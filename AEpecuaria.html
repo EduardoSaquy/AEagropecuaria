@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confinar — Gestão de Confinamento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --verde-escuro:#1F3D2E;
+    --verde-medio:#3D6B4F;
+    --verde-claro:#8CB39A;
+    --grafite:#242923;
+    --cinza:#6E756C;
+    --cinza-claro:#E4E7E0;
+    --cinza-bg:#F1F2EE;
+    --branco:#FDFDFB;
+    --trigo:#C79A45;
+    --alerta:#B3462F;
+    --alerta-bg:#F6E7E2;
+    --ok-bg:#E7EFE6;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(31,61,46,0.06), 0 4px 12px rgba(31,61,46,0.05);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:var(--cinza-bg);
+    color:var(--grafite);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    display:flex;
+    min-height:100vh;
+  }
+  /* ---------- SIDEBAR ---------- */
+  .sidebar{
+    width:230px;
+    flex-shrink:0;
+    background:var(--verde-escuro);
+    color:var(--branco);
+    display:flex;
+    flex-direction:column;
+    padding:24px 16px;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:0 8px 24px 8px;
+    margin-bottom:8px;
+    border-bottom:1px solid rgba(255,255,255,0.12);
+  }
+  .brand-mark{
+    width:32px;height:32px;flex-shrink:0;
+  }
+  .brand-name{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:19px;
+    letter-spacing:0.2px;
+  }
+  .brand-sub{
+    font-size:10px;
+    color:var(--verde-claro);
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    margin-top:-2px;
+  }
+  nav{margin-top:18px; display:flex; flex-direction:column; gap:4px;}
+  .nav-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:500;
+    color:rgba(255,255,255,0.72);
+    transition:background 0.15s, color 0.15s;
+    border:none;
+    background:none;
+    width:100%;
+    text-align:left;
+  }
+  .nav-item:hover{background:rgba(255,255,255,0.06); color:var(--branco);}
+  .nav-item.active{background:var(--verde-medio); color:var(--branco);}
+  .nav-item svg{flex-shrink:0;}
+  .sidebar-footer{
+    margin-top:auto;
+    padding-top:16px;
+    border-top:1px solid rgba(255,255,255,0.12);
+    font-size:11px;
+    color:rgba(255,255,255,0.45);
+    line-height:1.5;
+  }
+  /* ---------- MAIN ---------- */
+  .main{
+    flex:1;
+    padding:32px 40px 60px 40px;
+    max-width:1180px;
+  }
+  .page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    margin-bottom:28px;
+  }
+  .eyebrow{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:1.4px;
+    color:var(--verde-medio);
+    font-weight:600;
+    margin:0 0 4px 0;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-size:28px;
+    font-weight:600;
+    margin:0;
+    color:var(--verde-escuro);
+  }
+  .page-desc{color:var(--cinza); font-size:13.5px; margin-top:6px; max-width:520px;}
+  .btn{
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    font-weight:600;
+    padding:10px 18px;
+    border-radius:8px;
+    border:none;
+    cursor:pointer;
+    transition:filter 0.15s, transform 0.1s;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--verde-escuro); color:var(--branco);}
+  .btn-primary:hover{filter:brightness(1.15);}
+  .btn-ghost{background:transparent; color:var(--verde-escuro); border:1px solid var(--cinza-claro);}
+  .btn-ghost:hover{background:var(--branco);}
+  .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
+  .btn-danger-ghost:hover{background:var(--alerta-bg);}
+  .btn-sm{padding:6px 12px; font-size:12.5px;}
+
+  .card{
+    background:var(--branco);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    border:1px solid var(--cinza-claro);
+  }
+  .card-pad{padding:22px 24px;}
+  .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
+  .stat-card{
+    background:var(--branco);
+    border:1px solid var(--cinza-claro);
+    border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
+  .stat-value{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:22px;
+    font-weight:600;
+    color:var(--verde-escuro);
+    margin-top:6px;
+  }
+  .stat-value.alerta{color:var(--alerta);}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    color:var(--cinza);
+    font-weight:600;
+    padding:10px 14px;
+    border-bottom:1px solid var(--cinza-claro);
+    white-space:nowrap;
+  }
+  td{
+    padding:12px 14px;
+    border-bottom:1px solid var(--cinza-claro);
+    color:var(--grafite);
+    vertical-align:middle;
+  }
+  tr:last-child td{border-bottom:none;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .pill{
+    display:inline-block;
+    font-size:11px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:20px;
+  }
+  .pill-ok{background:var(--ok-bg); color:var(--verde-medio);}
+  .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
+  .pill-cat{background:var(--cinza-claro); color:var(--grafite);}
+
+  /* silo gauge */
+  .silo-wrap{display:flex; align-items:center; gap:8px;}
+  .silo{
+    width:14px; height:30px;
+    border:1.5px solid var(--verde-escuro);
+    border-radius:3px;
+    position:relative;
+    overflow:hidden;
+    background:var(--cinza-claro);
+    flex-shrink:0;
+  }
+  .silo-fill{
+    position:absolute; bottom:0; left:0; right:0;
+    background:var(--verde-medio);
+  }
+  .silo-fill.alerta{background:var(--alerta);}
+
+  /* form modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(31,61,46,0.35);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:50px 20px; overflow-y:auto; z-index:50;
+  }
+  .modal{
+    background:var(--branco); border-radius:14px; width:100%; max-width:560px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal-head{
+    padding:20px 24px; border-bottom:1px solid var(--cinza-claro);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--verde-escuro);}
+  .modal-close{background:none;border:none;cursor:pointer;color:var(--cinza);font-size:20px; line-height:1;}
+  .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
+  .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  label{font-size:12px; font-weight:600; color:var(--grafite);}
+  input, select, textarea{
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    padding:9px 11px;
+    border:1px solid var(--cinza-claro);
+    border-radius:7px;
+    background:var(--branco);
+    color:var(--grafite);
+    outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--verde-medio); box-shadow:0 0 0 3px rgba(61,107,79,0.12);}
+  .hint{font-size:11px; color:var(--cinza);}
+  .composicao-row{
+    display:grid; grid-template-columns: 1fr 90px 32px; gap:8px; align-items:center;
+  }
+  .total-bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-radius:8px; background:var(--cinza-bg); font-size:13px;
+  }
+  .total-bar.ok{color:var(--verde-medio); font-weight:600;}
+  .total-bar.warn{color:var(--trigo); font-weight:600;}
+
+  .empty{
+    text-align:center; padding:50px 20px; color:var(--cinza);
+  }
+  .empty h4{font-family:'Fraunces',serif; color:var(--verde-escuro); margin:10px 0 6px 0; font-size:16px;}
+  .diet-card{
+    border:1px solid var(--cinza-claro); border-radius:var(--radius); margin-bottom:14px; overflow:hidden;
+  }
+  .diet-head{
+    padding:16px 20px; display:flex; justify-content:space-between; align-items:center;
+    cursor:pointer; background:var(--branco);
+  }
+  .diet-head:hover{background:var(--cinza-bg);}
+  .diet-title{font-family:'Fraunces',serif; font-weight:600; font-size:15.5px; color:var(--verde-escuro);}
+  .diet-sub{font-size:12px; color:var(--cinza); margin-top:2px;}
+  .diet-metrics{display:flex; gap:22px;}
+  .diet-metric{text-align:right;}
+  .diet-metric .v{font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--verde-escuro); font-size:14px;}
+  .diet-metric .l{font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza);}
+  .diet-body{padding:0 20px 18px 20px; border-top:1px solid var(--cinza-claro); background:var(--cinza-bg);}
+  .chev{transition:transform 0.15s;}
+  .chev.open{transform:rotate(180deg);}
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px;}
+  .search{
+    display:flex; align-items:center; gap:8px; background:var(--branco);
+    border:1px solid var(--cinza-claro); border-radius:8px; padding:8px 12px; width:260px;
+  }
+  .search input{border:none; padding:0; flex:1;}
+  .search input:focus{box-shadow:none;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* ===================== ESTADO ===================== */
+const state = {
+  page: 'ingredientes',
+  ingredientes: [
+    {id:1, nome:'Milho moído', categoria:'Energético', fornecedor:'Cooperativa Vale Verde', unidade:'kg', ms:88, pb:9.0, ndt:88, precoKg:0.98, estoqueMin:5000, obs:''},
+    {id:2, nome:'Farelo de soja', categoria:'Proteico', fornecedor:'Agroindustrial Sul', unidade:'kg', ms:89, pb:45.0, ndt:82, precoKg:2.35, estoqueMin:2000, obs:''},
+    {id:3, nome:'Bagaço de cana', categoria:'Volumoso', fornecedor:'Usina Santa Fé', unidade:'kg', ms:50, pb:2.0, ndt:48, precoKg:0.22, estoqueMin:8000, obs:''},
+    {id:4, nome:'Núcleo mineral', categoria:'Mineral', fornecedor:'NutriMax', unidade:'kg', ms:98, pb:0, ndt:0, precoKg:6.80, estoqueMin:300, obs:''},
+  ],
+  movimentos: [
+    {id:1, data:'2026-06-15', ingredienteId:1, tipo:'entrada', quantidade:12000},
+    {id:2, data:'2026-06-15', ingredienteId:2, tipo:'entrada', quantidade:5000},
+    {id:3, data:'2026-06-15', ingredienteId:3, tipo:'entrada', quantidade:20000},
+    {id:4, data:'2026-06-15', ingredienteId:4, tipo:'entrada', quantidade:600},
+    {id:5, data:'2026-06-28', ingredienteId:1, tipo:'saida', quantidade:5200},
+    {id:6, data:'2026-06-28', ingredienteId:2, tipo:'saida', quantidade:2100},
+    {id:7, data:'2026-06-28', ingredienteId:3, tipo:'saida', quantidade:9600},
+    {id:8, data:'2026-06-28', ingredienteId:4, tipo:'saida', quantidade:180},
+  ],
+  dietas: [
+    {id:1, nome:'Dieta Terminação Alto Grão', categoriaAnimal:'Boi terminação', kgAnimalDia:9.5,
+      itens:[{ingredienteId:1, pct:68}, {ingredienteId:2, pct:12}, {ingredienteId:3, pct:18}, {ingredienteId:4, pct:2}]},
+  ],
+  nextIngId: 5,
+  nextMovId: 9,
+  nextDietId: 2,
+  modal: null, // {type:'ingrediente'|'movimento'|'dieta', data: {...}}
+  openDietId: 1,
+  search: '',
+};
+
+let editDraft = null; // temp form state while modal open
+
+function render(){
+  const root = document.getElementById('root');
+  root.innerHTML = `
+    <div class="app">
+      ${Sidebar()}
+      <div class="main">
+        ${Header()}
+        ${state.page==='ingredientes' ? PageIngredientes() : ''}
+        ${state.page==='estoque' ? PageEstoque() : ''}
+        ${state.page==='dietas' ? PageDietas() : ''}
+      </div>
+    </div>
+    ${state.modal ? Modal() : ''}
+  `;
+  attachEvents();
+}
+
+/* ===================== HELPERS ===================== */
+function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
+function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
+
+function saldoIngrediente(id){
+  let saldo = 0;
+  state.movimentos.filter(m=>m.ingredienteId===id).forEach(m=>{
+    saldo += m.tipo==='entrada' ? m.quantidade : -m.quantidade;
+  });
+  return saldo;
+}
+
+/* ===================== SIDEBAR ===================== */
+function Sidebar(){
+  const items = [
+    {key:'ingredientes', label:'Ingredientes', icon:iconLeaf()},
+    {key:'estoque', label:'Estoque', icon:iconSilo()},
+    {key:'dietas', label:'Formulação de Dietas', icon:iconBowl()},
+  ];
+  return `
+  <div class="sidebar">
+    <div class="brand">
+      ${brandMark()}
+      <div>
+        <div class="brand-name">Confinar</div>
+        <div class="brand-sub">Gestão de confinamento</div>
+      </div>
+    </div>
+    <nav>
+      ${items.map(it=>`
+        <button class="nav-item ${state.page===it.key?'active':''}" data-nav="${it.key}">
+          ${it.icon} ${it.label}
+        </button>
+      `).join('')}
+    </nav>
+    <div class="sidebar-footer">
+      MVP · dados em memória<br/>desta sessão do navegador.
+    </div>
+  </div>`;
+}
+function brandMark(){
+  return `<svg class="brand-mark" viewBox="0 0 32 32" fill="none">
+    <rect x="4" y="12" width="8" height="16" rx="1.5" fill="#8CB39A"/>
+    <rect x="14" y="6" width="8" height="22" rx="1.5" fill="#C79A45"/>
+    <rect x="24" y="16" width="4" height="12" rx="1.5" fill="#8CB39A"/>
+  </svg>`;
+}
+function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
+function iconSilo(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
+function iconBowl(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18a9 6 0 0 1-18 0Z"/><path d="M8 12V7a4 4 0 0 1 8 0v5"/></svg>`; }
+
+/* ===================== HEADER ===================== */
+function Header(){
+  const titles = {
+    ingredientes:{eyebrow:'Cadastro', title:'Ingredientes', desc:'Composição nutricional, fornecedor e preço de cada insumo da fazenda.'},
+    estoque:{eyebrow:'Movimentação', title:'Estoque', desc:'Saldo atual por ingrediente, calculado a partir das entradas e saídas registradas.'},
+    dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
+  };
+  const t = titles[state.page];
+  const actionLabel = state.page==='ingredientes' ? '+ Novo ingrediente' : state.page==='estoque' ? '+ Nova movimentação' : '+ Nova dieta';
+  return `
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">${t.eyebrow}</p>
+      <h1>${t.title}</h1>
+      <p class="page-desc">${t.desc}</p>
+    </div>
+    <button class="btn btn-primary" data-action="new">${actionLabel}</button>
+  </div>`;
+}
+
+/* ===================== PÁGINA: INGREDIENTES ===================== */
+function PageIngredientes(){
+  const list = state.ingredientes.filter(i=> i.nome.toLowerCase().includes(state.search.toLowerCase()) );
+  return `
+  <div class="toolbar">
+    <div class="search">
+      ${iconSearch()}
+      <input type="text" placeholder="Buscar ingrediente..." value="${state.search}" data-search="1"/>
+    </div>
+    <span class="hint">${list.length} ingrediente(s) cadastrado(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhum ingrediente encontrado','Cadastre insumos para usá-los nas dietas.') : `
+    <table>
+      <thead><tr>
+        <th>Ingrediente</th><th>Categoria</th><th>Fornecedor</th>
+        <th>MS%</th><th>PB%</th><th>NDT%</th><th>Preço/kg</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(i=>`
+          <tr>
+            <td><strong>${i.nome}</strong></td>
+            <td><span class="pill pill-cat">${i.categoria}</span></td>
+            <td>${i.fornecedor||'—'}</td>
+            <td class="mono">${fmt(i.ms,1)}%</td>
+            <td class="mono">${fmt(i.pb,1)}%</td>
+            <td class="mono">${fmt(i.ndt,1)}%</td>
+            <td class="mono">R$ ${fmt(i.precoKg)}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-ing="${i.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-ing="${i.id}">Excluir</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: ESTOQUE ===================== */
+function PageEstoque(){
+  const rows = state.ingredientes.map(i=>{
+    const saldo = saldoIngrediente(i.id);
+    const valor = saldo * i.precoKg;
+    const pctMin = i.estoqueMin>0 ? Math.min(saldo/(i.estoqueMin*2),1) : 1;
+    const baixo = saldo < i.estoqueMin;
+    return {i, saldo, valor, pctMin, baixo};
+  });
+  const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
+  const alertas = rows.filter(r=>r.baixo).length;
+
+  const movRows = [...state.movimentos].sort((a,b)=> b.data.localeCompare(a.data)).slice(0,8);
+
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Valor total em estoque</div><div class="stat-value">R$ ${fmt(valorTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Itens cadastrados</div><div class="stat-value">${state.ingredientes.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Alertas de estoque baixo</div><div class="stat-value ${alertas>0?'alerta':''}">${alertas}</div></div>
+    <div class="stat-card"><div class="stat-label">Movimentações registradas</div><div class="stat-value">${state.movimentos.length}</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:22px;">
+    <table>
+      <thead><tr>
+        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th><th>Valor</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr>
+            <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${r.baixo?'alerta':''}" style="height:${Math.round(r.pctMin*100)}%"></div></div></div></td>
+            <td><strong>${r.i.nome}</strong></td>
+            <td class="mono">${fmtInt(r.saldo)} ${r.i.unidade}</td>
+            <td class="mono">${fmtInt(r.i.estoqueMin)} ${r.i.unidade}</td>
+            <td class="mono">R$ ${fmt(r.valor)}</td>
+            <td>${r.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Últimas movimentações</p>
+  <div class="card">
+    ${movRows.length===0 ? Empty('Nenhuma movimentação','Registre entradas e saídas de insumos.') : `
+    <table>
+      <thead><tr><th>Data</th><th>Ingrediente</th><th>Tipo</th><th>Quantidade</th><th></th></tr></thead>
+      <tbody>
+        ${movRows.map(m=>{
+          const ing = getIng(m.ingredienteId);
+          return `<tr>
+            <td class="mono">${m.data.split('-').reverse().join('/')}</td>
+            <td>${ing?ing.nome:'—'}</td>
+            <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}</td>
+            <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: DIETAS ===================== */
+function calcDieta(d){
+  let ms=0, pb=0, ndt=0, custoKg=0, pctTotal=0;
+  d.itens.forEach(it=>{
+    const ing = getIng(it.ingredienteId);
+    if(!ing) return;
+    const frac = it.pct/100;
+    ms += ing.ms*frac;
+    pb += ing.pb*frac;
+    ndt += ing.ndt*frac;
+    custoKg += ing.precoKg*frac;
+    pctTotal += it.pct;
+  });
+  return {ms, pb, ndt, custoKg, pctTotal, custoAnimalDia: custoKg*d.kgAnimalDia};
+}
+
+function PageDietas(){
+  if(state.dietas.length===0){
+    return `<div class="card">${Empty('Nenhuma dieta formulada','Crie uma dieta combinando ingredientes cadastrados.')}</div>`;
+  }
+  return state.dietas.map(d=>{
+    const c = calcDieta(d);
+    const open = state.openDietId===d.id;
+    return `
+    <div class="diet-card">
+      <div class="diet-head" data-toggle-diet="${d.id}">
+        <div>
+          <div class="diet-title">${d.nome}</div>
+          <div class="diet-sub">${d.categoriaAnimal} · ${fmt(d.kgAnimalDia,1)} kg MN/animal/dia</div>
+        </div>
+        <div class="diet-metrics">
+          <div class="diet-metric"><div class="v">${fmt(c.ms,1)}%</div><div class="l">MS</div></div>
+          <div class="diet-metric"><div class="v">${fmt(c.pb,1)}%</div><div class="l">PB</div></div>
+          <div class="diet-metric"><div class="v">${fmt(c.ndt,1)}%</div><div class="l">NDT</div></div>
+          <div class="diet-metric"><div class="v">R$ ${fmt(c.custoKg,3)}</div><div class="l">Custo/kg</div></div>
+          <div class="diet-metric"><div class="v">R$ ${fmt(c.custoAnimalDia)}</div><div class="l">Custo/animal/dia</div></div>
+          <svg class="chev ${open?'open':''}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
+      ${open ? `
+      <div class="diet-body">
+        <table>
+          <thead><tr><th>Ingrediente</th><th>% na dieta</th><th>Kg/animal/dia</th><th>Custo/animal/dia</th></tr></thead>
+          <tbody>
+            ${d.itens.map(it=>{
+              const ing = getIng(it.ingredienteId);
+              if(!ing) return '';
+              const kgAnimal = d.kgAnimalDia*it.pct/100;
+              return `<tr>
+                <td>${ing.nome}</td>
+                <td class="mono">${fmt(it.pct,1)}%</td>
+                <td class="mono">${fmt(kgAnimal,2)} kg</td>
+                <td class="mono">R$ ${fmt(kgAnimal*ing.precoKg)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        ${c.pctTotal!==100 ? `<p class="hint" style="color:var(--trigo); margin-top:8px;">⚠ Percentuais somam ${fmt(c.pctTotal,1)}%, não 100%.</p>` : ''}
+        <div style="margin-top:14px; display:flex; gap:10px;">
+          <button class="btn btn-ghost btn-sm" data-edit-diet="${d.id}">Editar dieta</button>
+          <button class="btn btn-danger-ghost" data-del-diet="${d.id}">Excluir dieta</button>
+        </div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function Empty(title, sub){
+  return `<div class="empty">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
+    <h4>${title}</h4>
+    <div class="page-desc" style="margin:0 auto;">${sub}</div>
+  </div>`;
+}
+function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
+
+/* ===================== MODAL / FORMS ===================== */
+function Modal(){
+  if(state.modal.type==='ingrediente') return ModalIngrediente();
+  if(state.modal.type==='movimento') return ModalMovimento();
+  if(state.modal.type==='dieta') return ModalDieta();
+  return '';
+}
+
+function ModalIngrediente(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar ingrediente':'Novo ingrediente'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome do ingrediente</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Milho moído"/></div>
+        <div class="field-row">
+          <div class="field"><label>Categoria</label>
+            <select id="f-categoria">
+              ${['Energético','Proteico','Volumoso','Mineral','Aditivo'].map(c=>`<option ${d.categoria===c?'selected':''}>${c}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Unidade</label>
+            <select id="f-unidade">
+              ${['kg','ton'].map(c=>`<option ${d.unidade===c?'selected':''}>${c}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Fornecedor</label><input id="f-fornecedor" value="${d.fornecedor}" placeholder="Ex: Cooperativa Vale Verde"/></div>
+        <div class="field-row">
+          <div class="field"><label>Matéria seca (%)</label><input id="f-ms" type="number" step="0.1" value="${d.ms}"/></div>
+          <div class="field"><label>Proteína bruta (%)</label><input id="f-pb" type="number" step="0.1" value="${d.pb}"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>NDT (%)</label><input id="f-ndt" type="number" step="0.1" value="${d.ndt}"/></div>
+          <div class="field"><label>Preço por kg (R$)</label><input id="f-preco" type="number" step="0.01" value="${d.precoKg}"/></div>
+        </div>
+        <div class="field"><label>Estoque mínimo (alerta)</label><input id="f-min" type="number" step="1" value="${d.estoqueMin}"/></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="ingrediente">${d._editId?'Salvar alterações':'Salvar ingrediente'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalMovimento(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar movimentação':'Nova movimentação de estoque'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Ingrediente</label>
+          <select id="f-ing">
+            ${state.ingredientes.map(i=>`<option value="${i.id}" ${d.ingredienteId==i.id?'selected':''}>${i.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Tipo</label>
+            <select id="f-tipo">
+              <option value="entrada" ${d.tipo==='entrada'?'selected':''}>Entrada (compra)</option>
+              <option value="saida" ${d.tipo==='saida'?'selected':''}>Saída (consumo)</option>
+            </select>
+          </div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field"><label>Quantidade</label><input id="f-qtd" type="number" step="0.1" value="${d.quantidade}"/></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="movimento">${d._editId?'Salvar alterações':'Registrar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalDieta(){
+  const d = editDraft;
+  const totalPct = d.itens.reduce((a,it)=>a+Number(it.pct||0),0);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar dieta':'Nova dieta'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome da dieta</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Dieta Terminação Alto Grão"/></div>
+        <div class="field-row">
+          <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${d.categoriaAnimal}" placeholder="Ex: Boi terminação"/></div>
+          <div class="field"><label>Kg de dieta / animal / dia</label><input id="f-kganimal" type="number" step="0.1" value="${d.kgAnimalDia}"/></div>
+        </div>
+        <label>Composição (% da dieta)</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          ${d.itens.map((it,idx)=>`
+            <div class="composicao-row">
+              <select data-item-ing="${idx}">
+                ${state.ingredientes.map(i=>`<option value="${i.id}" ${it.ingredienteId==i.id?'selected':''}>${i.nome}</option>`).join('')}
+              </select>
+              <input data-item-pct="${idx}" type="number" step="0.1" value="${it.pct}" placeholder="%"/>
+              <button class="btn-danger-ghost" data-item-del="${idx}" style="padding:6px;">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        <button class="btn btn-ghost btn-sm" data-item-add="1" style="align-self:flex-start;">+ Adicionar ingrediente</button>
+        <div class="total-bar ${totalPct===100?'ok':'warn'}">
+          <span>Total da composição</span><span>${fmt(totalPct,1)}% ${totalPct===100?'✓':'(deve somar 100%)'}</span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="dieta">${d._editId?'Salvar alterações':'Salvar dieta'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== EVENTOS ===================== */
+function attachEvents(){
+  document.querySelectorAll('[data-nav]').forEach(el=>{
+    el.onclick = ()=>{ state.page = el.dataset.nav; render(); };
+  });
+  const searchEl = document.querySelector('[data-search]');
+  if(searchEl){
+    searchEl.oninput = (e)=>{ state.search = e.target.value; render();
+      // refocus + cursor at end after re-render
+      const s = document.querySelector('[data-search]');
+      s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+    };
+  }
+  const newBtn = document.querySelector('[data-action="new"]');
+  if(newBtn){
+    newBtn.onclick = ()=>{
+      if(state.page==='ingredientes'){
+        editDraft = {nome:'', categoria:'Energético', fornecedor:'', unidade:'kg', ms:'', pb:'', ndt:'', precoKg:'', estoqueMin:''};
+        state.modal = {type:'ingrediente'};
+      } else if(state.page==='estoque'){
+        editDraft = {ingredienteId: state.ingredientes[0]?.id||'', tipo:'entrada', data:new Date().toISOString().slice(0,10), quantidade:''};
+        state.modal = {type:'movimento'};
+      } else {
+        editDraft = {nome:'', categoriaAnimal:'', kgAnimalDia:9, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
+        state.modal = {type:'dieta'};
+      }
+      render();
+    };
+  }
+  document.querySelectorAll('[data-edit-ing]').forEach(el=>{
+    el.onclick = ()=>{
+      const ing = getIng(el.dataset.editIng);
+      editDraft = {...ing, _editId: ing.id};
+      state.modal = {type:'ingrediente'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-ing]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.delIng);
+      state.ingredientes = state.ingredientes.filter(i=>i.id!==id);
+      state.movimentos = state.movimentos.filter(m=>m.ingredienteId!==id);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-edit-mov]').forEach(el=>{
+    el.onclick = ()=>{
+      const mov = state.movimentos.find(m=>m.id===Number(el.dataset.editMov));
+      editDraft = {...mov, _editId: mov.id};
+      state.modal = {type:'movimento'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-mov]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.delMov);
+      state.movimentos = state.movimentos.filter(m=>m.id!==id);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-diet]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.delDiet);
+      state.dietas = state.dietas.filter(d=>d.id!==id);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-edit-diet]').forEach(el=>{
+    el.onclick = ()=>{
+      const dieta = state.dietas.find(x=>x.id===Number(el.dataset.editDiet));
+      editDraft = {...dieta, itens: dieta.itens.map(it=>({...it})), _editId: dieta.id};
+      state.modal = {type:'dieta'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-toggle-diet]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.toggleDiet);
+      state.openDietId = state.openDietId===id ? null : id;
+      render();
+    };
+  });
+
+  // modal generic close
+  document.querySelectorAll('[data-close], [data-close-overlay]').forEach(el=>{
+    el.onclick = (e)=>{
+      if(e.target.dataset.stop) return;
+      state.modal = null; editDraft=null; render();
+    };
+  });
+  const stopEl = document.querySelector('[data-stop]');
+  if(stopEl) stopEl.onclick = (e)=> e.stopPropagation();
+
+  // dieta item add/remove/change
+  document.querySelectorAll('[data-item-add]').forEach(el=>{
+    el.onclick = ()=>{ editDraft.itens.push({ingredienteId:state.ingredientes[0]?.id||'', pct:''}); render(); };
+  });
+  document.querySelectorAll('[data-item-del]').forEach(el=>{
+    el.onclick = ()=>{ editDraft.itens.splice(Number(el.dataset.itemDel),1); render(); };
+  });
+  document.querySelectorAll('[data-item-ing]').forEach(el=>{
+    el.onchange = (e)=>{ editDraft.itens[Number(el.dataset.itemIng)].ingredienteId = Number(e.target.value); };
+  });
+  document.querySelectorAll('[data-item-pct]').forEach(el=>{
+    el.oninput = (e)=>{ editDraft.itens[Number(el.dataset.itemPct)].pct = e.target.value; };
+  });
+
+  // save handlers
+  const saveBtn = document.querySelector('[data-save]');
+  if(saveBtn){
+    saveBtn.onclick = ()=>{
+      const type = saveBtn.dataset.save;
+      if(type==='ingrediente'){
+        const campos = {
+          nome: document.getElementById('f-nome').value || 'Sem nome',
+          categoria: document.getElementById('f-categoria').value,
+          fornecedor: document.getElementById('f-fornecedor').value,
+          unidade: document.getElementById('f-unidade').value,
+          ms: Number(document.getElementById('f-ms').value)||0,
+          pb: Number(document.getElementById('f-pb').value)||0,
+          ndt: Number(document.getElementById('f-ndt').value)||0,
+          precoKg: Number(document.getElementById('f-preco').value)||0,
+          estoqueMin: Number(document.getElementById('f-min').value)||0,
+        };
+        if(editDraft._editId){
+          const idx = state.ingredientes.findIndex(i=>i.id===editDraft._editId);
+          state.ingredientes[idx] = {...state.ingredientes[idx], ...campos};
+        } else {
+          state.ingredientes.push({id: state.nextIngId++, ...campos, obs:''});
+        }
+      } else if(type==='movimento'){
+        const campos = {
+          data: document.getElementById('f-data').value,
+          ingredienteId: Number(document.getElementById('f-ing').value),
+          tipo: document.getElementById('f-tipo').value,
+          quantidade: Number(document.getElementById('f-qtd').value)||0,
+        };
+        if(editDraft._editId){
+          const idx = state.movimentos.findIndex(m=>m.id===editDraft._editId);
+          state.movimentos[idx] = {...state.movimentos[idx], ...campos};
+        } else {
+          state.movimentos.push({id: state.nextMovId++, ...campos});
+        }
+      } else if(type==='dieta'){
+        const campos = {
+          nome: document.getElementById('f-nome').value || 'Sem nome',
+          categoriaAnimal: document.getElementById('f-categoria').value,
+          kgAnimalDia: Number(document.getElementById('f-kganimal').value)||0,
+          itens: editDraft.itens.map(it=>({ingredienteId:Number(it.ingredienteId), pct:Number(it.pct)||0})),
+        };
+        if(editDraft._editId){
+          const idx = state.dietas.findIndex(x=>x.id===editDraft._editId);
+          state.dietas[idx] = {...state.dietas[idx], ...campos};
+          state.openDietId = editDraft._editId;
+        } else {
+          const novaDieta = {id: state.nextDietId++, ...campos};
+          state.dietas.push(novaDieta);
+          state.openDietId = novaDieta.id;
+        }
+      }
+      state.modal = null; editDraft = null;
+      render();
+    };
+  }
+}
+
+render();
+</script>
+</body>
+</html>
