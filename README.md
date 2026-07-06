@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AEpecuária
 
 Sistema web de gestão nutricional e de estoque para confinamento e semiconfinamento de bovinos de corte, desenvolvido para uso interno da **AE Agropecuária**.
@@ -32,3 +33,7 @@ EduardoSaquy
 ## Licença
 
 Uso proprietário e interno da AE Agropecuária. Reprodução, distribuição ou uso fora da empresa não autorizados sem permissão prévia.
+=======
+# AEagropecuaria
+todos os apps da ae
+>>>>>>> b5f4b0b6c4f2b9f8e56b69634d27bf6fe467f7e0
