@@ -295,35 +295,42 @@
 <body>
 <div id="root"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+/* ===================== SUPABASE ===================== */
+const db = supabase.createClient(
+  'https://leojfqlbdtlriemdgnyw.supabase.co',
+  'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
+);
+
+function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor, unidade:r.unidade, ms:r.ms, pb:r.pb, ndt:r.ndt, precoKg:r.preco_kg, estoqueMin:r.estoque_min, obs:r.obs||''}; }
+function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
+function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade}; }
+function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade}; }
+function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[]}; }
+function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens}; }
+
+async function loadAll(){
+  const [ing, mov, diet] = await Promise.all([
+    db.from('ingredientes').select('*').order('id'),
+    db.from('movimentos').select('*').order('id'),
+    db.from('dietas').select('*').order('id'),
+  ]);
+  state.ingredientes = (ing.data||[]).map(rowToIngrediente);
+  state.movimentos = (mov.data||[]).map(rowToMovimento);
+  state.dietas = (diet.data||[]).map(rowToDieta);
+  if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
+  render();
+}
+
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'ingredientes',
-  ingredientes: [
-    {id:1, nome:'Milho moído', categoria:'Energético', fornecedor:'Cooperativa Vale Verde', unidade:'kg', ms:88, pb:9.0, ndt:88, precoKg:0.98, estoqueMin:5000, obs:''},
-    {id:2, nome:'Farelo de soja', categoria:'Proteico', fornecedor:'Agroindustrial Sul', unidade:'kg', ms:89, pb:45.0, ndt:82, precoKg:2.35, estoqueMin:2000, obs:''},
-    {id:3, nome:'Bagaço de cana', categoria:'Volumoso', fornecedor:'Usina Santa Fé', unidade:'kg', ms:50, pb:2.0, ndt:48, precoKg:0.22, estoqueMin:8000, obs:''},
-    {id:4, nome:'Núcleo mineral', categoria:'Mineral', fornecedor:'NutriMax', unidade:'kg', ms:98, pb:0, ndt:0, precoKg:6.80, estoqueMin:300, obs:''},
-  ],
-  movimentos: [
-    {id:1, data:'2026-06-15', ingredienteId:1, tipo:'entrada', quantidade:12000},
-    {id:2, data:'2026-06-15', ingredienteId:2, tipo:'entrada', quantidade:5000},
-    {id:3, data:'2026-06-15', ingredienteId:3, tipo:'entrada', quantidade:20000},
-    {id:4, data:'2026-06-15', ingredienteId:4, tipo:'entrada', quantidade:600},
-    {id:5, data:'2026-06-28', ingredienteId:1, tipo:'saida', quantidade:5200},
-    {id:6, data:'2026-06-28', ingredienteId:2, tipo:'saida', quantidade:2100},
-    {id:7, data:'2026-06-28', ingredienteId:3, tipo:'saida', quantidade:9600},
-    {id:8, data:'2026-06-28', ingredienteId:4, tipo:'saida', quantidade:180},
-  ],
-  dietas: [
-    {id:1, nome:'Dieta Terminação Alto Grão', categoriaAnimal:'Boi terminação', kgAnimalDia:9.5,
-      itens:[{ingredienteId:1, pct:68}, {ingredienteId:2, pct:12}, {ingredienteId:3, pct:18}, {ingredienteId:4, pct:2}]},
-  ],
-  nextIngId: 5,
-  nextMovId: 9,
-  nextDietId: 2,
+  ingredientes: [],
+  movimentos: [],
+  dietas: [],
   modal: null, // {type:'ingrediente'|'movimento'|'dieta', data: {...}}
-  openDietId: 1,
+  openDietId: null,
   search: '',
 };
 
@@ -753,11 +760,10 @@ function attachEvents(){
     };
   });
   document.querySelectorAll('[data-del-ing]').forEach(el=>{
-    el.onclick = ()=>{
+    el.onclick = async ()=>{
       const id = Number(el.dataset.delIng);
-      state.ingredientes = state.ingredientes.filter(i=>i.id!==id);
-      state.movimentos = state.movimentos.filter(m=>m.ingredienteId!==id);
-      render();
+      await db.from('ingredientes').delete().eq('id', id);
+      await loadAll();
     };
   });
   document.querySelectorAll('[data-edit-mov]').forEach(el=>{
@@ -769,17 +775,17 @@ function attachEvents(){
     };
   });
   document.querySelectorAll('[data-del-mov]').forEach(el=>{
-    el.onclick = ()=>{
+    el.onclick = async ()=>{
       const id = Number(el.dataset.delMov);
-      state.movimentos = state.movimentos.filter(m=>m.id!==id);
-      render();
+      await db.from('movimentos').delete().eq('id', id);
+      await loadAll();
     };
   });
   document.querySelectorAll('[data-del-diet]').forEach(el=>{
-    el.onclick = ()=>{
+    el.onclick = async ()=>{
       const id = Number(el.dataset.delDiet);
-      state.dietas = state.dietas.filter(d=>d.id!==id);
-      render();
+      await db.from('dietas').delete().eq('id', id);
+      await loadAll();
     };
   });
   document.querySelectorAll('[data-edit-diet]').forEach(el=>{
@@ -825,7 +831,7 @@ function attachEvents(){
   // save handlers
   const saveBtn = document.querySelector('[data-save]');
   if(saveBtn){
-    saveBtn.onclick = ()=>{
+    saveBtn.onclick = async ()=>{
       const type = saveBtn.dataset.save;
       if(type==='ingrediente'){
         const campos = {
@@ -839,11 +845,11 @@ function attachEvents(){
           precoKg: Number(document.getElementById('f-preco').value)||0,
           estoqueMin: Number(document.getElementById('f-min').value)||0,
         };
+        const row = ingredienteToRow(campos);
         if(editDraft._editId){
-          const idx = state.ingredientes.findIndex(i=>i.id===editDraft._editId);
-          state.ingredientes[idx] = {...state.ingredientes[idx], ...campos};
+          await db.from('ingredientes').update(row).eq('id', editDraft._editId);
         } else {
-          state.ingredientes.push({id: state.nextIngId++, ...campos, obs:''});
+          await db.from('ingredientes').insert(row);
         }
       } else if(type==='movimento'){
         const campos = {
@@ -852,11 +858,11 @@ function attachEvents(){
           tipo: document.getElementById('f-tipo').value,
           quantidade: Number(document.getElementById('f-qtd').value)||0,
         };
+        const row = movimentoToRow(campos);
         if(editDraft._editId){
-          const idx = state.movimentos.findIndex(m=>m.id===editDraft._editId);
-          state.movimentos[idx] = {...state.movimentos[idx], ...campos};
+          await db.from('movimentos').update(row).eq('id', editDraft._editId);
         } else {
-          state.movimentos.push({id: state.nextMovId++, ...campos});
+          await db.from('movimentos').insert(row);
         }
       } else if(type==='dieta'){
         const campos = {
@@ -865,23 +871,22 @@ function attachEvents(){
           kgAnimalDia: Number(document.getElementById('f-kganimal').value)||0,
           itens: editDraft.itens.map(it=>({ingredienteId:Number(it.ingredienteId), pct:Number(it.pct)||0})),
         };
+        const row = dietaToRow(campos);
         if(editDraft._editId){
-          const idx = state.dietas.findIndex(x=>x.id===editDraft._editId);
-          state.dietas[idx] = {...state.dietas[idx], ...campos};
+          await db.from('dietas').update(row).eq('id', editDraft._editId);
           state.openDietId = editDraft._editId;
         } else {
-          const novaDieta = {id: state.nextDietId++, ...campos};
-          state.dietas.push(novaDieta);
-          state.openDietId = novaDieta.id;
+          const {data} = await db.from('dietas').insert(row).select().single();
+          state.openDietId = data.id;
         }
       }
       state.modal = null; editDraft = null;
-      render();
+      await loadAll();
     };
   }
 }
 
-render();
+loadAll();
 </script>
 </body>
 </html>

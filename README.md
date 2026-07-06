@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # AEpecuária
 
 Sistema web de gestão nutricional e de estoque para confinamento e semiconfinamento de bovinos de corte, desenvolvido para uso interno da **AE Agropecuária**.
@@ -13,18 +12,18 @@ O app permite cadastrar ingredientes com sua composição nutricional, controlar
 
 ## Status do projeto
 
-Protótipo funcional (MVP). Os dados ficam armazenados em memória durante a sessão do navegador — ao recarregar a página, o app volta aos dados de exemplo. Persistência permanente (banco de dados) é um próximo passo planejado.
+Protótipo funcional (MVP). Os dados são persistidos em um banco Postgres no Supabase (plano gratuito) — o app funciona em qualquer dispositivo (computador ou celular) e os dados ficam salvos entre sessões. Ainda não há autenticação/login: qualquer pessoa com a URL do app tem acesso de leitura e escrita.
 
 ## Como usar
 
-Baixe o arquivo `AEpecuaria.html` e abra diretamente em qualquer navegador. Não requer instalação, servidor ou conexão com internet.
-
-Também está disponível online via GitHub Pages:
+Acesse pelo navegador (computador ou celular), sem instalação:
 **https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html**
+
+Também é possível baixar o arquivo `AEpecuaria.html` e abrir localmente, mas nesse caso ele ainda depende de conexão com internet para acessar o banco de dados.
 
 ## Tecnologia
 
-HTML, CSS e JavaScript puro (sem frameworks ou dependências externas de build). Todo o estado da aplicação roda no navegador do usuário.
+HTML, CSS e JavaScript puro no frontend (sem frameworks ou build). Persistência via [Supabase](https://supabase.com) (Postgres + API REST), consumido diretamente do navegador com a biblioteca `@supabase/supabase-js`.
 
 ## Autor
 
@@ -33,7 +32,3 @@ EduardoSaquy
 ## Licença
 
 Uso proprietário e interno da AE Agropecuária. Reprodução, distribuição ou uso fora da empresa não autorizados sem permissão prévia.
-=======
-# AEagropecuaria
-todos os apps da ae
->>>>>>> b5f4b0b6c4f2b9f8e56b69634d27bf6fe467f7e0
