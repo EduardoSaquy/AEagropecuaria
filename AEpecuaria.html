@@ -3,29 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Confinar — Gestão de Confinamento</title>
+<title>AE Nutrição — Gestão de Confinamento</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#1F3D2E">
+<meta name="theme-color" content="#0F2A4A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --verde-escuro:#1F3D2E;
-    --verde-medio:#3D6B4F;
-    --verde-claro:#8CB39A;
-    --grafite:#242923;
-    --cinza:#6E756C;
-    --cinza-claro:#E4E7E0;
-    --cinza-bg:#F1F2EE;
-    --branco:#FDFDFB;
-    --trigo:#C79A45;
+    --verde-escuro:#0F2A4A;
+    --verde-medio:#1D5DA8;
+    --verde-claro:#9DC0E8;
+    --grafite:#1E2A38;
+    --cinza:#65758A;
+    --cinza-claro:#DEE6F0;
+    --cinza-bg:#F2F5FA;
+    --branco:#FFFFFF;
+    --trigo:#C98A2B;
     --alerta:#B3462F;
     --alerta-bg:#F6E7E2;
-    --ok-bg:#E7EFE6;
+    --ok-bg:#E5EEF9;
     --radius:10px;
-    --shadow:0 1px 2px rgba(31,61,46,0.06), 0 4px 12px rgba(31,61,46,0.05);
+    --shadow:0 1px 2px rgba(15,42,74,0.06), 0 4px 12px rgba(15,42,74,0.06);
   }
   *{box-sizing:border-box;}
   body{
@@ -409,7 +409,7 @@ function Sidebar(){
     <div class="brand">
       ${brandMark()}
       <div>
-        <div class="brand-name">Confinar</div>
+        <div class="brand-name">AE Nutrição</div>
         <div class="brand-sub">Gestão de confinamento</div>
       </div>
     </div>
@@ -427,9 +427,9 @@ function Sidebar(){
 }
 function brandMark(){
   return `<svg class="brand-mark" viewBox="0 0 32 32" fill="none">
-    <rect x="4" y="12" width="8" height="16" rx="1.5" fill="#8CB39A"/>
-    <rect x="14" y="6" width="8" height="22" rx="1.5" fill="#C79A45"/>
-    <rect x="24" y="16" width="4" height="12" rx="1.5" fill="#8CB39A"/>
+    <rect x="4" y="12" width="8" height="16" rx="1.5" fill="#9DC0E8"/>
+    <rect x="14" y="6" width="8" height="22" rx="1.5" fill="#C98A2B"/>
+    <rect x="24" y="16" width="4" height="12" rx="1.5" fill="#9DC0E8"/>
   </svg>`;
 }
 function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
