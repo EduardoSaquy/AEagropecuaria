@@ -864,6 +864,7 @@ function attachEvents(){
   if(saveBtn){
     saveBtn.onclick = async ()=>{
       const type = saveBtn.dataset.save;
+      let error = null;
       if(type==='ingrediente'){
         const campos = {
           nome: document.getElementById('f-nome').value || 'Sem nome',
@@ -878,9 +879,9 @@ function attachEvents(){
         };
         const row = ingredienteToRow(campos);
         if(editDraft._editId){
-          await db.from('ingredientes').update(row).eq('id', editDraft._editId);
+          ({error} = await db.from('ingredientes').update(row).eq('id', editDraft._editId));
         } else {
-          await db.from('ingredientes').insert(row);
+          ({error} = await db.from('ingredientes').insert(row));
         }
       } else if(type==='movimento'){
         const campos = {
@@ -891,9 +892,9 @@ function attachEvents(){
         };
         const row = movimentoToRow(campos);
         if(editDraft._editId){
-          await db.from('movimentos').update(row).eq('id', editDraft._editId);
+          ({error} = await db.from('movimentos').update(row).eq('id', editDraft._editId));
         } else {
-          await db.from('movimentos').insert(row);
+          ({error} = await db.from('movimentos').insert(row));
         }
       } else if(type==='dieta'){
         const campos = {
@@ -904,12 +905,17 @@ function attachEvents(){
         };
         const row = dietaToRow(campos);
         if(editDraft._editId){
-          await db.from('dietas').update(row).eq('id', editDraft._editId);
+          ({error} = await db.from('dietas').update(row).eq('id', editDraft._editId));
           state.openDietId = editDraft._editId;
         } else {
-          const {data} = await db.from('dietas').insert(row).select().single();
-          state.openDietId = data.id;
+          const res = await db.from('dietas').insert(row).select().single();
+          error = res.error;
+          if(res.data) state.openDietId = res.data.id;
         }
+      }
+      if(error){
+        alert('Não foi possível salvar: ' + error.message);
+        return;
       }
       state.modal = null; editDraft = null;
       await loadAll();
