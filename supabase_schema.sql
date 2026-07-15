@@ -60,3 +60,35 @@ alter table dietas enable row level security;
 create policy "public full access" on ingredientes for all using (true) with check (true);
 create policy "public full access" on movimentos for all using (true) with check (true);
 create policy "public full access" on dietas for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Lotes e Saída de Ração
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- acima (ingredientes, movimentos, dietas) já existirem no seu projeto.
+-- ===================================================================
+
+create table lotes (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  numero_animais numeric default 0,
+  data_inicio date,
+  data_fim date
+);
+
+create table saidas_racao (
+  id bigint generated always as identity primary key,
+  data date not null,
+  dieta_id bigint references dietas(id) on delete set null,
+  lote_id bigint references lotes(id) on delete set null,
+  quantidade_kg numeric default 0
+);
+
+-- vincula as movimentações de estoque geradas por uma saída de ração,
+-- para que excluir a saída também desfaça o desconto no estoque
+alter table movimentos add column saida_racao_id bigint references saidas_racao(id) on delete cascade;
+
+alter table lotes enable row level security;
+alter table saidas_racao enable row level security;
+
+create policy "public full access" on lotes for all using (true) with check (true);
+create policy "public full access" on saidas_racao for all using (true) with check (true);
