@@ -295,6 +295,36 @@
   .search input{border:none; padding:0; flex:1;}
   .search input:focus{box-shadow:none;}
 
+  /* sub-abas dentro de um grupo (ex: Ingredientes / Estoque) */
+  .subtabs{display:flex; gap:18px; margin-bottom:22px; border-bottom:1px solid var(--cinza-claro); overflow-x:auto;}
+  .subtab{
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; color:var(--cinza);
+    background:none; border:none; padding:10px 2px; cursor:pointer; white-space:nowrap;
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .subtab:hover{color:var(--verde-escuro);}
+  .subtab.active{color:var(--verde-escuro); border-bottom-color:var(--verde-medio);}
+
+  /* botão flutuante de ação rápida */
+  .fab-wrap{position:fixed; bottom:28px; right:28px; z-index:60; display:flex; flex-direction:column; align-items:flex-end; gap:10px;}
+  .fab-btn{
+    width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
+    background:var(--verde-escuro); color:#fff; font-size:26px; line-height:1;
+    box-shadow:0 6px 18px rgba(15,42,74,0.28); transition:filter 0.15s, transform 0.1s;
+  }
+  .fab-btn:hover{filter:brightness(1.15);}
+  .fab-btn:active{transform:scale(0.95);}
+  .fab-menu{
+    display:flex; flex-direction:column; gap:6px; background:var(--branco);
+    border:1px solid var(--cinza-claro); border-radius:12px; padding:10px; box-shadow:var(--shadow);
+  }
+  .fab-menu-item{
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; text-align:left;
+    padding:10px 14px; border-radius:8px; border:none; background:none; cursor:pointer;
+    color:var(--verde-escuro); white-space:nowrap;
+  }
+  .fab-menu-item:hover{background:var(--cinza-bg);}
+
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -320,6 +350,8 @@
     .overlay{padding:16px 10px;}
     .diet-metrics{flex-wrap:wrap; gap:10px 16px; justify-content:flex-end;}
     .diet-head{flex-direction:column; align-items:flex-start; gap:10px;}
+    .fab-wrap{bottom:18px; right:18px;}
+    .fab-btn{width:50px; height:50px; font-size:24px;}
   }
 </style>
 </head>
@@ -372,6 +404,7 @@ const state = {
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao', data: {...}}
   openDietId: null,
   search: '',
+  fabOpen: false,
 };
 
 let editDraft = null; // temp form state while modal open
@@ -383,6 +416,7 @@ function render(){
       ${Sidebar()}
       <div class="main">
         ${Header()}
+        ${SubTabs()}
         ${state.page==='ingredientes' ? PageIngredientes() : ''}
         ${state.page==='estoque' ? PageEstoque() : ''}
         ${state.page==='dietas' ? PageDietas() : ''}
@@ -391,6 +425,7 @@ function render(){
       </div>
     </div>
     ${state.modal ? Modal() : ''}
+    ${FabMenu()}
   `;
   attachEvents();
 }
@@ -408,15 +443,27 @@ function saldoIngrediente(id){
   return saldo;
 }
 
+/* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
+const GROUPS = {
+  insumos: {label:'Insumos', icon:iconLeaf(), pages:[
+    {key:'ingredientes', label:'Ingredientes'},
+    {key:'estoque', label:'Estoque'},
+  ]},
+  dietas: {label:'Formulação de Dietas', icon:iconBowl(), pages:[
+    {key:'dietas', label:'Formulação de Dietas'},
+  ]},
+  confinamento: {label:'Confinamento', icon:iconLote(), pages:[
+    {key:'lotes', label:'Lotes'},
+    {key:'racao', label:'Saída de Ração'},
+  ]},
+};
+function currentGroupKey(){
+  return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page));
+}
+
 /* ===================== SIDEBAR ===================== */
 function Sidebar(){
-  const items = [
-    {key:'ingredientes', label:'Ingredientes', icon:iconLeaf()},
-    {key:'estoque', label:'Estoque', icon:iconSilo()},
-    {key:'dietas', label:'Formulação de Dietas', icon:iconBowl()},
-    {key:'lotes', label:'Lotes', icon:iconLote()},
-    {key:'racao', label:'Saída de Ração', icon:iconRacao()},
-  ];
+  const activeGroup = currentGroupKey();
   return `
   <div class="sidebar">
     <div class="brand">
@@ -427,15 +474,25 @@ function Sidebar(){
       </div>
     </div>
     <nav>
-      ${items.map(it=>`
-        <button class="nav-item ${state.page===it.key?'active':''}" data-nav="${it.key}">
-          ${it.icon} ${it.label}
+      ${Object.entries(GROUPS).map(([key,g])=>`
+        <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">
+          ${g.icon} ${g.label}
         </button>
       `).join('')}
     </nav>
     <div class="sidebar-footer">
       MVP · dados salvos<br/>na nuvem (Supabase).
     </div>
+  </div>`;
+}
+function SubTabs(){
+  const group = GROUPS[currentGroupKey()];
+  if(!group || group.pages.length<2) return '';
+  return `
+  <div class="subtabs">
+    ${group.pages.map(p=>`
+      <button class="subtab ${state.page===p.key?'active':''}" data-subnav="${p.key}">${p.label}</button>
+    `).join('')}
   </div>`;
 }
 function brandMark(){
@@ -461,11 +518,6 @@ function Header(){
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
   };
   const t = titles[state.page];
-  const actionLabel = state.page==='ingredientes' ? '+ Novo ingrediente'
-    : state.page==='estoque' ? '+ Nova movimentação'
-    : state.page==='dietas' ? '+ Nova dieta'
-    : state.page==='lotes' ? '+ Novo lote'
-    : '+ Nova saída de ração';
   return `
   <div class="page-header">
     <div>
@@ -473,7 +525,48 @@ function Header(){
       <h1>${t.title}</h1>
       <p class="page-desc">${t.desc}</p>
     </div>
-    <button class="btn btn-primary" data-action="new">${actionLabel}</button>
+  </div>`;
+}
+
+/* ===================== BOTÃO DE AÇÃO RÁPIDA (FAB) ===================== */
+function openNewModal(type){
+  if(type==='ingrediente'){
+    editDraft = {nome:'', categoria:'Energético', fornecedor:'', unidade:'kg', ms:'', pb:'', ndt:'', precoKg:'', estoqueMin:''};
+    state.modal = {type:'ingrediente'};
+  } else if(type==='movimento'){
+    editDraft = {ingredienteId: state.ingredientes[0]?.id||'', tipo:'entrada', data:new Date().toISOString().slice(0,10), quantidade:''};
+    state.modal = {type:'movimento'};
+  } else if(type==='dieta'){
+    editDraft = {nome:'', categoriaAnimal:'', kgAnimalDia:9, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
+    state.modal = {type:'dieta'};
+  } else if(type==='lote'){
+    editDraft = {nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:''};
+    state.modal = {type:'lote'};
+  } else if(type==='saidaRacao'){
+    if(state.dietas.length===0 || state.lotes.length===0){
+      alert('Cadastre ao menos uma dieta e um lote antes de registrar uma saída de ração.');
+      return false;
+    }
+    editDraft = {dietaId: state.dietas[0]?.id||'', loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
+    state.modal = {type:'saidaRacao'};
+  }
+  return true;
+}
+function FabMenu(){
+  const actions = [
+    {type:'ingrediente', label:'Novo ingrediente'},
+    {type:'movimento', label:'Nova movimentação de estoque'},
+    {type:'dieta', label:'Nova dieta'},
+    {type:'lote', label:'Novo lote'},
+    {type:'saidaRacao', label:'Nova saída de ração'},
+  ];
+  return `
+  <div class="fab-wrap">
+    ${state.fabOpen ? `
+    <div class="fab-menu">
+      ${actions.map(a=>`<button class="fab-menu-item" data-fab-action="${a.type}">+ ${a.label}</button>`).join('')}
+    </div>` : ''}
+    <button class="fab-btn" data-fab-toggle="1" aria-label="Adicionar">${state.fabOpen ? '&times;' : '+'}</button>
   </div>`;
 }
 
@@ -901,9 +994,6 @@ function ModalSaidaRacao(){
 
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
-  document.querySelectorAll('[data-nav]').forEach(el=>{
-    el.onclick = ()=>{ state.page = el.dataset.nav; render(); };
-  });
   const searchEl = document.querySelector('[data-search]');
   if(searchEl){
     searchEl.oninput = (e)=>{ state.search = e.target.value; render();
@@ -912,32 +1002,27 @@ function attachEvents(){
       s.focus(); s.setSelectionRange(s.value.length, s.value.length);
     };
   }
-  const newBtn = document.querySelector('[data-action="new"]');
-  if(newBtn){
-    newBtn.onclick = ()=>{
-      if(state.page==='ingredientes'){
-        editDraft = {nome:'', categoria:'Energético', fornecedor:'', unidade:'kg', ms:'', pb:'', ndt:'', precoKg:'', estoqueMin:''};
-        state.modal = {type:'ingrediente'};
-      } else if(state.page==='estoque'){
-        editDraft = {ingredienteId: state.ingredientes[0]?.id||'', tipo:'entrada', data:new Date().toISOString().slice(0,10), quantidade:''};
-        state.modal = {type:'movimento'};
-      } else if(state.page==='dietas'){
-        editDraft = {nome:'', categoriaAnimal:'', kgAnimalDia:9, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
-        state.modal = {type:'dieta'};
-      } else if(state.page==='lotes'){
-        editDraft = {nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:''};
-        state.modal = {type:'lote'};
-      } else if(state.page==='racao'){
-        if(state.dietas.length===0 || state.lotes.length===0){
-          alert('Cadastre ao menos uma dieta e um lote antes de registrar uma saída de ração.');
-          return;
-        }
-        editDraft = {dietaId: state.dietas[0]?.id||'', loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
-        state.modal = {type:'saidaRacao'};
-      }
+  document.querySelectorAll('[data-nav-group]').forEach(el=>{
+    el.onclick = ()=>{
+      const group = GROUPS[el.dataset.navGroup];
+      if(!group.pages.some(p=>p.key===state.page)) state.page = group.pages[0].key;
       render();
     };
+  });
+  document.querySelectorAll('[data-subnav]').forEach(el=>{
+    el.onclick = ()=>{ state.page = el.dataset.subnav; render(); };
+  });
+  const fabToggle = document.querySelector('[data-fab-toggle]');
+  if(fabToggle){
+    fabToggle.onclick = ()=>{ state.fabOpen = !state.fabOpen; render(); };
   }
+  document.querySelectorAll('[data-fab-action]').forEach(el=>{
+    el.onclick = ()=>{
+      openNewModal(el.dataset.fabAction);
+      state.fabOpen = false;
+      render();
+    };
+  });
   document.querySelectorAll('[data-edit-ing]').forEach(el=>{
     el.onclick = ()=>{
       const ing = getIng(el.dataset.editIng);
