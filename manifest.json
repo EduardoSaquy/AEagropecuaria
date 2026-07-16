@@ -1,11 +1,11 @@
 {
-  "name": "Confinar — Gestão de Confinamento",
-  "short_name": "Confinar",
+  "name": "AE Nutrição — Gestão de Confinamento",
+  "short_name": "AE Nutrição",
   "start_url": "./AEpecuaria.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F1F2EE",
-  "theme_color": "#1F3D2E",
+  "background_color": "#F2F5FA",
+  "theme_color": "#0F2A4A",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
