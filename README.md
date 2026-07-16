@@ -12,6 +12,8 @@ O app permite cadastrar ingredientes com sua composição nutricional, controlar
 - **Lotes** — cadastro dos lotes/currais de animais, com número de cabeças e datas de início e encerramento.
 - **Saída de Ração** — lançamento da ração feita e distribuída a um lote a partir de uma dieta formulada; o estoque de cada ingrediente é descontado automaticamente na proporção da composição da dieta. CRUD completo.
 - **Leitura de Cocho** — registro diário da avaliação de sobra no cocho de cada curral, com nota de 1 (limpo) a 4 (muito excesso) e observação opcional. CRUD completo.
+- **Pasto** — registro da reposição de ração ou suplemento no cocho de lotes que estão no pasto, vinculado a um ingrediente cadastrado; desconta o estoque automaticamente. CRUD completo.
+- **Financeiro** — custo de ração e pasto do dia e do mês, custo por animal, e cadastro de custos fixos mensais da operação (mão de obra, energia, etc.), com o total mensal (variável + fixo). CRUD completo dos custos fixos.
 
 ## Status do projeto
 
