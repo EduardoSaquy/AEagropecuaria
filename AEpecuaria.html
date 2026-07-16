@@ -418,7 +418,7 @@ async function loadAll(){
 
 /* ===================== ESTADO ===================== */
 const state = {
-  page: 'ingredientes',
+  page: 'estoque',
   ingredientes: [],
   movimentos: [],
   dietas: [],
@@ -475,8 +475,8 @@ function saldoIngrediente(id){
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
 const GROUPS = {
   insumos: {label:'Insumos', icon:iconLeaf(), pages:[
-    {key:'ingredientes', label:'Ingredientes'},
     {key:'estoque', label:'Estoque'},
+    {key:'ingredientes', label:'Ingredientes'},
   ]},
   dietas: {label:'Formulação de Dietas', icon:iconBowl(), pages:[
     {key:'dietas', label:'Formulação de Dietas'},
