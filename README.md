@@ -11,6 +11,7 @@ O app permite cadastrar ingredientes com sua composição nutricional, controlar
 - **Formulação de Dietas** — composição de dietas por percentual de ingrediente, com cálculo automático de MS%, PB%, NDT%, custo por kg e custo por animal/dia. CRUD completo.
 - **Lotes** — cadastro dos lotes/currais de animais, com número de cabeças e datas de início e encerramento.
 - **Saída de Ração** — lançamento da ração feita e distribuída a um lote a partir de uma dieta formulada; o estoque de cada ingrediente é descontado automaticamente na proporção da composição da dieta. CRUD completo.
+- **Leitura de Cocho** — registro diário da avaliação de sobra no cocho de cada curral, com nota de 1 (limpo) a 4 (muito excesso) e observação opcional. CRUD completo.
 
 ## Status do projeto
 
