@@ -389,15 +389,20 @@ function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg}; }
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
+function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, ingredienteId:r.ingrediente_id, quantidade:r.quantidade}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, cf] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
     db.from('lotes').select('*').order('id'),
     db.from('saidas_racao').select('*').order('id'),
     db.from('leituras_cocho').select('*').order('id'),
+    db.from('pasto').select('*').order('id'),
+    db.from('custos_fixos').select('*').order('id'),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -405,6 +410,8 @@ async function loadAll(){
   state.lotes = (lot.data||[]).map(rowToLote);
   state.saidasRacao = (sr.data||[]).map(rowToSaidaRacao);
   state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
+  state.pasto = (pt.data||[]).map(rowToPasto);
+  state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
   render();
 }
@@ -418,7 +425,9 @@ const state = {
   lotes: [],
   saidasRacao: [],
   leiturasCocho: [],
-  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho', data: {...}}
+  pasto: [],
+  custosFixos: [],
+  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo', data: {...}}
   openDietId: null,
   search: '',
   fabOpen: false,
@@ -440,6 +449,8 @@ function render(){
         ${state.page==='lotes' ? PageLotes() : ''}
         ${state.page==='racao' ? PageSaidaRacao() : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
+        ${state.page==='pasto' ? PagePasto() : ''}
+        ${state.page==='financeiro' ? PageFinanceiro() : ''}
       </div>
     </div>
     ${state.modal ? Modal() : ''}
@@ -474,6 +485,12 @@ const GROUPS = {
     {key:'lotes', label:'Lotes'},
     {key:'racao', label:'Saída de Ração'},
     {key:'cocho', label:'Leitura de Cocho'},
+  ]},
+  pasto: {label:'Pasto', icon:iconPasto(), pages:[
+    {key:'pasto', label:'Pasto'},
+  ]},
+  financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
+    {key:'financeiro', label:'Financeiro'},
   ]},
 };
 function currentGroupKey(){
@@ -526,6 +543,8 @@ function iconSilo(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fil
 function iconBowl(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18a9 6 0 0 1-18 0Z"/><path d="M8 12V7a4 4 0 0 1 8 0v5"/></svg>`; }
 function iconLote(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>`; }
 function iconRacao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg>`; }
+function iconPasto(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 20c2-6 4-6 4-11"/><path d="M9 20c2-8 4-8 4-14"/><path d="M15 20c2-5 4-5 4-9"/></svg>`; }
+function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M9.5 9.5c0-1.4 1.1-2.5 2.5-2.5s2.5.7 2.5 2c0 3-5 2-5 5 0 1.3 1.1 2 2.5 2s2.5-1.1 2.5-2.5"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -536,6 +555,8 @@ function Header(){
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
+    pasto:{eyebrow:'Movimentação', title:'Pasto', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto.'},
+    financeiro:{eyebrow:'Gestão', title:'Financeiro', desc:'Acompanhe o custo diário e mensal de alimentação dos animais, e cadastre os custos fixos da operação.'},
   };
   const t = titles[state.page];
   return `
@@ -576,6 +597,16 @@ function openNewModal(type){
     }
     editDraft = {loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), nota:2, observacao:''};
     state.modal = {type:'cocho'};
+  } else if(type==='pasto'){
+    if(state.lotes.length===0 || state.ingredientes.length===0){
+      alert('Cadastre ao menos um lote e um ingrediente antes de registrar uma reposição de pasto.');
+      return false;
+    }
+    editDraft = {loteId: state.lotes[0]?.id||'', ingredienteId: state.ingredientes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
+    state.modal = {type:'pasto'};
+  } else if(type==='custoFixo'){
+    editDraft = {nome:'', categoria:'', valorMensal:''};
+    state.modal = {type:'custoFixo'};
   }
   return true;
 }
@@ -587,6 +618,8 @@ function FabMenu(){
     {type:'lote', label:'Novo lote'},
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
+    {type:'pasto', label:'Nova reposição de pasto'},
+    {type:'custoFixo', label:'Novo custo fixo'},
   ];
   return `
   <div class="fab-wrap">
@@ -876,6 +909,108 @@ function PageCocho(){
   </div>`;
 }
 
+/* ===================== PÁGINA: PASTO ===================== */
+function custoPasto(p){
+  const ing = getIng(p.ingredienteId);
+  return ing ? ing.precoKg * p.quantidade : 0;
+}
+function PagePasto(){
+  const list = [...state.pasto].sort((a,b)=> b.data.localeCompare(a.data));
+  return `
+  <div class="toolbar">
+    <span class="hint">${list.length} reposição(ões) registrada(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhuma reposição de pasto registrada','Registre a ração ou suplemento colocado no cocho de cada lote no pasto.') : `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Lote</th><th>Ingrediente</th><th>Quantidade</th><th>Custo estimado</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(p=>{
+          const lote = state.lotes.find(l=>l.id===p.loteId);
+          const ing = getIng(p.ingredienteId);
+          return `<tr>
+            <td class="mono">${p.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td>${ing?ing.nome:'—'}</td>
+            <td class="mono">${fmtInt(p.quantidade)} ${ing?ing.unidade:''}</td>
+            <td class="mono">R$ ${fmt(custoPasto(p))}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-pasto="${p.id}">Excluir</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: FINANCEIRO ===================== */
+function custoSaidaRacao(s){
+  const dieta = state.dietas.find(d=>d.id===s.dietaId);
+  return dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0;
+}
+function hojeStr(){ return new Date().toISOString().slice(0,10); }
+function mesAtualStr(){ return new Date().toISOString().slice(0,7); }
+function PageFinanceiro(){
+  const hoje = hojeStr();
+  const mes = mesAtualStr();
+
+  const racaoHoje = state.saidasRacao.filter(s=>s.data===hoje).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const pastoHoje = state.pasto.filter(p=>p.data===hoje).reduce((a,p)=>a+custoPasto(p),0);
+  const custoHoje = racaoHoje + pastoHoje;
+
+  const racaoMes = state.saidasRacao.filter(s=>s.data.startsWith(mes)).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const pastoMes = state.pasto.filter(p=>p.data.startsWith(mes)).reduce((a,p)=>a+custoPasto(p),0);
+  const variavelMes = racaoMes + pastoMes;
+  const fixosMes = state.custosFixos.reduce((a,c)=>a+Number(c.valorMensal||0),0);
+  const totalMes = variavelMes + fixosMes;
+
+  const totalAnimais = state.lotes.filter(l=>!l.dataFim).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const custoPorAnimalHoje = totalAnimais>0 ? custoHoje/totalAnimais : 0;
+
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo de ração + pasto hoje</div><div class="stat-value">R$ ${fmt(custoHoje)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo/animal hoje</div><div class="stat-value">R$ ${fmt(custoPorAnimalHoje,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(variavelMes)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(fixosMes)}</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <div class="stat-label">Total do mês (variável + fixo)</div>
+        <div class="stat-value" style="font-size:26px;">R$ ${fmt(totalMes)}</div>
+      </div>
+      <span class="hint">${fmtInt(totalAnimais)} animais em lotes ativos</span>
+    </div>
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Custos fixos cadastrados</p>
+  <div class="card">
+    ${state.custosFixos.length===0 ? Empty('Nenhum custo fixo cadastrado','Cadastre despesas mensais fixas, como mão de obra, energia e manutenção.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Categoria</th><th>Valor mensal</th><th></th></tr></thead>
+      <tbody>
+        ${state.custosFixos.map(c=>`
+          <tr>
+            <td><strong>${c.nome}</strong></td>
+            <td>${c.categoria || '—'}</td>
+            <td class="mono">R$ ${fmt(c.valorMensal)}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
 function Empty(title, sub){
   return `<div class="empty">
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
@@ -893,6 +1028,8 @@ function Modal(){
   if(state.modal.type==='lote') return ModalLote();
   if(state.modal.type==='saidaRacao') return ModalSaidaRacao();
   if(state.modal.type==='cocho') return ModalCocho();
+  if(state.modal.type==='pasto') return ModalPasto();
+  if(state.modal.type==='custoFixo') return ModalCustoFixo();
   return '';
 }
 
@@ -1095,6 +1232,60 @@ function ModalCocho(){
   </div>`;
 }
 
+function ModalPasto(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar reposição de pasto':'Nova reposição de pasto'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Lote</label>
+            <select id="f-lote">
+              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Ingrediente colocado no cocho</label>
+            <select id="f-ing">
+              ${state.ingredientes.map(i=>`<option value="${i.id}" ${d.ingredienteId==i.id?'selected':''}>${i.nome}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Quantidade</label><input id="f-qtdpasto" type="number" step="0.1" value="${d.quantidade}"/></div>
+        </div>
+        <p class="hint">O estoque do ingrediente escolhido é descontado automaticamente ao salvar.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="pasto">${d._editId?'Salvar alterações':'Registrar reposição'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalCustoFixo(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar custo fixo':'Novo custo fixo'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome do custo</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
+        <div class="field-row">
+          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Pessoal"/></div>
+          <div class="field"><label>Valor mensal (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="custoFixo">${d._editId?'Salvar alterações':'Salvar custo fixo'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
   const searchEl = document.querySelector('[data-search]');
@@ -1218,6 +1409,36 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-nota-pick]').forEach(el=>{
     el.onclick = ()=>{ editDraft.nota = Number(el.dataset.notaPick); render(); };
+  });
+  document.querySelectorAll('[data-edit-pasto]').forEach(el=>{
+    el.onclick = ()=>{
+      const p = state.pasto.find(x=>x.id===Number(el.dataset.editPasto));
+      editDraft = {...p, _editId: p.id};
+      state.modal = {type:'pasto'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-pasto]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delPasto);
+      await db.from('pasto').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-edit-custofixo]').forEach(el=>{
+    el.onclick = ()=>{
+      const c = state.custosFixos.find(x=>x.id===Number(el.dataset.editCustofixo));
+      editDraft = {...c, _editId: c.id};
+      state.modal = {type:'custoFixo'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-custofixo]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delCustofixo);
+      await db.from('custos_fixos').delete().eq('id', id);
+      await loadAll();
+    };
   });
   document.querySelectorAll('[data-toggle-diet]').forEach(el=>{
     el.onclick = ()=>{
@@ -1354,6 +1575,38 @@ function attachEvents(){
           ({error} = await db.from('leituras_cocho').update(row).eq('id', editDraft._editId));
         } else {
           ({error} = await db.from('leituras_cocho').insert(row));
+        }
+      } else if(type==='pasto'){
+        const loteId = Number(document.getElementById('f-lote').value);
+        const ingredienteId = Number(document.getElementById('f-ing').value);
+        const data = document.getElementById('f-data').value;
+        const quantidade = Number(document.getElementById('f-qtdpasto').value)||0;
+        const row = {data, lote_id: loteId, ingrediente_id: ingredienteId, quantidade};
+        let pastoId = editDraft._editId;
+        if(pastoId){
+          ({error} = await db.from('pasto').update(row).eq('id', pastoId));
+          if(!error) await db.from('movimentos').delete().eq('pasto_id', pastoId);
+        } else {
+          const res = await db.from('pasto').insert(row).select().single();
+          error = res.error;
+          if(res.data) pastoId = res.data.id;
+        }
+        if(!error){
+          ({error} = await db.from('movimentos').insert({
+            data, ingrediente_id: ingredienteId, tipo: 'saida', quantidade, pasto_id: pastoId,
+          }));
+        }
+      } else if(type==='custoFixo'){
+        const campos = {
+          nome: document.getElementById('f-nome').value || 'Sem nome',
+          categoria: document.getElementById('f-categoria').value,
+          valorMensal: Number(document.getElementById('f-valormensal').value)||0,
+        };
+        const row = custoFixoToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('custos_fixos').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('custos_fixos').insert(row));
         }
       }
       if(error){
