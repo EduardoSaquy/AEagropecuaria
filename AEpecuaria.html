@@ -464,6 +464,11 @@ function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFrac
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
+// "Preço por kg" é sempre por quilo; quantidades guardadas em "ton" precisam
+// ser convertidas para kg antes de multiplicar pelo preço.
+function qtdEmKg(qtd, unidade){ return unidade==='ton' ? Number(qtd||0)*1000 : Number(qtd||0); }
+function kgParaUnidade(qtdKg, unidade){ return unidade==='ton' ? qtdKg/1000 : qtdKg; }
+
 function saldoIngrediente(id){
   let saldo = 0;
   state.movimentos.filter(m=>m.ingredienteId===id).forEach(m=>{
@@ -674,7 +679,7 @@ function PageIngredientes(){
 function PageEstoque(){
   const rows = state.ingredientes.map(i=>{
     const saldo = saldoIngrediente(i.id);
-    const valor = saldo * i.precoKg;
+    const valor = qtdEmKg(saldo, i.unidade) * i.precoKg;
     const pctMin = i.estoqueMin>0 ? Math.min(saldo/(i.estoqueMin*2),1) : 1;
     const baixo = saldo < i.estoqueMin;
     return {i, saldo, valor, pctMin, baixo};
@@ -912,7 +917,7 @@ function PageCocho(){
 /* ===================== PÁGINA: PASTO ===================== */
 function custoPasto(p){
   const ing = getIng(p.ingredienteId);
-  return ing ? ing.precoKg * p.quantidade : 0;
+  return ing ? ing.precoKg * qtdEmKg(p.quantidade, ing.unidade) : 0;
 }
 function PagePasto(){
   const list = [...state.pasto].sort((a,b)=> b.data.localeCompare(a.data));
@@ -1062,7 +1067,8 @@ function ModalIngrediente(){
           <div class="field"><label>NDT (%)</label><input id="f-ndt" type="number" step="0.1" value="${d.ndt}"/></div>
           <div class="field"><label>Preço por kg (R$)</label><input id="f-preco" type="number" step="0.01" value="${d.precoKg}"/></div>
         </div>
-        <div class="field"><label>Estoque mínimo (alerta)</label><input id="f-min" type="number" step="1" value="${d.estoqueMin}"/></div>
+        <div class="field"><label>Estoque mínimo (alerta, em ${d.unidade||'kg'})</label><input id="f-min" type="number" step="1" value="${d.estoqueMin}"/></div>
+        <p class="hint">O preço é sempre por quilo (R$/kg), mesmo quando a unidade de estoque escolhida acima é tonelada.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -1093,7 +1099,7 @@ function ModalMovimento(){
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
         </div>
-        <div class="field"><label>Quantidade</label><input id="f-qtd" type="number" step="0.1" value="${d.quantidade}"/></div>
+        <div class="field"><label>Quantidade (em ${getIng(d.ingredienteId)?.unidade || 'kg'})</label><input id="f-qtd" type="number" step="0.1" value="${d.quantidade}"/></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -1253,7 +1259,7 @@ function ModalPasto(){
         </div>
         <div class="field-row">
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
-          <div class="field"><label>Quantidade</label><input id="f-qtdpasto" type="number" step="0.1" value="${d.quantidade}"/></div>
+          <div class="field"><label>Quantidade (em ${getIng(d.ingredienteId)?.unidade || 'kg'})</label><input id="f-qtdpasto" type="number" step="0.1" value="${d.quantidade}"/></div>
         </div>
         <p class="hint">O estoque do ingrediente escolhido é descontado automaticamente ao salvar.</p>
       </div>
@@ -1555,10 +1561,14 @@ function attachEvents(){
           if(res.data) saidaId = res.data.id;
         }
         if(!error && dieta){
-          const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>({
-            data, ingrediente_id: it.ingredienteId, tipo: 'saida',
-            quantidade: quantidadeKg*it.pct/100, saida_racao_id: saidaId,
-          }));
+          const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+            const ing = getIng(it.ingredienteId);
+            const consumoKg = quantidadeKg*it.pct/100;
+            return {
+              data, ingrediente_id: it.ingredienteId, tipo: 'saida',
+              quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
+            };
+          });
           if(movs.length){
             ({error} = await db.from('movimentos').insert(movs));
           }
