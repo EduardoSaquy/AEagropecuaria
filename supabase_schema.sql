@@ -110,3 +110,34 @@ create table leituras_cocho (
 alter table leituras_cocho enable row level security;
 
 create policy "public full access" on leituras_cocho for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Pasto e Financeiro
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- das migrações acima já existirem no seu projeto.
+-- ===================================================================
+
+create table pasto (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete set null,
+  ingrediente_id bigint references ingredientes(id) on delete set null,
+  quantidade numeric default 0
+);
+
+-- vincula as movimentações de estoque geradas por uma reposição de pasto,
+-- para que excluir o registro também desfaça o desconto no estoque
+alter table movimentos add column pasto_id bigint references pasto(id) on delete cascade;
+
+create table custos_fixos (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  categoria text,
+  valor_mensal numeric default 0
+);
+
+alter table pasto enable row level security;
+alter table custos_fixos enable row level security;
+
+create policy "public full access" on pasto for all using (true) with check (true);
+create policy "public full access" on custos_fixos for all using (true) with check (true);
