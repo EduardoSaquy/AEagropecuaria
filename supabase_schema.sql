@@ -92,3 +92,21 @@ alter table saidas_racao enable row level security;
 
 create policy "public full access" on lotes for all using (true) with check (true);
 create policy "public full access" on saidas_racao for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Leitura de Cocho
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- lotes e saidas_racao (migração acima) já existirem no seu projeto.
+-- ===================================================================
+
+create table leituras_cocho (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete cascade,
+  nota smallint not null check (nota between 1 and 4), -- 1 limpo · 2 bom · 3 pouco excesso · 4 muito excesso
+  observacao text default ''
+);
+
+alter table leituras_cocho enable row level security;
+
+create policy "public full access" on leituras_cocho for all using (true) with check (true);

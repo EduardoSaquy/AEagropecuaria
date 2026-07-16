@@ -205,6 +205,7 @@
   .pill-ok{background:var(--ok-bg); color:var(--verde-medio);}
   .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
   .pill-cat{background:var(--cinza-claro); color:var(--grafite);}
+  .pill-warn{background:#F5E9D7; color:var(--trigo);}
 
   /* silo gauge */
   .silo-wrap{display:flex; align-items:center; gap:8px;}
@@ -325,6 +326,17 @@
   }
   .fab-menu-item:hover{background:var(--cinza-bg);}
 
+  /* seletor de nota da leitura de cocho */
+  .nota-picker{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+  .nota-btn{
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:12px 6px; border-radius:8px; border:1.5px solid var(--cinza-claro); background:var(--branco);
+    cursor:pointer; font-family:'Inter',sans-serif;
+  }
+  .nota-btn .n{font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:var(--verde-escuro);}
+  .nota-btn .l{font-size:10.5px; color:var(--cinza); text-align:center; line-height:1.3;}
+  .nota-btn.active{border-color:var(--verde-medio); background:var(--ok-bg);}
+
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -375,20 +387,24 @@ function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal,
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim}; }
 function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null}; }
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg}; }
+function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||''}; }
+function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
     db.from('lotes').select('*').order('id'),
     db.from('saidas_racao').select('*').order('id'),
+    db.from('leituras_cocho').select('*').order('id'),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
   state.dietas = (diet.data||[]).map(rowToDieta);
   state.lotes = (lot.data||[]).map(rowToLote);
   state.saidasRacao = (sr.data||[]).map(rowToSaidaRacao);
+  state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
   if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
   render();
 }
@@ -401,7 +417,8 @@ const state = {
   dietas: [],
   lotes: [],
   saidasRacao: [],
-  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao', data: {...}}
+  leiturasCocho: [],
+  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho', data: {...}}
   openDietId: null,
   search: '',
   fabOpen: false,
@@ -422,6 +439,7 @@ function render(){
         ${state.page==='dietas' ? PageDietas() : ''}
         ${state.page==='lotes' ? PageLotes() : ''}
         ${state.page==='racao' ? PageSaidaRacao() : ''}
+        ${state.page==='cocho' ? PageCocho() : ''}
       </div>
     </div>
     ${state.modal ? Modal() : ''}
@@ -455,6 +473,7 @@ const GROUPS = {
   confinamento: {label:'Confinamento', icon:iconLote(), pages:[
     {key:'lotes', label:'Lotes'},
     {key:'racao', label:'Saída de Ração'},
+    {key:'cocho', label:'Leitura de Cocho'},
   ]},
 };
 function currentGroupKey(){
@@ -516,6 +535,7 @@ function Header(){
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
+    cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
   };
   const t = titles[state.page];
   return `
@@ -549,6 +569,13 @@ function openNewModal(type){
     }
     editDraft = {dietaId: state.dietas[0]?.id||'', loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
+  } else if(type==='cocho'){
+    if(state.lotes.length===0){
+      alert('Cadastre ao menos um lote antes de registrar uma leitura de cocho.');
+      return false;
+    }
+    editDraft = {loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), nota:2, observacao:''};
+    state.modal = {type:'cocho'};
   }
   return true;
 }
@@ -559,6 +586,7 @@ function FabMenu(){
     {type:'dieta', label:'Nova dieta'},
     {type:'lote', label:'Novo lote'},
     {type:'saidaRacao', label:'Nova saída de ração'},
+    {type:'cocho', label:'Nova leitura de cocho'},
   ];
   return `
   <div class="fab-wrap">
@@ -809,6 +837,45 @@ function PageSaidaRacao(){
   </div>`;
 }
 
+/* ===================== PÁGINA: LEITURA DE COCHO ===================== */
+const NOTAS_COCHO = {
+  1: {label:'1 · Limpo', pill:'pill-ok'},
+  2: {label:'2 · Bom', pill:'pill-ok'},
+  3: {label:'3 · Pouco excesso', pill:'pill-warn'},
+  4: {label:'4 · Muito excesso', pill:'pill-alerta'},
+};
+function PageCocho(){
+  const list = [...state.leiturasCocho].sort((a,b)=> b.data.localeCompare(a.data));
+  return `
+  <div class="toolbar">
+    <span class="hint">${list.length} leitura(s) registrada(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhuma leitura de cocho registrada','Registre diariamente a avaliação de sobra no cocho de cada curral.') : `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Curral</th><th>Leitura</th><th>Observação</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(c=>{
+          const lote = state.lotes.find(l=>l.id===c.loteId);
+          const n = NOTAS_COCHO[c.nota] || {label:c.nota, pill:'pill-cat'};
+          return `<tr>
+            <td class="mono">${c.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td><span class="pill ${n.pill}">${n.label}</span></td>
+            <td>${c.observacao || '—'}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-cocho="${c.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-cocho="${c.id}">Excluir</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
 function Empty(title, sub){
   return `<div class="empty">
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
@@ -825,6 +892,7 @@ function Modal(){
   if(state.modal.type==='dieta') return ModalDieta();
   if(state.modal.type==='lote') return ModalLote();
   if(state.modal.type==='saidaRacao') return ModalSaidaRacao();
+  if(state.modal.type==='cocho') return ModalCocho();
   return '';
 }
 
@@ -992,6 +1060,41 @@ function ModalSaidaRacao(){
   </div>`;
 }
 
+function ModalCocho(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar leitura de cocho':'Nova leitura de cocho'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Curral (lote)</label>
+            <select id="f-lote">
+              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field">
+          <label>Leitura do cocho</label>
+          <div class="nota-picker">
+            ${[1,2,3,4].map(n=>`
+              <button type="button" class="nota-btn ${Number(d.nota)===n?'active':''}" data-nota-pick="${n}">
+                <span class="n">${n}</span><span class="l">${NOTAS_COCHO[n].label.split(' · ')[1]}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obs" rows="2" placeholder="Ex: cocho vazio pela manhã">${d.observacao||''}</textarea></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="cocho">${d._editId?'Salvar alterações':'Registrar leitura'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
   const searchEl = document.querySelector('[data-search]');
@@ -1097,6 +1200,24 @@ function attachEvents(){
       await db.from('saidas_racao').delete().eq('id', id);
       await loadAll();
     };
+  });
+  document.querySelectorAll('[data-edit-cocho]').forEach(el=>{
+    el.onclick = ()=>{
+      const c = state.leiturasCocho.find(x=>x.id===Number(el.dataset.editCocho));
+      editDraft = {...c, _editId: c.id};
+      state.modal = {type:'cocho'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-cocho]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delCocho);
+      await db.from('leituras_cocho').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-nota-pick]').forEach(el=>{
+    el.onclick = ()=>{ editDraft.nota = Number(el.dataset.notaPick); render(); };
   });
   document.querySelectorAll('[data-toggle-diet]').forEach(el=>{
     el.onclick = ()=>{
@@ -1220,6 +1341,19 @@ function attachEvents(){
           if(movs.length){
             ({error} = await db.from('movimentos').insert(movs));
           }
+        }
+      } else if(type==='cocho'){
+        const campos = {
+          loteId: Number(document.getElementById('f-lote').value),
+          data: document.getElementById('f-data').value,
+          nota: Number(editDraft.nota)||2,
+          observacao: document.getElementById('f-obs').value,
+        };
+        const row = leituraCochoToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('leituras_cocho').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('leituras_cocho').insert(row));
         }
       }
       if(error){
