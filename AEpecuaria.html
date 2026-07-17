@@ -1106,23 +1106,36 @@ const SERIES_COLORS = ['#2a78d6','#008300','#e87ba4','#eda100','#1baf7a','#eb683
 
 // A cor segue sempre a mesma categoria (nunca a posição no ranking do mês),
 // para não trocar de cor quando um custo cresce/encolhe em relação aos outros.
-// Ração, Pasto e Cria têm cor fixa reservada; as demais categorias (texto
-// livre dos custos fixos) recebem uma cor por ordem alfabética, sem repetir cor.
-const CATEGORIAS_RESERVADAS = ['Ração','Pasto','Cria'];
-function coresPorCategoria(nomes){
+// São dois gráficos com jobs diferentes — não fazem sentido misturados no
+// mesmo painel: um compara as áreas de produção (Confinamento/Pasto/Cria),
+// o outro compara os centros de custo fixo (Pessoal, Manutenção etc.).
+const AREAS_PRODUCAO = ['Confinamento','Pasto','Cria'];
+function coresPorArea(){
   const mapa = {};
-  const slots = SERIES_COLORS.slice(CATEGORIAS_RESERVADAS.length);
-  const outras = [...new Set(nomes.filter(n=>!CATEGORIAS_RESERVADAS.includes(n)))].sort();
-  outras.forEach((nome,idx)=>{ mapa[nome] = slots[idx % slots.length]; });
-  CATEGORIAS_RESERVADAS.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
+  AREAS_PRODUCAO.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
+  return mapa;
+}
+function coresPorCentroCusto(nomes){
+  const mapa = {};
+  const unicos = [...new Set(nomes)].sort();
+  unicos.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx % SERIES_COLORS.length]; });
   return mapa;
 }
 
-function composicaoCustoMes(racaoMes, pastoMes, criaMes, custosFixos){
+function composicaoPorArea(racaoConfMes, pastoMes, criaMes){
   const grupos = {};
-  if(racaoMes>0) grupos['Ração'] = racaoMes;
+  if(racaoConfMes>0) grupos['Confinamento'] = racaoConfMes;
   if(pastoMes>0) grupos['Pasto'] = pastoMes;
   if(criaMes>0) grupos['Cria'] = criaMes;
+  let entries = Object.entries(grupos).map(([nome,valor])=>({nome,valor}));
+  entries.sort((a,b)=>b.valor-a.valor);
+  const cores = coresPorArea();
+  const total = entries.reduce((a,e)=>a+e.valor,0);
+  return entries.map(e=>({...e, pct: total>0 ? e.valor/total*100 : 0, cor: cores[e.nome]}));
+}
+
+function composicaoCentrosCusto(custosFixos){
+  const grupos = {};
   custosFixos.forEach(c=>{
     const cat = (c.categoria||'').trim() || 'Outros';
     grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
@@ -1134,7 +1147,7 @@ function composicaoCustoMes(racaoMes, pastoMes, criaMes, custosFixos){
     const restoValor = entries.slice(7).reduce((a,e)=>a+e.valor,0);
     entries = [...principais, {nome:'Outros', valor:restoValor}];
   }
-  const cores = coresPorCategoria(entries.map(e=>e.nome));
+  const cores = coresPorCentroCusto(entries.map(e=>e.nome));
   const total = entries.reduce((a,e)=>a+e.valor,0);
   return entries.map(e=>({...e, pct: total>0 ? e.valor/total*100 : 0, cor: cores[e.nome]}));
 }
@@ -1149,9 +1162,9 @@ function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
   return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
 }
 
-function PainelResultados(entries, totalMes){
+function PainelResultados(entries, totalMes, panelId, eyebrow, titulo, vazioMsg){
   if(entries.length===0){
-    return `<div class="card" style="margin-bottom:22px;">${Empty('Sem custos no mês para compor o gráfico','Cadastre custos fixos ou lance ração/pasto para ver a composição aqui.')}</div>`;
+    return `<div class="card" style="margin-bottom:22px;">${Empty('Sem custos no mês para compor o gráfico', vazioMsg)}</div>`;
   }
   const cx=110, cy=110, rOut=100, rIn=64;
   const gap = entries.length>1 ? 0.025 : 0;
@@ -1167,14 +1180,14 @@ function PainelResultados(entries, totalMes){
     const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
     const showLabel = e.pct>=6;
     return `
-      <path class="donut-slice" data-slice-idx="${idx}" data-tip-nome="${e.nome}" data-tip-valor="${fmt(e.valor)}" data-tip-pct="${fmt(e.pct,1)}"
+      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${e.nome}" data-tip-valor="${fmt(e.valor)}" data-tip-pct="${fmt(e.pct,1)}"
         d="${path}" fill="${e.cor}" tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.valor)}, ${fmt(e.pct,1)}% do mês"></path>
       ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(e.pct,0)}%</text>` : ''}
     `;
   }).join('');
 
   const legenda = entries.map((e,idx)=>`
-    <div class="legenda-row" data-legenda-idx="${idx}">
+    <div class="legenda-row" data-legenda-idx="${panelId}-${idx}">
       <span class="legenda-swatch" style="background:${e.cor}"></span>
       <span class="legenda-nome">${e.nome}</span>
       <span class="legenda-valor">R$ ${fmt(e.valor)}</span>
@@ -1185,8 +1198,8 @@ function PainelResultados(entries, totalMes){
   return `
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad">
-      <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
-      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">Composição do custo do mês</h3>
+      <p class="eyebrow" style="margin:0 0 4px;">${eyebrow}</p>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">${titulo}</h3>
       <div class="painel-resultados">
         <div class="donut-wrap">
           <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
@@ -1198,8 +1211,7 @@ function PainelResultados(entries, totalMes){
         <div class="painel-legenda">${legenda}</div>
       </div>
     </div>
-  </div>
-  <div id="painel-tooltip" class="painel-tooltip"></div>`;
+  </div>`;
 }
 
 // Saída de Ração é uma tabela só, compartilhada entre lotes de Confinamento e
@@ -1249,7 +1261,8 @@ function dadosFinanceiro(){
 /* ---- Financeiro: Resumo ---- */
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
-  const composicaoMes = composicaoCustoMes(d.racaoConfMes, d.pastoMes, d.criaMes, state.custosFixos);
+  const composicaoArea = composicaoPorArea(d.racaoConfMes, d.pastoMes, d.criaMes);
+  const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
@@ -1278,7 +1291,9 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
-  ${PainelResultados(composicaoMes, d.totalMes)}`;
+  ${PainelResultados(composicaoArea, d.variavelMes, 'area', 'Painel de resultados', 'Custo variável do mês por área (Confinamento, Pasto e Cria)', 'Lance ração, pasto ou reprodução para ver a composição por área aqui.')}
+  ${PainelResultados(composicaoFixos, d.fixosMes, 'fixos', 'Painel de resultados', 'Custos fixos do mês por centro de custo', 'Cadastre custos fixos para ver a composição por centro de custo aqui.')}
+  <div id="painel-tooltip" class="painel-tooltip"></div>`;
 }
 
 /* ---- Financeiro: Por Curral ---- */
