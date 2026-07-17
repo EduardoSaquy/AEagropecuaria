@@ -141,3 +141,17 @@ alter table custos_fixos enable row level security;
 
 create policy "public full access" on pasto for all using (true) with check (true);
 create policy "public full access" on custos_fixos for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Dietas de Confinamento x Pasto
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- das migrações acima já existirem no seu projeto.
+--
+-- O Pasto passa a usar uma dieta formulada (do tipo "pasto") em vez de
+-- um ingrediente único, igual já funciona em Saída de Ração. A coluna
+-- pasto.ingrediente_id não é mais usada pelo app, mas fica no banco
+-- (não é apagada) para não perder o histórico de lançamentos antigos.
+-- ===================================================================
+
+alter table dietas add column tipo text default 'confinamento' check (tipo in ('confinamento','pasto'));
+alter table pasto add column dieta_id bigint references dietas(id) on delete set null;
