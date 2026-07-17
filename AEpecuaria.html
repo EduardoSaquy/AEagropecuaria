@@ -378,6 +378,38 @@
   .demo-resultado-label{font-size:13px; font-weight:600; flex:1;}
   .demo-resultado-valor{font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:700;}
 
+  /* ---------- LOGIN ---------- */
+  .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .login-card{background:var(--branco); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.12); border:1px solid var(--cinza-claro); padding:40px 36px; width:100%; max-width:360px;}
+  .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:28px;}
+  .login-brand .brand-name{color:var(--verde-escuro); font-family:'Fraunces',serif; font-weight:600; font-size:19px;}
+  .login-field{margin-bottom:16px; display:flex; flex-direction:column; gap:5px;}
+  .login-field input{width:100%;}
+  .login-error{background:var(--alerta-bg); color:var(--alerta); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px;}
+  .login-btn{width:100%; margin-top:6px; justify-content:center;}
+  .login-btn:disabled{opacity:0.6; cursor:default;}
+  .login-loading{min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--cinza); font-size:14px;}
+
+  /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
+  .sidebar-user{
+    margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);
+    display:flex; align-items:center; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
+  }
+  .sidebar-user-nome{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .btn-sair{
+    background:rgba(255,255,255,0.1); border:none; color:#fff; padding:6px 10px;
+    border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap;
+  }
+  .btn-sair:hover{background:rgba(255,255,255,0.2);}
+
+  /* ---------- ADMIN: MATRIZ DE PERMISSÕES ---------- */
+  .perm-matrix{width:100%; border-collapse:collapse; font-size:13px;}
+  .perm-matrix th, .perm-matrix td{padding:8px 10px; border-bottom:1px solid var(--cinza-claro); text-align:left;}
+  .perm-matrix select{width:100%; padding:6px 8px; font-size:12.5px;}
+  .status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
+  .status-dot.ativo{background:var(--bom);}
+  .status-dot.inativo{background:var(--cinza);}
+
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -389,6 +421,7 @@
     nav{margin-top:0; flex-direction:row; gap:4px;}
     .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
     .sidebar-footer{display:none;}
+    .sidebar-user{margin-top:0; padding-top:0; border-top:none; flex-shrink:0;}
     .main{padding:20px 16px 48px 16px; max-width:100%;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
@@ -444,9 +477,10 @@ function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
 function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
+function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -460,6 +494,7 @@ async function loadAll(){
     db.from('receitas').select('*').order('id'),
     db.from('precos_arroba').select('*').order('id'),
     db.from('config_financeiro').select('*').eq('id', 1),
+    db.from('profiles').select('*').order('nome'),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -468,6 +503,7 @@ async function loadAll(){
   state.saidasRacao = (sr.data||[]).map(rowToSaidaRacao);
   state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
   state.pasto = (pt.data||[]).map(rowToPasto);
+  state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   state.investimentos = (inv.data||[]).map(rowToInvestimento);
@@ -494,20 +530,49 @@ const state = {
   metaMargemPct: null,
   custosFixos: [],
   investimentos: [],
-  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento', data: {...}}
+  perfis: [],
+  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
   search: '',
   fabOpen: false,
+  // ---- autenticação ----
+  authChecked: false, // já verificamos se existe sessão salva?
+  session: null,
+  perfil: null, // {nome, usuario, papel, permissoes, ativo} do usuário logado
+  loginDraft: {usuario:'', senha:''},
+  loginError: '',
+  loginLoading: false,
+  usuarioError: '',
+  usuarioLoading: false,
 };
 
 let editDraft = null; // temp form state while modal open
 
 function render(){
   const root = document.getElementById('root');
+
+  if(!state.authChecked){
+    root.innerHTML = `<div class="login-loading">Carregando...</div>`;
+    return;
+  }
+  if(!state.session){
+    root.innerHTML = LoginPage();
+    attachEvents();
+    return;
+  }
+  if(!state.perfil || !state.perfil.ativo){
+    root.innerHTML = AguardandoLiberacao();
+    attachEvents();
+    return;
+  }
+
+  const grupos = gruposVisiveis();
+  const semModulos = grupos.length===0;
   root.innerHTML = `
     <div class="app">
       ${Sidebar()}
       <div class="main">
+        ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos módulos.') : `
         ${Header()}
         ${SubTabs()}
         ${state.page==='ingredientes' ? PageIngredientes() : ''}
@@ -526,12 +591,157 @@ function render(){
         ${state.page==='financeiroReceitas' ? PageFinanceiroReceitas() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
         ${state.page==='financeiroInvestimentos' ? PageFinanceiroInvestimentos() : ''}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : ''}
+        `}
       </div>
     </div>
     ${state.modal ? Modal() : ''}
-    ${FabMenu()}
+    ${!semModulos ? FabMenu() : ''}
   `;
   attachEvents();
+}
+
+/* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
+const DOMINIO_LOGIN = 'aeagropecuaria.local';
+const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'financeiro'};
+const ACAO_MODULOS = {
+  ingrediente:['insumos'], movimento:['insumos'],
+  dieta:['dietas'],
+  lote:['confinamento','pasto','cria'],
+  saidaRacao:['confinamento'], cocho:['confinamento'],
+  pasto:['pasto'],
+  saidaRacaoCria:['cria'], reproducaoCusto:['cria'],
+  custoFixo:['financeiro'], investimento:['financeiro'], receita:['financeiro'], precoArroba:['financeiro'], metaMargem:['financeiro'],
+};
+
+function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
+function souAdmin(){ return state.perfil?.papel === 'admin'; }
+function temPermissao(modulo, nivel){
+  if(!state.perfil) return false;
+  if(souAdmin()) return true;
+  const atual = state.perfil.permissoes?.[modulo];
+  if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
+  return atual==='editar';
+}
+function podeEditarAcao(type){
+  return (ACAO_MODULOS[type]||[]).some(m=>temPermissao(m,'editar'));
+}
+function grupoVisivel(key){
+  if(key==='admin') return souAdmin();
+  return temPermissao(MODULOS_GROUP[key], 'visualizar');
+}
+function gruposVisiveis(){
+  return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key));
+}
+function primeiraPaginaVisivel(){
+  const grupos = gruposVisiveis();
+  return grupos[0] ? grupos[0][1].pages[0].key : null;
+}
+
+async function loadPerfil(){
+  const uid = state.session?.user?.id;
+  if(!uid){ state.perfil = null; return; }
+  const { data } = await db.from('profiles').select('*').eq('id', uid).single();
+  state.perfil = data ? rowToPerfil(data) : null;
+  if(state.perfil && state.perfil.ativo && !gruposVisiveis().some(([k])=>k===currentGroupKey())){
+    const primeira = primeiraPaginaVisivel();
+    if(primeira) state.page = primeira;
+  }
+}
+
+async function initAuth(){
+  const { data } = await db.auth.getSession();
+  state.session = data.session;
+  if(state.session) await loadPerfil();
+  state.authChecked = true;
+  render();
+  if(state.session && state.perfil?.ativo) loadAll();
+
+  let primeiroEvento = true;
+  db.auth.onAuthStateChange(async (event, newSession)=>{
+    // o primeiro disparo (INITIAL_SESSION) já foi tratado acima; e o disparo
+    // logo após o login manual também já foi tratado em fazerLogin()
+    if(primeiroEvento){ primeiroEvento = false; return; }
+    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
+    state.session = newSession;
+    if(newSession){
+      await loadPerfil();
+      render();
+      if(state.perfil?.ativo) loadAll();
+    } else {
+      state.perfil = null;
+      render();
+    }
+  });
+}
+
+async function fazerLogin(){
+  const usuario = normalizeUsuario(state.loginDraft.usuario);
+  const senha = state.loginDraft.senha;
+  if(!usuario || !senha){ state.loginError = 'Informe usuário e senha.'; render(); return; }
+  state.loginLoading = true; state.loginError = ''; render();
+  const email = `${usuario}@${DOMINIO_LOGIN}`;
+  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+  state.loginLoading = false;
+  if(error){
+    state.loginError = 'Usuário ou senha inválidos.';
+    render();
+    return;
+  }
+  state.session = data.session;
+  await loadPerfil();
+  state.loginDraft = {usuario:'', senha:''};
+  render();
+  if(state.perfil?.ativo) loadAll();
+}
+
+async function fazerLogout(){
+  await db.auth.signOut();
+  state.session = null;
+  state.perfil = null;
+  state.page = 'financeiroResumo';
+  render();
+}
+
+function LoginPage(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        ${brandMark()}
+        <div class="brand-name">AE Pecuária</div>
+      </div>
+      ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
+      <form data-login-form="1">
+        <div class="login-field">
+          <label>Usuário</label>
+          <input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus />
+        </div>
+        <div class="login-field">
+          <label>Senha</label>
+          <input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" />
+        </div>
+        <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
+      </form>
+    </div>
+  </div>`;
+}
+
+function AguardandoLiberacao(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        ${brandMark()}
+        <div class="brand-name">AE Pecuária</div>
+      </div>
+      <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
+        Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
+        Fale com o administrador do sistema.
+      </p>
+      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
+    </div>
+  </div>`;
 }
 
 /* ===================== HELPERS ===================== */
@@ -589,6 +799,9 @@ const GROUPS = {
     {key:'financeiroCustosFixos', label:'Custos Fixos'},
     {key:'financeiroInvestimentos', label:'Investimentos'},
   ]},
+  admin: {label:'Administração', icon:iconAdmin(), pages:[
+    {key:'adminUsuarios', label:'Usuários'},
+  ]},
 };
 function currentGroupKey(){
   return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page));
@@ -606,12 +819,16 @@ function Sidebar(){
       </div>
     </div>
     <nav>
-      ${Object.entries(GROUPS).map(([key,g])=>`
+      ${gruposVisiveis().map(([key,g])=>`
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">
           ${g.icon} ${g.label}
         </button>
       `).join('')}
     </nav>
+    <div class="sidebar-user">
+      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
+      <button class="btn-sair" data-logout="1">Sair</button>
+    </div>
     <div class="sidebar-footer">
       MVP · dados salvos<br/>na nuvem (Supabase).
     </div>
@@ -642,6 +859,7 @@ function iconRacao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fi
 function iconPasto(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 20c2-6 4-6 4-11"/><path d="M9 20c2-8 4-8 4-14"/><path d="M15 20c2-5 4-5 4-9"/></svg>`; }
 function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M9.5 9.5c0-1.4 1.1-2.5 2.5-2.5s2.5.7 2.5 2c0 3-5 2-5 5 0 1.3 1.1 2 2.5 2s2.5-1.1 2.5-2.5"/></svg>`; }
 function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.35-9.5-8.5C1 9 2.5 5.5 6 5c2-.3 4 .8 5 2.5 1-1.7 3-2.8 5-2.5 3.5.5 5 4 3.5 7.5C19 16.65 12 21 12 21Z"/></svg>`; }
+function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -662,6 +880,7 @@ function Header(){
     financeiroReceitas:{eyebrow:'Gestão', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
     financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
+    adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
   };
   const t = titles[state.page];
   return `
@@ -766,7 +985,8 @@ function FabMenu(){
     {type:'receita', label:'Nova receita'},
     {type:'precoArroba', label:'Atualizar preço da arroba'},
     {type:'metaMargem', label:'Definir meta de margem'},
-  ];
+  ].filter(a=>podeEditarAcao(a.type));
+  if(actions.length===0) return '';
   return `
   <div class="fab-wrap">
     ${state.fabOpen ? `
@@ -806,8 +1026,10 @@ function PageIngredientes(){
             <td class="mono">${fmt(i.ndt,1)}%</td>
             <td class="mono">R$ ${fmt(i.precoKg)}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('insumos','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-ing="${i.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-ing="${i.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>
         `).join('')}
@@ -872,8 +1094,10 @@ function PageEstoque(){
             <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}</td>
             <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('insumos','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -940,10 +1164,12 @@ function PageDietas(){
           </tbody>
         </table>
         ${c.pctTotal!==100 ? `<p class="hint" style="color:var(--trigo); margin-top:8px;">⚠ Percentuais somam ${fmt(c.pctTotal,1)}%, não 100%.</p>` : ''}
+        ${temPermissao('dietas','editar') ? `
         <div style="margin-top:14px; display:flex; gap:10px;">
           <button class="btn btn-ghost btn-sm" data-edit-diet="${d.id}">Editar dieta</button>
           <button class="btn btn-danger-ghost" data-del-diet="${d.id}">Excluir dieta</button>
         </div>
+        ` : ''}
       </div>` : ''}
     </div>`;
   }).join('');
@@ -976,8 +1202,10 @@ function PageLotes(tipo){
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
             <td>${l.dataFim ? '<span class="pill pill-cat">Encerrado</span>' : '<span class="pill pill-ok">Ativo</span>'}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>
         `).join('')}
@@ -1016,8 +1244,10 @@ function PageSaidaRacao(tipo){
             <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
             <td class="mono">R$ ${fmt(custo)}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-racao="${s.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -1055,8 +1285,10 @@ function PageCocho(){
             <td><span class="pill ${n.pill}">${n.label}</span></td>
             <td>${c.observacao || '—'}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('confinamento','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-cocho="${c.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-cocho="${c.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -1093,8 +1325,10 @@ function PagePasto(){
             <td class="mono">${fmtInt(p.quantidade)} kg</td>
             <td class="mono">R$ ${fmt(custoPasto(p))}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('pasto','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-pasto="${p.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -1126,8 +1360,10 @@ function PageReproducao(){
             <td>${r.item}</td>
             <td class="mono">R$ ${fmt(custoReproducao(r))}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-reproducao="${r.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-reproducao="${r.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -1304,7 +1540,7 @@ function DemonstrativoReceitaDespesa(despesa, receita, margemAtualPct, metaMarge
         <span class="stat-label">Margem ${rotulo}</span>
         <span class="mono" style="font-weight:600; color:var(--verde-escuro);">${margemAtualPct!==null ? fmt(margemAtualPct,1)+'%' : '—'}</span>
         ${metaMargemPct!==null ? `<span class="pill ${margemOk?'pill-ok':'pill-alerta'}">${margemOk?'Acima da meta':'Abaixo da meta'} (meta ${fmt(metaMargemPct,1)}%)</span>` : ''}
-        ${mostrarEditarMeta!==false ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
+        ${mostrarEditarMeta!==false && temPermissao('financeiro','editar') ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -1454,7 +1690,7 @@ function PageFinanceiroResumo(){
         <div class="stat-value" style="font-size:24px;">${arroba ? 'R$ '+fmt(arroba.valor) : '—'}</div>
         <div class="hint" style="margin-top:2px;">${arroba ? 'Atualizado em '+arroba.data.split('-').reverse().join('/') : 'Nenhum valor cadastrado ainda'}</div>
       </div>
-      <button class="btn btn-ghost btn-sm" data-fab-action="precoArroba">Atualizar preço</button>
+      ${temPermissao('financeiro','editar') ? `<button class="btn btn-ghost btn-sm" data-fab-action="precoArroba">Atualizar preço</button>` : ''}
     </div>
   </div>
 
@@ -1578,8 +1814,10 @@ function PageFinanceiroReceitas(){
             <td class="mono">${r.arrobas ? fmt(r.arrobas,2) : '—'}</td>
             <td class="mono">R$ ${fmt(r.valor)}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -1607,8 +1845,10 @@ function PageFinanceiroCustosFixos(){
             <td>${c.categoria || '—'}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>
         `).join('')}
@@ -1632,8 +1872,10 @@ function PageFinanceiroInvestimentos(){
             <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">R$ ${fmt(i.valor)}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao('financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>
         `).join('')}
@@ -1644,6 +1886,98 @@ function PageFinanceiroInvestimentos(){
         </tr>
       </tbody>
     </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: ADMINISTRAÇÃO — USUÁRIOS ===================== */
+const MODULOS_PERMISSAO = [
+  ['insumos','Insumos'], ['dietas','Dietas'], ['confinamento','Confinamento'],
+  ['pasto','Pasto'], ['cria','Cria'], ['financeiro','Financeiro'],
+];
+function PageAdminUsuarios(){
+  return `
+  <div class="toolbar">
+    <span class="hint">${state.perfis.length} usuário(s) cadastrado(s)</span>
+    <button class="btn btn-primary btn-sm" data-novo-usuario="1">+ Novo usuário</button>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para as pessoas da sua equipe.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${state.perfis.map(p=>`
+          <tr>
+            <td><strong>${p.nome}</strong></td>
+            <td class="mono">${p.usuario}</td>
+            <td>${p.papel==='admin' ? '<span class="pill pill-cat">Administrador</span>' : '<span class="pill pill-ok">Funcionário</span>'}</td>
+            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
+            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+function ModalUsuario(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-criar-usuario="1" ${state.usuarioLoading?'disabled':''}>${state.usuarioLoading?'Criando...':'Criar usuário'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalPermissoes(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Editar acesso — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
+        <div class="field"><label>Perfil</label>
+          <select id="f-papelusuario">
+            <option value="funcionario" ${d.papel==='funcionario'?'selected':''}>Funcionário</option>
+            <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
+          </select>
+        </div>
+        <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
+        <p class="hint">Administradores têm acesso total a todos os módulos — a tabela abaixo só vale para o perfil Funcionário.</p>
+        <table class="perm-matrix">
+          <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
+          <tbody>
+            ${MODULOS_PERMISSAO.map(([key,label])=>`
+              <tr>
+                <td>${label}</td>
+                <td>
+                  <select data-perm-modulo="${key}">
+                    <option value="nenhum" ${(!d.permissoes[key] || d.permissoes[key]==='nenhum')?'selected':''}>Nenhum</option>
+                    <option value="visualizar" ${d.permissoes[key]==='visualizar'?'selected':''}>Visualizar</option>
+                    <option value="editar" ${d.permissoes[key]==='editar'?'selected':''}>Editar</option>
+                  </select>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="permissoes">Salvar</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -1672,6 +2006,8 @@ function Modal(){
   if(state.modal.type==='receita') return ModalReceita();
   if(state.modal.type==='precoArroba') return ModalPrecoArroba();
   if(state.modal.type==='metaMargem') return ModalMetaMargem();
+  if(state.modal.type==='usuario') return ModalUsuario();
+  if(state.modal.type==='permissoes') return ModalPermissoes();
   return '';
 }
 
@@ -2093,6 +2429,52 @@ function ModalMetaMargem(){
 
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
+  const loginForm = document.querySelector('[data-login-form]');
+  if(loginForm){
+    loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };
+    const uEl = document.querySelector('[data-login-usuario]');
+    const sEl = document.querySelector('[data-login-senha]');
+    if(uEl) uEl.oninput = (e)=>{ state.loginDraft.usuario = e.target.value; };
+    if(sEl) sEl.oninput = (e)=>{ state.loginDraft.senha = e.target.value; };
+  }
+  document.querySelectorAll('[data-logout]').forEach(el=>{
+    el.onclick = ()=> fazerLogout();
+  });
+  document.querySelectorAll('[data-novo-usuario]').forEach(el=>{
+    el.onclick = ()=>{
+      editDraft = {nome:'', usuario:'', senha:''};
+      state.usuarioError = '';
+      state.modal = {type:'usuario'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-editar-usuario]').forEach(el=>{
+    el.onclick = ()=>{
+      const perfil = state.perfis.find(p=>p.id===el.dataset.editarUsuario);
+      editDraft = {_perfilId: perfil.id, nome: perfil.nome, usuario: perfil.usuario, papel: perfil.papel, ativo: perfil.ativo, permissoes: {...perfil.permissoes}};
+      state.modal = {type:'permissoes'};
+      render();
+    };
+  });
+  const criarUsuarioBtn = document.querySelector('[data-criar-usuario]');
+  if(criarUsuarioBtn){
+    criarUsuarioBtn.onclick = async ()=>{
+      const nome = document.getElementById('f-nomeusuario').value.trim();
+      const usuario = document.getElementById('f-usuario').value.trim();
+      const senha = document.getElementById('f-senhausuario').value;
+      if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
+      state.usuarioLoading = true; state.usuarioError = ''; render();
+      const { data, error } = await db.functions.invoke('criar-usuario', { body: { nome, usuario, senha } });
+      state.usuarioLoading = false;
+      if(error || data?.error){
+        state.usuarioError = data?.error || error.message || 'Falha ao criar usuário.';
+        render();
+        return;
+      }
+      state.modal = null; editDraft = null;
+      await loadAll();
+    };
+  }
   const searchEl = document.querySelector('[data-search]');
   if(searchEl){
     searchEl.oninput = (e)=>{ state.search = e.target.value; render();
@@ -2527,6 +2909,12 @@ function attachEvents(){
       } else if(type==='metaMargem'){
         const pct = Number(document.getElementById('f-metamargem').value)||0;
         ({error} = await db.from('config_financeiro').upsert({id:1, meta_margem_pct:pct}));
+      } else if(type==='permissoes'){
+        const papel = document.getElementById('f-papelusuario').value;
+        const ativo = document.getElementById('f-ativousuario').checked;
+        const permissoes = {};
+        document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoes[sel.dataset.permModulo] = sel.value; });
+        ({error} = await db.from('profiles').update({papel, ativo, permissoes}).eq('id', editDraft._perfilId));
       }
       if(error){
         alert('Não foi possível salvar: ' + error.message);
@@ -2581,7 +2969,7 @@ function attachEvents(){
   });
 }
 
-loadAll();
+initAuth();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
