@@ -1927,9 +1927,9 @@ function ModalUsuario(){
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
-        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -2467,7 +2467,11 @@ function attachEvents(){
       const { data, error } = await db.functions.invoke('criar-usuario', { body: { nome, usuario, senha } });
       state.usuarioLoading = false;
       if(error || data?.error){
-        state.usuarioError = data?.error || error.message || 'Falha ao criar usuário.';
+        let msg = data?.error || error?.message || 'Falha ao criar usuário.';
+        if(error?.context && typeof error.context.json === 'function'){
+          try { const corpo = await error.context.json(); if(corpo?.error) msg = corpo.error; } catch(e){}
+        }
+        state.usuarioError = msg;
         render();
         return;
       }
