@@ -615,7 +615,7 @@ const ACAO_MODULOS = {
 };
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
-function souAdmin(){ return state.perfil?.papel === 'admin'; }
+function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -1894,6 +1894,12 @@ const MODULOS_PERMISSAO = [
   ['insumos','Insumos'], ['dietas','Dietas'], ['confinamento','Confinamento'],
   ['pasto','Pasto'], ['cria','Cria'], ['financeiro','Financeiro'],
 ];
+const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
+function papelPill(papel){
+  const label = PAPEL_LABELS[papel] || papel;
+  const classe = (papel==='admin' || papel==='proprietario') ? 'pill-cat' : (papel==='consultor' ? 'pill-warn' : 'pill-ok');
+  return `<span class="pill ${classe}">${label}</span>`;
+}
 function PageAdminUsuarios(){
   return `
   <div class="toolbar">
@@ -1909,7 +1915,7 @@ function PageAdminUsuarios(){
           <tr>
             <td><strong>${p.nome}</strong></td>
             <td class="mono">${p.usuario}</td>
-            <td>${p.papel==='admin' ? '<span class="pill pill-cat">Administrador</span>' : '<span class="pill pill-ok">Funcionário</span>'}</td>
+            <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
             <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
           </tr>
@@ -1949,12 +1955,14 @@ function ModalPermissoes(){
         <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
-            <option value="funcionario" ${d.papel==='funcionario'?'selected':''}>Funcionário</option>
+            <option value="colaborador" ${d.papel==='colaborador'?'selected':''}>Colaborador</option>
+            <option value="consultor" ${d.papel==='consultor'?'selected':''}>Consultor</option>
+            <option value="proprietario" ${d.papel==='proprietario'?'selected':''}>Proprietário</option>
             <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administradores têm acesso total a todos os módulos — a tabela abaixo só vale para o perfil Funcionário.</p>
+        <p class="hint">Administrador e Proprietário têm acesso total a todos os módulos — a tabela abaixo só vale para Colaborador e Consultor.</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>

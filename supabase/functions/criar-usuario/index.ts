@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
       id: novoUsuario.user.id,
       nome,
       usuario: usuarioNormalizado,
-      papel: 'funcionario',
+      papel: 'colaborador',
       permissoes: permissoes || {},
       ativo: true,
     })
