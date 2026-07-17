@@ -337,6 +337,34 @@
   .nota-btn .l{font-size:10.5px; color:var(--cinza); text-align:center; line-height:1.3;}
   .nota-btn.active{border-color:var(--verde-medio); background:var(--ok-bg);}
 
+  /* painel de resultados (gráfico de rosca + legenda) */
+  .painel-resultados{display:flex; gap:32px; align-items:center; flex-wrap:wrap;}
+  .donut-wrap{flex-shrink:0;}
+  .donut-svg{display:block;}
+  .donut-slice{cursor:pointer; transition:opacity 0.15s;}
+  .donut-slice:hover, .donut-slice.hover{opacity:0.82;}
+  .donut-slice:focus{outline:2px solid var(--verde-medio); outline-offset:2px;}
+  .donut-label{font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; fill:#fff; pointer-events:none;}
+  .donut-center-value{font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; fill:var(--verde-escuro);}
+  .donut-center-label{font-family:'Inter',sans-serif; font-size:10px; fill:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
+  .painel-legenda{flex:1; min-width:260px; display:flex; flex-direction:column; gap:2px;}
+  .legenda-row{
+    display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px;
+    padding:7px 8px; border-radius:6px; cursor:pointer;
+  }
+  .legenda-row:hover, .legenda-row.hover{background:var(--cinza-bg);}
+  .legenda-swatch{width:12px; height:12px; border-radius:3px;}
+  .legenda-nome{font-size:13px; color:var(--grafite);}
+  .legenda-valor{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--grafite); font-variant-numeric:tabular-nums;}
+  .legenda-pct{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--cinza); min-width:48px; text-align:right; font-variant-numeric:tabular-nums;}
+  .painel-tooltip{
+    position:fixed; pointer-events:none; z-index:80; display:none; max-width:220px;
+    background:var(--verde-escuro); color:#fff; padding:8px 12px; border-radius:8px;
+    font-size:12.5px; box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  }
+  .painel-tooltip .v{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;}
+  .painel-tooltip .l{font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px;}
+
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -364,6 +392,8 @@
     .diet-head{flex-direction:column; align-items:flex-start; gap:10px;}
     .fab-wrap{bottom:18px; right:18px;}
     .fab-btn{width:50px; height:50px; font-size:24px;}
+    .painel-resultados{flex-direction:column; align-items:stretch;}
+    .donut-wrap{align-self:center;}
   }
 </style>
 </head>
@@ -976,6 +1006,107 @@ function custoSaidaRacao(s){
 }
 function hojeStr(){ return new Date().toISOString().slice(0,10); }
 function mesAtualStr(){ return new Date().toISOString().slice(0,7); }
+
+/* paleta categórica validada (fixa, nunca ciclada) */
+const SERIES_COLORS = ['#2a78d6','#008300','#e87ba4','#eda100','#1baf7a','#eb6834','#4a3aa7','#e34948'];
+
+// A cor segue sempre a mesma categoria (nunca a posição no ranking do mês),
+// para não trocar de cor quando um custo cresce/encolhe em relação aos outros.
+// Ração e Pasto têm cor fixa reservada; as demais categorias (texto livre dos
+// custos fixos) recebem uma cor por ordem alfabética, sem repetir cor entre elas.
+function coresPorCategoria(nomes){
+  const mapa = {};
+  const slots = SERIES_COLORS.slice(2);
+  const outras = [...new Set(nomes.filter(n=>n!=='Ração' && n!=='Pasto'))].sort();
+  outras.forEach((nome,idx)=>{ mapa[nome] = slots[idx % slots.length]; });
+  mapa['Ração'] = SERIES_COLORS[0];
+  mapa['Pasto'] = SERIES_COLORS[1];
+  return mapa;
+}
+
+function composicaoCustoMes(racaoMes, pastoMes, custosFixos){
+  const grupos = {};
+  if(racaoMes>0) grupos['Ração'] = racaoMes;
+  if(pastoMes>0) grupos['Pasto'] = pastoMes;
+  custosFixos.forEach(c=>{
+    const cat = (c.categoria||'').trim() || 'Outros';
+    grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
+  });
+  let entries = Object.entries(grupos).map(([nome,valor])=>({nome,valor})).filter(e=>e.valor>0);
+  entries.sort((a,b)=>b.valor-a.valor);
+  if(entries.length>8){
+    const principais = entries.slice(0,7);
+    const restoValor = entries.slice(7).reduce((a,e)=>a+e.valor,0);
+    entries = [...principais, {nome:'Outros', valor:restoValor}];
+  }
+  const cores = coresPorCategoria(entries.map(e=>e.nome));
+  const total = entries.reduce((a,e)=>a+e.valor,0);
+  return entries.map(e=>({...e, pct: total>0 ? e.valor/total*100 : 0, cor: cores[e.nome]}));
+}
+
+function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
+function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
+  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
+  const [x0,y0] = polarXY(cx,cy,rOut,a0);
+  const [x1,y1] = polarXY(cx,cy,rOut,a1);
+  const [x2,y2] = polarXY(cx,cy,rIn,a1);
+  const [x3,y3] = polarXY(cx,cy,rIn,a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+}
+
+function PainelResultados(entries, totalMes){
+  if(entries.length===0){
+    return `<div class="card" style="margin-bottom:22px;">${Empty('Sem custos no mês para compor o gráfico','Cadastre custos fixos ou lance ração/pasto para ver a composição aqui.')}</div>`;
+  }
+  const cx=110, cy=110, rOut=100, rIn=64;
+  const gap = entries.length>1 ? 0.025 : 0;
+  let angle = 0;
+  const slices = entries.map((e,idx)=>{
+    const frac = e.valor/totalMes;
+    const sweep = frac*Math.PI*2;
+    const a0 = angle + gap/2;
+    const a1 = angle + sweep - gap/2;
+    angle += sweep;
+    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
+    const midAngle = (a0+a1)/2;
+    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
+    const showLabel = e.pct>=6;
+    return `
+      <path class="donut-slice" data-slice-idx="${idx}" data-tip-nome="${e.nome}" data-tip-valor="${fmt(e.valor)}" data-tip-pct="${fmt(e.pct,1)}"
+        d="${path}" fill="${e.cor}" tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.valor)}, ${fmt(e.pct,1)}% do mês"></path>
+      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(e.pct,0)}%</text>` : ''}
+    `;
+  }).join('');
+
+  const legenda = entries.map((e,idx)=>`
+    <div class="legenda-row" data-legenda-idx="${idx}">
+      <span class="legenda-swatch" style="background:${e.cor}"></span>
+      <span class="legenda-nome">${e.nome}</span>
+      <span class="legenda-valor">R$ ${fmt(e.valor)}</span>
+      <span class="legenda-pct">${fmt(e.pct,1)}%</span>
+    </div>
+  `).join('');
+
+  return `
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad">
+      <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">Composição do custo do mês</h3>
+      <div class="painel-resultados">
+        <div class="donut-wrap">
+          <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
+            ${slices}
+            <text class="donut-center-value" x="110" y="104" text-anchor="middle">R$ ${fmt(totalMes,0)}</text>
+            <text class="donut-center-label" x="110" y="123" text-anchor="middle">no mês</text>
+          </svg>
+        </div>
+        <div class="painel-legenda">${legenda}</div>
+      </div>
+    </div>
+  </div>
+  <div id="painel-tooltip" class="painel-tooltip"></div>`;
+}
+
 function PageFinanceiro(){
   const hoje = hojeStr();
   const mes = mesAtualStr();
@@ -1020,6 +1151,8 @@ function PageFinanceiro(){
     return {lote:l, racao, pasto, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
+  const composicaoMes = composicaoCustoMes(racaoMes, pastoMes, state.custosFixos);
+
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Custo de ração + pasto hoje</div><div class="stat-value">R$ ${fmt(custoHoje)}</div></div>
@@ -1043,6 +1176,8 @@ function PageFinanceiro(){
       <span class="hint">${fmtInt(totalAnimais)} animais em lotes ativos</span>
     </div>
   </div>
+
+  ${PainelResultados(composicaoMes, totalMes)}
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral</p>
   <div class="card" style="margin-bottom:22px;">
@@ -1814,6 +1949,49 @@ function attachEvents(){
       await loadAll();
     };
   }
+
+  // painel de resultados: hover sincronizado entre gráfico e legenda
+  const tooltip = document.getElementById('painel-tooltip');
+  const clearHovers = ()=>{
+    document.querySelectorAll('.donut-slice.hover, .legenda-row.hover').forEach(el=>el.classList.remove('hover'));
+  };
+  document.querySelectorAll('[data-slice-idx]').forEach(el=>{
+    const idx = el.dataset.sliceIdx;
+    el.addEventListener('pointerenter', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
+      if(row) row.classList.add('hover');
+      if(tooltip){
+        tooltip.innerHTML = `<div class="v">R$ ${el.dataset.tipValor}</div><div class="l">${el.dataset.tipNome} · ${el.dataset.tipPct}%</div>`;
+        tooltip.style.display = 'block';
+      }
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(tooltip){ tooltip.style.left = (e.clientX+14)+'px'; tooltip.style.top = (e.clientY+14)+'px'; }
+    });
+    el.addEventListener('pointerleave', ()=>{
+      clearHovers();
+      if(tooltip) tooltip.style.display = 'none';
+    });
+    el.addEventListener('focus', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
+      if(row) row.classList.add('hover');
+    });
+    el.addEventListener('blur', clearHovers);
+  });
+  document.querySelectorAll('[data-legenda-idx]').forEach(el=>{
+    const idx = el.dataset.legendaIdx;
+    el.addEventListener('pointerenter', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const slice = document.querySelector(`[data-slice-idx="${idx}"]`);
+      if(slice) slice.classList.add('hover');
+    });
+    el.addEventListener('pointerleave', clearHovers);
+  });
 }
 
 loadAll();
