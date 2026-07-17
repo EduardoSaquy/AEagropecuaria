@@ -392,7 +392,7 @@
 
   /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
   .sidebar-user{
-    margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);
+    margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.12);
     display:flex; align-items:center; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
   }
   .sidebar-user-nome{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -421,7 +421,7 @@
     nav{margin-top:0; flex-direction:row; gap:4px;}
     .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
     .sidebar-footer{display:none;}
-    .sidebar-user{margin-top:0; padding-top:0; border-top:none; flex-shrink:0;}
+    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
     .main{padding:20px 16px 48px 16px; max-width:100%;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
@@ -823,6 +823,10 @@ function Sidebar(){
         <div class="brand-name">AE Pecuária</div>
       </div>
     </div>
+    <div class="sidebar-user">
+      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
+      <button class="btn-sair" data-logout="1">Sair</button>
+    </div>
     <nav>
       ${gruposVisiveis().map(([key,g])=>`
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">
@@ -830,10 +834,6 @@ function Sidebar(){
         </button>
       `).join('')}
     </nav>
-    <div class="sidebar-user">
-      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
-      <button class="btn-sair" data-logout="1">Sair</button>
-    </div>
     <div class="sidebar-footer">
       MVP · dados salvos<br/>na nuvem (Supabase).
     </div>
