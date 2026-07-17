@@ -481,9 +481,10 @@ function render(){
         ${state.page==='ingredientes' ? PageIngredientes() : ''}
         ${state.page==='estoque' ? PageEstoque() : ''}
         ${state.page==='dietas' ? PageDietas() : ''}
-        ${state.page==='lotes' ? PageLotes() : ''}
+        ${state.page==='lotes' ? PageLotes('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao() : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
+        ${state.page==='lotesPasto' ? PageLotes('pasto') : ''}
         ${state.page==='pasto' ? PagePasto() : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
@@ -533,7 +534,8 @@ const GROUPS = {
     {key:'cocho', label:'Leitura de Cocho'},
   ]},
   pasto: {label:'Pasto', icon:iconPasto(), pages:[
-    {key:'pasto', label:'Pasto'},
+    {key:'lotesPasto', label:'Lotes'},
+    {key:'pasto', label:'Saída de Pasto'},
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
@@ -601,10 +603,11 @@ function Header(){
     ingredientes:{eyebrow:'Cadastro', title:'Ingredientes', desc:'Composição nutricional, fornecedor e preço de cada insumo da fazenda.'},
     estoque:{eyebrow:'Movimentação', title:'Estoque', desc:'Saldo atual por ingrediente, calculado a partir das entradas e saídas registradas.'},
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
-    lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais, com número de cabeças e período de início e encerramento.'},
+    lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
-    pasto:{eyebrow:'Movimentação', title:'Pasto', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto.'},
+    lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
+    pasto:{eyebrow:'Movimentação', title:'Saída de Pasto', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Curral', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
@@ -864,23 +867,25 @@ function PageDietas(){
 }
 
 /* ===================== PÁGINA: LOTES ===================== */
-function PageLotes(){
-  const list = state.lotes;
+function PageLotes(tipo){
+  const list = state.lotes.filter(l=>loteTipo(l)===tipo);
+  const vazio = tipo==='confinamento'
+    ? Empty('Nenhum lote de confinamento cadastrado','Cadastre um lote com "confinamento" no nome para ele aparecer aqui.')
+    : Empty('Nenhum lote de pasto cadastrado','Cadastre um lote sem "confinamento" no nome para ele aparecer aqui.');
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre os lotes/currais de animais da fazenda.') : `
+    ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Lote</th><th>Tipo</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+        <th>Lote</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(l=>`
           <tr>
             <td><strong>${l.nome}</strong></td>
-            <td><span class="pill ${loteTipo(l)==='confinamento'?'pill-ok':'pill-warn'}">${loteTipo(l)==='confinamento'?'Confinamento':'Pasto'}</span></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
@@ -1453,6 +1458,7 @@ function ModalLote(){
         </div>
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
+        <p class="hint">Inclua a palavra "confinamento" no nome para o lote aparecer na aba Confinamento; sem ela, aparece na aba Pasto.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
