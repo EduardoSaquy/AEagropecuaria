@@ -392,7 +392,7 @@
 
   /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
   .sidebar-user{
-    margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);
+    margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.12);
     display:flex; align-items:center; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
   }
   .sidebar-user-nome{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -421,7 +421,7 @@
     nav{margin-top:0; flex-direction:row; gap:4px;}
     .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
     .sidebar-footer{display:none;}
-    .sidebar-user{margin-top:0; padding-top:0; border-top:none; flex-shrink:0;}
+    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
     .main{padding:20px 16px 48px 16px; max-width:100%;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
@@ -589,9 +589,10 @@ function render(){
         ${state.page==='reproducao' ? PageReproducao() : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
-        ${state.page==='financeiroReceitas' ? PageFinanceiroReceitas() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
         ${state.page==='financeiroInvestimentos' ? PageFinanceiroInvestimentos() : ''}
+        ${state.page==='resultadosResumo' ? PageResultadosResumo() : ''}
+        ${state.page==='resultadosReceitas' ? PageResultadosReceitas() : ''}
         ${state.page==='adminUsuarios' ? PageAdminUsuarios() : ''}
         `}
       </div>
@@ -604,7 +605,7 @@ function render(){
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
-const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'financeiro'};
+const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'financeiro', resultados:'resultados'};
 const ACAO_MODULOS = {
   ingrediente:['insumos'], movimento:['insumos'],
   dieta:['dietas'],
@@ -612,7 +613,8 @@ const ACAO_MODULOS = {
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'],
-  custoFixo:['financeiro'], investimento:['financeiro'], receita:['financeiro'], precoArroba:['financeiro'], metaMargem:['financeiro'],
+  custoFixo:['financeiro'], investimento:['financeiro'], precoArroba:['financeiro'],
+  receita:['resultados'], metaMargem:['resultados'],
 };
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
@@ -800,9 +802,12 @@ const GROUPS = {
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
     {key:'financeiroCurral', label:'Por Lote'},
-    {key:'financeiroReceitas', label:'Receitas'},
     {key:'financeiroCustosFixos', label:'Custos Fixos'},
     {key:'financeiroInvestimentos', label:'Investimentos'},
+  ]},
+  resultados: {label:'Resultados', icon:iconResultados(), pages:[
+    {key:'resultadosResumo', label:'Resumo'},
+    {key:'resultadosReceitas', label:'Receitas'},
   ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
@@ -823,6 +828,10 @@ function Sidebar(){
         <div class="brand-name">AE Pecuária</div>
       </div>
     </div>
+    <div class="sidebar-user">
+      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
+      <button class="btn-sair" data-logout="1">Sair</button>
+    </div>
     <nav>
       ${gruposVisiveis().map(([key,g])=>`
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">
@@ -830,10 +839,6 @@ function Sidebar(){
         </button>
       `).join('')}
     </nav>
-    <div class="sidebar-user">
-      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
-      <button class="btn-sair" data-logout="1">Sair</button>
-    </div>
     <div class="sidebar-footer">
       MVP · dados salvos<br/>na nuvem (Supabase).
     </div>
@@ -865,6 +870,7 @@ function iconPasto(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fi
 function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M9.5 9.5c0-1.4 1.1-2.5 2.5-2.5s2.5.7 2.5 2c0 3-5 2-5 5 0 1.3 1.1 2 2.5 2s2.5-1.1 2.5-2.5"/></svg>`; }
 function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.35-9.5-8.5C1 9 2.5 5.5 6 5c2-.3 4 .8 5 2.5 1-1.7 3-2.8 5-2.5 3.5.5 5 4 3.5 7.5C19 16.65 12 21 12 21Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
+function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -881,11 +887,12 @@ function Header(){
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
-    financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
+    financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês da operação.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
-    financeiroReceitas:{eyebrow:'Gestão', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
     financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
+    resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
+    resultadosReceitas:{eyebrow:'Resultado', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
   };
   const t = titles[state.page];
@@ -1586,7 +1593,7 @@ function DemonstrativoReceitaDespesa(despesa, receita, margemAtualPct, metaMarge
         <span class="stat-label">Margem ${rotulo}</span>
         <span class="mono" style="font-weight:600; color:var(--verde-escuro);">${margemAtualPct!==null ? fmt(margemAtualPct,1)+'%' : '—'}</span>
         ${metaMargemPct!==null ? `<span class="pill ${margemOk?'pill-ok':'pill-alerta'}">${margemOk?'Acima da meta':'Abaixo da meta'} (meta ${fmt(metaMargemPct,1)}%)</span>` : ''}
-        ${mostrarEditarMeta!==false && temPermissao('financeiro','editar') ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
+        ${mostrarEditarMeta!==false && temPermissao('resultados','editar') ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -1722,11 +1729,7 @@ function dadosFinanceiro(){
 /* ---- Financeiro: Resumo ---- */
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
-  const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
-  const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
   const arroba = precoArrobaAtual();
-  const meses = comparativoMensal(d.fixosMes);
-  const anual = comparativoAnual(meses);
 
   return `
   <div class="card" style="margin-bottom:22px;">
@@ -1766,6 +1769,18 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
+  `;
+}
+
+/* ---- Resultados: Resumo ---- */
+function PageResultadosResumo(){
+  const d = dadosFinanceiro();
+  const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
+  const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
+  const meses = comparativoMensal(d.fixosMes);
+  const anual = comparativoAnual(meses);
+
+  return `
   ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
@@ -1843,7 +1858,7 @@ function PageFinanceiroCurral(){
 }
 
 /* ---- Financeiro: Receitas ---- */
-function PageFinanceiroReceitas(){
+function PageResultadosReceitas(){
   const list = [...state.receitas].sort((a,b)=> b.data.localeCompare(a.data));
   return `
   <div class="card">
@@ -1860,7 +1875,7 @@ function PageFinanceiroReceitas(){
             <td class="mono">${r.arrobas ? fmt(r.arrobas,2) : '—'}</td>
             <td class="mono">R$ ${fmt(r.valor)}</td>
             <td style="display:flex; gap:6px;">
-              ${temPermissao('financeiro','editar') ? `
+              ${temPermissao('resultados','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>
               ` : ''}
@@ -1938,7 +1953,7 @@ function PageFinanceiroInvestimentos(){
 /* ===================== PÁGINA: ADMINISTRAÇÃO — USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
   ['insumos','Insumos'], ['dietas','Dietas'], ['confinamento','Confinamento'],
-  ['pasto','Pasto'], ['cria','Cria'], ['financeiro','Financeiro'],
+  ['pasto','Pasto'], ['cria','Cria'], ['financeiro','Financeiro'], ['resultados','Resultados'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
 function papelPill(papel){

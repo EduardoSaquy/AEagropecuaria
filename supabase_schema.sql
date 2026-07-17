@@ -468,3 +468,29 @@ alter table lotes alter column destino set not null;
 alter table lotes drop constraint if exists lotes_destino_check;
 alter table lotes add constraint lotes_destino_check
   check (destino in ('confinamento','pasto','cria'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Módulo "Resultados" separado do Financeiro
+-- Receitas e a meta de margem (config_financeiro) passam a ser
+-- controladas pelo módulo "resultados" em vez de "financeiro" — assim
+-- dá pra liberar o Financeiro (só custos) para alguém sem dar acesso
+-- às receitas e aos demonstrativos de resultado.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+drop policy if exists "select receitas" on receitas;
+drop policy if exists "inserir receitas" on receitas;
+drop policy if exists "atualizar receitas" on receitas;
+drop policy if exists "excluir receitas" on receitas;
+create policy "select receitas" on receitas for select using (tem_permissao('resultados','visualizar'));
+create policy "inserir receitas" on receitas for insert with check (tem_permissao('resultados','editar'));
+create policy "atualizar receitas" on receitas for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
+create policy "excluir receitas" on receitas for delete using (tem_permissao('resultados','editar'));
+
+drop policy if exists "select config_financeiro" on config_financeiro;
+drop policy if exists "inserir config_financeiro" on config_financeiro;
+drop policy if exists "atualizar config_financeiro" on config_financeiro;
+drop policy if exists "excluir config_financeiro" on config_financeiro;
+create policy "select config_financeiro" on config_financeiro for select using (tem_permissao('resultados','visualizar'));
+create policy "inserir config_financeiro" on config_financeiro for insert with check (tem_permissao('resultados','editar'));
+create policy "atualizar config_financeiro" on config_financeiro for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
+create policy "excluir config_financeiro" on config_financeiro for delete using (tem_permissao('resultados','editar'));
