@@ -177,3 +177,26 @@ create table investimentos (
 alter table investimentos enable row level security;
 
 create policy "public full access" on investimentos for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Reprodução (lançamentos de sêmen e outros insumos)
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- das migrações acima já existirem no seu projeto.
+--
+-- Registro por data/lote do custo com sêmen e outros insumos usados na
+-- inseminação — só aparece vinculado a lotes com "reprodução" no nome
+-- (aba Reprodução). Entra no Financeiro como custo variável, igual
+-- Saída de Ração e Pasto.
+-- ===================================================================
+
+create table reproducao_custos (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete cascade,
+  item text not null,
+  custo numeric default 0
+);
+
+alter table reproducao_custos enable row level security;
+
+create policy "public full access" on reproducao_custos for all using (true) with check (true);
