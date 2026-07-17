@@ -1318,6 +1318,47 @@ function DemonstrativoReceitaDespesa(despesaMes, receitaMes, margemAtualPct, met
   </div>`;
 }
 
+function ComparativoMensal(meses, anual){
+  const ano = new Date().getFullYear();
+  return `
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad">
+      <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 4px;">Despesa vs Receita — mês a mês (${ano})</h3>
+      <p class="hint" style="margin:0 0 16px;">O custo fixo mensal atual é aplicado a todos os meses, já que o app não guarda um histórico de custo fixo por mês.</p>
+      <table>
+        <thead><tr><th>Mês</th><th>Despesa</th><th>Receita</th><th>Resultado</th></tr></thead>
+        <tbody>
+          ${meses.map(m=>`
+            <tr>
+              <td>${m.label}</td>
+              <td class="mono">R$ ${fmt(m.despesa)}</td>
+              <td class="mono">R$ ${fmt(m.receita)}</td>
+              <td class="mono" style="color:${m.resultado>=0?'var(--bom)':'var(--alerta)'}; font-weight:600;">${m.resultado<0?'-':''}R$ ${fmt(Math.abs(m.resultado))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad" style="display:flex; flex-wrap:wrap; gap:24px;">
+      <div>
+        <div class="stat-label">Despesa no ano (${ano})</div>
+        <div class="stat-value" style="font-size:22px;">R$ ${fmt(anual.despesa)}</div>
+      </div>
+      <div>
+        <div class="stat-label">Receita no ano (${ano})</div>
+        <div class="stat-value" style="font-size:22px;">R$ ${fmt(anual.receita)}</div>
+      </div>
+      <div>
+        <div class="stat-label">Resultado do ano</div>
+        <div class="stat-value" style="font-size:22px; color:${anual.resultado>=0?'var(--bom)':'var(--alerta)'};">${anual.resultado<0?'-':''}R$ ${fmt(Math.abs(anual.resultado))}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // Saída de Ração é uma tabela só, compartilhada entre lotes de Confinamento e
 // de Cria; para separar os dois no painel de resultados, é preciso checar o
 // tipo do lote de destino de cada lançamento.
@@ -1326,6 +1367,40 @@ function racaoLoteTipo(s){ const lote = state.lotes.find(l=>l.id===s.loteId); re
 function precoArrobaAtual(){
   if(state.precosArroba.length===0) return null;
   return [...state.precosArroba].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
+}
+
+const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function custoVariavelDoMes(mesStr){
+  const racao = state.saidasRacao.filter(s=>s.data.startsWith(mesStr)).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const pasto = state.pasto.filter(p=>p.data.startsWith(mesStr)).reduce((a,p)=>a+custoPasto(p),0);
+  const reproducao = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
+  return racao + pasto + reproducao;
+}
+function receitaDoMes(mesStr){
+  return state.receitas.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+Number(r.valor||0),0);
+}
+
+// Custo fixo não tem histórico por mês no app (só o valor mensal atual),
+// então o mesmo total é aplicado a todos os meses do ano ao montar o
+// comparativo — é uma aproximação, avisada na tela.
+function comparativoMensal(fixosMes){
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mesAtual = hoje.getMonth();
+  const meses = [];
+  for(let m=0; m<=mesAtual; m++){
+    const mesStr = `${ano}-${String(m+1).padStart(2,'0')}`;
+    const despesa = custoVariavelDoMes(mesStr) + fixosMes;
+    const receita = receitaDoMes(mesStr);
+    meses.push({mesStr, label: `${NOMES_MES[m]}/${ano}`, despesa, receita, resultado: receita-despesa});
+  }
+  return meses;
+}
+function comparativoAnual(meses){
+  const despesa = meses.reduce((a,m)=>a+m.despesa,0);
+  const receita = meses.reduce((a,m)=>a+m.receita,0);
+  return {despesa, receita, resultado: receita-despesa};
 }
 
 function dadosFinanceiro(){
@@ -1392,6 +1467,8 @@ function PageFinanceiroResumo(){
   const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
   const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
   const arroba = precoArrobaAtual();
+  const meses = comparativoMensal(d.fixosMes);
+  const anual = comparativoAnual(meses);
 
   return `
   <div class="card" style="margin-bottom:22px;">
@@ -1432,6 +1509,7 @@ function PageFinanceiroResumo(){
   </div>
 
   ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct)}
+  ${ComparativoMensal(meses, anual)}
   ${PainelResultados(composicaoArea, d.totalMes, 'area', 'Painel de resultados', 'Custo total do mês por área (Confinamento, Pasto e Cria, já com a fatia do custo fixo diluída)', 'Lance ração, pasto ou reprodução, e cadastre lotes ativos, para ver a composição por área aqui.')}
   ${PainelResultados(composicaoFixos, d.fixosMes, 'fixos', 'Painel de resultados', 'Custos fixos do mês por centro de custo', 'Cadastre custos fixos para ver a composição por centro de custo aqui.')}
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
