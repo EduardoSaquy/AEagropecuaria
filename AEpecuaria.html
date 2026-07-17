@@ -985,7 +985,7 @@ function FabMenu(){
     {type:'receita', label:'Nova receita'},
     {type:'precoArroba', label:'Atualizar preço da arroba'},
     {type:'metaMargem', label:'Definir meta de margem'},
-  ].filter(a=>podeEditarAcao(a.type));
+  ].filter(a=>podeEditarAcao(a.type) && (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]));
   if(actions.length===0) return '';
   return `
   <div class="fab-wrap">
