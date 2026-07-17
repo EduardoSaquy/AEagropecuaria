@@ -155,3 +155,25 @@ create policy "public full access" on custos_fixos for all using (true) with che
 
 alter table dietas add column tipo text default 'confinamento' check (tipo in ('confinamento','pasto'));
 alter table pasto add column dieta_id bigint references dietas(id) on delete set null;
+
+-- ===================================================================
+-- MIGRAÇÃO: Investimentos
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- das migrações acima já existirem no seu projeto.
+--
+-- Registro de compras de animais, máquinas e outros bens — separado
+-- dos Custos Fixos porque não é uma despesa operacional recorrente,
+-- e não entra nos cálculos de custo diário/mensal do Financeiro.
+-- ===================================================================
+
+create table investimentos (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  categoria text,
+  valor numeric default 0,
+  data date
+);
+
+alter table investimentos enable row level security;
+
+create policy "public full access" on investimentos for all using (true) with check (true);
