@@ -1118,11 +1118,11 @@ function coresPorCategoria(nomes){
   return mapa;
 }
 
-function composicaoCustoMes(racaoMes, pastoMes, reproducaoMes, custosFixos){
+function composicaoCustoMes(racaoMes, pastoMes, criaMes, custosFixos){
   const grupos = {};
   if(racaoMes>0) grupos['Ração'] = racaoMes;
   if(pastoMes>0) grupos['Pasto'] = pastoMes;
-  if(reproducaoMes>0) grupos['Cria'] = reproducaoMes;
+  if(criaMes>0) grupos['Cria'] = criaMes;
   custosFixos.forEach(c=>{
     const cat = (c.categoria||'').trim() || 'Outros';
     grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
@@ -1202,18 +1202,29 @@ function PainelResultados(entries, totalMes){
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
 }
 
+// Saída de Ração é uma tabela só, compartilhada entre lotes de Confinamento e
+// de Cria; para separar os dois no painel de resultados, é preciso checar o
+// tipo do lote de destino de cada lançamento.
+function racaoLoteTipo(s){ const lote = state.lotes.find(l=>l.id===s.loteId); return lote ? loteTipo(lote) : null; }
+
 function dadosFinanceiro(){
   const hoje = hojeStr();
   const mes = mesAtualStr();
 
-  const racaoHoje = state.saidasRacao.filter(s=>s.data===hoje).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racaoConfHoje = state.saidasRacao.filter(s=>s.data===hoje && racaoLoteTipo(s)==='confinamento').reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racaoCriaHoje = state.saidasRacao.filter(s=>s.data===hoje && racaoLoteTipo(s)==='reproducao').reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racaoHoje = racaoConfHoje + racaoCriaHoje;
   const pastoHoje = state.pasto.filter(p=>p.data===hoje).reduce((a,p)=>a+custoPasto(p),0);
   const reproducaoHoje = state.reproducao.filter(r=>r.data===hoje).reduce((a,r)=>a+custoReproducao(r),0);
+  const criaHoje = racaoCriaHoje + reproducaoHoje;
   const custoHoje = racaoHoje + pastoHoje + reproducaoHoje;
 
-  const racaoMes = state.saidasRacao.filter(s=>s.data.startsWith(mes)).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racaoConfMes = state.saidasRacao.filter(s=>s.data.startsWith(mes) && racaoLoteTipo(s)==='confinamento').reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racaoCriaMes = state.saidasRacao.filter(s=>s.data.startsWith(mes) && racaoLoteTipo(s)==='reproducao').reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racaoMes = racaoConfMes + racaoCriaMes;
   const pastoMes = state.pasto.filter(p=>p.data.startsWith(mes)).reduce((a,p)=>a+custoPasto(p),0);
   const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+custoReproducao(r),0);
+  const criaMes = racaoCriaMes + reproducaoMes;
   const variavelMes = racaoMes + pastoMes + reproducaoMes;
   const fixosMes = state.custosFixos.reduce((a,c)=>a+Number(c.valorMensal||0),0);
   const totalMes = variavelMes + fixosMes;
@@ -1230,14 +1241,15 @@ function dadosFinanceiro(){
     return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
   }, 0);
 
-  return {hoje, mes, racaoHoje, pastoHoje, reproducaoHoje, custoHoje, racaoMes, pastoMes, reproducaoMes, variavelMes, fixosMes, totalMes,
+  return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
+    racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
 }
 
 /* ---- Financeiro: Resumo ---- */
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
-  const composicaoMes = composicaoCustoMes(d.racaoMes, d.pastoMes, d.reproducaoMes, state.custosFixos);
+  const composicaoMes = composicaoCustoMes(d.racaoConfMes, d.pastoMes, d.criaMes, state.custosFixos);
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
