@@ -382,14 +382,14 @@ function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categori
 function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
 function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade}; }
 function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade}; }
-function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[]}; }
-function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens}; }
+function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento'}; }
+function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento'}; }
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim}; }
 function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null}; }
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg}; }
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
-function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, ingredienteId:r.ingrediente_id, quantidade:r.quantidade}; }
+function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
 
@@ -463,6 +463,9 @@ function render(){
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
+
+// Lote é considerado de Confinamento se "confinamento" aparece no nome; os demais são de Pasto.
+function loteTipo(lote){ return /confinamento/i.test(lote.nome) ? 'confinamento' : 'pasto'; }
 
 // "Preço por kg" é sempre por quilo; quantidades guardadas em "ton" precisam
 // ser convertidas para kg antes de multiplicar pelo preço.
@@ -583,17 +586,19 @@ function openNewModal(type){
     editDraft = {ingredienteId: state.ingredientes[0]?.id||'', tipo:'entrada', data:new Date().toISOString().slice(0,10), quantidade:''};
     state.modal = {type:'movimento'};
   } else if(type==='dieta'){
-    editDraft = {nome:'', categoriaAnimal:'', kgAnimalDia:9, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
+    editDraft = {nome:'', tipo:'confinamento', categoriaAnimal:'', kgAnimalDia:9, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
     state.modal = {type:'dieta'};
   } else if(type==='lote'){
     editDraft = {nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:''};
     state.modal = {type:'lote'};
   } else if(type==='saidaRacao'){
-    if(state.dietas.length===0 || state.lotes.length===0){
-      alert('Cadastre ao menos uma dieta e um lote antes de registrar uma saída de ração.');
+    const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
+    const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
+    if(dietasConf.length===0 || lotesConf.length===0){
+      alert('Cadastre ao menos uma dieta de Confinamento e um lote com "confinamento" no nome antes de registrar uma saída de ração.');
       return false;
     }
-    editDraft = {dietaId: state.dietas[0]?.id||'', loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
+    editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
   } else if(type==='cocho'){
     if(state.lotes.length===0){
@@ -603,11 +608,13 @@ function openNewModal(type){
     editDraft = {loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), nota:2, observacao:''};
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
-    if(state.lotes.length===0 || state.ingredientes.length===0){
-      alert('Cadastre ao menos um lote e um ingrediente antes de registrar uma reposição de pasto.');
+    const dietasPasto = state.dietas.filter(x=>x.tipo==='pasto');
+    const lotesPasto = state.lotes.filter(l=>loteTipo(l)==='pasto');
+    if(lotesPasto.length===0 || dietasPasto.length===0){
+      alert('Cadastre ao menos um lote sem "confinamento" no nome e uma dieta de Pasto antes de registrar uma reposição de pasto.');
       return false;
     }
-    editDraft = {loteId: state.lotes[0]?.id||'', ingredienteId: state.ingredientes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
+    editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: dietasPasto[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
     state.modal = {type:'pasto'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:''};
@@ -768,7 +775,7 @@ function PageDietas(){
     <div class="diet-card">
       <div class="diet-head" data-toggle-diet="${d.id}">
         <div>
-          <div class="diet-title">${d.nome}</div>
+          <div class="diet-title">${d.nome} <span class="pill ${d.tipo==='pasto'?'pill-warn':'pill-ok'}">${d.tipo==='pasto'?'Pasto':'Confinamento'}</span></div>
           <div class="diet-sub">${d.categoriaAnimal} · ${fmt(d.kgAnimalDia,1)} kg MN/animal/dia</div>
         </div>
         <div class="diet-metrics">
@@ -819,12 +826,13 @@ function PageLotes(){
     ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre os lotes/currais de animais da fazenda.') : `
     <table>
       <thead><tr>
-        <th>Lote</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+        <th>Lote</th><th>Tipo</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(l=>`
           <tr>
             <td><strong>${l.nome}</strong></td>
+            <td><span class="pill ${loteTipo(l)==='confinamento'?'pill-ok':'pill-warn'}">${loteTipo(l)==='confinamento'?'Confinamento':'Pasto'}</span></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
@@ -916,8 +924,8 @@ function PageCocho(){
 
 /* ===================== PÁGINA: PASTO ===================== */
 function custoPasto(p){
-  const ing = getIng(p.ingredienteId);
-  return ing ? ing.precoKg * qtdEmKg(p.quantidade, ing.unidade) : 0;
+  const dieta = state.dietas.find(d=>d.id===p.dietaId);
+  return dieta ? calcDieta(dieta).custoKg * p.quantidade : 0;
 }
 function PagePasto(){
   const list = [...state.pasto].sort((a,b)=> b.data.localeCompare(a.data));
@@ -926,20 +934,20 @@ function PagePasto(){
     <span class="hint">${list.length} reposição(ões) registrada(s)</span>
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma reposição de pasto registrada','Registre a ração ou suplemento colocado no cocho de cada lote no pasto.') : `
+    ${list.length===0 ? Empty('Nenhuma reposição de pasto registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.') : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Ingrediente</th><th>Quantidade</th><th>Custo estimado</th><th></th>
+        <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th><th>Custo estimado</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
-          const ing = getIng(p.ingredienteId);
+          const dieta = state.dietas.find(d=>d.id===p.dietaId);
           return `<tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td>${lote?lote.nome:'—'}</td>
-            <td>${ing?ing.nome:'—'}</td>
-            <td class="mono">${fmtInt(p.quantidade)} ${ing?ing.unidade:''}</td>
+            <td>${dieta?dieta.nome:'—'}</td>
+            <td class="mono">${fmtInt(p.quantidade)} kg</td>
             <td class="mono">R$ ${fmt(custoPasto(p))}</td>
             <td style="display:flex; gap:6px;">
               <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
@@ -976,13 +984,46 @@ function PageFinanceiro(){
   const totalAnimais = state.lotes.filter(l=>!l.dataFim).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   const custoPorAnimalHoje = totalAnimais>0 ? custoHoje/totalAnimais : 0;
 
+  const fixoDiario = fixosMes/30;
+  const custoTotalPorAnimalDia = totalAnimais>0 ? (custoHoje+fixoDiario)/totalAnimais : 0;
+  const custoTotalPorAnimalMes = totalAnimais>0 ? totalMes/totalAnimais : 0;
+
+  const valorEstoque = state.ingredientes.reduce((a,i)=>{
+    const saldo = saldoIngrediente(i.id);
+    return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
+  }, 0);
+
+  const custosPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
+    const racao = state.saidasRacao.filter(s=>s.data===hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pasto = state.pasto.filter(p=>p.data===hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const total = racao + pasto;
+    const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
+    return {lote:l, racao, pasto, total, porAnimal};
+  }).sort((a,b)=> b.total-a.total);
+
+  const custosMesPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
+    const racao = state.saidasRacao.filter(s=>s.data.startsWith(mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pasto = state.pasto.filter(p=>p.data.startsWith(mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const variavel = racao + pasto;
+    const fixoAlocado = totalAnimais>0 ? fixosMes*(Number(l.numeroAnimais||0)/totalAnimais) : 0;
+    const total = variavel + fixoAlocado;
+    const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
+    return {lote:l, racao, pasto, fixoAlocado, total, porAnimal};
+  }).sort((a,b)=> b.total-a.total);
+
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Custo de ração + pasto hoje</div><div class="stat-value">R$ ${fmt(custoHoje)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custo/animal hoje</div><div class="stat-value">R$ ${fmt(custoPorAnimalHoje,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo variável/animal/dia</div><div class="stat-value">R$ ${fmt(custoPorAnimalHoje,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(variavelMes)}</div></div>
     <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(fixosMes)}</div></div>
   </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo total/animal/dia (com fixo)</div><div class="stat-value">R$ ${fmt(custoTotalPorAnimalDia,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(custoTotalPorAnimalMes,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(valorEstoque)}</div></div>
+  </div>
+  <p class="hint" style="margin:-14px 0 20px;">"Com fixo" dilui o custo fixo mensal entre os animais (mensal ÷ 30 dias ÷ nº de animais em lotes ativos), somado ao custo variável de ração e pasto.</p>
 
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -993,6 +1034,47 @@ function PageFinanceiro(){
       <span class="hint">${fmtInt(totalAnimais)} animais em lotes ativos</span>
     </div>
   </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral</p>
+  <div class="card" style="margin-bottom:22px;">
+    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento para ver o custo diário de cada um aqui.') : `
+    <table>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração hoje</th><th>Pasto hoje</th><th>Total hoje</th><th>Custo/animal hoje</th></tr></thead>
+      <tbody>
+        ${custosPorLote.map(r=>`
+          <tr>
+            <td><strong>${r.lote.nome}</strong></td>
+            <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
+            <td class="mono">R$ ${fmt(r.racao)}</td>
+            <td class="mono">R$ ${fmt(r.pasto)}</td>
+            <td class="mono">R$ ${fmt(r.total)}</td>
+            <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + fatia do custo fixo)</p>
+  <div class="card" style="margin-bottom:22px;">
+    ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento para ver o custo total do mês de cada um aqui.') : `
+    <table>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th></tr></thead>
+      <tbody>
+        ${custosMesPorLote.map(r=>`
+          <tr>
+            <td><strong>${r.lote.nome}</strong></td>
+            <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
+            <td class="mono">R$ ${fmt(r.racao+r.pasto)}</td>
+            <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
+            <td class="mono">R$ ${fmt(r.total)}</td>
+            <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin:-14px 0 20px;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custos fixos cadastrados</p>
   <div class="card">
@@ -1119,9 +1201,16 @@ function ModalDieta(){
       <div class="modal-body">
         <div class="field"><label>Nome da dieta</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Dieta Terminação Alto Grão"/></div>
         <div class="field-row">
+          <div class="field"><label>Tipo</label>
+            <select id="f-tipodieta">
+              <option value="confinamento" ${d.tipo==='confinamento'?'selected':''}>Confinamento</option>
+              <option value="pasto" ${d.tipo==='pasto'?'selected':''}>Pasto</option>
+            </select>
+          </div>
           <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${d.categoriaAnimal}" placeholder="Ex: Boi terminação"/></div>
-          <div class="field"><label>Kg de dieta / animal / dia</label><input id="f-kganimal" type="number" step="0.1" value="${d.kgAnimalDia}"/></div>
         </div>
+        <div class="field"><label>Kg de dieta / animal / dia</label><input id="f-kganimal" type="number" step="0.1" value="${d.kgAnimalDia}"/></div>
+        <p class="hint">Dietas de "Confinamento" aparecem em Saída de Ração; dietas de "Pasto" aparecem no lançamento de Pasto.</p>
         <label>Composição (% da dieta)</label>
         <div style="display:flex; flex-direction:column; gap:8px;">
           ${d.itens.map((it,idx)=>`
@@ -1178,14 +1267,14 @@ function ModalSaidaRacao(){
       <div class="modal-head"><h3>${d._editId?'Editar saída de ração':'Nova saída de ração'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Dieta</label>
+          <div class="field"><label>Dieta (Confinamento)</label>
             <select id="f-dieta">
-              ${state.dietas.map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+              ${state.dietas.filter(x=>x.tipo!=='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Lote de destino</label>
+          <div class="field"><label>Lote de destino (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -1246,22 +1335,22 @@ function ModalPasto(){
       <div class="modal-head"><h3>${d._editId?'Editar reposição de pasto':'Nova reposição de pasto'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Lote</label>
+          <div class="field"><label>Lote (Pasto)</label>
             <select id="f-lote">
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='pasto').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Ingrediente colocado no cocho</label>
-            <select id="f-ing">
-              ${state.ingredientes.map(i=>`<option value="${i.id}" ${d.ingredienteId==i.id?'selected':''}>${i.nome}</option>`).join('')}
+          <div class="field"><label>Dieta de pasto</label>
+            <select id="f-dietapasto">
+              ${state.dietas.filter(x=>x.tipo==='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
             </select>
           </div>
         </div>
         <div class="field-row">
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
-          <div class="field"><label>Quantidade (em ${getIng(d.ingredienteId)?.unidade || 'kg'})</label><input id="f-qtdpasto" type="number" step="0.1" value="${d.quantidade}"/></div>
+          <div class="field"><label>Quantidade total colocada no cocho (kg)</label><input id="f-qtdpasto" type="number" step="0.1" value="${d.quantidade}"/></div>
         </div>
-        <p class="hint">O estoque do ingrediente escolhido é descontado automaticamente ao salvar.</p>
+        <p class="hint">O estoque de cada ingrediente da dieta escolhida é descontado automaticamente, na proporção da composição.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -1518,6 +1607,7 @@ function attachEvents(){
       } else if(type==='dieta'){
         const campos = {
           nome: document.getElementById('f-nome').value || 'Sem nome',
+          tipo: document.getElementById('f-tipodieta').value,
           categoriaAnimal: document.getElementById('f-categoria').value,
           kgAnimalDia: Number(document.getElementById('f-kganimal').value)||0,
           itens: editDraft.itens.map(it=>({ingredienteId:Number(it.ingredienteId), pct:Number(it.pct)||0})),
@@ -1588,10 +1678,11 @@ function attachEvents(){
         }
       } else if(type==='pasto'){
         const loteId = Number(document.getElementById('f-lote').value);
-        const ingredienteId = Number(document.getElementById('f-ing').value);
+        const dietaId = Number(document.getElementById('f-dietapasto').value);
         const data = document.getElementById('f-data').value;
         const quantidade = Number(document.getElementById('f-qtdpasto').value)||0;
-        const row = {data, lote_id: loteId, ingrediente_id: ingredienteId, quantidade};
+        const dieta = state.dietas.find(x=>x.id===dietaId);
+        const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
         let pastoId = editDraft._editId;
         if(pastoId){
           ({error} = await db.from('pasto').update(row).eq('id', pastoId));
@@ -1601,10 +1692,18 @@ function attachEvents(){
           error = res.error;
           if(res.data) pastoId = res.data.id;
         }
-        if(!error){
-          ({error} = await db.from('movimentos').insert({
-            data, ingrediente_id: ingredienteId, tipo: 'saida', quantidade, pasto_id: pastoId,
-          }));
+        if(!error && dieta){
+          const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+            const ing = getIng(it.ingredienteId);
+            const consumoKg = quantidade*it.pct/100;
+            return {
+              data, ingrediente_id: it.ingredienteId, tipo: 'saida',
+              quantidade: kgParaUnidade(consumoKg, ing?.unidade), pasto_id: pastoId,
+            };
+          });
+          if(movs.length){
+            ({error} = await db.from('movimentos').insert(movs));
+          }
         }
       } else if(type==='custoFixo'){
         const campos = {
