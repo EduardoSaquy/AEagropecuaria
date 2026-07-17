@@ -425,3 +425,24 @@ create policy "excluir config_financeiro" on config_financeiro for delete using 
 --
 -- insert into profiles (id, nome, usuario, papel, permissoes, ativo) values
 --   ('<SEU-UUID-AQUI>', 'Eduardo', 'eduardo', 'admin', '{}'::jsonb, true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Cargos Proprietário e Consultor, renomeia Funcionário -> Colaborador
+-- Pode rodar a qualquer momento (não precisa de ordem especial como a
+-- migração de login). Some acesso não muda para quem já é 'funcionario':
+-- essas contas viram 'colaborador' automaticamente, com as mesmas
+-- permissões de antes.
+-- ===================================================================
+alter table profiles drop constraint if exists profiles_papel_check;
+update profiles set papel = 'colaborador' where papel = 'funcionario';
+alter table profiles alter column papel set default 'colaborador';
+alter table profiles add constraint profiles_papel_check
+  check (papel in ('admin','proprietario','colaborador','consultor'));
+
+-- Proprietário passa a ter acesso total, igual Administrador.
+create or replace function is_admin() returns boolean
+language sql security definer set search_path = public stable as $$
+  select exists(
+    select 1 from profiles where id = auth.uid() and papel in ('admin','proprietario') and ativo = true
+  );
+$$;
