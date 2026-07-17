@@ -1115,10 +1115,15 @@ function coresPorArea(){
   AREAS_PRODUCAO.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
   return mapa;
 }
+// No painel global, Confinamento/Pasto/Cria têm cor fixa reservada (mesma dos
+// outros gráficos); as categorias de custo fixo (texto livre) recebem uma cor
+// por ordem alfabética nos slots restantes, sem repetir cor entre elas.
 function coresPorCentroCusto(nomes){
   const mapa = {};
-  const unicos = [...new Set(nomes)].sort();
-  unicos.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx % SERIES_COLORS.length]; });
+  const slots = SERIES_COLORS.slice(AREAS_PRODUCAO.length);
+  const outras = [...new Set(nomes.filter(n=>!AREAS_PRODUCAO.includes(n)))].sort();
+  outras.forEach((nome,idx)=>{ mapa[nome] = slots[idx % slots.length]; });
+  AREAS_PRODUCAO.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
   return mapa;
 }
 
@@ -1134,8 +1139,13 @@ function composicaoPorArea(racaoConfMes, pastoMes, criaMes){
   return entries.map(e=>({...e, pct: total>0 ? e.valor/total*100 : 0, cor: cores[e.nome]}));
 }
 
-function composicaoCentrosCusto(custosFixos){
+// Painel global: todas as categorias juntas (Confinamento/Pasto/Cria +
+// cada centro de custo fixo), como fatia de 100% do custo total do mês.
+function composicaoGlobal(racaoConfMes, pastoMes, criaMes, custosFixos){
   const grupos = {};
+  if(racaoConfMes>0) grupos['Confinamento'] = racaoConfMes;
+  if(pastoMes>0) grupos['Pasto'] = pastoMes;
+  if(criaMes>0) grupos['Cria'] = criaMes;
   custosFixos.forEach(c=>{
     const cat = (c.categoria||'').trim() || 'Outros';
     grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
@@ -1262,7 +1272,7 @@ function dadosFinanceiro(){
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
   const composicaoArea = composicaoPorArea(d.racaoConfMes, d.pastoMes, d.criaMes);
-  const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
+  const composicaoGlobalMes = composicaoGlobal(d.racaoConfMes, d.pastoMes, d.criaMes, state.custosFixos);
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
@@ -1292,7 +1302,7 @@ function PageFinanceiroResumo(){
   </div>
 
   ${PainelResultados(composicaoArea, d.variavelMes, 'area', 'Painel de resultados', 'Custo variável do mês por área (Confinamento, Pasto e Cria)', 'Lance ração, pasto ou reprodução para ver a composição por área aqui.')}
-  ${PainelResultados(composicaoFixos, d.fixosMes, 'fixos', 'Painel de resultados', 'Custos fixos do mês por centro de custo', 'Cadastre custos fixos para ver a composição por centro de custo aqui.')}
+  ${PainelResultados(composicaoGlobalMes, d.totalMes, 'global', 'Painel de resultados', 'Custo total do mês — todas as categorias (variáveis + fixas)', 'Cadastre custos fixos ou lance ração/pasto/reprodução para ver a composição aqui.')}
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
 }
 
