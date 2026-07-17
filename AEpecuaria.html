@@ -392,9 +392,11 @@ function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.not
 function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
+function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
+function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, cf] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, cf, inv] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -403,6 +405,7 @@ async function loadAll(){
     db.from('leituras_cocho').select('*').order('id'),
     db.from('pasto').select('*').order('id'),
     db.from('custos_fixos').select('*').order('id'),
+    db.from('investimentos').select('*').order('id'),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -412,6 +415,7 @@ async function loadAll(){
   state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
   state.pasto = (pt.data||[]).map(rowToPasto);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
+  state.investimentos = (inv.data||[]).map(rowToInvestimento);
   if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
   render();
 }
@@ -427,7 +431,8 @@ const state = {
   leiturasCocho: [],
   pasto: [],
   custosFixos: [],
-  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo', data: {...}}
+  investimentos: [],
+  modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento', data: {...}}
   openDietId: null,
   search: '',
   fabOpen: false,
@@ -619,6 +624,9 @@ function openNewModal(type){
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:''};
     state.modal = {type:'custoFixo'};
+  } else if(type==='investimento'){
+    editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
+    state.modal = {type:'investimento'};
   }
   return true;
 }
@@ -632,6 +640,7 @@ function FabMenu(){
     {type:'cocho', label:'Nova leitura de cocho'},
     {type:'pasto', label:'Nova reposição de pasto'},
     {type:'custoFixo', label:'Novo custo fixo'},
+    {type:'investimento', label:'Novo investimento'},
   ];
   return `
   <div class="fab-wrap">
@@ -1095,6 +1104,33 @@ function PageFinanceiro(){
         `).join('')}
       </tbody>
     </table>`}
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Investimentos (não entram no custo operacional)</p>
+  <div class="card">
+    ${state.investimentos.length===0 ? Empty('Nenhum investimento registrado','Registre aqui compras de animais, máquinas e outros bens — esse valor não entra no custo diário/mensal de alimentação.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Categoria</th><th>Data</th><th>Valor</th><th></th></tr></thead>
+      <tbody>
+        ${state.investimentos.map(i=>`
+          <tr>
+            <td><strong>${i.nome}</strong></td>
+            <td>${i.categoria || '—'}</td>
+            <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
+            <td class="mono">R$ ${fmt(i.valor)}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>
+            </td>
+          </tr>
+        `).join('')}
+        <tr>
+          <td colspan="3" style="text-align:right; font-weight:600;">Total investido</td>
+          <td class="mono" style="font-weight:600;">R$ ${fmt(state.investimentos.reduce((a,i)=>a+Number(i.valor||0),0))}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>`}
   </div>`;
 }
 
@@ -1117,6 +1153,7 @@ function Modal(){
   if(state.modal.type==='cocho') return ModalCocho();
   if(state.modal.type==='pasto') return ModalPasto();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
+  if(state.modal.type==='investimento') return ModalInvestimento();
   return '';
 }
 
@@ -1381,6 +1418,29 @@ function ModalCustoFixo(){
   </div>`;
 }
 
+function ModalInvestimento(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar investimento':'Novo investimento'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome do investimento</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Compra de animais, Trator novo"/></div>
+        <div class="field-row">
+          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Animais, Ativos"/></div>
+          <div class="field"><label>Valor (R$)</label><input id="f-valorinvest" type="number" step="0.01" value="${d.valor}"/></div>
+        </div>
+        <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        <p class="hint">Investimentos ficam registrados separadamente e não entram no custo diário/mensal de alimentação do Financeiro.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="investimento">${d._editId?'Salvar alterações':'Salvar investimento'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
   const searchEl = document.querySelector('[data-search]');
@@ -1532,6 +1592,21 @@ function attachEvents(){
     el.onclick = async ()=>{
       const id = Number(el.dataset.delCustofixo);
       await db.from('custos_fixos').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-edit-investimento]').forEach(el=>{
+    el.onclick = ()=>{
+      const i = state.investimentos.find(x=>x.id===Number(el.dataset.editInvestimento));
+      editDraft = {...i, _editId: i.id};
+      state.modal = {type:'investimento'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-investimento]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delInvestimento);
+      await db.from('investimentos').delete().eq('id', id);
       await loadAll();
     };
   });
@@ -1716,6 +1791,19 @@ function attachEvents(){
           ({error} = await db.from('custos_fixos').update(row).eq('id', editDraft._editId));
         } else {
           ({error} = await db.from('custos_fixos').insert(row));
+        }
+      } else if(type==='investimento'){
+        const campos = {
+          nome: document.getElementById('f-nome').value || 'Sem nome',
+          categoria: document.getElementById('f-categoria').value,
+          valor: Number(document.getElementById('f-valorinvest').value)||0,
+          data: document.getElementById('f-data').value,
+        };
+        const row = investimentoToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('investimentos').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('investimentos').insert(row));
         }
       }
       if(error){
