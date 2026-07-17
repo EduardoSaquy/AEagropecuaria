@@ -984,6 +984,10 @@ function PageFinanceiro(){
   const totalAnimais = state.lotes.filter(l=>!l.dataFim).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   const custoPorAnimalHoje = totalAnimais>0 ? custoHoje/totalAnimais : 0;
 
+  const fixoDiario = fixosMes/30;
+  const custoTotalPorAnimalDia = totalAnimais>0 ? (custoHoje+fixoDiario)/totalAnimais : 0;
+  const custoTotalPorAnimalMes = totalAnimais>0 ? totalMes/totalAnimais : 0;
+
   const valorEstoque = state.ingredientes.reduce((a,i)=>{
     const saldo = saldoIngrediente(i.id);
     return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
@@ -1000,11 +1004,16 @@ function PageFinanceiro(){
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Custo de ração + pasto hoje</div><div class="stat-value">R$ ${fmt(custoHoje)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custo/animal hoje</div><div class="stat-value">R$ ${fmt(custoPorAnimalHoje,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo variável/animal/dia</div><div class="stat-value">R$ ${fmt(custoPorAnimalHoje,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(variavelMes)}</div></div>
     <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(fixosMes)}</div></div>
+  </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo total/animal/dia (com fixo)</div><div class="stat-value">R$ ${fmt(custoTotalPorAnimalDia,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(custoTotalPorAnimalMes,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(valorEstoque)}</div></div>
   </div>
+  <p class="hint" style="margin:-14px 0 20px;">"Com fixo" dilui o custo fixo mensal entre os animais (mensal ÷ 30 dias ÷ nº de animais em lotes ativos), somado ao custo variável de ração e pasto.</p>
 
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
