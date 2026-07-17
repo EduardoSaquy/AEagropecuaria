@@ -616,6 +616,8 @@ const ACAO_MODULOS = {
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
+// criar lote é restrito por cargo (não pela tabela de permissões por módulo): Colaborador nunca pode.
+function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -985,7 +987,11 @@ function FabMenu(){
     {type:'receita', label:'Nova receita'},
     {type:'precoArroba', label:'Atualizar preço da arroba'},
     {type:'metaMargem', label:'Definir meta de margem'},
-  ].filter(a=>podeEditarAcao(a.type) && (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]));
+  ].filter(a=>{
+    const nestaAba = (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]);
+    if(a.type==='lote') return nestaAba && podeCriarLote();
+    return nestaAba && podeEditarAcao(a.type);
+  });
   if(actions.length===0) return '';
   return `
   <div class="fab-wrap">
