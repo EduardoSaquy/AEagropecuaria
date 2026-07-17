@@ -481,11 +481,15 @@ function render(){
         ${state.page==='ingredientes' ? PageIngredientes() : ''}
         ${state.page==='estoque' ? PageEstoque() : ''}
         ${state.page==='dietas' ? PageDietas() : ''}
-        ${state.page==='lotes' ? PageLotes() : ''}
+        ${state.page==='lotes' ? PageLotes('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao() : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
+        ${state.page==='lotesPasto' ? PageLotes('pasto') : ''}
         ${state.page==='pasto' ? PagePasto() : ''}
-        ${state.page==='financeiro' ? PageFinanceiro() : ''}
+        ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
+        ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
+        ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
+        ${state.page==='financeiroInvestimentos' ? PageFinanceiroInvestimentos() : ''}
       </div>
     </div>
     ${state.modal ? Modal() : ''}
@@ -530,10 +534,14 @@ const GROUPS = {
     {key:'cocho', label:'Leitura de Cocho'},
   ]},
   pasto: {label:'Pasto', icon:iconPasto(), pages:[
-    {key:'pasto', label:'Pasto'},
+    {key:'lotesPasto', label:'Lotes'},
+    {key:'pasto', label:'Saída de Ração'},
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
-    {key:'financeiro', label:'Financeiro'},
+    {key:'financeiroResumo', label:'Resumo'},
+    {key:'financeiroCurral', label:'Por Curral'},
+    {key:'financeiroCustosFixos', label:'Custos Fixos'},
+    {key:'financeiroInvestimentos', label:'Investimentos'},
   ]},
 };
 function currentGroupKey(){
@@ -595,11 +603,15 @@ function Header(){
     ingredientes:{eyebrow:'Cadastro', title:'Ingredientes', desc:'Composição nutricional, fornecedor e preço de cada insumo da fazenda.'},
     estoque:{eyebrow:'Movimentação', title:'Estoque', desc:'Saldo atual por ingrediente, calculado a partir das entradas e saídas registradas.'},
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
-    lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais, com número de cabeças e período de início e encerramento.'},
+    lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
-    pasto:{eyebrow:'Movimentação', title:'Pasto', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto.'},
-    financeiro:{eyebrow:'Gestão', title:'Financeiro', desc:'Acompanhe o custo diário e mensal de alimentação dos animais, e cadastre os custos fixos da operação.'},
+    lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
+    pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
+    financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
+    financeiroCurral:{eyebrow:'Gestão', title:'Por Curral', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
+    financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
+    financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
   };
   const t = titles[state.page];
   return `
@@ -855,23 +867,25 @@ function PageDietas(){
 }
 
 /* ===================== PÁGINA: LOTES ===================== */
-function PageLotes(){
-  const list = state.lotes;
+function PageLotes(tipo){
+  const list = state.lotes.filter(l=>loteTipo(l)===tipo);
+  const vazio = tipo==='confinamento'
+    ? Empty('Nenhum lote de confinamento cadastrado','Cadastre um lote com "confinamento" no nome para ele aparecer aqui.')
+    : Empty('Nenhum lote de pasto cadastrado','Cadastre um lote sem "confinamento" no nome para ele aparecer aqui.');
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre os lotes/currais de animais da fazenda.') : `
+    ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Lote</th><th>Tipo</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+        <th>Lote</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(l=>`
           <tr>
             <td><strong>${l.nome}</strong></td>
-            <td><span class="pill ${loteTipo(l)==='confinamento'?'pill-ok':'pill-warn'}">${loteTipo(l)==='confinamento'?'Confinamento':'Pasto'}</span></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
@@ -1107,7 +1121,7 @@ function PainelResultados(entries, totalMes){
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
 }
 
-function PageFinanceiro(){
+function dadosFinanceiro(){
   const hoje = hojeStr();
   const mes = mesAtualStr();
 
@@ -1133,52 +1147,68 @@ function PageFinanceiro(){
     return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
   }, 0);
 
+  return {hoje, mes, racaoHoje, pastoHoje, custoHoje, racaoMes, pastoMes, variavelMes, fixosMes, totalMes,
+    totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
+}
+
+/* ---- Financeiro: Resumo ---- */
+function PageFinanceiroResumo(){
+  const d = dadosFinanceiro();
+  const composicaoMes = composicaoCustoMes(d.racaoMes, d.pastoMes, state.custosFixos);
+
+  return `
+  <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Ração + pasto hoje</div><div class="stat-value">R$ ${fmt(d.custoHoje)}</div></div>
+    <div class="stat-card"><div class="stat-label">Variável/animal/dia</div><div class="stat-value">R$ ${fmt(d.custoPorAnimalHoje,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total/animal/dia (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalDia,2)}</div></div>
+  </div>
+
+  <p class="eyebrow" style="margin:22px 0 10px;">Este mês</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(d.variavelMes)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(d.fixosMes)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalMes,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(d.valorEstoque)}</div></div>
+  </div>
+  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário).</p>
+
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <div class="stat-label">Total do mês (variável + fixo)</div>
+        <div class="stat-value" style="font-size:26px;">R$ ${fmt(d.totalMes)}</div>
+      </div>
+      <span class="hint">${fmtInt(d.totalAnimais)} animais em lotes ativos</span>
+    </div>
+  </div>
+
+  ${PainelResultados(composicaoMes, d.totalMes)}`;
+}
+
+/* ---- Financeiro: Por Curral ---- */
+function PageFinanceiroCurral(){
+  const d = dadosFinanceiro();
+
   const custosPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
-    const racao = state.saidasRacao.filter(s=>s.data===hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
-    const pasto = state.pasto.filter(p=>p.data===hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pasto = state.pasto.filter(p=>p.data===d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
     const total = racao + pasto;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
     return {lote:l, racao, pasto, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   const custosMesPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
-    const racao = state.saidasRacao.filter(s=>s.data.startsWith(mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
-    const pasto = state.pasto.filter(p=>p.data.startsWith(mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
     const variavel = racao + pasto;
-    const fixoAlocado = totalAnimais>0 ? fixosMes*(Number(l.numeroAnimais||0)/totalAnimais) : 0;
+    const fixoAlocado = d.totalAnimais>0 ? d.fixosMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
     return {lote:l, racao, pasto, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
-  const composicaoMes = composicaoCustoMes(racaoMes, pastoMes, state.custosFixos);
-
   return `
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Custo de ração + pasto hoje</div><div class="stat-value">R$ ${fmt(custoHoje)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custo variável/animal/dia</div><div class="stat-value">R$ ${fmt(custoPorAnimalHoje,2)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(variavelMes)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(fixosMes)}</div></div>
-  </div>
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Custo total/animal/dia (com fixo)</div><div class="stat-value">R$ ${fmt(custoTotalPorAnimalDia,2)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custo total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(custoTotalPorAnimalMes,2)}</div></div>
-    <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(valorEstoque)}</div></div>
-  </div>
-  <p class="hint" style="margin:-14px 0 20px;">"Com fixo" dilui o custo fixo mensal entre os animais (mensal ÷ 30 dias ÷ nº de animais em lotes ativos), somado ao custo variável de ração e pasto.</p>
-
-  <div class="card" style="margin-bottom:22px;">
-    <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-      <div>
-        <div class="stat-label">Total do mês (variável + fixo)</div>
-        <div class="stat-value" style="font-size:26px;">R$ ${fmt(totalMes)}</div>
-      </div>
-      <span class="hint">${fmtInt(totalAnimais)} animais em lotes ativos</span>
-    </div>
-  </div>
-
-  ${PainelResultados(composicaoMes, totalMes)}
-
   <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral</p>
   <div class="card" style="margin-bottom:22px;">
     ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento para ver o custo diário de cada um aqui.') : `
@@ -1218,9 +1248,12 @@ function PageFinanceiro(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 20px;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos.</p>
+  <p class="hint" style="margin:-14px 0 0;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos.</p>`;
+}
 
-  <p class="eyebrow" style="margin-bottom:10px;">Custos fixos cadastrados</p>
+/* ---- Financeiro: Custos Fixos ---- */
+function PageFinanceiroCustosFixos(){
+  return `
   <div class="card">
     ${state.custosFixos.length===0 ? Empty('Nenhum custo fixo cadastrado','Cadastre despesas mensais fixas, como mão de obra, energia e manutenção.') : `
     <table>
@@ -1239,9 +1272,12 @@ function PageFinanceiro(){
         `).join('')}
       </tbody>
     </table>`}
-  </div>
+  </div>`;
+}
 
-  <p class="eyebrow" style="margin-bottom:10px;">Investimentos (não entram no custo operacional)</p>
+/* ---- Financeiro: Investimentos ---- */
+function PageFinanceiroInvestimentos(){
+  return `
   <div class="card">
     ${state.investimentos.length===0 ? Empty('Nenhum investimento registrado','Registre aqui compras de animais, máquinas e outros bens — esse valor não entra no custo diário/mensal de alimentação.') : `
     <table>
@@ -1422,6 +1458,7 @@ function ModalLote(){
         </div>
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
+        <p class="hint">Inclua a palavra "confinamento" no nome para o lote aparecer na aba Confinamento; sem ela, aparece na aba Pasto.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
