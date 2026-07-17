@@ -1281,44 +1281,45 @@ function PainelResultados(entries, totalMes, panelId, eyebrow, titulo, vazioMsg)
   </div>`;
 }
 
-function DemonstrativoReceitaDespesa(despesaMes, receitaMes, margemAtualPct, metaMargemPct){
-  const maior = Math.max(despesaMes, receitaMes, 1);
-  const resultado = receitaMes - despesaMes;
+function DemonstrativoReceitaDespesa(despesa, receita, margemAtualPct, metaMargemPct, periodo, mostrarEditarMeta){
+  const maior = Math.max(despesa, receita, 1);
+  const resultado = receita - despesa;
   const positivo = resultado >= 0;
   const margemOk = margemAtualPct!==null && metaMargemPct!==null && margemAtualPct>=metaMargemPct;
+  const rotulo = periodo==='ano' ? 'do ano' : 'do mês';
   return `
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad">
       <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
-      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">Despesa vs Receita do mês</h3>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">Despesa vs Receita ${rotulo}</h3>
       <div class="demonstrativo-bars">
         <div class="demo-bar-row">
           <span class="demo-bar-label">Despesa</span>
-          <div class="demo-bar-track"><div class="demo-bar-fill demo-bar-despesa" style="width:${Math.round(despesaMes/maior*100)}%"></div></div>
-          <span class="demo-bar-valor">R$ ${fmt(despesaMes)}</span>
+          <div class="demo-bar-track"><div class="demo-bar-fill demo-bar-despesa" style="width:${Math.round(despesa/maior*100)}%"></div></div>
+          <span class="demo-bar-valor">R$ ${fmt(despesa)}</span>
         </div>
         <div class="demo-bar-row">
           <span class="demo-bar-label">Receita</span>
-          <div class="demo-bar-track"><div class="demo-bar-fill demo-bar-receita" style="width:${Math.round(receitaMes/maior*100)}%"></div></div>
-          <span class="demo-bar-valor">R$ ${fmt(receitaMes)}</span>
+          <div class="demo-bar-track"><div class="demo-bar-fill demo-bar-receita" style="width:${Math.round(receita/maior*100)}%"></div></div>
+          <span class="demo-bar-valor">R$ ${fmt(receita)}</span>
         </div>
       </div>
       <div class="demo-resultado ${positivo?'demo-resultado-ok':'demo-resultado-critico'}">
         <span class="demo-resultado-icone">${positivo?'▲':'▼'}</span>
-        <span class="demo-resultado-label">${positivo?'Lucro do mês':'Prejuízo do mês'}</span>
+        <span class="demo-resultado-label">${positivo?'Lucro':'Prejuízo'} ${rotulo}</span>
         <span class="demo-resultado-valor">R$ ${fmt(Math.abs(resultado))}</span>
       </div>
       <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
-        <span class="stat-label">Margem do mês</span>
+        <span class="stat-label">Margem ${rotulo}</span>
         <span class="mono" style="font-weight:600; color:var(--verde-escuro);">${margemAtualPct!==null ? fmt(margemAtualPct,1)+'%' : '—'}</span>
         ${metaMargemPct!==null ? `<span class="pill ${margemOk?'pill-ok':'pill-alerta'}">${margemOk?'Acima da meta':'Abaixo da meta'} (meta ${fmt(metaMargemPct,1)}%)</span>` : ''}
-        <button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>
+        ${mostrarEditarMeta!==false ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
       </div>
     </div>
   </div>`;
 }
 
-function ComparativoMensal(meses, anual){
+function ComparativoMensal(meses){
   const ano = new Date().getFullYear();
   return `
   <div class="card" style="margin-bottom:22px;">
@@ -1339,22 +1340,6 @@ function ComparativoMensal(meses, anual){
           `).join('')}
         </tbody>
       </table>
-    </div>
-  </div>
-  <div class="card" style="margin-bottom:22px;">
-    <div class="card-pad" style="display:flex; flex-wrap:wrap; gap:24px;">
-      <div>
-        <div class="stat-label">Despesa no ano (${ano})</div>
-        <div class="stat-value" style="font-size:22px;">R$ ${fmt(anual.despesa)}</div>
-      </div>
-      <div>
-        <div class="stat-label">Receita no ano (${ano})</div>
-        <div class="stat-value" style="font-size:22px;">R$ ${fmt(anual.receita)}</div>
-      </div>
-      <div>
-        <div class="stat-label">Resultado do ano</div>
-        <div class="stat-value" style="font-size:22px; color:${anual.resultado>=0?'var(--bom)':'var(--alerta)'};">${anual.resultado<0?'-':''}R$ ${fmt(Math.abs(anual.resultado))}</div>
-      </div>
     </div>
   </div>`;
 }
@@ -1508,8 +1493,9 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
-  ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct)}
-  ${ComparativoMensal(meses, anual)}
+  ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
+  ${ComparativoMensal(meses)}
+  ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
   ${PainelResultados(composicaoArea, d.totalMes, 'area', 'Painel de resultados', 'Custo total do mês por área (Confinamento, Pasto e Cria, já com a fatia do custo fixo diluída)', 'Lance ração, pasto ou reprodução, e cadastre lotes ativos, para ver a composição por área aqui.')}
   ${PainelResultados(composicaoFixos, d.fixosMes, 'fixos', 'Painel de resultados', 'Custos fixos do mês por centro de custo', 'Cadastre custos fixos para ver a composição por centro de custo aqui.')}
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
