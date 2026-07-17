@@ -1,6 +1,6 @@
 {
-  "name": "AE Nutrição — Gestão de Confinamento",
-  "short_name": "AE Nutrição",
+  "name": "AE Pecuária — Gestão de Confinamento",
+  "short_name": "AE Pecuária",
   "start_url": "./AEpecuaria.html",
   "scope": "./",
   "display": "standalone",

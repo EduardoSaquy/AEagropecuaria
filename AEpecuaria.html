@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AE Nutrição — Gestão de Confinamento</title>
+<title>AE Pecuária — Gestão de Confinamento</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -24,6 +24,8 @@
     --alerta:#B3462F;
     --alerta-bg:#F6E7E2;
     --ok-bg:#E5EEF9;
+    --bom:#0C7A43;
+    --bom-bg:#E3F1E8;
     --radius:10px;
     --shadow:0 1px 2px rgba(15,42,74,0.06), 0 4px 12px rgba(15,42,74,0.06);
   }
@@ -365,6 +367,24 @@
   .painel-tooltip .v{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;}
   .painel-tooltip .l{font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px;}
 
+  /* ---------- DEMONSTRATIVO DESPESA x RECEITA ---------- */
+  .demonstrativo-bars{display:flex; flex-direction:column; gap:14px; margin-bottom:18px;}
+  .demo-bar-row{display:grid; grid-template-columns:70px 1fr 120px; align-items:center; gap:12px;}
+  .demo-bar-label{font-size:12px; font-weight:600; color:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
+  .demo-bar-track{background:var(--cinza-claro); border-radius:20px; height:14px; overflow:hidden;}
+  .demo-bar-fill{height:100%; border-radius:20px; transition:width 0.3s;}
+  .demo-bar-despesa{background:var(--cinza);}
+  .demo-bar-receita{background:var(--bom);}
+  .demo-bar-valor{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--grafite); text-align:right; font-variant-numeric:tabular-nums;}
+  .demo-resultado{
+    display:flex; align-items:center; gap:10px; padding:14px 18px; border-radius:var(--radius);
+  }
+  .demo-resultado-ok{background:var(--bom-bg); color:var(--bom);}
+  .demo-resultado-critico{background:var(--alerta-bg); color:var(--alerta);}
+  .demo-resultado-icone{font-size:16px; line-height:1;}
+  .demo-resultado-label{font-size:13px; font-weight:600; flex:1;}
+  .demo-resultado-valor{font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:700;}
+
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -394,6 +414,8 @@
     .fab-btn{width:50px; height:50px; font-size:24px;}
     .painel-resultados{flex-direction:column; align-items:stretch;}
     .donut-wrap{align-self:center;}
+    .demo-bar-row{grid-template-columns:1fr; gap:4px;}
+    .demo-bar-valor{text-align:left;}
   }
 </style>
 </head>
@@ -424,11 +446,15 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
+function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
+function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor}; }
+function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
+function precoArrobaToRow(p){ return {data:p.data, valor:p.valor}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
 function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -439,6 +465,9 @@ async function loadAll(){
     db.from('reproducao_custos').select('*').order('id'),
     db.from('custos_fixos').select('*').order('id'),
     db.from('investimentos').select('*').order('id'),
+    db.from('receitas').select('*').order('id'),
+    db.from('precos_arroba').select('*').order('id'),
+    db.from('config_financeiro').select('*').eq('id', 1),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -450,6 +479,9 @@ async function loadAll(){
   state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   state.investimentos = (inv.data||[]).map(rowToInvestimento);
+  state.receitas = (rec.data||[]).map(rowToReceita);
+  state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);
+  state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
   if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
   render();
 }
@@ -465,6 +497,9 @@ const state = {
   leiturasCocho: [],
   pasto: [],
   reproducao: [],
+  receitas: [],
+  precosArroba: [],
+  metaMargemPct: null,
   custosFixos: [],
   investimentos: [],
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento', data: {...}}
@@ -496,6 +531,7 @@ function render(){
         ${state.page==='reproducao' ? PageReproducao() : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
+        ${state.page==='financeiroReceitas' ? PageFinanceiroReceitas() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
         ${state.page==='financeiroInvestimentos' ? PageFinanceiroInvestimentos() : ''}
       </div>
@@ -557,6 +593,7 @@ const GROUPS = {
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
     {key:'financeiroCurral', label:'Por Curral'},
+    {key:'financeiroReceitas', label:'Receitas'},
     {key:'financeiroCustosFixos', label:'Custos Fixos'},
     {key:'financeiroInvestimentos', label:'Investimentos'},
   ]},
@@ -573,7 +610,7 @@ function Sidebar(){
     <div class="brand">
       ${brandMark()}
       <div>
-        <div class="brand-name">AE Nutrição</div>
+        <div class="brand-name">AE Pecuária</div>
         <div class="brand-sub">Gestão de confinamento</div>
       </div>
     </div>
@@ -631,6 +668,7 @@ function Header(){
     reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Curral', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
+    financeiroReceitas:{eyebrow:'Gestão', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
     financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
   };
@@ -707,6 +745,17 @@ function openNewModal(type){
   } else if(type==='investimento'){
     editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
     state.modal = {type:'investimento'};
+  } else if(type==='receita'){
+    editDraft = {loteId:'', descricao:'', arrobas:'', valor:'', data:new Date().toISOString().slice(0,10)};
+    state.modal = {type:'receita'};
+  } else if(type==='precoArroba'){
+    const hoje = new Date().toISOString().slice(0,10);
+    const existente = state.precosArroba.find(p=>p.data===hoje);
+    editDraft = existente ? {...existente, _editId: existente.id} : {data: hoje, valor: ''};
+    state.modal = {type:'precoArroba'};
+  } else if(type==='metaMargem'){
+    editDraft = {valor: state.metaMargemPct ?? ''};
+    state.modal = {type:'metaMargem'};
   }
   return true;
 }
@@ -723,6 +772,9 @@ function FabMenu(){
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'custoFixo', label:'Novo custo fixo'},
     {type:'investimento', label:'Novo investimento'},
+    {type:'receita', label:'Nova receita'},
+    {type:'precoArroba', label:'Atualizar preço da arroba'},
+    {type:'metaMargem', label:'Definir meta de margem'},
   ];
   return `
   <div class="fab-wrap">
@@ -1229,10 +1281,52 @@ function PainelResultados(entries, totalMes, panelId, eyebrow, titulo, vazioMsg)
   </div>`;
 }
 
+function DemonstrativoReceitaDespesa(despesaMes, receitaMes, margemAtualPct, metaMargemPct){
+  const maior = Math.max(despesaMes, receitaMes, 1);
+  const resultado = receitaMes - despesaMes;
+  const positivo = resultado >= 0;
+  const margemOk = margemAtualPct!==null && metaMargemPct!==null && margemAtualPct>=metaMargemPct;
+  return `
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad">
+      <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">Despesa vs Receita do mês</h3>
+      <div class="demonstrativo-bars">
+        <div class="demo-bar-row">
+          <span class="demo-bar-label">Despesa</span>
+          <div class="demo-bar-track"><div class="demo-bar-fill demo-bar-despesa" style="width:${Math.round(despesaMes/maior*100)}%"></div></div>
+          <span class="demo-bar-valor">R$ ${fmt(despesaMes)}</span>
+        </div>
+        <div class="demo-bar-row">
+          <span class="demo-bar-label">Receita</span>
+          <div class="demo-bar-track"><div class="demo-bar-fill demo-bar-receita" style="width:${Math.round(receitaMes/maior*100)}%"></div></div>
+          <span class="demo-bar-valor">R$ ${fmt(receitaMes)}</span>
+        </div>
+      </div>
+      <div class="demo-resultado ${positivo?'demo-resultado-ok':'demo-resultado-critico'}">
+        <span class="demo-resultado-icone">${positivo?'▲':'▼'}</span>
+        <span class="demo-resultado-label">${positivo?'Lucro do mês':'Prejuízo do mês'}</span>
+        <span class="demo-resultado-valor">R$ ${fmt(Math.abs(resultado))}</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <span class="stat-label">Margem do mês</span>
+        <span class="mono" style="font-weight:600; color:var(--verde-escuro);">${margemAtualPct!==null ? fmt(margemAtualPct,1)+'%' : '—'}</span>
+        ${metaMargemPct!==null ? `<span class="pill ${margemOk?'pill-ok':'pill-alerta'}">${margemOk?'Acima da meta':'Abaixo da meta'} (meta ${fmt(metaMargemPct,1)}%)</span>` : ''}
+        <button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // Saída de Ração é uma tabela só, compartilhada entre lotes de Confinamento e
 // de Cria; para separar os dois no painel de resultados, é preciso checar o
 // tipo do lote de destino de cada lançamento.
 function racaoLoteTipo(s){ const lote = state.lotes.find(l=>l.id===s.loteId); return lote ? loteTipo(lote) : null; }
+
+function precoArrobaAtual(){
+  if(state.precosArroba.length===0) return null;
+  return [...state.precosArroba].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
+}
 
 function dadosFinanceiro(){
   const hoje = hojeStr();
@@ -1282,9 +1376,13 @@ function dadosFinanceiro(){
     return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
   }, 0);
 
+  const receitaMes = state.receitas.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+Number(r.valor||0),0);
+  const resultadoMes = receitaMes - totalMes;
+  const margemAtualPct = receitaMes>0 ? (resultadoMes/receitaMes*100) : null;
+
   return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
-    custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes,
+    custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
 }
 
@@ -1293,8 +1391,20 @@ function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
   const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
   const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
+  const arroba = precoArrobaAtual();
 
   return `
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <div class="stat-label">Arroba (Tocantins) — Datagro</div>
+        <div class="stat-value" style="font-size:24px;">${arroba ? 'R$ '+fmt(arroba.valor) : '—'}</div>
+        <div class="hint" style="margin-top:2px;">${arroba ? 'Atualizado em '+arroba.data.split('-').reverse().join('/') : 'Nenhum valor cadastrado ainda'}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-fab-action="precoArroba">Atualizar preço</button>
+    </div>
+  </div>
+
   <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Custo variável hoje</div><div class="stat-value">R$ ${fmt(d.custoHoje)}</div></div>
@@ -1321,6 +1431,7 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
+  ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct)}
   ${PainelResultados(composicaoArea, d.totalMes, 'area', 'Painel de resultados', 'Custo total do mês por área (Confinamento, Pasto e Cria, já com a fatia do custo fixo diluída)', 'Lance ração, pasto ou reprodução, e cadastre lotes ativos, para ver a composição por área aqui.')}
   ${PainelResultados(composicaoFixos, d.fixosMes, 'fixos', 'Painel de resultados', 'Custos fixos do mês por centro de custo', 'Cadastre custos fixos para ver a composição por centro de custo aqui.')}
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
@@ -1392,6 +1503,39 @@ function PageFinanceiroCurral(){
     </table>`}
   </div>
   <p class="hint" style="margin:-14px 0 0;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos.</p>`;
+}
+
+/* ---- Financeiro: Receitas ---- */
+function PageFinanceiroReceitas(){
+  const list = [...state.receitas].sort((a,b)=> b.data.localeCompare(a.data));
+  return `
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhuma receita registrada','Registre a venda de animais e outras receitas da operação.') : `
+    <table>
+      <thead><tr><th>Data</th><th>Lote</th><th>Descrição</th><th>Arrobas</th><th>Valor</th><th></th></tr></thead>
+      <tbody>
+        ${list.map(r=>{
+          const lote = state.lotes.find(l=>l.id===r.loteId);
+          return `<tr>
+            <td class="mono">${r.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td>${r.descricao}</td>
+            <td class="mono">${r.arrobas ? fmt(r.arrobas,2) : '—'}</td>
+            <td class="mono">R$ ${fmt(r.valor)}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>
+            </td>
+          </tr>`;
+        }).join('')}
+        <tr>
+          <td colspan="4" style="text-align:right; font-weight:600;">Total recebido</td>
+          <td class="mono" style="font-weight:600;">R$ ${fmt(list.reduce((a,r)=>a+Number(r.valor||0),0))}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>`}
+  </div>`;
 }
 
 /* ---- Financeiro: Custos Fixos ---- */
@@ -1470,6 +1614,9 @@ function Modal(){
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
   if(state.modal.type==='investimento') return ModalInvestimento();
+  if(state.modal.type==='receita') return ModalReceita();
+  if(state.modal.type==='precoArroba') return ModalPrecoArroba();
+  if(state.modal.type==='metaMargem') return ModalMetaMargem();
   return '';
 }
 
@@ -1820,6 +1967,75 @@ function ModalInvestimento(){
   </div>`;
 }
 
+function ModalReceita(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar receita':'Nova receita'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Lote (opcional)</label>
+            <select id="f-lotereceita">
+              <option value="">— Geral / não vinculada a um lote —</option>
+              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field"><label>Descrição</label><input id="f-descricaoreceita" value="${d.descricao}" placeholder="Ex: Venda de animais, Venda de esterco"/></div>
+        <div class="field-row">
+          <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobas" type="number" step="0.01" value="${d.arrobas||''}"/></div>
+          <div class="field"><label>Valor recebido (R$)</label><input id="f-valorreceita" type="number" step="0.01" value="${d.valor}"/></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="receita">${d._editId?'Salvar alterações':'Salvar receita'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalPrecoArroba(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Atualizar preço da arroba</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Data</label><input id="f-dataarroba" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Valor da arroba (R$/@)</label><input id="f-valorarroba" type="number" step="0.01" value="${d.valor}"/></div>
+        </div>
+        <p class="hint">Valor médio da arroba no Tocantins (Datagro) — atualize manualmente conforme a cotação do dia.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="precoArroba">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalMetaMargem(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Definir meta de margem</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Meta de margem sobre a receita (%)</label><input id="f-metamargem" type="number" step="0.1" value="${d.valor}"/></div>
+        <p class="hint">A margem do mês (lucro ÷ receita) é comparada com essa meta no Resumo do Financeiro.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="metaMargem">Salvar meta</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
   const searchEl = document.querySelector('[data-search]');
@@ -2002,6 +2218,21 @@ function attachEvents(){
     el.onclick = async ()=>{
       const id = Number(el.dataset.delInvestimento);
       await db.from('investimentos').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-edit-receita]').forEach(el=>{
+    el.onclick = ()=>{
+      const r = state.receitas.find(x=>x.id===Number(el.dataset.editReceita));
+      editDraft = {...r, _editId: r.id};
+      state.modal = {type:'receita'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-receita]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delReceita);
+      await db.from('receitas').delete().eq('id', id);
       await loadAll();
     };
   });
@@ -2213,6 +2444,34 @@ function attachEvents(){
         } else {
           ({error} = await db.from('investimentos').insert(row));
         }
+      } else if(type==='receita'){
+        const campos = {
+          loteId: document.getElementById('f-lotereceita').value ? Number(document.getElementById('f-lotereceita').value) : null,
+          data: document.getElementById('f-data').value,
+          descricao: document.getElementById('f-descricaoreceita').value || 'Sem descrição',
+          arrobas: document.getElementById('f-arrobas').value ? Number(document.getElementById('f-arrobas').value) : null,
+          valor: Number(document.getElementById('f-valorreceita').value)||0,
+        };
+        const row = receitaToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('receitas').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('receitas').insert(row));
+        }
+      } else if(type==='precoArroba'){
+        const campos = {
+          data: document.getElementById('f-dataarroba').value,
+          valor: Number(document.getElementById('f-valorarroba').value)||0,
+        };
+        const row = precoArrobaToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('precos_arroba').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('precos_arroba').insert(row));
+        }
+      } else if(type==='metaMargem'){
+        const pct = Number(document.getElementById('f-metamargem').value)||0;
+        ({error} = await db.from('config_financeiro').upsert({id:1, meta_margem_pct:pct}));
       }
       if(error){
         alert('Não foi possível salvar: ' + error.message);
