@@ -1001,6 +1001,16 @@ function PageFinanceiro(){
     return {lote:l, racao, pasto, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
+  const custosMesPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
+    const racao = state.saidasRacao.filter(s=>s.data.startsWith(mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pasto = state.pasto.filter(p=>p.data.startsWith(mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const variavel = racao + pasto;
+    const fixoAlocado = totalAnimais>0 ? fixosMes*(Number(l.numeroAnimais||0)/totalAnimais) : 0;
+    const total = variavel + fixoAlocado;
+    const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
+    return {lote:l, racao, pasto, fixoAlocado, total, porAnimal};
+  }).sort((a,b)=> b.total-a.total);
+
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Custo de ração + pasto hoje</div><div class="stat-value">R$ ${fmt(custoHoje)}</div></div>
@@ -1044,6 +1054,27 @@ function PageFinanceiro(){
       </tbody>
     </table>`}
   </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + fatia do custo fixo)</p>
+  <div class="card" style="margin-bottom:22px;">
+    ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento para ver o custo total do mês de cada um aqui.') : `
+    <table>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th></tr></thead>
+      <tbody>
+        ${custosMesPorLote.map(r=>`
+          <tr>
+            <td><strong>${r.lote.nome}</strong></td>
+            <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
+            <td class="mono">R$ ${fmt(r.racao+r.pasto)}</td>
+            <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
+            <td class="mono">R$ ${fmt(r.total)}</td>
+            <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin:-14px 0 20px;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custos fixos cadastrados</p>
   <div class="card">
