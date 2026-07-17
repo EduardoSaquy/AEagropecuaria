@@ -1755,7 +1755,6 @@ function PageFinanceiroResumo(){
     <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(d.variavelMes)}</div></div>
     <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(d.fixosMes)}</div></div>
     <div class="stat-card"><div class="stat-label">Total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalMes,2)}</div></div>
-    <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(d.valorEstoque)}</div></div>
   </div>
   <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário).</p>
 
@@ -1781,6 +1780,9 @@ function PageResultadosResumo(){
   const anual = comparativoAnual(meses);
 
   return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(d.valorEstoque)}</div></div>
+  </div>
   ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
