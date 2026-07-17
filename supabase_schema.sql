@@ -254,3 +254,174 @@ create table config_financeiro (
 alter table config_financeiro enable row level security;
 
 create policy "public full access" on config_financeiro for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Login e permissões por módulo
+--
+-- ATENÇÃO — ORDEM DE EXECUÇÃO, LEIA ANTES DE RODAR:
+-- Esta migração troca as políticas de acesso público ("public full
+-- access") por políticas que exigem login e permissão por módulo.
+-- A partir do momento em que você rodar este bloco, o app SÓ funciona
+-- para quem tiver uma conta com perfil em `profiles` — incluindo você.
+--
+-- Passo a passo obrigatório, NESTA ORDEM:
+-- 1. Espere o app publicado já ter a tela de login (peça confirmação
+--    antes de rodar esta migração).
+-- 2. No painel do Supabase: Authentication > Users > Add user. Crie
+--    sua própria conta (email pode ser fake, ex: eduardo@aeagropecuaria.local,
+--    já marcando "Auto Confirm User"). Anote o UUID gerado.
+-- 3. Rode o bloco abaixo (cria as tabelas/políticas nova).
+-- 4. Rode o insert manual no final deste bloco, trocando o UUID e o
+--    nome, pra virar o primeiro administrador.
+-- 5. Só depois disso faça login no app com esse usuário/senha.
+-- ===================================================================
+
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  nome text not null,
+  usuario text not null unique, -- nome de usuário do login (sem @dominio)
+  papel text not null default 'funcionario' check (papel in ('admin','funcionario')),
+  permissoes jsonb not null default '{}'::jsonb, -- {"insumos":"editar","dietas":"visualizar",...}
+  ativo boolean not null default true,
+  created_at timestamptz default now()
+);
+
+alter table profiles enable row level security;
+
+-- funções auxiliares (security definer + search_path fixo, para não
+-- herdar permissão de quem chama nem sofrer sequestro de search_path)
+create or replace function is_admin() returns boolean
+language sql security definer set search_path = public stable as $$
+  select exists(
+    select 1 from profiles where id = auth.uid() and papel = 'admin' and ativo = true
+  );
+$$;
+
+create or replace function tem_permissao(modulo text, nivel text) returns boolean
+language sql security definer set search_path = public stable as $$
+  select case
+    when is_admin() then true
+    when nivel = 'visualizar' then (
+      select permissoes->>modulo in ('visualizar','editar')
+      from profiles where id = auth.uid() and ativo = true
+    )
+    else (
+      select permissoes->>modulo = 'editar'
+      from profiles where id = auth.uid() and ativo = true
+    )
+  end;
+$$;
+
+create policy "ver proprio perfil ou admin ve todos" on profiles for select
+  using (auth.uid() = id or is_admin());
+create policy "admin cria perfis" on profiles for insert with check (is_admin());
+create policy "admin atualiza perfis" on profiles for update using (is_admin()) with check (is_admin());
+create policy "admin exclui perfis" on profiles for delete using (is_admin());
+
+-- troca as políticas públicas por políticas com permissão por módulo.
+-- lotes e saidas_racao são usados tanto por Confinamento quanto por
+-- Cria (e lotes também por Pasto), então aceitam qualquer um dos módulos.
+-- (cada operação de escrita vira 3 políticas separadas — insert/update/delete —
+-- porque o Postgres não aceita "for insert, update, delete" numa política só)
+drop policy if exists "public full access" on ingredientes;
+drop policy if exists "public full access" on movimentos;
+create policy "select insumos" on ingredientes for select using (tem_permissao('insumos','visualizar'));
+create policy "inserir insumos" on ingredientes for insert with check (tem_permissao('insumos','editar'));
+create policy "atualizar insumos" on ingredientes for update using (tem_permissao('insumos','editar')) with check (tem_permissao('insumos','editar'));
+create policy "excluir insumos" on ingredientes for delete using (tem_permissao('insumos','editar'));
+create policy "select movimentos" on movimentos for select using (tem_permissao('insumos','visualizar'));
+create policy "inserir movimentos" on movimentos for insert with check (tem_permissao('insumos','editar'));
+create policy "atualizar movimentos" on movimentos for update using (tem_permissao('insumos','editar')) with check (tem_permissao('insumos','editar'));
+create policy "excluir movimentos" on movimentos for delete using (tem_permissao('insumos','editar'));
+
+drop policy if exists "public full access" on dietas;
+create policy "select dietas" on dietas for select using (tem_permissao('dietas','visualizar'));
+create policy "inserir dietas" on dietas for insert with check (tem_permissao('dietas','editar'));
+create policy "atualizar dietas" on dietas for update using (tem_permissao('dietas','editar')) with check (tem_permissao('dietas','editar'));
+create policy "excluir dietas" on dietas for delete using (tem_permissao('dietas','editar'));
+
+drop policy if exists "public full access" on lotes;
+create policy "select lotes" on lotes for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('pasto','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir lotes" on lotes for insert with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "atualizar lotes" on lotes for update using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+) with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "excluir lotes" on lotes for delete using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+
+drop policy if exists "public full access" on saidas_racao;
+create policy "select saidas_racao" on saidas_racao for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir saidas_racao" on saidas_racao for insert with check (
+  tem_permissao('confinamento','editar') or tem_permissao('cria','editar')
+);
+create policy "atualizar saidas_racao" on saidas_racao for update using (
+  tem_permissao('confinamento','editar') or tem_permissao('cria','editar')
+) with check (
+  tem_permissao('confinamento','editar') or tem_permissao('cria','editar')
+);
+create policy "excluir saidas_racao" on saidas_racao for delete using (
+  tem_permissao('confinamento','editar') or tem_permissao('cria','editar')
+);
+
+drop policy if exists "public full access" on leituras_cocho;
+create policy "select leituras_cocho" on leituras_cocho for select using (tem_permissao('confinamento','visualizar'));
+create policy "inserir leituras_cocho" on leituras_cocho for insert with check (tem_permissao('confinamento','editar'));
+create policy "atualizar leituras_cocho" on leituras_cocho for update using (tem_permissao('confinamento','editar')) with check (tem_permissao('confinamento','editar'));
+create policy "excluir leituras_cocho" on leituras_cocho for delete using (tem_permissao('confinamento','editar'));
+
+drop policy if exists "public full access" on pasto;
+create policy "select pasto" on pasto for select using (tem_permissao('pasto','visualizar'));
+create policy "inserir pasto" on pasto for insert with check (tem_permissao('pasto','editar'));
+create policy "atualizar pasto" on pasto for update using (tem_permissao('pasto','editar')) with check (tem_permissao('pasto','editar'));
+create policy "excluir pasto" on pasto for delete using (tem_permissao('pasto','editar'));
+
+drop policy if exists "public full access" on reproducao_custos;
+create policy "select reproducao_custos" on reproducao_custos for select using (tem_permissao('cria','visualizar'));
+create policy "inserir reproducao_custos" on reproducao_custos for insert with check (tem_permissao('cria','editar'));
+create policy "atualizar reproducao_custos" on reproducao_custos for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
+create policy "excluir reproducao_custos" on reproducao_custos for delete using (tem_permissao('cria','editar'));
+
+drop policy if exists "public full access" on custos_fixos;
+drop policy if exists "public full access" on investimentos;
+drop policy if exists "public full access" on receitas;
+drop policy if exists "public full access" on precos_arroba;
+drop policy if exists "public full access" on config_financeiro;
+create policy "select custos_fixos" on custos_fixos for select using (tem_permissao('financeiro','visualizar'));
+create policy "inserir custos_fixos" on custos_fixos for insert with check (tem_permissao('financeiro','editar'));
+create policy "atualizar custos_fixos" on custos_fixos for update using (tem_permissao('financeiro','editar')) with check (tem_permissao('financeiro','editar'));
+create policy "excluir custos_fixos" on custos_fixos for delete using (tem_permissao('financeiro','editar'));
+create policy "select investimentos" on investimentos for select using (tem_permissao('financeiro','visualizar'));
+create policy "inserir investimentos" on investimentos for insert with check (tem_permissao('financeiro','editar'));
+create policy "atualizar investimentos" on investimentos for update using (tem_permissao('financeiro','editar')) with check (tem_permissao('financeiro','editar'));
+create policy "excluir investimentos" on investimentos for delete using (tem_permissao('financeiro','editar'));
+create policy "select receitas" on receitas for select using (tem_permissao('financeiro','visualizar'));
+create policy "inserir receitas" on receitas for insert with check (tem_permissao('financeiro','editar'));
+create policy "atualizar receitas" on receitas for update using (tem_permissao('financeiro','editar')) with check (tem_permissao('financeiro','editar'));
+create policy "excluir receitas" on receitas for delete using (tem_permissao('financeiro','editar'));
+create policy "select precos_arroba" on precos_arroba for select using (tem_permissao('financeiro','visualizar'));
+create policy "inserir precos_arroba" on precos_arroba for insert with check (tem_permissao('financeiro','editar'));
+create policy "atualizar precos_arroba" on precos_arroba for update using (tem_permissao('financeiro','editar')) with check (tem_permissao('financeiro','editar'));
+create policy "excluir precos_arroba" on precos_arroba for delete using (tem_permissao('financeiro','editar'));
+create policy "select config_financeiro" on config_financeiro for select using (tem_permissao('financeiro','visualizar'));
+create policy "inserir config_financeiro" on config_financeiro for insert with check (tem_permissao('financeiro','editar'));
+create policy "atualizar config_financeiro" on config_financeiro for update using (tem_permissao('financeiro','editar')) with check (tem_permissao('financeiro','editar'));
+create policy "excluir config_financeiro" on config_financeiro for delete using (tem_permissao('financeiro','editar'));
+
+-- PASSO 4 (rode por último, depois de criar seu usuário no painel):
+-- troque '<SEU-UUID-AQUI>' pelo UUID do usuário criado no painel, e
+-- 'Eduardo' pelo seu nome. 'usuario' é o que você vai digitar pra
+-- entrar no app (sem @dominio) — use o mesmo que está antes do @ no
+-- email fake que você criou no painel (ex: email "eduardo@aeagropecuaria.local"
+-- → usuario 'eduardo').
+--
+-- insert into profiles (id, nome, usuario, papel, permissoes, ativo) values
+--   ('<SEU-UUID-AQUI>', 'Eduardo', 'eduardo', 'admin', '{}'::jsonb, true);
