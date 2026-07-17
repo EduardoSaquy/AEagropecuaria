@@ -487,11 +487,12 @@ function render(){
         ${state.page==='estoque' ? PageEstoque() : ''}
         ${state.page==='dietas' ? PageDietas() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
-        ${state.page==='racao' ? PageSaidaRacao() : ''}
+        ${state.page==='racao' ? PageSaidaRacao('confinamento') : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
         ${state.page==='lotesPasto' ? PageLotes('pasto') : ''}
         ${state.page==='pasto' ? PagePasto() : ''}
         ${state.page==='lotesReproducao' ? PageLotes('reproducao') : ''}
+        ${state.page==='racaoCria' ? PageSaidaRacao('reproducao') : ''}
         ${state.page==='reproducao' ? PageReproducao() : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
@@ -550,6 +551,7 @@ const GROUPS = {
   ]},
   reproducao: {label:'Cria', icon:iconReproducao(), pages:[
     {key:'lotesReproducao', label:'Lotes'},
+    {key:'racaoCria', label:'Saída de Ração'},
     {key:'reproducao', label:'Inseminação'},
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
@@ -625,6 +627,7 @@ function Header(){
     lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
     pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
+    racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Curral', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
@@ -665,6 +668,15 @@ function openNewModal(type){
     }
     editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
+  } else if(type==='saidaRacaoCria'){
+    const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
+    const lotesCria = state.lotes.filter(l=>loteTipo(l)==='reproducao');
+    if(dietasConf.length===0 || lotesCria.length===0){
+      alert('Cadastre ao menos uma dieta de Confinamento e um lote com "reprodução" no nome antes de registrar uma saída de ração para a Cria.');
+      return false;
+    }
+    editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesCria[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
+    state.modal = {type:'saidaRacaoCria'};
   } else if(type==='cocho'){
     if(state.lotes.length===0){
       alert('Cadastre ao menos um lote antes de registrar uma leitura de cocho.');
@@ -707,6 +719,7 @@ function FabMenu(){
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
     {type:'pasto', label:'Nova reposição de pasto'},
+    {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'custoFixo', label:'Novo custo fixo'},
     {type:'investimento', label:'Novo investimento'},
@@ -931,14 +944,19 @@ function PageLotes(tipo){
 }
 
 /* ===================== PÁGINA: SAÍDA DE RAÇÃO ===================== */
-function PageSaidaRacao(){
-  const list = [...state.saidasRacao].sort((a,b)=> b.data.localeCompare(a.data));
+function PageSaidaRacao(tipo){
+  const list = state.saidasRacao
+    .filter(s=>{ const lote = state.lotes.find(l=>l.id===s.loteId); return lote && loteTipo(lote)===tipo; })
+    .sort((a,b)=> b.data.localeCompare(a.data));
+  const vazio = tipo==='reproducao'
+    ? Empty('Nenhuma saída de ração registrada','Registre a ração feita a partir de uma dieta para os lotes de Cria, para descontar o estoque automaticamente.')
+    : Empty('Nenhuma saída de ração registrada','Registre a ração feita a partir de uma dieta para descontar o estoque automaticamente.');
   return `
   <div class="toolbar">
     <span class="hint">${list.length} saída(s) registrada(s)</span>
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma saída de ração registrada','Registre a ração feita a partir de uma dieta para descontar o estoque automaticamente.') : `
+    ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
         <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th><th>Custo estimado</th><th></th>
@@ -1389,6 +1407,7 @@ function Modal(){
   if(state.modal.type==='dieta') return ModalDieta();
   if(state.modal.type==='lote') return ModalLote();
   if(state.modal.type==='saidaRacao') return ModalSaidaRacao();
+  if(state.modal.type==='saidaRacaoCria') return ModalSaidaRacaoCria();
   if(state.modal.type==='cocho') return ModalCocho();
   if(state.modal.type==='pasto') return ModalPasto();
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
@@ -1565,6 +1584,39 @@ function ModalSaidaRacao(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="saidaRacao">${d._editId?'Salvar alterações':'Registrar saída'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalSaidaRacaoCria(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar saída de ração':'Nova saída de ração (Cria)'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Dieta</label>
+            <select id="f-dieta">
+              ${state.dietas.filter(x=>x.tipo!=='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Lote de destino (Cria)</label>
+            <select id="f-lote">
+              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Quantidade total de ração (kg)</label><input id="f-qtdracao" type="number" step="0.1" value="${d.quantidadeKg}"/></div>
+        </div>
+        <p class="hint">Ao salvar, o app desconta automaticamente do estoque cada ingrediente da dieta escolhida, na proporção da composição cadastrada.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="saidaRacaoCria">${d._editId?'Salvar alterações':'Registrar saída'}</button>
       </div>
     </div>
   </div>`;
@@ -1806,7 +1858,8 @@ function attachEvents(){
     el.onclick = ()=>{
       const s = state.saidasRacao.find(x=>x.id===Number(el.dataset.editRacao));
       editDraft = {...s, _editId: s.id};
-      state.modal = {type:'saidaRacao'};
+      const lote = state.lotes.find(l=>l.id===s.loteId);
+      state.modal = {type: lote && loteTipo(lote)==='reproducao' ? 'saidaRacaoCria' : 'saidaRacao'};
       render();
     };
   });
@@ -1994,7 +2047,7 @@ function attachEvents(){
         } else {
           ({error} = await db.from('lotes').insert(row));
         }
-      } else if(type==='saidaRacao'){
+      } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaId = Number(document.getElementById('f-dieta').value);
         const loteId = Number(document.getElementById('f-lote').value);
         const data = document.getElementById('f-data').value;
