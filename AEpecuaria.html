@@ -461,8 +461,8 @@ function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingred
 function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade}; }
 function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento'}; }
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento'}; }
-function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim}; }
-function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null}; }
+function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino}; }
+function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino}; }
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg}; }
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
@@ -578,6 +578,7 @@ function render(){
         ${state.page==='ingredientes' ? PageIngredientes() : ''}
         ${state.page==='estoque' ? PageEstoque() : ''}
         ${state.page==='dietas' ? PageDietas() : ''}
+        ${state.page==='lotesGeral' ? PageLotesGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao('confinamento') : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
@@ -630,6 +631,7 @@ function podeEditarAcao(type){
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
+  if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 function gruposVisiveis(){
@@ -753,9 +755,7 @@ function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
 // Lote é considerado de Confinamento se "confinamento" aparece no nome; os demais são de Pasto.
 function loteTipo(lote){
-  if(/reprodu/i.test(lote.nome)) return 'reproducao';
-  if(/confinamento/i.test(lote.nome)) return 'confinamento';
-  return 'pasto';
+  return lote.destino==='cria' ? 'reproducao' : (lote.destino||'pasto');
 }
 
 // "Preço por kg" é sempre por quilo; quantidades guardadas em "ton" precisam
@@ -780,6 +780,9 @@ const GROUPS = {
   dietas: {label:'Formulação de Dietas', icon:iconBowl(), pages:[
     {key:'dietas', label:'Formulação de Dietas'},
   ]},
+  lotesGeral: {label:'Lotes', icon:iconLote(), pages:[
+    {key:'lotesGeral', label:'Lotes'},
+  ]},
   confinamento: {label:'Confinamento', icon:iconLote(), pages:[
     {key:'lotes', label:'Lotes'},
     {key:'racao', label:'Saída de Ração'},
@@ -796,7 +799,7 @@ const GROUPS = {
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
-    {key:'financeiroCurral', label:'Por Curral'},
+    {key:'financeiroCurral', label:'Por Lote'},
     {key:'financeiroReceitas', label:'Receitas'},
     {key:'financeiroCustosFixos', label:'Custos Fixos'},
     {key:'financeiroInvestimentos', label:'Investimentos'},
@@ -869,6 +872,7 @@ function Header(){
     ingredientes:{eyebrow:'Cadastro', title:'Ingredientes', desc:'Composição nutricional, fornecedor e preço de cada insumo da fazenda.'},
     estoque:{eyebrow:'Movimentação', title:'Estoque', desc:'Saldo atual por ingrediente, calculado a partir das entradas e saídas registradas.'},
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
+    lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
@@ -878,7 +882,7 @@ function Header(){
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
-    financeiroCurral:{eyebrow:'Gestão', title:'Por Curral', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
+    financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
     financeiroReceitas:{eyebrow:'Gestão', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
     financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
@@ -907,7 +911,9 @@ function openNewModal(type){
     editDraft = {nome:'', tipo:'confinamento', categoriaAnimal:'', kgAnimalDia:9, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
     state.modal = {type:'dieta'};
   } else if(type==='lote'){
-    editDraft = {nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:''};
+    const grupoAtual = currentGroupKey();
+    const destinoPadrao = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'cria' : 'confinamento';
+    editDraft = {nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:'', destino:destinoPadrao};
     state.modal = {type:'lote'};
   } else if(type==='saidaRacao'){
     const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
@@ -1185,10 +1191,10 @@ function PageDietas(){
 function PageLotes(tipo){
   const list = state.lotes.filter(l=>loteTipo(l)===tipo);
   const vazio = tipo==='confinamento'
-    ? Empty('Nenhum lote de confinamento cadastrado','Cadastre um lote com "confinamento" no nome para ele aparecer aqui.')
+    ? Empty('Nenhum lote de confinamento cadastrado','Cadastre o lote na aba Lotes, escolhendo Confinamento como destino, para ele aparecer aqui.')
     : tipo==='reproducao'
-    ? Empty('Nenhum lote de cria cadastrado','Cadastre um lote com "reprodução" no nome (ex: Vaca Reprodução, Novilhas Reprodução) para ele aparecer aqui.')
-    : Empty('Nenhum lote de pasto cadastrado','Cadastre um lote sem "confinamento" e sem "reprodução" no nome para ele aparecer aqui.');
+    ? Empty('Nenhum lote de cria cadastrado','Cadastre o lote na aba Lotes, escolhendo Cria como destino, para ele aparecer aqui.')
+    : Empty('Nenhum lote de pasto cadastrado','Cadastre o lote na aba Lotes, escolhendo Pasto como destino, para ele aparecer aqui.');
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
@@ -1212,6 +1218,40 @@ function PageLotes(tipo){
               <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
               ` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: LOTES (ESTOQUE DE ANIMAIS) ===================== */
+const DESTINO_LOTE_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
+function PageLotesGeral(){
+  const list = [...state.lotes].sort((a,b)=> (b.dataInicio||'').localeCompare(a.dataInicio||''));
+  return `
+  <div class="toolbar">
+    <span class="hint">${list.length} lote(s) cadastrado(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre um lote e escolha o destino — Confinamento, Pasto ou Cria — para ele aparecer na aba certa.') : `
+    <table>
+      <thead><tr>
+        <th>Lote</th><th>Destino</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(l=>`
+          <tr>
+            <td><strong>${l.nome}</strong></td>
+            <td><span class="pill pill-cat">${DESTINO_LOTE_LABEL[l.destino]||l.destino||'—'}</span></td>
+            <td class="mono">${fmtInt(l.numeroAnimais)}</td>
+            <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
+            <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
+            <td>${l.dataFim ? '<span class="pill pill-cat">Encerrado</span>' : '<span class="pill pill-ok">Ativo</span>'}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
             </td>
           </tr>
         `).join('')}
@@ -2149,13 +2189,19 @@ function ModalLote(){
       <div class="modal-head"><h3>${d._editId?'Editar lote':'Novo lote'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Identificação do lote</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Lote 12 / Curral 3"/></div>
+        <div class="field"><label>Destino</label>
+          <select id="f-destino">
+            <option value="confinamento" ${d.destino==='confinamento'?'selected':''}>Confinamento</option>
+            <option value="pasto" ${d.destino==='pasto'?'selected':''}>Pasto</option>
+            <option value="cria" ${d.destino==='cria'?'selected':''}>Cria</option>
+          </select>
+        </div>
         <div class="field-row">
           <div class="field"><label>Nº de animais</label><input id="f-numanimais" type="number" step="1" value="${d.numeroAnimais}"/></div>
           <div class="field"><label>Data de início</label><input id="f-datainicio" type="date" value="${d.dataInicio}"/></div>
         </div>
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
-        <p class="hint">Inclua "confinamento" no nome para o lote aparecer na aba Confinamento, ou "reprodução" para aparecer na aba Cria; sem nenhuma das duas, aparece na aba Pasto.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -2783,6 +2829,7 @@ function attachEvents(){
           numeroAnimais: Number(document.getElementById('f-numanimais').value)||0,
           dataInicio: document.getElementById('f-datainicio').value,
           dataFim: document.getElementById('f-datafim').value || null,
+          destino: document.getElementById('f-destino').value,
         };
         const row = loteToRow(campos);
         if(editDraft._editId){

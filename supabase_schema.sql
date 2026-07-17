@@ -446,3 +446,25 @@ language sql security definer set search_path = public stable as $$
     select 1 from profiles where id = auth.uid() and papel in ('admin','proprietario') and ativo = true
   );
 $$;
+
+-- ===================================================================
+-- MIGRAÇÃO: Campo destino explícito em lotes (Confinamento/Pasto/Cria)
+-- Antes o destino do lote era adivinhado pelo nome (se tinha
+-- "confinamento" ou "reprodução" no nome). Agora é um campo explícito,
+-- escolhido na hora de cadastrar o lote na aba Lotes. Esta migração
+-- preenche o destino dos lotes já cadastrados usando a mesma regra
+-- antiga, então nada muda de lugar para quem já estava cadastrado.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table lotes add column if not exists destino text;
+update lotes set destino = case
+  when nome ~* 'reprodu' then 'cria'
+  when nome ~* 'confinamento' then 'confinamento'
+  else 'pasto'
+end
+where destino is null;
+alter table lotes alter column destino set default 'pasto';
+alter table lotes alter column destino set not null;
+alter table lotes drop constraint if exists lotes_destino_check;
+alter table lotes add constraint lotes_destino_check
+  check (destino in ('confinamento','pasto','cria'));
