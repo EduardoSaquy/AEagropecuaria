@@ -420,13 +420,15 @@ function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, l
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
 function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade}; }
+function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, item:r.item, custo:r.custo}; }
+function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
 function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, cf, inv] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -434,6 +436,7 @@ async function loadAll(){
     db.from('saidas_racao').select('*').order('id'),
     db.from('leituras_cocho').select('*').order('id'),
     db.from('pasto').select('*').order('id'),
+    db.from('reproducao_custos').select('*').order('id'),
     db.from('custos_fixos').select('*').order('id'),
     db.from('investimentos').select('*').order('id'),
   ]);
@@ -444,6 +447,7 @@ async function loadAll(){
   state.saidasRacao = (sr.data||[]).map(rowToSaidaRacao);
   state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
   state.pasto = (pt.data||[]).map(rowToPasto);
+  state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   state.investimentos = (inv.data||[]).map(rowToInvestimento);
   if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
@@ -452,7 +456,7 @@ async function loadAll(){
 
 /* ===================== ESTADO ===================== */
 const state = {
-  page: 'estoque',
+  page: 'financeiroResumo',
   ingredientes: [],
   movimentos: [],
   dietas: [],
@@ -460,6 +464,7 @@ const state = {
   saidasRacao: [],
   leiturasCocho: [],
   pasto: [],
+  reproducao: [],
   custosFixos: [],
   investimentos: [],
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento', data: {...}}
@@ -486,6 +491,8 @@ function render(){
         ${state.page==='cocho' ? PageCocho() : ''}
         ${state.page==='lotesPasto' ? PageLotes('pasto') : ''}
         ${state.page==='pasto' ? PagePasto() : ''}
+        ${state.page==='lotesReproducao' ? PageLotes('reproducao') : ''}
+        ${state.page==='reproducao' ? PageReproducao() : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
@@ -504,7 +511,11 @@ function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
 // Lote é considerado de Confinamento se "confinamento" aparece no nome; os demais são de Pasto.
-function loteTipo(lote){ return /confinamento/i.test(lote.nome) ? 'confinamento' : 'pasto'; }
+function loteTipo(lote){
+  if(/reprodu/i.test(lote.nome)) return 'reproducao';
+  if(/confinamento/i.test(lote.nome)) return 'confinamento';
+  return 'pasto';
+}
 
 // "Preço por kg" é sempre por quilo; quantidades guardadas em "ton" precisam
 // ser convertidas para kg antes de multiplicar pelo preço.
@@ -536,6 +547,10 @@ const GROUPS = {
   pasto: {label:'Pasto', icon:iconPasto(), pages:[
     {key:'lotesPasto', label:'Lotes'},
     {key:'pasto', label:'Saída de Ração'},
+  ]},
+  reproducao: {label:'Cria', icon:iconReproducao(), pages:[
+    {key:'lotesReproducao', label:'Lotes'},
+    {key:'reproducao', label:'Inseminação'},
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
@@ -596,6 +611,7 @@ function iconLote(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fil
 function iconRacao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg>`; }
 function iconPasto(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 20c2-6 4-6 4-11"/><path d="M9 20c2-8 4-8 4-14"/><path d="M15 20c2-5 4-5 4-9"/></svg>`; }
 function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M9.5 9.5c0-1.4 1.1-2.5 2.5-2.5s2.5.7 2.5 2c0 3-5 2-5 5 0 1.3 1.1 2 2.5 2s2.5-1.1 2.5-2.5"/></svg>`; }
+function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.35-9.5-8.5C1 9 2.5 5.5 6 5c2-.3 4 .8 5 2.5 1-1.7 3-2.8 5-2.5 3.5.5 5 4 3.5 7.5C19 16.65 12 21 12 21Z"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -608,6 +624,8 @@ function Header(){
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
     lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
     pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
+    lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
+    reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês, e a composição do custo mensal por categoria.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Curral', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
@@ -663,6 +681,14 @@ function openNewModal(type){
     }
     editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: dietasPasto[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
     state.modal = {type:'pasto'};
+  } else if(type==='reproducaoCusto'){
+    const lotesReprod = state.lotes.filter(l=>loteTipo(l)==='reproducao');
+    if(lotesReprod.length===0){
+      alert('Cadastre ao menos um lote com "reprodução" no nome (ex: Vaca Reprodução) antes de registrar um lançamento de reprodução.');
+      return false;
+    }
+    editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), item:'', custo:''};
+    state.modal = {type:'reproducaoCusto'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:''};
     state.modal = {type:'custoFixo'};
@@ -681,6 +707,7 @@ function FabMenu(){
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
     {type:'pasto', label:'Nova reposição de pasto'},
+    {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'custoFixo', label:'Novo custo fixo'},
     {type:'investimento', label:'Novo investimento'},
   ];
@@ -871,7 +898,9 @@ function PageLotes(tipo){
   const list = state.lotes.filter(l=>loteTipo(l)===tipo);
   const vazio = tipo==='confinamento'
     ? Empty('Nenhum lote de confinamento cadastrado','Cadastre um lote com "confinamento" no nome para ele aparecer aqui.')
-    : Empty('Nenhum lote de pasto cadastrado','Cadastre um lote sem "confinamento" no nome para ele aparecer aqui.');
+    : tipo==='reproducao'
+    ? Empty('Nenhum lote de cria cadastrado','Cadastre um lote com "reprodução" no nome (ex: Vaca Reprodução, Novilhas Reprodução) para ele aparecer aqui.')
+    : Empty('Nenhum lote de pasto cadastrado','Cadastre um lote sem "confinamento" e sem "reprodução" no nome para ele aparecer aqui.');
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
@@ -1013,6 +1042,39 @@ function PagePasto(){
   </div>`;
 }
 
+/* ===================== PÁGINA: REPRODUÇÃO ===================== */
+function custoReproducao(r){ return Number(r.custo)||0; }
+function PageReproducao(){
+  const list = [...state.reproducao].sort((a,b)=> b.data.localeCompare(a.data));
+  return `
+  <div class="toolbar">
+    <span class="hint">${list.length} lançamento(s) registrado(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhum lançamento de reprodução registrado','Registre as doses de sêmen e outros insumos usados na reprodução de cada lote.') : `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Lote</th><th>Item</th><th>Custo</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(r=>{
+          const lote = state.lotes.find(l=>l.id===r.loteId);
+          return `<tr>
+            <td class="mono">${r.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td>${r.item}</td>
+            <td class="mono">R$ ${fmt(custoReproducao(r))}</td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-reproducao="${r.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-reproducao="${r.id}">Excluir</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
 /* ===================== PÁGINA: FINANCEIRO ===================== */
 function custoSaidaRacao(s){
   const dieta = state.dietas.find(d=>d.id===s.dietaId);
@@ -1026,22 +1088,23 @@ const SERIES_COLORS = ['#2a78d6','#008300','#e87ba4','#eda100','#1baf7a','#eb683
 
 // A cor segue sempre a mesma categoria (nunca a posição no ranking do mês),
 // para não trocar de cor quando um custo cresce/encolhe em relação aos outros.
-// Ração e Pasto têm cor fixa reservada; as demais categorias (texto livre dos
-// custos fixos) recebem uma cor por ordem alfabética, sem repetir cor entre elas.
+// Ração, Pasto e Cria têm cor fixa reservada; as demais categorias (texto
+// livre dos custos fixos) recebem uma cor por ordem alfabética, sem repetir cor.
+const CATEGORIAS_RESERVADAS = ['Ração','Pasto','Cria'];
 function coresPorCategoria(nomes){
   const mapa = {};
-  const slots = SERIES_COLORS.slice(2);
-  const outras = [...new Set(nomes.filter(n=>n!=='Ração' && n!=='Pasto'))].sort();
+  const slots = SERIES_COLORS.slice(CATEGORIAS_RESERVADAS.length);
+  const outras = [...new Set(nomes.filter(n=>!CATEGORIAS_RESERVADAS.includes(n)))].sort();
   outras.forEach((nome,idx)=>{ mapa[nome] = slots[idx % slots.length]; });
-  mapa['Ração'] = SERIES_COLORS[0];
-  mapa['Pasto'] = SERIES_COLORS[1];
+  CATEGORIAS_RESERVADAS.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
   return mapa;
 }
 
-function composicaoCustoMes(racaoMes, pastoMes, custosFixos){
+function composicaoCustoMes(racaoMes, pastoMes, reproducaoMes, custosFixos){
   const grupos = {};
   if(racaoMes>0) grupos['Ração'] = racaoMes;
   if(pastoMes>0) grupos['Pasto'] = pastoMes;
+  if(reproducaoMes>0) grupos['Cria'] = reproducaoMes;
   custosFixos.forEach(c=>{
     const cat = (c.categoria||'').trim() || 'Outros';
     grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
@@ -1127,11 +1190,13 @@ function dadosFinanceiro(){
 
   const racaoHoje = state.saidasRacao.filter(s=>s.data===hoje).reduce((a,s)=>a+custoSaidaRacao(s),0);
   const pastoHoje = state.pasto.filter(p=>p.data===hoje).reduce((a,p)=>a+custoPasto(p),0);
-  const custoHoje = racaoHoje + pastoHoje;
+  const reproducaoHoje = state.reproducao.filter(r=>r.data===hoje).reduce((a,r)=>a+custoReproducao(r),0);
+  const custoHoje = racaoHoje + pastoHoje + reproducaoHoje;
 
   const racaoMes = state.saidasRacao.filter(s=>s.data.startsWith(mes)).reduce((a,s)=>a+custoSaidaRacao(s),0);
   const pastoMes = state.pasto.filter(p=>p.data.startsWith(mes)).reduce((a,p)=>a+custoPasto(p),0);
-  const variavelMes = racaoMes + pastoMes;
+  const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+custoReproducao(r),0);
+  const variavelMes = racaoMes + pastoMes + reproducaoMes;
   const fixosMes = state.custosFixos.reduce((a,c)=>a+Number(c.valorMensal||0),0);
   const totalMes = variavelMes + fixosMes;
 
@@ -1147,19 +1212,19 @@ function dadosFinanceiro(){
     return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
   }, 0);
 
-  return {hoje, mes, racaoHoje, pastoHoje, custoHoje, racaoMes, pastoMes, variavelMes, fixosMes, totalMes,
+  return {hoje, mes, racaoHoje, pastoHoje, reproducaoHoje, custoHoje, racaoMes, pastoMes, reproducaoMes, variavelMes, fixosMes, totalMes,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
 }
 
 /* ---- Financeiro: Resumo ---- */
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
-  const composicaoMes = composicaoCustoMes(d.racaoMes, d.pastoMes, state.custosFixos);
+  const composicaoMes = composicaoCustoMes(d.racaoMes, d.pastoMes, d.reproducaoMes, state.custosFixos);
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
   <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Ração + pasto hoje</div><div class="stat-value">R$ ${fmt(d.custoHoje)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo variável hoje</div><div class="stat-value">R$ ${fmt(d.custoHoje)}</div></div>
     <div class="stat-card"><div class="stat-label">Variável/animal/dia</div><div class="stat-value">R$ ${fmt(d.custoPorAnimalHoje,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Total/animal/dia (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalDia,2)}</div></div>
   </div>
@@ -1193,27 +1258,29 @@ function PageFinanceiroCurral(){
   const custosPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data===d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
-    const total = racao + pasto;
+    const reproducao = state.reproducao.filter(r=>r.data===d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
+    const total = racao + pasto + reproducao;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    return {lote:l, racao, pasto, total, porAnimal};
+    return {lote:l, racao, pasto, reproducao, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   const custosMesPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
-    const variavel = racao + pasto;
+    const reproducao = state.reproducao.filter(r=>r.data.startsWith(d.mes) && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
+    const variavel = racao + pasto + reproducao;
     const fixoAlocado = d.totalAnimais>0 ? d.fixosMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    return {lote:l, racao, pasto, fixoAlocado, total, porAnimal};
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral</p>
   <div class="card" style="margin-bottom:22px;">
-    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento para ver o custo diário de cada um aqui.') : `
+    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo diário de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração hoje</th><th>Pasto hoje</th><th>Total hoje</th><th>Custo/animal hoje</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração hoje</th><th>Pasto hoje</th><th>Cria hoje</th><th>Total hoje</th><th>Custo/animal hoje</th></tr></thead>
       <tbody>
         ${custosPorLote.map(r=>`
           <tr>
@@ -1221,6 +1288,7 @@ function PageFinanceiroCurral(){
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
             <td class="mono">R$ ${fmt(r.racao)}</td>
             <td class="mono">R$ ${fmt(r.pasto)}</td>
+            <td class="mono">R$ ${fmt(r.reproducao)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
           </tr>
@@ -1229,17 +1297,17 @@ function PageFinanceiroCurral(){
     </table>`}
   </div>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + fatia do custo fixo)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
-    ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento para ver o custo total do mês de cada um aqui.') : `
+    ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo total do mês de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto+Cria no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th></tr></thead>
       <tbody>
         ${custosMesPorLote.map(r=>`
           <tr>
             <td><strong>${r.lote.nome}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
-            <td class="mono">R$ ${fmt(r.racao+r.pasto)}</td>
+            <td class="mono">R$ ${fmt(r.racao+r.pasto+r.reproducao)}</td>
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
@@ -1323,6 +1391,7 @@ function Modal(){
   if(state.modal.type==='saidaRacao') return ModalSaidaRacao();
   if(state.modal.type==='cocho') return ModalCocho();
   if(state.modal.type==='pasto') return ModalPasto();
+  if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
   if(state.modal.type==='investimento') return ModalInvestimento();
   return '';
@@ -1458,7 +1527,7 @@ function ModalLote(){
         </div>
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
-        <p class="hint">Inclua a palavra "confinamento" no nome para o lote aparecer na aba Confinamento; sem ela, aparece na aba Pasto.</p>
+        <p class="hint">Inclua "confinamento" no nome para o lote aparecer na aba Confinamento, ou "reprodução" para aparecer na aba Cria; sem nenhuma das duas, aparece na aba Pasto.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -1564,6 +1633,35 @@ function ModalPasto(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="pasto">${d._editId?'Salvar alterações':'Registrar reposição'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalReproducaoCusto(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar lançamento de reprodução':'Novo lançamento de reprodução'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Lote (Cria)</label>
+            <select id="f-lote">
+              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Item</label><input id="f-item" value="${d.item}" placeholder="Ex: Sêmen touro Angus, Hormônio IATF"/></div>
+          <div class="field"><label>Custo (R$)</label><input id="f-custoreproducao" type="number" step="0.01" value="${d.custo}"/></div>
+        </div>
+        <p class="hint">O custo entra no Financeiro como custo variável do lote de reprodução escolhido.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="reproducaoCusto">${d._editId?'Salvar alterações':'Salvar lançamento'}</button>
       </div>
     </div>
   </div>`;
@@ -1749,6 +1847,21 @@ function attachEvents(){
     el.onclick = async ()=>{
       const id = Number(el.dataset.delPasto);
       await db.from('pasto').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-edit-reproducao]').forEach(el=>{
+    el.onclick = ()=>{
+      const r = state.reproducao.find(x=>x.id===Number(el.dataset.editReproducao));
+      editDraft = {...r, _editId: r.id};
+      state.modal = {type:'reproducaoCusto'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-reproducao]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delReproducao);
+      await db.from('reproducao_custos').delete().eq('id', id);
       await loadAll();
     };
   });
@@ -1951,6 +2064,19 @@ function attachEvents(){
           if(movs.length){
             ({error} = await db.from('movimentos').insert(movs));
           }
+        }
+      } else if(type==='reproducaoCusto'){
+        const campos = {
+          loteId: Number(document.getElementById('f-lote').value),
+          data: document.getElementById('f-data').value,
+          item: document.getElementById('f-item').value || 'Sem descrição',
+          custo: Number(document.getElementById('f-custoreproducao').value)||0,
+        };
+        const row = reproducaoCustoToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('reproducao_custos').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('reproducao_custos').insert(row));
         }
       } else if(type==='custoFixo'){
         const campos = {
