@@ -223,3 +223,34 @@ create table receitas (
 alter table receitas enable row level security;
 
 create policy "public full access" on receitas for all using (true) with check (true);
+
+-- ===================================================================
+-- MIGRAÇÃO: Preço da arroba e meta de margem
+-- Rode só este bloco abaixo no SQL Editor do Supabase se as tabelas
+-- das migrações acima já existirem no seu projeto.
+--
+-- precos_arroba: histórico do valor médio da arroba (atualizado
+-- manualmente, ex: consultando o app Indicador do Boi Datagro), usado
+-- no banner do topo do Resumo do Financeiro.
+-- config_financeiro: linha única (id=1) com a meta de margem (%),
+-- usada para comparar com a margem real do mês.
+-- ===================================================================
+
+create table precos_arroba (
+  id bigint generated always as identity primary key,
+  data date not null,
+  valor numeric default 0
+);
+
+alter table precos_arroba enable row level security;
+
+create policy "public full access" on precos_arroba for all using (true) with check (true);
+
+create table config_financeiro (
+  id bigint primary key,
+  meta_margem_pct numeric
+);
+
+alter table config_financeiro enable row level security;
+
+create policy "public full access" on config_financeiro for all using (true) with check (true);
