@@ -1118,18 +1118,24 @@ function coresPorArea(){
 // No painel global, Confinamento/Pasto/Cria têm cor fixa reservada (mesma dos
 // outros gráficos); as categorias de custo fixo (texto livre) recebem uma cor
 // por ordem alfabética nos slots restantes, sem repetir cor entre elas.
+// Centros de custo fixo têm cor própria (ordem alfabética) — não precisam
+// reservar slots para Confinamento/Pasto/Cria porque esse gráfico não mistura
+// os dois eixos (área x centro de custo): cada real do custo fixo pertence a
+// exatamente uma categoria aqui, sem sobrepor com o gráfico de área.
 function coresPorCentroCusto(nomes){
   const mapa = {};
-  const slots = SERIES_COLORS.slice(AREAS_PRODUCAO.length);
-  const outras = [...new Set(nomes.filter(n=>!AREAS_PRODUCAO.includes(n)))].sort();
-  outras.forEach((nome,idx)=>{ mapa[nome] = slots[idx % slots.length]; });
-  AREAS_PRODUCAO.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
+  const unicos = [...new Set(nomes)].sort();
+  unicos.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx % SERIES_COLORS.length]; });
   return mapa;
 }
 
-function composicaoPorArea(racaoConfMes, pastoMes, criaMes){
+// Cada área (Confinamento/Pasto/Cria) já vem com o custo fixo diluído por
+// cabeça somado (mesmo critério do Por Curral), então as 3 fatias juntas
+// somam 100% do custo total do mês — sem precisar repetir os centros de
+// custo fixo como fatias à parte.
+function composicaoPorArea(confMes, pastoMes, criaMes){
   const grupos = {};
-  if(racaoConfMes>0) grupos['Confinamento'] = racaoConfMes;
+  if(confMes>0) grupos['Confinamento'] = confMes;
   if(pastoMes>0) grupos['Pasto'] = pastoMes;
   if(criaMes>0) grupos['Cria'] = criaMes;
   let entries = Object.entries(grupos).map(([nome,valor])=>({nome,valor}));
@@ -1141,11 +1147,10 @@ function composicaoPorArea(racaoConfMes, pastoMes, criaMes){
 
 // Painel global: todas as categorias juntas (Confinamento/Pasto/Cria +
 // cada centro de custo fixo), como fatia de 100% do custo total do mês.
-function composicaoGlobal(racaoConfMes, pastoMes, criaMes, custosFixos){
+// Puro centro de custo fixo — não mistura com as áreas, porque essa fatia já
+// foi diluída dentro de cada área no gráfico "por área" acima.
+function composicaoCentrosCusto(custosFixos){
   const grupos = {};
-  if(racaoConfMes>0) grupos['Confinamento'] = racaoConfMes;
-  if(pastoMes>0) grupos['Pasto'] = pastoMes;
-  if(criaMes>0) grupos['Cria'] = criaMes;
   custosFixos.forEach(c=>{
     const cat = (c.categoria||'').trim() || 'Outros';
     grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
@@ -1251,12 +1256,26 @@ function dadosFinanceiro(){
   const fixosMes = state.custosFixos.reduce((a,c)=>a+Number(c.valorMensal||0),0);
   const totalMes = variavelMes + fixosMes;
 
-  const totalAnimais = state.lotes.filter(l=>!l.dataFim).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
+  const totalAnimais = lotesAtivos.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   const custoPorAnimalHoje = totalAnimais>0 ? custoHoje/totalAnimais : 0;
 
   const fixoDiario = fixosMes/30;
   const custoTotalPorAnimalDia = totalAnimais>0 ? (custoHoje+fixoDiario)/totalAnimais : 0;
   const custoTotalPorAnimalMes = totalAnimais>0 ? totalMes/totalAnimais : 0;
+
+  // Custo fixo (mão de obra, energia etc.) diluído por área, na proporção do
+  // número de animais de cada uma — mesmo critério já usado em Por Curral.
+  const animaisPorTipo = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const animaisConfinamento = animaisPorTipo('confinamento');
+  const animaisPasto = animaisPorTipo('pasto');
+  const animaisCria = animaisPorTipo('reproducao');
+  const fixoConfinamento = totalAnimais>0 ? fixosMes*(animaisConfinamento/totalAnimais) : 0;
+  const fixoPasto = totalAnimais>0 ? fixosMes*(animaisPasto/totalAnimais) : 0;
+  const fixoCria = totalAnimais>0 ? fixosMes*(animaisCria/totalAnimais) : 0;
+  const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamento;
+  const custoTotalPastoMes = pastoMes + fixoPasto;
+  const custoTotalCriaMes = criaMes + fixoCria;
 
   const valorEstoque = state.ingredientes.reduce((a,i)=>{
     const saldo = saldoIngrediente(i.id);
@@ -1265,14 +1284,15 @@ function dadosFinanceiro(){
 
   return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
+    custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
 }
 
 /* ---- Financeiro: Resumo ---- */
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
-  const composicaoArea = composicaoPorArea(d.racaoConfMes, d.pastoMes, d.criaMes);
-  const composicaoGlobalMes = composicaoGlobal(d.racaoConfMes, d.pastoMes, d.criaMes, state.custosFixos);
+  const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
+  const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
@@ -1301,8 +1321,8 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
-  ${PainelResultados(composicaoArea, d.variavelMes, 'area', 'Painel de resultados', 'Custo variável do mês por área (Confinamento, Pasto e Cria)', 'Lance ração, pasto ou reprodução para ver a composição por área aqui.')}
-  ${PainelResultados(composicaoGlobalMes, d.totalMes, 'global', 'Painel de resultados', 'Custo total do mês — todas as categorias (variáveis + fixas)', 'Cadastre custos fixos ou lance ração/pasto/reprodução para ver a composição aqui.')}
+  ${PainelResultados(composicaoArea, d.totalMes, 'area', 'Painel de resultados', 'Custo total do mês por área (Confinamento, Pasto e Cria, já com a fatia do custo fixo diluída)', 'Lance ração, pasto ou reprodução, e cadastre lotes ativos, para ver a composição por área aqui.')}
+  ${PainelResultados(composicaoFixos, d.fixosMes, 'fixos', 'Painel de resultados', 'Custos fixos do mês por centro de custo', 'Cadastre custos fixos para ver a composição por centro de custo aqui.')}
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
 }
 
