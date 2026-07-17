@@ -464,6 +464,9 @@ function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFrac
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
+// Lote é considerado de Confinamento se "confinamento" aparece no nome; os demais são de Pasto.
+function loteTipo(lote){ return /confinamento/i.test(lote.nome) ? 'confinamento' : 'pasto'; }
+
 // "Preço por kg" é sempre por quilo; quantidades guardadas em "ton" precisam
 // ser convertidas para kg antes de multiplicar pelo preço.
 function qtdEmKg(qtd, unidade){ return unidade==='ton' ? Number(qtd||0)*1000 : Number(qtd||0); }
@@ -590,11 +593,12 @@ function openNewModal(type){
     state.modal = {type:'lote'};
   } else if(type==='saidaRacao'){
     const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
-    if(dietasConf.length===0 || state.lotes.length===0){
-      alert('Cadastre ao menos uma dieta de Confinamento e um lote antes de registrar uma saída de ração.');
+    const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
+    if(dietasConf.length===0 || lotesConf.length===0){
+      alert('Cadastre ao menos uma dieta de Confinamento e um lote com "confinamento" no nome antes de registrar uma saída de ração.');
       return false;
     }
-    editDraft = {dietaId: dietasConf[0]?.id||'', loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
+    editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
   } else if(type==='cocho'){
     if(state.lotes.length===0){
@@ -605,11 +609,12 @@ function openNewModal(type){
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
     const dietasPasto = state.dietas.filter(x=>x.tipo==='pasto');
-    if(state.lotes.length===0 || dietasPasto.length===0){
-      alert('Cadastre ao menos um lote e uma dieta de Pasto antes de registrar uma reposição de pasto.');
+    const lotesPasto = state.lotes.filter(l=>loteTipo(l)==='pasto');
+    if(lotesPasto.length===0 || dietasPasto.length===0){
+      alert('Cadastre ao menos um lote sem "confinamento" no nome e uma dieta de Pasto antes de registrar uma reposição de pasto.');
       return false;
     }
-    editDraft = {loteId: state.lotes[0]?.id||'', dietaId: dietasPasto[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
+    editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: dietasPasto[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
     state.modal = {type:'pasto'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:''};
@@ -821,12 +826,13 @@ function PageLotes(){
     ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre os lotes/currais de animais da fazenda.') : `
     <table>
       <thead><tr>
-        <th>Lote</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+        <th>Lote</th><th>Tipo</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(l=>`
           <tr>
             <td><strong>${l.nome}</strong></td>
+            <td><span class="pill ${loteTipo(l)==='confinamento'?'pill-ok':'pill-warn'}">${loteTipo(l)==='confinamento'?'Confinamento':'Pasto'}</span></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
@@ -1226,9 +1232,9 @@ function ModalSaidaRacao(){
               ${state.dietas.filter(x=>x.tipo!=='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Lote de destino</label>
+          <div class="field"><label>Lote de destino (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -1289,9 +1295,9 @@ function ModalPasto(){
       <div class="modal-head"><h3>${d._editId?'Editar reposição de pasto':'Nova reposição de pasto'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Lote</label>
+          <div class="field"><label>Lote (Pasto)</label>
             <select id="f-lote">
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='pasto').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Dieta de pasto</label>
