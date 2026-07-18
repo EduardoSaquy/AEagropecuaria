@@ -469,6 +469,8 @@ function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.not
 function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade}; }
 function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, item:r.item, custo:r.custo}; }
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
+function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro}; }
+function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
@@ -480,7 +482,7 @@ function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, cfgFaz] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, cfgFaz, prt] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -496,6 +498,7 @@ async function loadAll(){
     db.from('config_financeiro').select('*').eq('id', 1),
     db.from('profiles').select('*').order('nome'),
     db.from('config_fazenda').select('*').eq('id', 1),
+    db.from('partos').select('*').order('id'),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -506,6 +509,7 @@ async function loadAll(){
   state.pasto = (pt.data||[]).map(rowToPasto);
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
+  state.partos = (prt.data||[]).map(rowToParto);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   state.investimentos = (inv.data||[]).map(rowToInvestimento);
   state.receitas = (rec.data||[]).map(rowToReceita);
@@ -527,6 +531,7 @@ const state = {
   leiturasCocho: [],
   pasto: [],
   reproducao: [],
+  partos: [],
   receitas: [],
   precosArroba: [],
   metaMargemPct: null,
@@ -590,6 +595,7 @@ function render(){
         ${state.page==='lotesReproducao' ? PageLotes('reproducao') : ''}
         ${state.page==='racaoCria' ? PageSaidaRacao('reproducao') : ''}
         ${state.page==='reproducao' ? PageReproducao() : ''}
+        ${state.page==='reproducaoPartos' ? PagePartos() : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
@@ -616,7 +622,7 @@ const ACAO_MODULOS = {
   lote:['confinamento','pasto','cria'],
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
-  saidaRacaoCria:['cria'], reproducaoCusto:['cria'],
+  saidaRacaoCria:['cria'], reproducaoCusto:['cria'], parto:['cria'],
   custoFixo:['financeiro'], precoArroba:['financeiro'],
   receita:['resultados'], metaMargem:['resultados'], investimento:['resultados'],
 };
@@ -760,7 +766,7 @@ function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFrac
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
-// Lote é considerado de Confinamento se "confinamento" aparece no nome; os demais são de Pasto.
+// Traduz o destino explícito do lote (aba Lotes) para a chave interna usada nas páginas ('reproducao' = Cria).
 function loteTipo(lote){
   return lote.destino==='cria' ? 'reproducao' : (lote.destino||'pasto');
 }
@@ -803,6 +809,7 @@ const GROUPS = {
     {key:'lotesReproducao', label:'Lotes'},
     {key:'racaoCria', label:'Saída de Ração'},
     {key:'reproducao', label:'Inseminação'},
+    {key:'reproducaoPartos', label:'Partos'},
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
@@ -896,6 +903,7 @@ function Header(){
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
+    reproducaoPartos:{eyebrow:'Movimentação', title:'Partos', desc:'Registre os partos por lote, com o número da mãe e o sexo do bezerro.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês da operação.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
@@ -936,7 +944,7 @@ function openNewModal(type){
     const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
     if(dietasConf.length===0 || lotesConf.length===0){
-      alert('Cadastre ao menos uma dieta de Confinamento e um lote com "confinamento" no nome antes de registrar uma saída de ração.');
+      alert('Cadastre ao menos uma dieta de Confinamento e um lote com destino Confinamento (aba Lotes) antes de registrar uma saída de ração.');
       return false;
     }
     editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
@@ -945,7 +953,7 @@ function openNewModal(type){
     const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
     const lotesCria = state.lotes.filter(l=>loteTipo(l)==='reproducao');
     if(dietasConf.length===0 || lotesCria.length===0){
-      alert('Cadastre ao menos uma dieta de Confinamento e um lote com "reprodução" no nome antes de registrar uma saída de ração para a Cria.');
+      alert('Cadastre ao menos uma dieta de Confinamento e um lote com destino Cria (aba Lotes) antes de registrar uma saída de ração para a Cria.');
       return false;
     }
     editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesCria[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
@@ -961,7 +969,7 @@ function openNewModal(type){
     const dietasPasto = state.dietas.filter(x=>x.tipo==='pasto');
     const lotesPasto = state.lotes.filter(l=>loteTipo(l)==='pasto');
     if(lotesPasto.length===0 || dietasPasto.length===0){
-      alert('Cadastre ao menos um lote sem "confinamento" no nome e uma dieta de Pasto antes de registrar uma reposição de pasto.');
+      alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta de Pasto antes de registrar uma reposição de pasto.');
       return false;
     }
     editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: dietasPasto[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidade:''};
@@ -969,11 +977,19 @@ function openNewModal(type){
   } else if(type==='reproducaoCusto'){
     const lotesReprod = state.lotes.filter(l=>loteTipo(l)==='reproducao');
     if(lotesReprod.length===0){
-      alert('Cadastre ao menos um lote com "reprodução" no nome (ex: Vaca Reprodução) antes de registrar um lançamento de reprodução.');
+      alert('Cadastre ao menos um lote com destino Cria (aba Lotes) antes de registrar um lançamento de reprodução.');
       return false;
     }
     editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), item:'', custo:''};
     state.modal = {type:'reproducaoCusto'};
+  } else if(type==='parto'){
+    const lotesReprod = state.lotes.filter(l=>loteTipo(l)==='reproducao');
+    if(lotesReprod.length===0){
+      alert('Cadastre ao menos um lote com destino Cria (aba Lotes) antes de registrar um parto.');
+      return false;
+    }
+    editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), numeroMae:'', sexoBezerro:'macho'};
+    state.modal = {type:'parto'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:''};
     state.modal = {type:'custoFixo'};
@@ -1008,6 +1024,7 @@ function FabMenu(){
     {type:'pasto', label:'Nova reposição de pasto'},
     {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
+    {type:'parto', label:'Novo parto'},
     {type:'custoFixo', label:'Novo custo fixo'},
     {type:'investimento', label:'Novo investimento'},
     {type:'receita', label:'Nova receita'},
@@ -1429,6 +1446,41 @@ function PageReproducao(){
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-reproducao="${r.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-reproducao="${r.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: PARTOS ===================== */
+const SEXO_BEZERRO_LABEL = {macho:'Macho', femea:'Fêmea'};
+function PagePartos(){
+  const list = [...state.partos].sort((a,b)=> b.data.localeCompare(a.data));
+  return `
+  <div class="toolbar">
+    <span class="hint">${list.length} parto(s) registrado(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhum parto registrado','Registre os partos por lote, com o número da mãe e o sexo do bezerro.') : `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(p=>{
+          const lote = state.lotes.find(l=>l.id===p.loteId);
+          return `<tr>
+            <td class="mono">${p.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td class="mono">${p.numeroMae||'—'}</td>
+            <td>${SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—'}</td>
+            <td style="display:flex; gap:6px;">
+              ${temPermissao('cria','editar') ? `
+              <button class="btn-ghost btn-sm" data-edit-parto="${p.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-parto="${p.id}">Excluir</button>
               ` : ''}
             </td>
           </tr>`;
@@ -2134,6 +2186,7 @@ function Modal(){
   if(state.modal.type==='cocho') return ModalCocho();
   if(state.modal.type==='pasto') return ModalPasto();
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
+  if(state.modal.type==='parto') return ModalParto();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
   if(state.modal.type==='investimento') return ModalInvestimento();
   if(state.modal.type==='receita') return ModalReceita();
@@ -2449,6 +2502,39 @@ function ModalReproducaoCusto(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="reproducaoCusto">${d._editId?'Salvar alterações':'Salvar lançamento'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalParto(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar parto':'Novo parto'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Lote (Cria)</label>
+            <select id="f-lote">
+              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Número da mãe</label><input id="f-numeromae" value="${d.numeroMae}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Sexo do bezerro</label>
+            <select id="f-sexobezerro">
+              <option value="macho" ${d.sexoBezerro==='macho'?'selected':''}>Macho</option>
+              <option value="femea" ${d.sexoBezerro==='femea'?'selected':''}>Fêmea</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="parto">${d._editId?'Salvar alterações':'Salvar parto'}</button>
       </div>
     </div>
   </div>`;
@@ -2772,6 +2858,21 @@ function attachEvents(){
       await loadAll();
     };
   });
+  document.querySelectorAll('[data-edit-parto]').forEach(el=>{
+    el.onclick = ()=>{
+      const p = state.partos.find(x=>x.id===Number(el.dataset.editParto));
+      editDraft = {...p, _editId: p.id};
+      state.modal = {type:'parto'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-parto]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delParto);
+      await db.from('partos').delete().eq('id', id);
+      await loadAll();
+    };
+  });
   document.querySelectorAll('[data-edit-custofixo]').forEach(el=>{
     el.onclick = ()=>{
       const c = state.custosFixos.find(x=>x.id===Number(el.dataset.editCustofixo));
@@ -3000,6 +3101,19 @@ function attachEvents(){
           ({error} = await db.from('reproducao_custos').update(row).eq('id', editDraft._editId));
         } else {
           ({error} = await db.from('reproducao_custos').insert(row));
+        }
+      } else if(type==='parto'){
+        const campos = {
+          loteId: Number(document.getElementById('f-lote').value),
+          data: document.getElementById('f-data').value,
+          numeroMae: document.getElementById('f-numeromae').value,
+          sexoBezerro: document.getElementById('f-sexobezerro').value,
+        };
+        const row = partoToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('partos').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('partos').insert(row));
         }
       } else if(type==='custoFixo'){
         const campos = {
