@@ -494,3 +494,23 @@ create policy "select config_financeiro" on config_financeiro for select using (
 create policy "inserir config_financeiro" on config_financeiro for insert with check (tem_permissao('resultados','editar'));
 create policy "atualizar config_financeiro" on config_financeiro for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
 create policy "excluir config_financeiro" on config_financeiro for delete using (tem_permissao('resultados','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Fazenda (área em hectares) e resultado por hectare
+-- Cadastro da área é restrito a Administrador/Proprietário (mesma
+-- lógica de is_admin(), que já cobre os dois cargos), mas o valor
+-- calculado (resultado por hectare) fica visível pra quem já tem
+-- acesso de visualização a Resultados.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table config_fazenda (
+  id bigint primary key,
+  hectares numeric
+);
+
+alter table config_fazenda enable row level security;
+
+create policy "select config_fazenda" on config_fazenda for select using (tem_permissao('resultados','visualizar'));
+create policy "inserir config_fazenda" on config_fazenda for insert with check (is_admin());
+create policy "atualizar config_fazenda" on config_fazenda for update using (is_admin()) with check (is_admin());
+create policy "excluir config_fazenda" on config_fazenda for delete using (is_admin());
