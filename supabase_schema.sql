@@ -564,3 +564,16 @@ create policy "excluir partos" on partos for delete using (tem_permissao('cria',
 -- continuam funcionando normalmente como "recorrentes" (mes = null).
 -- ===================================================================
 alter table custos_fixos add column if not exists mes text;
+
+-- ===================================================================
+-- MIGRAÇÃO: Diluição opcional por lote/área do custo fixo
+-- Todo custo fixo sempre entra no total geral (Financeiro/Resultados).
+-- Até aqui, ele também era sempre rateado por lote/área/dia na proporção
+-- do número de animais (aba Por Lote e gráfico "por área"). Agora dá pra
+-- desmarcar essa diluição num custo fixo específico — útil para um custo
+-- que já é (ou vai ser) coberto pelos lançamentos diários de ração, cocho
+-- ou pasto (ex: nutrição), pra não contar esse valor duas vezes por lote.
+-- Pode rodar a qualquer momento — todo custo fixo existente continua
+-- diluído normalmente (diluir_por_lote = true por padrão).
+-- ===================================================================
+alter table custos_fixos add column if not exists diluir_por_lote boolean not null default true;
