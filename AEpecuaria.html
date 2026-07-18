@@ -393,12 +393,13 @@
   /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
   .sidebar-user{
     margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.12);
-    display:flex; align-items:center; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
+    display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
   }
-  .sidebar-user-nome{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sidebar-user-nome{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sidebar-user-actions{display:flex; gap:8px;}
   .btn-sair{
     background:rgba(255,255,255,0.1); border:none; color:#fff; padding:6px 10px;
-    border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap;
+    border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap; flex:1;
   }
   .btn-sair:hover{background:rgba(255,255,255,0.2);}
 
@@ -845,7 +846,10 @@ function Sidebar(){
     </div>
     <div class="sidebar-user">
       <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
-      <button class="btn-sair" data-logout="1">Sair</button>
+      <div class="sidebar-user-actions">
+        <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
+        <button class="btn-sair" data-logout="1">Sair</button>
+      </div>
     </div>
     <nav>
       ${gruposVisiveis().map(([key,g])=>`
@@ -2326,6 +2330,7 @@ function Modal(){
   if(state.modal.type==='metaMargem') return ModalMetaMargem();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
+  if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
   if(state.modal.type==='hectares') return ModalHectares();
   return '';
 }
@@ -2794,6 +2799,26 @@ function ModalMetaMargem(){
   </div>`;
 }
 
+function ModalTrocarSenha(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Trocar senha</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Senha atual</label><input id="f-senhaatual" type="password" autocomplete="current-password" value="${d.senhaAtual}"/></div>
+        <div class="field"><label>Nova senha</label><input id="f-novasenha" type="password" autocomplete="new-password" value="${d.novaSenha}"/></div>
+        <div class="field"><label>Confirmar nova senha</label><input id="f-confirmarsenha" type="password" autocomplete="new-password" value="${d.confirmarSenha}"/></div>
+        <p class="hint">A nova senha precisa ter pelo menos 6 caracteres.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="trocarSenha">Salvar nova senha</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
   const loginForm = document.querySelector('[data-login-form]');
@@ -2806,6 +2831,13 @@ function attachEvents(){
   }
   document.querySelectorAll('[data-logout]').forEach(el=>{
     el.onclick = ()=> fazerLogout();
+  });
+  document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
+    el.onclick = ()=>{
+      editDraft = {senhaAtual:'', novaSenha:'', confirmarSenha:''};
+      state.modal = {type:'trocarSenha'};
+      render();
+    };
   });
   document.querySelectorAll('[data-novo-usuario]').forEach(el=>{
     el.onclick = ()=>{
@@ -3320,6 +3352,22 @@ function attachEvents(){
         const permissoes = {};
         document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoes[sel.dataset.permModulo] = sel.value; });
         ({error} = await db.from('profiles').update({papel, ativo, permissoes}).eq('id', editDraft._perfilId));
+      } else if(type==='trocarSenha'){
+        const senhaAtual = document.getElementById('f-senhaatual').value;
+        const novaSenha = document.getElementById('f-novasenha').value;
+        const confirmarSenha = document.getElementById('f-confirmarsenha').value;
+        if(!senhaAtual || !novaSenha || !confirmarSenha){ alert('Preencha todos os campos.'); return; }
+        if(novaSenha.length<6){ alert('A nova senha precisa ter pelo menos 6 caracteres.'); return; }
+        if(novaSenha!==confirmarSenha){ alert('A confirmação não bate com a nova senha.'); return; }
+        const email = `${state.perfil.usuario}@${DOMINIO_LOGIN}`;
+        const { error: erroSenhaAtual } = await db.auth.signInWithPassword({ email, password: senhaAtual });
+        if(erroSenhaAtual){ alert('Senha atual incorreta.'); return; }
+        ({error} = await db.auth.updateUser({ password: novaSenha }));
+        if(error){ alert('Não foi possível trocar a senha: ' + error.message); return; }
+        state.modal = null; editDraft = null;
+        alert('Senha alterada com sucesso.');
+        render();
+        return;
       }
       if(error){
         alert('Não foi possível salvar: ' + error.message);
