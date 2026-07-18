@@ -529,3 +529,25 @@ create policy "select investimentos" on investimentos for select using (tem_perm
 create policy "inserir investimentos" on investimentos for insert with check (tem_permissao('resultados','editar'));
 create policy "atualizar investimentos" on investimentos for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
 create policy "excluir investimentos" on investimentos for delete using (tem_permissao('resultados','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Partos (Cria)
+-- Registro de partos por lote, com o número da mãe e o sexo do
+-- bezerro. Mesmo módulo de permissão ("cria") já usado para os
+-- outros lançamentos de Cria (ração e reprodução).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table partos (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete set null,
+  numero_mae text,
+  sexo_bezerro text check (sexo_bezerro in ('macho','femea'))
+);
+
+alter table partos enable row level security;
+
+create policy "select partos" on partos for select using (tem_permissao('cria','visualizar'));
+create policy "inserir partos" on partos for insert with check (tem_permissao('cria','editar'));
+create policy "atualizar partos" on partos for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
+create policy "excluir partos" on partos for delete using (tem_permissao('cria','editar'));
