@@ -1822,13 +1822,16 @@ function PageResultadosResumo(){
 function PageFinanceiroCurral(){
   const d = dadosFinanceiro();
 
+  const fixoDiarioMes = d.fixosMes/30;
   const custosPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data===d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
     const reproducao = state.reproducao.filter(r=>r.data===d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
-    const total = racao + pasto + reproducao;
+    const variavel = racao + pasto + reproducao;
+    const fixoAlocado = d.totalAnimais>0 ? fixoDiarioMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
+    const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    return {lote:l, racao, pasto, reproducao, total, porAnimal};
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   const custosMesPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
@@ -1843,11 +1846,11 @@ function PageFinanceiroCurral(){
   }).sort((a,b)=> b.total-a.total);
 
   return `
-  <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
     ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo diário de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração hoje</th><th>Pasto hoje</th><th>Cria hoje</th><th>Total hoje</th><th>Custo/animal hoje</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração hoje</th><th>Pasto hoje</th><th>Cria hoje</th><th>Custo fixo (dia)</th><th>Total hoje</th><th>Custo/animal hoje</th></tr></thead>
       <tbody>
         ${custosPorLote.map(r=>`
           <tr>
@@ -1856,6 +1859,7 @@ function PageFinanceiroCurral(){
             <td class="mono">R$ ${fmt(r.racao)}</td>
             <td class="mono">R$ ${fmt(r.pasto)}</td>
             <td class="mono">R$ ${fmt(r.reproducao)}</td>
+            <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
           </tr>
@@ -1863,6 +1867,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
+  <p class="hint" style="margin:-14px 0 22px;">O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção do número de animais de cada um — mesmo critério do total do mês, abaixo.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
