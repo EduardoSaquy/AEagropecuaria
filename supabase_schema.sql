@@ -551,3 +551,16 @@ create policy "select partos" on partos for select using (tem_permissao('cria','
 create policy "inserir partos" on partos for insert with check (tem_permissao('cria','editar'));
 create policy "atualizar partos" on partos for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
 create policy "excluir partos" on partos for delete using (tem_permissao('cria','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Histórico mensal real de Custos Fixos
+-- Antes, custo fixo era um valor único que valia igual pra todo mês
+-- (passado ou futuro), o que fazia o comparativo mensal do Financeiro
+-- parecer irreal (mesmo valor todo mês). Agora cada custo fixo pode
+-- opcionalmente ser amarrado a um mês específico ('YYYY-MM'). Um mês
+-- sem custo fixo próprio cadastrado continua caindo no valor
+-- "recorrente" (mes = null), que serve de padrão/projeção.
+-- Pode rodar a qualquer momento — os custos fixos já cadastrados
+-- continuam funcionando normalmente como "recorrentes" (mes = null).
+-- ===================================================================
+alter table custos_fixos add column if not exists mes text;
