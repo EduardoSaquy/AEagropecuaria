@@ -514,3 +514,18 @@ create policy "select config_fazenda" on config_fazenda for select using (tem_pe
 create policy "inserir config_fazenda" on config_fazenda for insert with check (is_admin());
 create policy "atualizar config_fazenda" on config_fazenda for update using (is_admin()) with check (is_admin());
 create policy "excluir config_fazenda" on config_fazenda for delete using (is_admin());
+
+-- ===================================================================
+-- MIGRAÇÃO: Investimentos passa de Financeiro para Resultados
+-- Pode rodar a qualquer momento. Depois de rodar, revise em
+-- Administração > Editar acesso quem deve enxergar Investimentos —
+-- quem só tinha acesso a Financeiro não ganha "resultados" sozinho.
+-- ===================================================================
+drop policy if exists "select investimentos" on investimentos;
+drop policy if exists "inserir investimentos" on investimentos;
+drop policy if exists "atualizar investimentos" on investimentos;
+drop policy if exists "excluir investimentos" on investimentos;
+create policy "select investimentos" on investimentos for select using (tem_permissao('resultados','visualizar'));
+create policy "inserir investimentos" on investimentos for insert with check (tem_permissao('resultados','editar'));
+create policy "atualizar investimentos" on investimentos for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
+create policy "excluir investimentos" on investimentos for delete using (tem_permissao('resultados','editar'));
