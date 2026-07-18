@@ -472,8 +472,8 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, diluirPorLote:r.diluir_por_lote!==false}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, diluir_por_lote:c.diluirPorLote!==false}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, area:r.area||null, diluirPorLote:r.diluir_por_lote!==false}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, area:c.area||null, diluir_por_lote:c.diluirPorLote!==false}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
 function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
@@ -815,7 +815,7 @@ const GROUPS = {
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
     {key:'financeiroCurral', label:'Por Lote'},
-    {key:'financeiroCustosFixos', label:'Custos Fixos'},
+    {key:'financeiroCustosFixos', label:'Despesas'},
   ]},
   resultados: {label:'Resultados', icon:iconResultados(), pages:[
     {key:'resultadosResumo', label:'Resumo'},
@@ -910,7 +910,7 @@ function Header(){
     reproducaoPartos:{eyebrow:'Movimentação', title:'Partos', desc:'Registre os partos por lote, com o número da mãe e o sexo do bezerro.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês da operação.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
-    financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
+    financeiroCustosFixos:{eyebrow:'Gestão', title:'Despesas', desc:'Despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Pasto ou Cria.'},
     resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
     resultadosReceitas:{eyebrow:'Resultado', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
@@ -996,7 +996,7 @@ function openNewModal(type){
     editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), numeroMae:'', sexoBezerro:'macho'};
     state.modal = {type:'parto'};
   } else if(type==='custoFixo'){
-    editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', diluirPorLote:true};
+    editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', area:'', diluirPorLote:true};
     state.modal = {type:'custoFixo'};
   } else if(type==='investimento'){
     editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
@@ -1030,7 +1030,7 @@ function FabMenu(){
     {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'parto', label:'Novo parto'},
-    {type:'custoFixo', label:'Novo custo fixo'},
+    {type:'custoFixo', label:'Nova despesa'},
     {type:'investimento', label:'Novo investimento'},
     {type:'receita', label:'Nova receita'},
     {type:'precoArroba', label:'Atualizar preço da arroba'},
@@ -1709,7 +1709,7 @@ function ComparativoMensal(meses){
     <div class="card-pad">
       <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
       <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 4px;">Despesa vs Receita — mês a mês (${ano})</h3>
-      <p class="hint" style="margin:0 0 16px;">O custo fixo mensal atual é aplicado a todos os meses, já que o app não guarda um histórico de custo fixo por mês.</p>
+      <p class="hint" style="margin:0 0 16px;">Cada mês usa a despesa real cadastrada pra ele, quando existe; senão, cai no valor recorrente cadastrado em Financeiro &gt; Despesas.</p>
       <table>
         <thead><tr><th>Mês</th><th>Despesa</th><th>Receita</th><th>Resultado</th></tr></thead>
         <tbody>
@@ -1756,7 +1756,11 @@ function custoVariavelDoMes(mesStr){
 function custosFixosDoMes(mesStr){
   const grupos = new Map();
   state.custosFixos.forEach(c=>{
-    const chave = `${c.nome}||${c.categoria||''}`;
+    // a área entra na chave pra não misturar, no mesmo grupo de fallback
+    // mês-específico/recorrente, duas "contas" que só coincidem de nome e
+    // centro de custo mas têm área diferente (ex: Insumos Pecuários
+    // indireto vs. Insumos Pecuários — Reprodução, que é direto da Cria).
+    const chave = `${c.nome}||${c.categoria||''}||${c.area||''}`;
     if(!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(c);
   });
@@ -1770,11 +1774,18 @@ function custosFixosDoMes(mesStr){
 function fixosDoMes(mesStr){
   return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
 }
-// Só os custos fixos marcados para diluir por lote/área — exclui os que já
-// contam no total geral mas não devem ser rateados por cabeça (ex: nutrição,
-// que será coberta pelos lançamentos diários de ração/cocho/pasto).
+// Só os custos fixos gerais (sem área direta) marcados para diluir por
+// lote/área — exclui os que já contam no total geral mas não devem ser
+// rateados por cabeça (ex: nutrição sem área, que será coberta pelos
+// lançamentos diários de ração/cocho/pasto) e exclui também qualquer conta
+// com área direta (essa já vai inteira pra área dela, não precisa ratear).
 function fixosDiluiveisDoMes(mesStr){
-  return custosFixosDoMes(mesStr).filter(c=>c.diluirPorLote!==false).reduce((a,c)=>a+Number(c.valorMensal||0),0);
+  return custosFixosDoMes(mesStr).filter(c=>c.diluirPorLote!==false && !c.area).reduce((a,c)=>a+Number(c.valorMensal||0),0);
+}
+// Soma das contas com área direta (Confinamento/Pasto/Cria) naquele mês —
+// vão inteiras pra área delas, sem rateio por cabeça.
+function custosDiretosDoMes(mesStr, area){
+  return custosFixosDoMes(mesStr).filter(c=>c.area===area).reduce((a,c)=>a+Number(c.valorMensal||0),0);
 }
 function receitaDoMes(mesStr){
   return state.receitas.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+Number(r.valor||0),0);
@@ -1830,9 +1841,9 @@ function composicaoPorAreaAno(){
     const pastoMes = state.pasto.filter(p=>p.data.startsWith(mesStr)).reduce((a,p)=>a+custoPasto(p),0);
     const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
     const fixosDiluiveis = fixosDiluiveisDoMes(mesStr);
-    const fixoConfinamento = totalAnimais>0 ? fixosDiluiveis*(animaisConfinamento/totalAnimais) : 0;
-    const fixoPasto = totalAnimais>0 ? fixosDiluiveis*(animaisPasto/totalAnimais) : 0;
-    const fixoCria = totalAnimais>0 ? fixosDiluiveis*(animaisCria/totalAnimais) : 0;
+    const fixoConfinamento = custosDiretosDoMes(mesStr,'confinamento') + (totalAnimais>0 ? fixosDiluiveis*(animaisConfinamento/totalAnimais) : 0);
+    const fixoPasto = custosDiretosDoMes(mesStr,'pasto') + (totalAnimais>0 ? fixosDiluiveis*(animaisPasto/totalAnimais) : 0);
+    const fixoCria = custosDiretosDoMes(mesStr,'cria') + (totalAnimais>0 ? fixosDiluiveis*(animaisCria/totalAnimais) : 0);
     confinamento += racaoConf + fixoConfinamento;
     pasto += pastoMes + fixoPasto;
     cria += racaoCria + reproducaoMes + fixoCria;
@@ -1882,16 +1893,17 @@ function dadosFinanceiro(){
 
   // Custo fixo (mão de obra, energia etc.) diluído por área, na proporção do
   // número de animais de cada uma — mesmo critério já usado em Por Curral.
-  // Só entram aqui os custos fixos marcados para diluir (fixosDiluiveisMes);
-  // um custo fixo desmarcado ainda conta no total geral (fixosMes/totalMes),
-  // só não é rateado por área/lote/dia.
+  // Uma conta com área direta (Confinamento/Pasto/Cria) vai inteira pra
+  // aquela área; uma conta "Geral" marcada pra diluir (fixosDiluiveisMes) é
+  // rateada por cabeça; uma conta "Geral" desmarcada só conta no total
+  // geral (fixosMes/totalMes), sem entrar em nenhuma área/lote/dia.
   const animaisPorTipo = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   const animaisConfinamento = animaisPorTipo('confinamento');
   const animaisPasto = animaisPorTipo('pasto');
   const animaisCria = animaisPorTipo('reproducao');
-  const fixoConfinamento = totalAnimais>0 ? fixosDiluiveisMes*(animaisConfinamento/totalAnimais) : 0;
-  const fixoPasto = totalAnimais>0 ? fixosDiluiveisMes*(animaisPasto/totalAnimais) : 0;
-  const fixoCria = totalAnimais>0 ? fixosDiluiveisMes*(animaisCria/totalAnimais) : 0;
+  const fixoConfinamento = custosDiretosDoMes(mes,'confinamento') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisConfinamento/totalAnimais) : 0);
+  const fixoPasto = custosDiretosDoMes(mes,'pasto') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisPasto/totalAnimais) : 0);
+  const fixoCria = custosDiretosDoMes(mes,'cria') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisCria/totalAnimais) : 0);
   const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamento;
   const custoTotalPastoMes = pastoMes + fixoPasto;
   const custoTotalCriaMes = criaMes + fixoCria;
@@ -2102,7 +2114,8 @@ function PageResultadosReceitas(){
   </div>`;
 }
 
-/* ---- Financeiro: Custos Fixos ---- */
+/* ---- Financeiro: Despesas ---- */
+const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
 function PageFinanceiroCustosFixos(){
   const list = [...state.custosFixos].sort((a,b)=>{
     if(!a.mes && b.mes) return -1;
@@ -2111,16 +2124,16 @@ function PageFinanceiroCustosFixos(){
   });
   return `
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum custo fixo cadastrado','Cadastre despesas mensais fixas, como mão de obra, energia e manutenção.') : `
+    ${list.length===0 ? Empty('Nenhuma despesa cadastrada','Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Categoria</th><th>Mês</th><th>Diluição</th><th>Valor mensal</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Área</th><th>Valor</th><th></th></tr></thead>
       <tbody>
         ${list.map(c=>`
           <tr>
             <td><strong>${c.nome}</strong></td>
             <td>${c.categoria || '—'}</td>
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
-            <td>${c.diluirPorLote!==false ? `<span class="pill pill-cat">Por lote/área</span>` : `<span class="pill">Só no geral</span>`}</td>
+            <td>${c.area ? `<span class="pill pill-cat">${AREA_LABEL[c.area]}</span>` : (c.diluirPorLote!==false ? `<span class="pill pill-ok">Geral · rateado</span>` : `<span class="pill">Geral · só total</span>`)}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('financeiro','editar') ? `
@@ -2682,26 +2695,37 @@ function ModalCustoFixo(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar custo fixo':'Novo custo fixo'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar despesa':'Nova despesa'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome do custo</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
+        <div class="field"><label>Nome / descrição</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
         <div class="field-row">
-          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Pessoal"/></div>
-          <div class="field"><label>Valor mensal (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
+          <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Mão-de-obra Operacional"/></div>
+          <div class="field"><label>Valor (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
         </div>
-        <div class="field"><label>Mês específico (opcional)</label><input id="f-mescustofixo" type="month" value="${d.mes||''}"/></div>
-        <p class="hint">Deixe em branco para um valor recorrente (vale pra qualquer mês sem histórico próprio). Preencha só se este valor for o gasto real de um mês específico (ex: importado de um relatório).</p>
+        <div class="field-row">
+          <div class="field"><label>Data (opcional)</label><input id="f-datacustofixo" type="date" value="${d.data||''}"/></div>
+          <div class="field">
+            <label>Área</label>
+            <select id="f-areacustofixo">
+              <option value="" ${!d.area?'selected':''}>Geral (indireto — rateado entre as áreas)</option>
+              <option value="confinamento" ${d.area==='confinamento'?'selected':''}>Confinamento</option>
+              <option value="pasto" ${d.area==='pasto'?'selected':''}>Pasto</option>
+              <option value="cria" ${d.area==='cria'?'selected':''}>Cria</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Deixe a data em branco para um valor recorrente (vale como padrão pra qualquer mês sem lançamento próprio). Preenchendo a data, o valor conta só no mês dela. Quando a Área é Confinamento/Pasto/Cria, o valor inteiro vai pra aquela área (sem rateio); em "Geral", ele é rateado por nº de animais entre as áreas — a não ser que a diluição por lote esteja desmarcada abaixo.</p>
         <div class="field" style="margin-top:6px;">
           <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
             <input id="f-diluircustofixo" type="checkbox" ${d.diluirPorLote!==false?'checked':''}/>
             Diluir esse custo entre lotes e áreas (rateio por nº de animais)
           </label>
-          <p class="hint">Desmarque para custos que contam só no total geral (Financeiro/Resultados), sem entrar na coluna "Custo fixo" de Por Lote nem no gráfico por área — use isso para um custo (ex: nutrição) que já é/será coberto pelos lançamentos diários de ração, cocho ou pasto, evitando contar duas vezes.</p>
+          <p class="hint">Só vale quando a Área acima é "Geral". Desmarque para um custo geral que conta só no total (Financeiro/Resultados), sem entrar em Por Lote nem no gráfico por área — use pra algo (ex: nutrição sem área definida) que já é/será coberto pelos lançamentos diários de ração, cocho ou pasto, evitando contar duas vezes.</p>
         </div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="custoFixo">${d._editId?'Salvar alterações':'Salvar custo fixo'}</button>
+        <button class="btn btn-primary" data-save="custoFixo">${d._editId?'Salvar alterações':'Salvar despesa'}</button>
       </div>
     </div>
   </div>`;
@@ -3289,12 +3313,18 @@ function attachEvents(){
           ({error} = await db.from('partos').insert(row));
         }
       } else if(type==='custoFixo'){
+        const data = document.getElementById('f-datacustofixo').value || null;
+        const area = document.getElementById('f-areacustofixo').value || null;
         const campos = {
           nome: document.getElementById('f-nome').value || 'Sem nome',
           categoria: document.getElementById('f-categoria').value,
           valorMensal: Number(document.getElementById('f-valormensal').value)||0,
-          mes: document.getElementById('f-mescustofixo').value || null,
-          diluirPorLote: document.getElementById('f-diluircustofixo').checked,
+          data,
+          mes: data ? data.slice(0,7) : null,
+          area,
+          // um custo com área direta já vai inteiro pra aquela área — não faz
+          // sentido também diluir por cabeça entre lotes (dobraria a conta).
+          diluirPorLote: area ? false : document.getElementById('f-diluircustofixo').checked,
         };
         const row = custoFixoToRow(campos);
         if(editDraft._editId){
