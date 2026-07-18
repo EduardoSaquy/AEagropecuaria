@@ -480,7 +480,7 @@ function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, cfgFaz] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -495,6 +495,7 @@ async function loadAll(){
     db.from('precos_arroba').select('*').order('id'),
     db.from('config_financeiro').select('*').eq('id', 1),
     db.from('profiles').select('*').order('nome'),
+    db.from('config_fazenda').select('*').eq('id', 1),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -510,6 +511,7 @@ async function loadAll(){
   state.receitas = (rec.data||[]).map(rowToReceita);
   state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);
   state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
+  state.hectares = (cfgFaz.data||[])[0]?.hectares ?? null;
   if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
   render();
 }
@@ -528,6 +530,7 @@ const state = {
   receitas: [],
   precosArroba: [],
   metaMargemPct: null,
+  hectares: null,
   custosFixos: [],
   investimentos: [],
   perfis: [],
@@ -593,6 +596,7 @@ function render(){
         ${state.page==='financeiroInvestimentos' ? PageFinanceiroInvestimentos() : ''}
         ${state.page==='resultadosResumo' ? PageResultadosResumo() : ''}
         ${state.page==='resultadosReceitas' ? PageResultadosReceitas() : ''}
+        ${state.page==='fazendaConfig' ? PageFazenda() : ''}
         ${state.page==='adminUsuarios' ? PageAdminUsuarios() : ''}
         `}
       </div>
@@ -634,6 +638,7 @@ function podeEditarAcao(type){
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
+  if(key==='fazenda') return souAdmin();
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 function gruposVisiveis(){
@@ -809,6 +814,9 @@ const GROUPS = {
     {key:'resultadosResumo', label:'Resumo'},
     {key:'resultadosReceitas', label:'Receitas'},
   ]},
+  fazenda: {label:'Fazenda', icon:iconFazenda(), pages:[
+    {key:'fazendaConfig', label:'Fazenda'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -871,6 +879,7 @@ function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fi
 function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.35-9.5-8.5C1 9 2.5 5.5 6 5c2-.3 4 .8 5 2.5 1-1.7 3-2.8 5-2.5 3.5.5 5 4 3.5 7.5C19 16.65 12 21 12 21Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
+function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -893,6 +902,7 @@ function Header(){
     financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
     resultadosReceitas:{eyebrow:'Resultado', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
+    fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Área total da fazenda, usada para calcular o resultado financeiro por hectare.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
   };
   const t = titles[state.page];
@@ -981,6 +991,9 @@ function openNewModal(type){
   } else if(type==='metaMargem'){
     editDraft = {valor: state.metaMargemPct ?? ''};
     state.modal = {type:'metaMargem'};
+  } else if(type==='hectares'){
+    editDraft = {valor: state.hectares ?? ''};
+    state.modal = {type:'hectares'};
   }
   return true;
 }
@@ -1779,10 +1792,24 @@ function PageResultadosResumo(){
   const meses = comparativoMensal(d.fixosMes);
   const anual = comparativoAnual(meses);
 
+  const porHectare = state.hectares>0 ? {
+    receita: d.receitaMes/state.hectares,
+    despesa: d.totalMes/state.hectares,
+    resultado: d.resultadoMes/state.hectares,
+  } : null;
+
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(d.valorEstoque)}</div></div>
   </div>
+  ${porHectare ? `
+  <p class="eyebrow" style="margin:22px 0 10px;">Por hectare (mês) — ${fmtInt(state.hectares)} ha</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Receita/ha</div><div class="stat-value">R$ ${fmt(porHectare.receita)}</div></div>
+    <div class="stat-card"><div class="stat-label">Despesa/ha</div><div class="stat-value">R$ ${fmt(porHectare.despesa)}</div></div>
+    <div class="stat-card"><div class="stat-label">Resultado/ha</div><div class="stat-value ${porHectare.resultado<0?'alerta':''}">R$ ${fmt(porHectare.resultado)}</div></div>
+  </div>
+  ` : `<p class="hint" style="margin:10px 0 20px;">Cadastre a área da fazenda (aba Fazenda, só para Administrador/Proprietário) para ver o resultado por hectare aqui.</p>`}
   ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
@@ -2052,6 +2079,36 @@ function ModalPermissoes(){
   </div>`;
 }
 
+/* ===================== PÁGINA: FAZENDA ===================== */
+function PageFazenda(){
+  return `
+  <div class="card" style="max-width:420px;">
+    <div class="card-pad">
+      <div class="stat-label">Área total da fazenda</div>
+      <div class="stat-value" style="font-size:28px;">${state.hectares!==null ? fmtInt(state.hectares)+' ha' : '—'}</div>
+      <p class="hint" style="margin-top:10px;">Usada para calcular o resultado financeiro (receita, despesa e lucro/prejuízo) por hectare, mostrado na aba Resultados.</p>
+      ${souAdmin() ? `<button class="btn btn-primary btn-sm" style="margin-top:14px;" data-fab-action="hectares">${state.hectares!==null ? 'Editar área' : 'Cadastrar área'}</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function ModalHectares(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Área da fazenda</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Hectares</label><input id="f-hectares" type="number" step="1" value="${d.valor}"/></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="hectares">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function Empty(title, sub){
   return `<div class="empty">
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
@@ -2079,6 +2136,7 @@ function Modal(){
   if(state.modal.type==='metaMargem') return ModalMetaMargem();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
+  if(state.modal.type==='hectares') return ModalHectares();
   return '';
 }
 
@@ -2991,6 +3049,9 @@ function attachEvents(){
       } else if(type==='metaMargem'){
         const pct = Number(document.getElementById('f-metamargem').value)||0;
         ({error} = await db.from('config_financeiro').upsert({id:1, meta_margem_pct:pct}));
+      } else if(type==='hectares'){
+        const hectares = Number(document.getElementById('f-hectares').value)||0;
+        ({error} = await db.from('config_fazenda').upsert({id:1, hectares}));
       } else if(type==='permissoes'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
