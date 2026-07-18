@@ -471,8 +471,8 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, diluirPorLote:r.diluir_por_lote!==false}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, diluir_por_lote:c.diluirPorLote!==false}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
 function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
@@ -992,7 +992,7 @@ function openNewModal(type){
     editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), numeroMae:'', sexoBezerro:'macho'};
     state.modal = {type:'parto'};
   } else if(type==='custoFixo'){
-    editDraft = {nome:'', categoria:'', valorMensal:'', mes:''};
+    editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', diluirPorLote:true};
     state.modal = {type:'custoFixo'};
   } else if(type==='investimento'){
     editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
@@ -1728,6 +1728,12 @@ function custosFixosDoMes(mesStr){
 function fixosDoMes(mesStr){
   return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
 }
+// Só os custos fixos marcados para diluir por lote/área — exclui os que já
+// contam no total geral mas não devem ser rateados por cabeça (ex: nutrição,
+// que será coberta pelos lançamentos diários de ração/cocho/pasto).
+function fixosDiluiveisDoMes(mesStr){
+  return custosFixosDoMes(mesStr).filter(c=>c.diluirPorLote!==false).reduce((a,c)=>a+Number(c.valorMensal||0),0);
+}
 function receitaDoMes(mesStr){
   return state.receitas.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+Number(r.valor||0),0);
 }
@@ -1774,25 +1780,29 @@ function dadosFinanceiro(){
   const criaMes = racaoCriaMes + reproducaoMes;
   const variavelMes = racaoMes + pastoMes + reproducaoMes;
   const fixosMes = fixosDoMes(mes);
+  const fixosDiluiveisMes = fixosDiluiveisDoMes(mes);
   const totalMes = variavelMes + fixosMes;
 
   const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
   const totalAnimais = lotesAtivos.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   const custoPorAnimalHoje = totalAnimais>0 ? custoHoje/totalAnimais : 0;
 
-  const fixoDiario = fixosMes/30;
+  const fixoDiario = fixosDiluiveisMes/30;
   const custoTotalPorAnimalDia = totalAnimais>0 ? (custoHoje+fixoDiario)/totalAnimais : 0;
   const custoTotalPorAnimalMes = totalAnimais>0 ? totalMes/totalAnimais : 0;
 
   // Custo fixo (mão de obra, energia etc.) diluído por área, na proporção do
   // número de animais de cada uma — mesmo critério já usado em Por Curral.
+  // Só entram aqui os custos fixos marcados para diluir (fixosDiluiveisMes);
+  // um custo fixo desmarcado ainda conta no total geral (fixosMes/totalMes),
+  // só não é rateado por área/lote/dia.
   const animaisPorTipo = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   const animaisConfinamento = animaisPorTipo('confinamento');
   const animaisPasto = animaisPorTipo('pasto');
   const animaisCria = animaisPorTipo('reproducao');
-  const fixoConfinamento = totalAnimais>0 ? fixosMes*(animaisConfinamento/totalAnimais) : 0;
-  const fixoPasto = totalAnimais>0 ? fixosMes*(animaisPasto/totalAnimais) : 0;
-  const fixoCria = totalAnimais>0 ? fixosMes*(animaisCria/totalAnimais) : 0;
+  const fixoConfinamento = totalAnimais>0 ? fixosDiluiveisMes*(animaisConfinamento/totalAnimais) : 0;
+  const fixoPasto = totalAnimais>0 ? fixosDiluiveisMes*(animaisPasto/totalAnimais) : 0;
+  const fixoCria = totalAnimais>0 ? fixosDiluiveisMes*(animaisCria/totalAnimais) : 0;
   const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamento;
   const custoTotalPastoMes = pastoMes + fixoPasto;
   const custoTotalCriaMes = criaMes + fixoCria;
@@ -1807,7 +1817,7 @@ function dadosFinanceiro(){
   const margemAtualPct = receitaMes>0 ? (resultadoMes/receitaMes*100) : null;
 
   return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
-    racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
+    racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, fixosDiluiveisMes, totalMes,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
 }
@@ -1895,7 +1905,7 @@ function PageResultadosResumo(){
 function PageFinanceiroCurral(){
   const d = dadosFinanceiro();
 
-  const fixoDiarioMes = d.fixosMes/30;
+  const fixoDiarioMes = d.fixosDiluiveisMes/30;
   const custosPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data===d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
@@ -1912,7 +1922,7 @@ function PageFinanceiroCurral(){
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
     const reproducao = state.reproducao.filter(r=>r.data.startsWith(d.mes) && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
     const variavel = racao + pasto + reproducao;
-    const fixoAlocado = d.totalAnimais>0 ? d.fixosMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
+    const fixoAlocado = d.totalAnimais>0 ? d.fixosDiluiveisMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
@@ -2010,13 +2020,14 @@ function PageFinanceiroCustosFixos(){
   <div class="card">
     ${list.length===0 ? Empty('Nenhum custo fixo cadastrado','Cadastre despesas mensais fixas, como mão de obra, energia e manutenção.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Categoria</th><th>Mês</th><th>Valor mensal</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Categoria</th><th>Mês</th><th>Diluição</th><th>Valor mensal</th><th></th></tr></thead>
       <tbody>
         ${list.map(c=>`
           <tr>
             <td><strong>${c.nome}</strong></td>
             <td>${c.categoria || '—'}</td>
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
+            <td>${c.diluirPorLote!==false ? `<span class="pill pill-cat">Por lote/área</span>` : `<span class="pill">Só no geral</span>`}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('financeiro','editar') ? `
@@ -2586,6 +2597,13 @@ function ModalCustoFixo(){
         </div>
         <div class="field"><label>Mês específico (opcional)</label><input id="f-mescustofixo" type="month" value="${d.mes||''}"/></div>
         <p class="hint">Deixe em branco para um valor recorrente (vale pra qualquer mês sem histórico próprio). Preencha só se este valor for o gasto real de um mês específico (ex: importado de um relatório).</p>
+        <div class="field" style="margin-top:6px;">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+            <input id="f-diluircustofixo" type="checkbox" ${d.diluirPorLote!==false?'checked':''}/>
+            Diluir esse custo entre lotes e áreas (rateio por nº de animais)
+          </label>
+          <p class="hint">Desmarque para custos que contam só no total geral (Financeiro/Resultados), sem entrar na coluna "Custo fixo" de Por Lote nem no gráfico por área — use isso para um custo (ex: nutrição) que já é/será coberto pelos lançamentos diários de ração, cocho ou pasto, evitando contar duas vezes.</p>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -3155,6 +3173,7 @@ function attachEvents(){
           categoria: document.getElementById('f-categoria').value,
           valorMensal: Number(document.getElementById('f-valormensal').value)||0,
           mes: document.getElementById('f-mescustofixo').value || null,
+          diluirPorLote: document.getElementById('f-diluircustofixo').checked,
         };
         const row = custoFixoToRow(campos);
         if(editDraft._editId){
