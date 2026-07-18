@@ -1720,10 +1720,24 @@ function custoVariavelDoMes(mesStr){
 
 // Custo fixo real daquele mês, se cadastrado (ex: importado de um relatório
 // histórico); senão, cai para os custos fixos "recorrentes" (mes em branco),
-// que representam o valor mensal atual/projetado.
+// que representam o valor mensal atual/projetado. Essa escolha (mês
+// específico vs. recorrente) é feita centro de custo por centro de custo —
+// cada grupo (mesmo nome+categoria) tem seu próprio fallback independente,
+// senão um centro de custo com lançamento de um mês faria os outros centros
+// (sem lançamento próprio naquele mês) sumirem em vez de cair no recorrente.
 function custosFixosDoMes(mesStr){
-  const doMes = state.custosFixos.filter(c=>c.mes===mesStr);
-  return doMes.length>0 ? doMes : state.custosFixos.filter(c=>!c.mes);
+  const grupos = new Map();
+  state.custosFixos.forEach(c=>{
+    const chave = `${c.nome}||${c.categoria||''}`;
+    if(!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(c);
+  });
+  const resultado = [];
+  grupos.forEach(rows=>{
+    const doMes = rows.filter(c=>c.mes===mesStr);
+    resultado.push(...(doMes.length>0 ? doMes : rows.filter(c=>!c.mes)));
+  });
+  return resultado;
 }
 function fixosDoMes(mesStr){
   return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
