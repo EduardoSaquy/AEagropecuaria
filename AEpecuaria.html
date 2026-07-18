@@ -593,7 +593,7 @@ function render(){
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
-        ${state.page==='financeiroInvestimentos' ? PageFinanceiroInvestimentos() : ''}
+        ${state.page==='resultadosInvestimentos' ? PageResultadosInvestimentos() : ''}
         ${state.page==='resultadosResumo' ? PageResultadosResumo() : ''}
         ${state.page==='resultadosReceitas' ? PageResultadosReceitas() : ''}
         ${state.page==='fazendaConfig' ? PageFazenda() : ''}
@@ -617,8 +617,8 @@ const ACAO_MODULOS = {
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'],
-  custoFixo:['financeiro'], investimento:['financeiro'], precoArroba:['financeiro'],
-  receita:['resultados'], metaMargem:['resultados'],
+  custoFixo:['financeiro'], precoArroba:['financeiro'],
+  receita:['resultados'], metaMargem:['resultados'], investimento:['resultados'],
 };
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
@@ -808,11 +808,11 @@ const GROUPS = {
     {key:'financeiroResumo', label:'Resumo'},
     {key:'financeiroCurral', label:'Por Lote'},
     {key:'financeiroCustosFixos', label:'Custos Fixos'},
-    {key:'financeiroInvestimentos', label:'Investimentos'},
   ]},
   resultados: {label:'Resultados', icon:iconResultados(), pages:[
     {key:'resultadosResumo', label:'Resumo'},
     {key:'resultadosReceitas', label:'Receitas'},
+    {key:'resultadosInvestimentos', label:'Investimentos'},
   ]},
   fazenda: {label:'Fazenda', icon:iconFazenda(), pages:[
     {key:'fazendaConfig', label:'Fazenda'},
@@ -899,7 +899,7 @@ function Header(){
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês da operação.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Custos Fixos', desc:'Despesas mensais fixas da operação, como mão de obra, energia e manutenção.'},
-    financeiroInvestimentos:{eyebrow:'Gestão', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
+    resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
     resultadosReceitas:{eyebrow:'Resultado', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
     fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Área total da fazenda, usada para calcular o resultado financeiro por hectare.'},
@@ -1948,7 +1948,7 @@ function PageFinanceiroCustosFixos(){
 }
 
 /* ---- Financeiro: Investimentos ---- */
-function PageFinanceiroInvestimentos(){
+function PageResultadosInvestimentos(){
   return `
   <div class="card">
     ${state.investimentos.length===0 ? Empty('Nenhum investimento registrado','Registre aqui compras de animais, máquinas e outros bens — esse valor não entra no custo diário/mensal de alimentação.') : `
@@ -1962,7 +1962,7 @@ function PageFinanceiroInvestimentos(){
             <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">R$ ${fmt(i.valor)}</td>
             <td style="display:flex; gap:6px;">
-              ${temPermissao('financeiro','editar') ? `
+              ${temPermissao('resultados','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>
               ` : ''}
