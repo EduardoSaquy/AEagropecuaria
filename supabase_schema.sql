@@ -577,3 +577,20 @@ alter table custos_fixos add column if not exists mes text;
 -- diluído normalmente (diluir_por_lote = true por padrão).
 -- ===================================================================
 alter table custos_fixos add column if not exists diluir_por_lote boolean not null default true;
+
+-- ===================================================================
+-- MIGRAÇÃO: Área direta (Confinamento/Pasto/Cria) e data da despesa
+-- Até aqui, um custo fixo só podia contar no total geral ou ser rateado
+-- por cabeça entre as áreas (diluir_por_lote). Isso é o correto pra custo
+-- indireto (ex: mão de obra, energia), mas um custo que já nasce ligado a
+-- uma área (ex: insumo de reprodução, que é só da Cria) deveria ir inteiro
+-- pra ela, sem rateio — é assim que apuração de custo em pecuária separa
+-- custo direto (vai 100% pra área de origem) de indireto (rateado).
+-- Também adiciona uma data específica da despesa (opcional), além do mês —
+-- pra registrar uma conta como um lançamento real (ex: nota fiscal de um
+-- dia específico), não só um valor recorrente ou mensal.
+-- Pode rodar a qualquer momento — toda despesa existente continua com
+-- área em branco (geral/indireta, comportamento igual a antes).
+-- ===================================================================
+alter table custos_fixos add column if not exists area text check (area in ('confinamento','pasto','cria'));
+alter table custos_fixos add column if not exists data date;
