@@ -959,11 +959,12 @@ function openNewModal(type){
     editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesCria[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacaoCria'};
   } else if(type==='cocho'){
-    if(state.lotes.length===0){
-      alert('Cadastre ao menos um lote antes de registrar uma leitura de cocho.');
+    const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
+    if(lotesConf.length===0){
+      alert('Cadastre ao menos um lote com destino Confinamento (aba Lotes) antes de registrar uma leitura de cocho.');
       return false;
     }
-    editDraft = {loteId: state.lotes[0]?.id||'', data:new Date().toISOString().slice(0,10), nota:2, observacao:''};
+    editDraft = {loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), nota:2, observacao:''};
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
     const dietasPasto = state.dietas.filter(x=>x.tipo==='pasto');
@@ -1270,6 +1271,7 @@ function PageLotesGeral(){
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
+    ${podeCriarLote() ? `<button class="btn btn-primary btn-sm" data-fab-action="lote">+ Novo lote</button>` : ''}
   </div>
   <div class="card">
     ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre um lote e escolha o destino — Confinamento, Pasto ou Cria — para ele aparecer na aba certa.') : `
@@ -1347,7 +1349,9 @@ const NOTAS_COCHO = {
   4: {label:'4 · Muito excesso', pill:'pill-alerta'},
 };
 function PageCocho(){
-  const list = [...state.leiturasCocho].sort((a,b)=> b.data.localeCompare(a.data));
+  const list = [...state.leiturasCocho]
+    .filter(c=>{ const lote = state.lotes.find(l=>l.id===c.loteId); return lote && loteTipo(lote)==='confinamento'; })
+    .sort((a,b)=> b.data.localeCompare(a.data));
   return `
   <div class="toolbar">
     <span class="hint">${list.length} leitura(s) registrada(s)</span>
@@ -1386,7 +1390,9 @@ function custoPasto(p){
   return dieta ? calcDieta(dieta).custoKg * p.quantidade : 0;
 }
 function PagePasto(){
-  const list = [...state.pasto].sort((a,b)=> b.data.localeCompare(a.data));
+  const list = state.pasto
+    .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; })
+    .sort((a,b)=> b.data.localeCompare(a.data));
   return `
   <div class="toolbar">
     <span class="hint">${list.length} reposição(ões) registrada(s)</span>
@@ -1423,7 +1429,9 @@ function PagePasto(){
 /* ===================== PÁGINA: REPRODUÇÃO ===================== */
 function custoReproducao(r){ return Number(r.custo)||0; }
 function PageReproducao(){
-  const list = [...state.reproducao].sort((a,b)=> b.data.localeCompare(a.data));
+  const list = state.reproducao
+    .filter(r=>{ const lote = state.lotes.find(l=>l.id===r.loteId); return lote && loteTipo(lote)==='reproducao'; })
+    .sort((a,b)=> b.data.localeCompare(a.data));
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lançamento(s) registrado(s)</span>
@@ -1458,7 +1466,9 @@ function PageReproducao(){
 /* ===================== PÁGINA: PARTOS ===================== */
 const SEXO_BEZERRO_LABEL = {macho:'Macho', femea:'Fêmea'};
 function PagePartos(){
-  const list = [...state.partos].sort((a,b)=> b.data.localeCompare(a.data));
+  const list = state.partos
+    .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='reproducao'; })
+    .sort((a,b)=> b.data.localeCompare(a.data));
   return `
   <div class="toolbar">
     <span class="hint">${list.length} parto(s) registrado(s)</span>
@@ -2418,9 +2428,9 @@ function ModalCocho(){
       <div class="modal-head"><h3>${d._editId?'Editar leitura de cocho':'Nova leitura de cocho'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Curral (lote)</label>
+          <div class="field"><label>Curral (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
