@@ -471,8 +471,8 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
 function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
@@ -992,7 +992,7 @@ function openNewModal(type){
     editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), numeroMae:'', sexoBezerro:'macho'};
     state.modal = {type:'parto'};
   } else if(type==='custoFixo'){
-    editDraft = {nome:'', categoria:'', valorMensal:''};
+    editDraft = {nome:'', categoria:'', valorMensal:'', mes:''};
     state.modal = {type:'custoFixo'};
   } else if(type==='investimento'){
     editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
@@ -1717,6 +1717,17 @@ function custoVariavelDoMes(mesStr){
   const reproducao = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
   return racao + pasto + reproducao;
 }
+
+// Custo fixo real daquele mês, se cadastrado (ex: importado de um relatório
+// histórico); senão, cai para os custos fixos "recorrentes" (mes em branco),
+// que representam o valor mensal atual/projetado.
+function custosFixosDoMes(mesStr){
+  const doMes = state.custosFixos.filter(c=>c.mes===mesStr);
+  return doMes.length>0 ? doMes : state.custosFixos.filter(c=>!c.mes);
+}
+function fixosDoMes(mesStr){
+  return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
+}
 function receitaDoMes(mesStr){
   return state.receitas.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+Number(r.valor||0),0);
 }
@@ -1724,14 +1735,14 @@ function receitaDoMes(mesStr){
 // Custo fixo não tem histórico por mês no app (só o valor mensal atual),
 // então o mesmo total é aplicado a todos os meses do ano ao montar o
 // comparativo — é uma aproximação, avisada na tela.
-function comparativoMensal(fixosMes){
+function comparativoMensal(){
   const hoje = new Date();
   const ano = hoje.getFullYear();
   const mesAtual = hoje.getMonth();
   const meses = [];
   for(let m=0; m<=mesAtual; m++){
     const mesStr = `${ano}-${String(m+1).padStart(2,'0')}`;
-    const despesa = custoVariavelDoMes(mesStr) + fixosMes;
+    const despesa = custoVariavelDoMes(mesStr) + fixosDoMes(mesStr);
     const receita = receitaDoMes(mesStr);
     meses.push({mesStr, label: `${NOMES_MES[m]}/${ano}`, despesa, receita, resultado: receita-despesa});
   }
@@ -1762,7 +1773,7 @@ function dadosFinanceiro(){
   const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+custoReproducao(r),0);
   const criaMes = racaoCriaMes + reproducaoMes;
   const variavelMes = racaoMes + pastoMes + reproducaoMes;
-  const fixosMes = state.custosFixos.reduce((a,c)=>a+Number(c.valorMensal||0),0);
+  const fixosMes = fixosDoMes(mes);
   const totalMes = variavelMes + fixosMes;
 
   const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
@@ -1850,8 +1861,8 @@ function PageFinanceiroResumo(){
 function PageResultadosResumo(){
   const d = dadosFinanceiro();
   const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
-  const composicaoFixos = composicaoCentrosCusto(state.custosFixos);
-  const meses = comparativoMensal(d.fixosMes);
+  const composicaoFixos = composicaoCentrosCusto(custosFixosDoMes(d.mes));
+  const meses = comparativoMensal();
   const anual = comparativoAnual(meses);
 
   const porHectare = state.hectares>0 ? {
@@ -1990,16 +2001,22 @@ function PageResultadosReceitas(){
 
 /* ---- Financeiro: Custos Fixos ---- */
 function PageFinanceiroCustosFixos(){
+  const list = [...state.custosFixos].sort((a,b)=>{
+    if(!a.mes && b.mes) return -1;
+    if(a.mes && !b.mes) return 1;
+    return (b.mes||'').localeCompare(a.mes||'');
+  });
   return `
   <div class="card">
-    ${state.custosFixos.length===0 ? Empty('Nenhum custo fixo cadastrado','Cadastre despesas mensais fixas, como mão de obra, energia e manutenção.') : `
+    ${list.length===0 ? Empty('Nenhum custo fixo cadastrado','Cadastre despesas mensais fixas, como mão de obra, energia e manutenção.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Categoria</th><th>Valor mensal</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Categoria</th><th>Mês</th><th>Valor mensal</th><th></th></tr></thead>
       <tbody>
-        ${state.custosFixos.map(c=>`
+        ${list.map(c=>`
           <tr>
             <td><strong>${c.nome}</strong></td>
             <td>${c.categoria || '—'}</td>
+            <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('financeiro','editar') ? `
@@ -2011,7 +2028,12 @@ function PageFinanceiroCustosFixos(){
         `).join('')}
       </tbody>
     </table>`}
-  </div>`;
+  </div>
+  <p class="hint" style="margin:14px 0 0;">"Recorrente" é o valor mensal atual, usado em qualquer mês que não tenha um custo fixo próprio cadastrado. Cadastrar um custo fixo com um mês específico (ex: a partir de um relatório histórico) substitui o recorrente só naquele mês, para refletir o gasto real.</p>`;
+}
+function mesLabel(mesStr){
+  const [ano, m] = mesStr.split('-');
+  return `${NOMES_MES[Number(m)-1]}/${ano}`;
 }
 
 /* ---- Financeiro: Investimentos ---- */
@@ -2562,6 +2584,8 @@ function ModalCustoFixo(){
           <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Pessoal"/></div>
           <div class="field"><label>Valor mensal (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
         </div>
+        <div class="field"><label>Mês específico (opcional)</label><input id="f-mescustofixo" type="month" value="${d.mes||''}"/></div>
+        <p class="hint">Deixe em branco para um valor recorrente (vale pra qualquer mês sem histórico próprio). Preencha só se este valor for o gasto real de um mês específico (ex: importado de um relatório).</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -3130,6 +3154,7 @@ function attachEvents(){
           nome: document.getElementById('f-nome').value || 'Sem nome',
           categoria: document.getElementById('f-categoria').value,
           valorMensal: Number(document.getElementById('f-valormensal').value)||0,
+          mes: document.getElementById('f-mescustofixo').value || null,
         };
         const row = custoFixoToRow(campos);
         if(editDraft._editId){
