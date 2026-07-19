@@ -479,6 +479,8 @@ const state = {
   sincronizando: false,
   abastecimentoError: '',
   abastecimentoLoading: false,
+  // ---- rateio & indicadores ----
+  rateioFiltro: { dataInicio: primeiroDiaMesISO(), dataFim: hojeISO() },
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -605,6 +607,7 @@ function render(){
         ${state.page==='adminUsuarios' ? PageAdminUsuarios()
           : state.page==='estoqueResumo' ? PageEstoqueResumo()
           : state.page==='abastecimentos' ? PageAbastecimentos()
+          : RATEIO_PAGES[state.page] ? RATEIO_PAGES[state.page].render()
           : PageCadastro(state.page)}
         `}
       </div>
@@ -743,6 +746,12 @@ const GROUPS = {
   abastecimento: {label:'Abastecimento', icon:iconAbastecimento(), pages:[
     {key:'abastecimentos', label:'Abastecimentos'},
   ]},
+  rateio: {label:'Rateio & Indicadores', icon:iconRateio(), pages:[
+    {key:'rateioFrente', label:'Por Frente'},
+    {key:'rateioTalhao', label:'Por Talhão / Área'},
+    {key:'rateioCentroCusto', label:'Por Centro de Custo'},
+    {key:'rateioEquipamento', label:'Por Equipamento'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -752,6 +761,7 @@ function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='estoque') return temPermissao('estoque','visualizar');
   if(key==='abastecimento') return temPermissao('abastecimento','visualizar');
+  if(key==='rateio') return temPermissao('rateio','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
@@ -796,6 +806,10 @@ function Header(){
   if(state.page==='abastecimentos'){
     return headerHtml('Abastecimento','Abastecimentos','Registro de abastecimento em campo (comboio) ou no tanque fixo, com leitura de medidor e rateio por talhão/centro de custo. Funciona offline — os registros sincronizam sozinhos quando a conexão voltar.');
   }
+  if(RATEIO_PAGES[state.page]){
+    const r = RATEIO_PAGES[state.page];
+    return headerHtml('Rateio & Indicadores', r.label, r.desc);
+  }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='estoque' ? 'Estoque' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
@@ -815,6 +829,7 @@ function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fil
 function iconFuel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 21h10"/><path d="M14 9h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/><path d="M7 7h5"/></svg>`; }
 function iconEstoque(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
 function iconAbastecimento(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>`; }
+function iconRateio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12V3a9 9 0 1 1-9 9h9Z"/><path d="M21 12A9 9 0 0 0 12 3v9h9Z" opacity="0.45"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
@@ -875,9 +890,10 @@ function PageCadastro(key){
 
 /* ===================== ESTOQUE: RESUMO / CONCILIAÇÃO ===================== */
 // Saldo teórico = entradas - saídas + ajustes. Saídas por abastecimento
-// ainda não existem (chegam na Fase 4) — até lá a função soma 0, mas já
-// fica pronta para quando os abastecimentos passarem a dar baixa aqui.
-function saidasAbastecimento(tanqueId){ return 0; }
+// (Fase 3) já dão baixa real aqui.
+function saidasAbastecimento(tanqueId){
+  return state.abastecimentos.filter(a=>a.tanqueId===tanqueId).reduce((a,x)=>a+Number(x.volumeLitros||0),0);
+}
 function saldoTanque(tanqueId){
   const entradas = state.entradasEstoque.filter(e=>e.tanqueId===tanqueId).reduce((a,e)=>a+Number(e.volumeLitros||0),0);
   const ajustes = state.ajustesEstoque.filter(a=>a.tanqueId===tanqueId).reduce((a,x)=>a+Number(x.volumeAjusteLitros||0),0);
@@ -887,10 +903,14 @@ function ultimaMedicao(tanqueId){
   const meds = state.medicoesFisicas.filter(m=>m.tanqueId===tanqueId).sort((a,b)=> b.data.localeCompare(a.data));
   return meds[0] || null;
 }
-// Custo médio ponderado, calculado só a partir das entradas por NF deste
-// tanque (prévia simples; o rateio completo por cultura/talhão é da Fase 5).
-function custoMedioPonderado(tanqueId){
-  const entradas = state.entradasEstoque.filter(e=>e.tanqueId===tanqueId);
+// Custo médio ponderado das entradas por NF deste tanque. Sem dataLimite,
+// considera todas as entradas (visão "hoje", usada no Resumo de Estoque).
+// Com dataLimite (usado no custeio de abastecimentos, Fase 4), considera
+// só as entradas até aquela data — aproxima o preço médio vigente no
+// tanque no momento em que o combustível foi de fato consumido.
+function custoMedioPonderado(tanqueId, dataLimite){
+  const limite = dataLimite ? String(dataLimite).slice(0,10) : null;
+  const entradas = state.entradasEstoque.filter(e=>e.tanqueId===tanqueId && (!limite || e.data<=limite));
   const volumeTotal = entradas.reduce((a,e)=>a+Number(e.volumeLitros||0),0);
   if(volumeTotal<=0) return null;
   const valorTotal = entradas.reduce((a,e)=>a+Number(e.valorTotal||0),0);
@@ -1251,6 +1271,235 @@ function ModalAbastecimento(){
   </div>`;
 }
 
+/* ===================== RATEIO & INDICADORES DE CONSUMO =====================
+ * Telas só de leitura (nenhum CRUD aqui): agregam os abastecimentos já
+ * registrados para mostrar custo/volume por frente, talhão, centro de
+ * custo e equipamento. O custo de cada abastecimento usa o custo médio
+ * ponderado das entradas do tanque ATÉ a data do abastecimento — não a
+ * média de hoje — para refletir o preço vigente no momento do consumo.
+ * Fica de fora desta fase (sem dado-fonte no sistema ainda): custo por
+ * tonelada colhida/produzida (depende de volume de colheita, que só
+ * existirá quando os apps de cana/grãos forem criados) e "evolução por
+ * safra" (melhor lugar é a Fase de dashboards, com gráficos de verdade).
+ */
+const FRENTE_LABELS = {cana:'Cana-de-açúcar', graos:'Grãos', pecuaria:'Pecuária', geral:'Geral'};
+function labelFrente(f){ return FRENTE_LABELS[f] || f; }
+function pillFrente(f){ return f==='geral' ? 'pill-cat' : 'pill-ok'; }
+function hojeISO(){ return new Date().toISOString().slice(0,10); }
+function primeiroDiaMesISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
+function custoAbastecimento(a){
+  const custoUnit = custoMedioPonderado(a.tanqueId, a.dataHora);
+  return custoUnit!=null ? custoUnit * Number(a.volumeLitros||0) : null;
+}
+function abastecimentosNoPeriodo(){
+  const { dataInicio, dataFim } = state.rateioFiltro;
+  return state.abastecimentos.filter(a=>{
+    const d = String(a.dataHora||'').slice(0,10);
+    return (!dataInicio || d>=dataInicio) && (!dataFim || d<=dataFim);
+  });
+}
+function frenteDoAbastecimento(a){
+  if(a.talhaoAreaId){
+    const talhao = state.talhoesAreas.find(t=>t.id===a.talhaoAreaId);
+    const cultura = talhao?.culturaId ? state.culturas.find(c=>c.id===talhao.culturaId) : null;
+    return cultura?.frente || 'geral';
+  }
+  if(a.centroCustoId){
+    const cc = state.centrosCusto.find(c=>c.id===a.centroCustoId);
+    return cc?.frente || 'geral';
+  }
+  return 'geral';
+}
+function agruparPorFrente(lista){
+  const grupos = {};
+  lista.forEach(a=>{
+    const frente = frenteDoAbastecimento(a);
+    if(!grupos[frente]) grupos[frente] = {frente, volume:0, custo:0, qtd:0};
+    grupos[frente].volume += Number(a.volumeLitros||0);
+    grupos[frente].qtd += 1;
+    const c = custoAbastecimento(a);
+    if(c!=null) grupos[frente].custo += c;
+  });
+  return Object.values(grupos).sort((a,b)=>b.custo-a.custo);
+}
+function agruparPorTalhao(lista){
+  const grupos = {};
+  lista.forEach(a=>{
+    if(!a.talhaoAreaId) return;
+    if(!grupos[a.talhaoAreaId]) grupos[a.talhaoAreaId] = {talhaoId:a.talhaoAreaId, volume:0, custo:0, qtd:0};
+    grupos[a.talhaoAreaId].volume += Number(a.volumeLitros||0);
+    grupos[a.talhaoAreaId].qtd += 1;
+    const c = custoAbastecimento(a);
+    if(c!=null) grupos[a.talhaoAreaId].custo += c;
+  });
+  return Object.values(grupos).map(g=>{
+    const talhao = state.talhoesAreas.find(t=>t.id===g.talhaoId);
+    const areaHa = talhao?.areaHa || null;
+    return {
+      ...g, nome: talhao?.nome || '—',
+      areaHa,
+      volumePorHa: areaHa ? g.volume/areaHa : null,
+      custoPorHa: areaHa ? g.custo/areaHa : null,
+    };
+  }).sort((a,b)=>b.custo-a.custo);
+}
+function agruparPorCentroCusto(lista){
+  const grupos = {};
+  lista.forEach(a=>{
+    if(!a.centroCustoId) return;
+    if(!grupos[a.centroCustoId]) grupos[a.centroCustoId] = {centroCustoId:a.centroCustoId, volume:0, custo:0, qtd:0};
+    grupos[a.centroCustoId].volume += Number(a.volumeLitros||0);
+    grupos[a.centroCustoId].qtd += 1;
+    const c = custoAbastecimento(a);
+    if(c!=null) grupos[a.centroCustoId].custo += c;
+  });
+  return Object.values(grupos).map(g=>{
+    const cc = state.centrosCusto.find(c=>c.id===g.centroCustoId);
+    return {...g, nome: cc?.nome || '—', frente: cc?.frente || 'geral'};
+  }).sort((a,b)=>b.custo-a.custo);
+}
+function agruparPorEquipamento(lista){
+  const porEquip = {};
+  lista.forEach(a=>{
+    (porEquip[a.equipamentoId] = porEquip[a.equipamentoId] || []).push(a);
+  });
+  return Object.entries(porEquip).map(([idStr, registros])=>{
+    const equipamentoId = Number(idStr);
+    const equipamento = state.equipamentos.find(e=>e.id===equipamentoId);
+    const volume = registros.reduce((a,r)=>a+Number(r.volumeLitros||0),0);
+    const custo = registros.reduce((a,r)=>{ const c = custoAbastecimento(r); return a+(c||0); }, 0);
+    let consumo = null, unidade = '';
+    if(equipamento && equipamento.tipoMedidor!=='nenhum'){
+      const leituras = registros.map(r=>Number(r.leituraMedidor)).filter(n=>!isNaN(n));
+      if(leituras.length>=2){
+        const percorrido = Math.max(...leituras) - Math.min(...leituras);
+        if(percorrido>0){
+          consumo = volume/percorrido;
+          unidade = equipamento.tipoMedidor==='horimetro' ? 'L/h' : 'L/km';
+        }
+      }
+    }
+    return { equipamentoId, nome: equipamento?.nome||'—', tipo: equipamento?.tipo||'', volume, custo, consumo, unidade, qtd: registros.length };
+  }).sort((a,b)=>b.custo-a.custo);
+}
+function FiltroPeriodoRateio(){
+  const lista = abastecimentosNoPeriodo();
+  return `
+  <div class="toolbar">
+    <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+      <div class="field" style="margin:0;"><label>De</label><input type="date" id="f-rateio-inicio" value="${state.rateioFiltro.dataInicio}" data-rateio-periodo="1"/></div>
+      <div class="field" style="margin:0;"><label>Até</label><input type="date" id="f-rateio-fim" value="${state.rateioFiltro.dataFim}" data-rateio-periodo="1"/></div>
+    </div>
+    <span class="hint">${lista.length} abastecimento(s) no período</span>
+  </div>`;
+}
+function PageRateioFrente(){
+  const lista = abastecimentosNoPeriodo();
+  const grupos = agruparPorFrente(lista);
+  const volumeTotal = grupos.reduce((a,g)=>a+g.volume,0);
+  const custoTotal = grupos.reduce((a,g)=>a+g.custo,0);
+  return `
+  ${FiltroPeriodoRateio()}
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Volume no período</div><div class="stat-value">${fmtInt(volumeTotal)} L</div></div>
+    <div class="stat-card"><div class="stat-label">Custo no período</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Abastecimentos</div><div class="stat-value">${lista.length}</div></div>
+  </div>
+  <div class="card">
+    ${grupos.length===0 ? Empty('Nenhum abastecimento no período','Ajuste o período ou registre abastecimentos na aba Abastecimento.') : `
+    <table>
+      <thead><tr><th>Frente</th><th>Volume</th><th>Custo</th><th>% do custo</th></tr></thead>
+      <tbody>
+        ${grupos.map(g=>`
+          <tr>
+            <td><span class="pill ${pillFrente(g.frente)}">${labelFrente(g.frente)}</span></td>
+            <td class="mono">${fmtInt(g.volume)} L</td>
+            <td class="mono">R$ ${fmt(g.custo)}</td>
+            <td class="mono">${custoTotal>0 ? fmt(g.custo/custoTotal*100,1) : '0,0'}%</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function PageRateioTalhao(){
+  const lista = abastecimentosNoPeriodo();
+  const grupos = agruparPorTalhao(lista);
+  return `
+  ${FiltroPeriodoRateio()}
+  <div class="card" style="overflow-x:auto;">
+    ${grupos.length===0 ? Empty('Nenhum abastecimento com talhão/área no período','Abastecimentos rateados por centro de custo aparecem na aba Por Centro de Custo.') : `
+    <table>
+      <thead><tr><th>Talhão / Área</th><th>Área</th><th>Volume</th><th>L/ha</th><th>Custo</th><th>R$/ha</th></tr></thead>
+      <tbody>
+        ${grupos.map(g=>`
+          <tr>
+            <td><strong>${g.nome}</strong></td>
+            <td class="mono">${g.areaHa ? fmt(g.areaHa,1)+' ha' : '—'}</td>
+            <td class="mono">${fmtInt(g.volume)} L</td>
+            <td class="mono">${g.volumePorHa!=null ? fmt(g.volumePorHa,2)+' L/ha' : '—'}</td>
+            <td class="mono">R$ ${fmt(g.custo)}</td>
+            <td class="mono">${g.custoPorHa!=null ? 'R$ '+fmt(g.custoPorHa) : '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function PageRateioCentroCusto(){
+  const lista = abastecimentosNoPeriodo();
+  const grupos = agruparPorCentroCusto(lista);
+  return `
+  ${FiltroPeriodoRateio()}
+  <div class="card" style="overflow-x:auto;">
+    ${grupos.length===0 ? Empty('Nenhum abastecimento com centro de custo no período','Abastecimentos rateados por talhão/área aparecem na aba Por Talhão/Área.') : `
+    <table>
+      <thead><tr><th>Centro de Custo</th><th>Frente</th><th>Volume</th><th>Custo</th></tr></thead>
+      <tbody>
+        ${grupos.map(g=>`
+          <tr>
+            <td><strong>${g.nome}</strong></td>
+            <td><span class="pill ${pillFrente(g.frente)}">${labelFrente(g.frente)}</span></td>
+            <td class="mono">${fmtInt(g.volume)} L</td>
+            <td class="mono">R$ ${fmt(g.custo)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function PageRateioEquipamento(){
+  const lista = abastecimentosNoPeriodo();
+  const grupos = agruparPorEquipamento(lista);
+  return `
+  ${FiltroPeriodoRateio()}
+  <div class="card" style="overflow-x:auto;">
+    ${grupos.length===0 ? Empty('Nenhum abastecimento no período','Ajuste o período ou registre abastecimentos na aba Abastecimento.') : `
+    <table>
+      <thead><tr><th>Equipamento</th><th>Tipo</th><th>Abastecimentos</th><th>Volume</th><th>Consumo</th><th>Custo</th></tr></thead>
+      <tbody>
+        ${grupos.map(g=>`
+          <tr>
+            <td><strong>${g.nome}</strong></td>
+            <td>${(OPCOES.TIPOS_EQUIPAMENTO.find(t=>t.value===g.tipo)||{}).label || g.tipo || '—'}</td>
+            <td class="mono">${g.qtd}</td>
+            <td class="mono">${fmtInt(g.volume)} L</td>
+            <td class="mono">${g.consumo!=null ? `${fmt(g.consumo,2)} ${g.unidade}` : '—'}</td>
+            <td class="mono">R$ ${fmt(g.custo)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin-top:10px;">Ranking por custo total no período. Consumo (L/h ou L/km) usa a diferença entre a maior e a menor leitura de medidor registrada no período — precisa de pelo menos 2 abastecimentos com leitura para aparecer.</p>`;
+}
+const RATEIO_PAGES = {
+  rateioFrente: {label:'Por Frente', desc:'Custo e volume de combustível por frente de negócio (cana, grãos, pecuária) no período selecionado.', render:PageRateioFrente},
+  rateioTalhao: {label:'Por Talhão / Área', desc:'Custo e volume por talhão/área, com litros e custo por hectare quando a área é conhecida.', render:PageRateioTalhao},
+  rateioCentroCusto: {label:'Por Centro de Custo', desc:'Custo e volume por centro de custo (transporte, administrativo, gerador etc.).', render:PageRateioCentroCusto},
+  rateioEquipamento: {label:'Por Equipamento', desc:'Consumo (L/h ou L/km) e custo por equipamento no período, para comparar eficiência e ranquear os maiores consumidores.', render:PageRateioEquipamento},
+};
+
 /* ===================== MODAL GENÉRICO DE CADASTRO ===================== */
 function novoCadastroDraft(key){
   const cfg = CADASTROS[key];
@@ -1376,6 +1625,7 @@ const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros'],
   ['estoque','Estoque'],
   ['abastecimento','Abastecimento'],
+  ['rateio','Rateio & Indicadores'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
@@ -1610,6 +1860,13 @@ function attachEvents(){
       const tanque = state.tanques.find(t=>t.id===Number(e.target.value));
       const hintEl = e.target.parentElement.querySelector('.hint');
       if(tanque && hintEl) hintEl.textContent = `${tanque.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanque.produtoId)}`;
+    };
+  });
+  document.querySelectorAll('[data-rateio-periodo]').forEach(el=>{
+    el.onchange = ()=>{
+      state.rateioFiltro.dataInicio = document.getElementById('f-rateio-inicio').value;
+      state.rateioFiltro.dataFim = document.getElementById('f-rateio-fim').value;
+      render();
     };
   });
   document.querySelectorAll('[data-close], [data-close-overlay]').forEach(el=>{
