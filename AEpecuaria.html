@@ -413,6 +413,12 @@
     border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap; flex:1;
   }
   .btn-sair:hover{background:rgba(255,255,255,0.2);}
+  .btn-pendencias{
+    background:rgba(201,138,43,0.22); border:1px solid rgba(201,138,43,0.5); color:#F5D9A8;
+    padding:8px 10px; border-radius:8px; font-size:11.5px; font-weight:600; cursor:pointer;
+    margin-bottom:14px; text-align:left; width:100%;
+  }
+  .btn-pendencias:hover{background:rgba(201,138,43,0.32);}
 
   /* ---------- ADMIN: MATRIZ DE PERMISSÕES ---------- */
   .perm-matrix{width:100%; border-collapse:collapse; font-size:13px;}
@@ -803,6 +809,163 @@ function validarObrigatorios(campos){
 }
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
+/* ===================== FILA OFFLINE (lançamentos sem sinal) ===================== */
+// Lançamentos de campo (ração, cocho, pasto, reprodução, parto, pesagem) não
+// podem se perder quando não há sinal de internet no curral/pasto. Se o
+// salvamento falhar por causa de rede (não por um erro real do servidor),
+// o lançamento é guardado neste aparelho (localStorage) e reenviado
+// automaticamente assim que a conexão voltar — nunca fica só na memória,
+// senão se perderia ao fechar a aba antes de sincronizar.
+const FILA_OFFLINE_KEY = 'aepecuaria_fila_offline_v1';
+const LANCAMENTO_LABEL = {
+  saidaRacao:'Saída de ração', saidaRacaoCria:'Saída de ração (Cria)', cocho:'Leitura de cocho',
+  pasto:'Reposição de pasto', reproducaoCusto:'Lançamento de reprodução', parto:'Parto', pesagem:'Pesagem',
+};
+function lerFilaOffline(){
+  try{ return JSON.parse(localStorage.getItem(FILA_OFFLINE_KEY)||'[]'); }
+  catch(e){ return []; }
+}
+function salvarFilaOffline(fila){
+  try{ localStorage.setItem(FILA_OFFLINE_KEY, JSON.stringify(fila)); }
+  catch(e){ /* localStorage indisponível (modo privado etc.) — sem o que fazer aqui */ }
+}
+function enfileirarLancamento(type, campos){
+  const lote = campos.loteId ? state.lotes.find(l=>l.id===campos.loteId) : null;
+  const fila = lerFilaOffline();
+  fila.push({
+    queueId: `${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    type, campos,
+    label: `${LANCAMENTO_LABEL[type]||type}${lote?' · '+lote.nome:''}`,
+    criadoEm: new Date().toISOString(),
+  });
+  salvarFilaOffline(fila);
+}
+// Distingue "sem conexão" (vale a pena guardar e tentar de novo depois) de
+// um erro real do servidor (dado inválido, RLS etc. — tentar de novo não
+// vai resolver, então não faz sentido enfileirar).
+function pareceErroDeRede(err){
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return true;
+  if(err && err.name==='TypeError') return true;
+  const msg = String((err && err.message) || err || '').toLowerCase();
+  return msg.includes('failed to fetch') || msg.includes('network') || msg.includes('load failed') || msg.includes('conexão');
+}
+// Executa de fato o insert (+ efeitos colaterais, como descontar estoque) de
+// um lançamento novo — usado tanto pelo salvamento normal quanto por essa
+// mesma função sendo chamada de novo depois, ao sincronizar a fila.
+async function executarInsertLancamento(type, campos){
+  if(type==='saidaRacao' || type==='saidaRacaoCria'){
+    const dieta = state.dietas.find(x=>x.id===campos.dietaId);
+    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg};
+    const res = await db.from('saidas_racao').insert(row).select().single();
+    if(res.error) return {error:res.error};
+    const saidaId = res.data.id;
+    if(dieta){
+      const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+        const ing = getIng(it.ingredienteId);
+        const consumoKg = campos.quantidadeKg*it.pct/100;
+        return {data:campos.data, ingrediente_id:it.ingredienteId, tipo:'saida', quantidade:kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id:saidaId};
+      });
+      if(movs.length){
+        const {error} = await db.from('movimentos').insert(movs);
+        if(error) return {error};
+      }
+    }
+    return {error:null};
+  }
+  if(type==='cocho'){
+    const {error} = await db.from('leituras_cocho').insert(leituraCochoToRow(campos));
+    return {error};
+  }
+  if(type==='pasto'){
+    const dieta = state.dietas.find(x=>x.id===campos.dietaId);
+    const row = {data:campos.data, lote_id:campos.loteId, dieta_id:campos.dietaId, quantidade:campos.quantidade};
+    const res = await db.from('pasto').insert(row).select().single();
+    if(res.error) return {error:res.error};
+    const pastoId = res.data.id;
+    if(dieta){
+      const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+        const ing = getIng(it.ingredienteId);
+        const consumoKg = campos.quantidade*it.pct/100;
+        return {data:campos.data, ingrediente_id:it.ingredienteId, tipo:'saida', quantidade:kgParaUnidade(consumoKg, ing?.unidade), pasto_id:pastoId};
+      });
+      if(movs.length){
+        const {error} = await db.from('movimentos').insert(movs);
+        if(error) return {error};
+      }
+    }
+    return {error:null};
+  }
+  if(type==='reproducaoCusto'){
+    const {error} = await db.from('reproducao_custos').insert(reproducaoCustoToRow(campos));
+    return {error};
+  }
+  if(type==='parto'){
+    const {error} = await db.from('partos').insert(partoToRow(campos));
+    return {error};
+  }
+  if(type==='pesagem'){
+    const {error} = await db.from('pesagens').insert(pesagemToRow(campos));
+    return {error};
+  }
+  return {error:{message:'Tipo de lançamento desconhecido: '+type}};
+}
+// Tenta salvar de verdade; se falhar por rede, guarda na fila offline em vez
+// de mostrar erro — do ponto de vista de quem está usando, "salvou" mesmo
+// assim (só que localmente, até a internet voltar).
+async function salvarOuEnfileirar(type, campos){
+  try{
+    const resultado = await executarInsertLancamento(type, campos);
+    if(!resultado.error) return {ok:true};
+    if(pareceErroDeRede(resultado.error)){
+      enfileirarLancamento(type, campos);
+      return {ok:true, enfileirado:true};
+    }
+    return {ok:false, error:resultado.error};
+  } catch(err){
+    if(pareceErroDeRede(err)){
+      enfileirarLancamento(type, campos);
+      return {ok:true, enfileirado:true};
+    }
+    return {ok:false, error:err};
+  }
+}
+let sincronizandoFila = false;
+async function tentarSincronizarFila(){
+  if(sincronizandoFila) return;
+  const filaInicial = lerFilaOffline();
+  if(filaInicial.length===0) return;
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return;
+  sincronizandoFila = true;
+  const pendentes = [...filaInicial];
+  const falhasReais = [];
+  let algumSucesso = false;
+  let i = 0;
+  while(i < pendentes.length){
+    const item = pendentes[i];
+    let resultado;
+    try{
+      resultado = await executarInsertLancamento(item.type, item.campos);
+    } catch(err){
+      resultado = {error: err};
+    }
+    if(!resultado.error){
+      pendentes.splice(i,1);
+      algumSucesso = true;
+    } else if(pareceErroDeRede(resultado.error)){
+      break; // ainda sem sinal — para por aqui, mantém esse e os seguintes na fila
+    } else {
+      falhasReais.push(item.label);
+      pendentes.splice(i,1); // erro real do servidor: não adianta insistir
+    }
+  }
+  salvarFilaOffline(pendentes);
+  sincronizandoFila = false;
+  if(algumSucesso) await loadAll(); else render();
+  if(falhasReais.length>0){
+    alert(`Alguns lançamentos pendentes não puderam ser enviados e foram descartados da fila (dado inválido ou registro relacionado removido):\n\n${falhasReais.join('\n')}\n\nSerá preciso lançar de novo.`);
+  }
+}
+
 // Traduz o destino explícito do lote (aba Lotes) para a chave interna usada nas páginas ('reproducao' = Cria).
 function loteTipo(lote){
   return lote.destino==='cria' ? 'reproducao' : (lote.destino||'pasto');
@@ -890,6 +1053,9 @@ function Sidebar(){
         <button class="btn-sair" data-logout="1">Sair</button>
       </div>
     </div>
+    ${lerFilaOffline().length>0 ? `
+    <button class="btn-pendencias" data-ver-pendencias="1">⏳ ${lerFilaOffline().length} pendente(s) de sincronização</button>
+    ` : ''}
     <nav>
       ${gruposVisiveis().map(([key,g])=>`
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">
@@ -2600,6 +2766,7 @@ function Modal(){
   if(state.modal.type==='permissoes') return ModalPermissoes();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
   if(state.modal.type==='hectares') return ModalHectares();
+  if(state.modal.type==='pendencias') return ModalPendencias();
   return '';
 }
 
@@ -3131,6 +3298,37 @@ function ModalTrocarSenha(){
   </div>`;
 }
 
+function ModalPendencias(){
+  const fila = lerFilaOffline();
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Pendências de sincronização</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${fila.length===0 ? `<p class="hint">Tudo sincronizado — nenhuma pendência.</p>` : `
+        <p class="hint">Esses lançamentos foram salvos neste aparelho enquanto estava sem conexão. Eles são enviados automaticamente assim que a internet voltar — mas você também pode tentar agora.</p>
+        <table>
+          <thead><tr><th>Lançamento</th><th>Criado em</th><th></th></tr></thead>
+          <tbody>
+            ${fila.map(item=>`
+              <tr>
+                <td>${item.label}</td>
+                <td class="mono">${new Date(item.criadoEm).toLocaleString('pt-BR')}</td>
+                <td><button class="btn-danger-ghost" data-descartar-pendencia="${item.queueId}">Descartar</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        `}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+        ${fila.length>0 ? `<button class="btn btn-primary" data-tentar-sincronizar="1">Tentar sincronizar agora</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
   const loginForm = document.querySelector('[data-login-form]');
@@ -3148,6 +3346,23 @@ function attachEvents(){
     el.onclick = ()=>{
       editDraft = {senhaAtual:'', novaSenha:'', confirmarSenha:''};
       state.modal = {type:'trocarSenha'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-ver-pendencias]').forEach(el=>{
+    el.onclick = ()=>{ state.modal = {type:'pendencias'}; render(); };
+  });
+  document.querySelectorAll('[data-tentar-sincronizar]').forEach(el=>{
+    el.onclick = async ()=>{
+      state.modal = null;
+      render();
+      await tentarSincronizarFila();
+    };
+  });
+  document.querySelectorAll('[data-descartar-pendencia]').forEach(el=>{
+    el.onclick = ()=>{
+      const fila = lerFilaOffline().filter(item=>item.queueId!==el.dataset.descartarPendencia);
+      salvarFilaOffline(fila);
       render();
     };
   });
@@ -3536,29 +3751,33 @@ function attachEvents(){
         if(!validarObrigatorios([[data,'Data'],[qtdRacaoVal,'Quantidade (kg)']])) return;
         if(Number(qtdRacaoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
         const quantidadeKg = Number(qtdRacaoVal);
-        const dieta = state.dietas.find(x=>x.id===dietaId);
-        const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
-        let saidaId = editDraft._editId;
-        if(saidaId){
+        if(editDraft._editId){
+          const dieta = state.dietas.find(x=>x.id===dietaId);
+          const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
+          const saidaId = editDraft._editId;
           ({error} = await db.from('saidas_racao').update(row).eq('id', saidaId));
           if(!error) await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
-        } else {
-          const res = await db.from('saidas_racao').insert(row).select().single();
-          error = res.error;
-          if(res.data) saidaId = res.data.id;
-        }
-        if(!error && dieta){
-          const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
-            const ing = getIng(it.ingredienteId);
-            const consumoKg = quantidadeKg*it.pct/100;
-            return {
-              data, ingrediente_id: it.ingredienteId, tipo: 'saida',
-              quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
-            };
-          });
-          if(movs.length){
-            ({error} = await db.from('movimentos').insert(movs));
+          if(!error && dieta){
+            const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+              const ing = getIng(it.ingredienteId);
+              const consumoKg = quantidadeKg*it.pct/100;
+              return {
+                data, ingrediente_id: it.ingredienteId, tipo: 'saida',
+                quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
+              };
+            });
+            if(movs.length){
+              ({error} = await db.from('movimentos').insert(movs));
+            }
           }
+        } else {
+          const resultado = await salvarOuEnfileirar(type, {dietaId, loteId, data, quantidadeKg});
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
         }
       } else if(type==='cocho'){
         const dataCochoVal = document.getElementById('f-data').value;
@@ -3569,11 +3788,16 @@ function attachEvents(){
           nota: Number(editDraft.nota)||2,
           observacao: document.getElementById('f-obs').value,
         };
-        const row = leituraCochoToRow(campos);
         if(editDraft._editId){
-          ({error} = await db.from('leituras_cocho').update(row).eq('id', editDraft._editId));
+          ({error} = await db.from('leituras_cocho').update(leituraCochoToRow(campos)).eq('id', editDraft._editId));
         } else {
-          ({error} = await db.from('leituras_cocho').insert(row));
+          const resultado = await salvarOuEnfileirar(type, campos);
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
         }
       } else if(type==='pasto'){
         const loteId = Number(document.getElementById('f-lote').value);
@@ -3583,29 +3807,33 @@ function attachEvents(){
         if(!validarObrigatorios([[data,'Data'],[qtdPastoVal,'Quantidade']])) return;
         if(Number(qtdPastoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
         const quantidade = Number(qtdPastoVal);
-        const dieta = state.dietas.find(x=>x.id===dietaId);
-        const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
-        let pastoId = editDraft._editId;
-        if(pastoId){
+        if(editDraft._editId){
+          const dieta = state.dietas.find(x=>x.id===dietaId);
+          const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
+          const pastoId = editDraft._editId;
           ({error} = await db.from('pasto').update(row).eq('id', pastoId));
           if(!error) await db.from('movimentos').delete().eq('pasto_id', pastoId);
-        } else {
-          const res = await db.from('pasto').insert(row).select().single();
-          error = res.error;
-          if(res.data) pastoId = res.data.id;
-        }
-        if(!error && dieta){
-          const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
-            const ing = getIng(it.ingredienteId);
-            const consumoKg = quantidade*it.pct/100;
-            return {
-              data, ingrediente_id: it.ingredienteId, tipo: 'saida',
-              quantidade: kgParaUnidade(consumoKg, ing?.unidade), pasto_id: pastoId,
-            };
-          });
-          if(movs.length){
-            ({error} = await db.from('movimentos').insert(movs));
+          if(!error && dieta){
+            const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+              const ing = getIng(it.ingredienteId);
+              const consumoKg = quantidade*it.pct/100;
+              return {
+                data, ingrediente_id: it.ingredienteId, tipo: 'saida',
+                quantidade: kgParaUnidade(consumoKg, ing?.unidade), pasto_id: pastoId,
+              };
+            });
+            if(movs.length){
+              ({error} = await db.from('movimentos').insert(movs));
+            }
           }
+        } else {
+          const resultado = await salvarOuEnfileirar(type, {loteId, dietaId, data, quantidade});
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
         }
       } else if(type==='reproducaoCusto'){
         const dataReprodVal = document.getElementById('f-data').value;
@@ -3619,11 +3847,16 @@ function attachEvents(){
           item: itemVal,
           custo: Number(custoVal),
         };
-        const row = reproducaoCustoToRow(campos);
         if(editDraft._editId){
-          ({error} = await db.from('reproducao_custos').update(row).eq('id', editDraft._editId));
+          ({error} = await db.from('reproducao_custos').update(reproducaoCustoToRow(campos)).eq('id', editDraft._editId));
         } else {
-          ({error} = await db.from('reproducao_custos').insert(row));
+          const resultado = await salvarOuEnfileirar(type, campos);
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
         }
       } else if(type==='parto'){
         const dataPartoVal = document.getElementById('f-data').value;
@@ -3635,11 +3868,16 @@ function attachEvents(){
           numeroMae: numeroMaeVal,
           sexoBezerro: document.getElementById('f-sexobezerro').value,
         };
-        const row = partoToRow(campos);
         if(editDraft._editId){
-          ({error} = await db.from('partos').update(row).eq('id', editDraft._editId));
+          ({error} = await db.from('partos').update(partoToRow(campos)).eq('id', editDraft._editId));
         } else {
-          ({error} = await db.from('partos').insert(row));
+          const resultado = await salvarOuEnfileirar(type, campos);
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
         }
       } else if(type==='pesagem'){
         const dataPesagemVal = document.getElementById('f-datapesagem').value;
@@ -3652,11 +3890,16 @@ function attachEvents(){
           pesoMedioKg: Number(pesoVal),
           observacao: document.getElementById('f-obspesagem').value,
         };
-        const row = pesagemToRow(campos);
         if(editDraft._editId){
-          ({error} = await db.from('pesagens').update(row).eq('id', editDraft._editId));
+          ({error} = await db.from('pesagens').update(pesagemToRow(campos)).eq('id', editDraft._editId));
         } else {
-          ({error} = await db.from('pesagens').insert(row));
+          const resultado = await salvarOuEnfileirar(type, campos);
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
         }
       } else if(type==='custoFixo'){
         const data = document.getElementById('f-datacustofixo').value || null;
@@ -3818,6 +4061,15 @@ initAuth();
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
 }
+
+// tenta sincronizar a fila offline assim que o navegador avisar que voltou
+// a conexão, e periodicamente como reforço (o evento 'online' nem sempre
+// dispara de forma confiável em todo dispositivo/navegador).
+window.addEventListener('online', tentarSincronizarFila);
+setInterval(tentarSincronizarFila, 30000);
+// se sobrou algo pendente de uma sessão anterior (app fechado antes de
+// sincronizar), tenta assim que o app abre de novo.
+setTimeout(tentarSincronizarFila, 3000);
 </script>
 </body>
 </html>
