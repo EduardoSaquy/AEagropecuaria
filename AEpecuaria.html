@@ -646,6 +646,9 @@ const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confina
 // tipo (mesma chave usada por loteTipo()) -> rótulo de tela e módulo de permissão
 const TIPO_PESAGEM_LABEL = {confinamento:'Confinamento', pasto:'Pasto', reproducao:'Cria'};
 const TIPO_MODULO = {confinamento:'confinamento', pasto:'pasto', reproducao:'cria'};
+// loteTipo() usa 'reproducao' pra Cria; o campo "area" de uma despesa usa
+// 'cria' (mesmo texto mostrado em Despesas) — essa tabela traduz um pro outro.
+const LOTETIPO_PARA_AREA = {confinamento:'confinamento', pasto:'pasto', reproducao:'cria'};
 const ACAO_MODULOS = {
   ingrediente:['insumos'], movimento:['insumos'],
   dieta:['dietas'],
@@ -2427,23 +2430,44 @@ function PageFinanceiroCurral(){
   const d = dadosFinanceiro();
 
   const fixoDiarioMes = d.fixosDiluiveisMes/30;
-  const custosPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
+
+  // Uma despesa com área direta (ex: "Reprodução Animal", marcada pra Cria)
+  // vai inteira pra área no total geral (dadosFinanceiro), mas dentro da
+  // área ainda precisa ser rateada entre os lotes daquela área — na
+  // proporção do número de animais de cada um, mesmo critério do rateio
+  // geral. Sem isso, uma despesa direta nunca aparecia em Por Lote.
+  const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
+  const animaisPorTipoCurral = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const animaisPorAreaMes = {confinamento: animaisPorTipoCurral('confinamento'), pasto: animaisPorTipoCurral('pasto'), reproducao: animaisPorTipoCurral('reproducao')};
+  const diretoMesPorArea = {};
+  Object.keys(LOTETIPO_PARA_AREA).forEach(tipo=>{ diretoMesPorArea[tipo] = custosDiretosDoMes(d.mes, LOTETIPO_PARA_AREA[tipo]); });
+  function fixoDiretoAlocado(lote, valorMensalDaArea){
+    const tipo = loteTipo(lote);
+    const totalAnimaisArea = animaisPorAreaMes[tipo];
+    return totalAnimaisArea>0 ? valorMensalDaArea*(Number(lote.numeroAnimais||0)/totalAnimaisArea) : 0;
+  }
+
+  const custosPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data===d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
     const reproducao = state.reproducao.filter(r=>r.data===d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
     const variavel = racao + pasto + reproducao;
-    const fixoAlocado = d.totalAnimais>0 ? fixoDiarioMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
+    const fixoGeral = d.totalAnimais>0 ? fixoDiarioMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
+    const fixoDireto = fixoDiretoAlocado(l, diretoMesPorArea[loteTipo(l)]/30);
+    const fixoAlocado = fixoGeral + fixoDireto;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
-  const custosMesPorLote = state.lotes.filter(l=>!l.dataFim).map(l=>{
+  const custosMesPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
     const reproducao = state.reproducao.filter(r=>r.data.startsWith(d.mes) && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
     const variavel = racao + pasto + reproducao;
-    const fixoAlocado = d.totalAnimais>0 ? d.fixosDiluiveisMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
+    const fixoGeral = d.totalAnimais>0 ? d.fixosDiluiveisMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
+    const fixoDireto = fixoDiretoAlocado(l, diretoMesPorArea[loteTipo(l)]);
+    const fixoAlocado = fixoGeral + fixoDireto;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
     const arrobas = arrobasProduzidasNoMes(l.id, d.mes, l.numeroAnimais);
