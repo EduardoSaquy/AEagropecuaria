@@ -2451,6 +2451,20 @@ function PageFinanceiroCurral(){
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
   }).sort((a,b)=> b.total-a.total);
 
+  // Mesmos dados de custosMesPorLote, só que somados por área (Confinamento/
+  // Pasto/Cria) em vez de por lote individual — pra comparar categorias.
+  const custoPorAreaMes = ['confinamento','pasto','reproducao'].map(tipo=>{
+    const lotesArea = custosMesPorLote.filter(r=>loteTipo(r.lote)===tipo);
+    const totalAnimais = lotesArea.reduce((a,r)=>a+Number(r.lote.numeroAnimais||0),0);
+    const totalCusto = lotesArea.reduce((a,r)=>a+r.total,0);
+    const totalArrobas = lotesArea.reduce((a,r)=>a+(r.arrobas||0),0);
+    return {
+      tipo, label: TIPO_PESAGEM_LABEL[tipo], numeroLotes: lotesArea.length, totalAnimais, totalCusto, totalArrobas,
+      custoPorArroba: totalArrobas>0 ? totalCusto/totalArrobas : null,
+      custoPorAnimal: totalAnimais>0 ? totalCusto/totalAnimais : null,
+    };
+  }).filter(r=>r.numeroLotes>0);
+
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
@@ -2496,7 +2510,29 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 0;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos. "@ produzidas" vem do ganho de peso do lote no mês (Pesagem) ÷ 30 kg × nº de animais — sem pesagem cadastrada no mês, aparece "—".</p>`;
+  <p class="hint" style="margin:-14px 0 22px;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos. "@ produzidas" vem do ganho de peso do lote no mês (Pesagem) ÷ 30 kg × nº de animais — sem pesagem cadastrada no mês, aparece "—".</p>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Custo por @ produzida — por área</p>
+  <div class="card">
+    ${custoPorAreaMes.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para comparar o custo por @ produzida entre as áreas.') : `
+    <table>
+      <thead><tr><th>Área</th><th>Lotes</th><th>Nº animais</th><th>Total no mês</th><th>Custo/animal</th><th>@ produzidas</th><th>Custo/@</th></tr></thead>
+      <tbody>
+        ${custoPorAreaMes.map(r=>`
+          <tr>
+            <td><strong>${r.label}</strong></td>
+            <td class="mono">${r.numeroLotes}</td>
+            <td class="mono">${fmtInt(r.totalAnimais)}</td>
+            <td class="mono">R$ ${fmt(r.totalCusto)}</td>
+            <td class="mono">${r.custoPorAnimal!==null ? 'R$ '+fmt(r.custoPorAnimal,2) : '—'}</td>
+            <td class="mono">${r.totalArrobas>0 ? fmt(r.totalArrobas,1)+' @' : '—'}</td>
+            <td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin-top:12px;">Soma dos lotes de cada área (mesmos dados da tabela "Por Lote" acima) — útil pra comparar, por exemplo, se o Confinamento está produzindo @ mais barata que o Pasto.</p>`;
 }
 
 /* ---- Financeiro: Receitas ---- */
