@@ -789,6 +789,18 @@ function AguardandoLiberacao(){
 /* ===================== HELPERS ===================== */
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+// Valida campos obrigatórios de um lançamento antes de salvar — campos:
+// [[valorBruto, rótulo], ...]. Barra o salvamento com um alerta claro se
+// algum estiver em branco (observação nunca entra aqui, é sempre opcional).
+function validarObrigatorios(campos){
+  for(const [valor, rotulo] of campos){
+    if(valor===null || valor===undefined || String(valor).trim()===''){
+      alert(`Preencha o campo "${rotulo}" antes de salvar.`);
+      return false;
+    }
+  }
+  return true;
+}
 function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 
 // Traduz o destino explícito do lote (aba Lotes) para a chave interna usada nas páginas ('reproducao' = Cria).
@@ -1095,6 +1107,7 @@ function FabMenu(){
 /* ===================== PÁGINA: INGREDIENTES ===================== */
 function PageIngredientes(){
   const list = state.ingredientes.filter(i=> i.nome.toLowerCase().includes(state.search.toLowerCase()) );
+  const verValor = souAdmin();
   return `
   <div class="toolbar">
     <div class="search">
@@ -1108,7 +1121,7 @@ function PageIngredientes(){
     <table>
       <thead><tr>
         <th>Ingrediente</th><th>Categoria</th><th>Fornecedor</th>
-        <th>MS%</th><th>PB%</th><th>NDT%</th><th>Preço/kg</th><th></th>
+        <th>MS%</th><th>PB%</th><th>NDT%</th>${verValor?'<th>Preço/kg</th>':''}<th></th>
       </tr></thead>
       <tbody>
         ${list.map(i=>`
@@ -1119,7 +1132,7 @@ function PageIngredientes(){
             <td class="mono">${fmt(i.ms,1)}%</td>
             <td class="mono">${fmt(i.pb,1)}%</td>
             <td class="mono">${fmt(i.ndt,1)}%</td>
-            <td class="mono">R$ ${fmt(i.precoKg)}</td>
+            ${verValor?`<td class="mono">R$ ${fmt(i.precoKg)}</td>`:''}
             <td style="display:flex; gap:6px;">
               ${temPermissao('insumos','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-ing="${i.id}">Editar</button>
@@ -1144,12 +1157,13 @@ function PageEstoque(){
   });
   const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
   const alertas = rows.filter(r=>r.baixo).length;
+  const verValor = souAdmin();
 
   const movRows = [...state.movimentos].sort((a,b)=> b.data.localeCompare(a.data)).slice(0,8);
 
   return `
   <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Valor total em estoque</div><div class="stat-value">R$ ${fmt(valorTotal)}</div></div>
+    ${verValor?`<div class="stat-card"><div class="stat-label">Valor total em estoque</div><div class="stat-value">R$ ${fmt(valorTotal)}</div></div>`:''}
     <div class="stat-card"><div class="stat-label">Itens cadastrados</div><div class="stat-value">${state.ingredientes.length}</div></div>
     <div class="stat-card"><div class="stat-label">Alertas de estoque baixo</div><div class="stat-value ${alertas>0?'alerta':''}">${alertas}</div></div>
     <div class="stat-card"><div class="stat-label">Movimentações registradas</div><div class="stat-value">${state.movimentos.length}</div></div>
@@ -1158,7 +1172,7 @@ function PageEstoque(){
   <div class="card" style="margin-bottom:22px;">
     <table>
       <thead><tr>
-        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th><th>Valor</th><th>Status</th>
+        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th>${verValor?'<th>Valor</th>':''}<th>Status</th>
       </tr></thead>
       <tbody>
         ${rows.map(r=>`
@@ -1167,7 +1181,7 @@ function PageEstoque(){
             <td><strong>${r.i.nome}</strong></td>
             <td class="mono">${fmtInt(r.saldo)} ${r.i.unidade}</td>
             <td class="mono">${fmtInt(r.i.estoqueMin)} ${r.i.unidade}</td>
-            <td class="mono">R$ ${fmt(r.valor)}</td>
+            ${verValor?`<td class="mono">R$ ${fmt(r.valor)}</td>`:''}
             <td>${r.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
           </tr>
         `).join('')}
@@ -2591,6 +2605,7 @@ function Modal(){
 
 function ModalIngrediente(){
   const d = editDraft;
+  const verValor = souAdmin();
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -2614,12 +2629,16 @@ function ModalIngrediente(){
           <div class="field"><label>Matéria seca (%)</label><input id="f-ms" type="number" step="0.1" value="${d.ms}"/></div>
           <div class="field"><label>Proteína bruta (%)</label><input id="f-pb" type="number" step="0.1" value="${d.pb}"/></div>
         </div>
+        ${verValor ? `
         <div class="field-row">
           <div class="field"><label>NDT (%)</label><input id="f-ndt" type="number" step="0.1" value="${d.ndt}"/></div>
           <div class="field"><label>Preço por kg (R$)</label><input id="f-preco" type="number" step="0.01" value="${d.precoKg}"/></div>
         </div>
-        <div class="field"><label>Estoque mínimo (alerta, em ${d.unidade||'kg'})</label><input id="f-min" type="number" step="1" value="${d.estoqueMin}"/></div>
         <p class="hint">O preço é sempre por quilo (R$/kg), mesmo quando a unidade de estoque escolhida acima é tonelada.</p>
+        ` : `
+        <div class="field"><label>NDT (%)</label><input id="f-ndt" type="number" step="0.1" value="${d.ndt}"/></div>
+        `}
+        <div class="field"><label>Estoque mínimo (alerta, em ${d.unidade||'kg'})</label><input id="f-min" type="number" step="1" value="${d.estoqueMin}"/></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -3445,6 +3464,9 @@ function attachEvents(){
       const type = saveBtn.dataset.save;
       let error = null;
       if(type==='ingrediente'){
+        // o campo de preço só existe no formulário pra quem pode ver valores
+        // (souAdmin) — sem ele, preserva o preço que já estava salvo.
+        const precoInput = document.getElementById('f-preco');
         const campos = {
           nome: document.getElementById('f-nome').value || 'Sem nome',
           categoria: document.getElementById('f-categoria').value,
@@ -3453,7 +3475,7 @@ function attachEvents(){
           ms: Number(document.getElementById('f-ms').value)||0,
           pb: Number(document.getElementById('f-pb').value)||0,
           ndt: Number(document.getElementById('f-ndt').value)||0,
-          precoKg: Number(document.getElementById('f-preco').value)||0,
+          precoKg: precoInput ? Number(precoInput.value)||0 : Number(editDraft.precoKg)||0,
           estoqueMin: Number(document.getElementById('f-min').value)||0,
         };
         const row = ingredienteToRow(campos);
@@ -3510,7 +3532,10 @@ function attachEvents(){
         const dietaId = Number(document.getElementById('f-dieta').value);
         const loteId = Number(document.getElementById('f-lote').value);
         const data = document.getElementById('f-data').value;
-        const quantidadeKg = Number(document.getElementById('f-qtdracao').value)||0;
+        const qtdRacaoVal = document.getElementById('f-qtdracao').value;
+        if(!validarObrigatorios([[data,'Data'],[qtdRacaoVal,'Quantidade (kg)']])) return;
+        if(Number(qtdRacaoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
+        const quantidadeKg = Number(qtdRacaoVal);
         const dieta = state.dietas.find(x=>x.id===dietaId);
         const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
         let saidaId = editDraft._editId;
@@ -3536,9 +3561,11 @@ function attachEvents(){
           }
         }
       } else if(type==='cocho'){
+        const dataCochoVal = document.getElementById('f-data').value;
+        if(!validarObrigatorios([[dataCochoVal,'Data']])) return;
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
-          data: document.getElementById('f-data').value,
+          data: dataCochoVal,
           nota: Number(editDraft.nota)||2,
           observacao: document.getElementById('f-obs').value,
         };
@@ -3552,7 +3579,10 @@ function attachEvents(){
         const loteId = Number(document.getElementById('f-lote').value);
         const dietaId = Number(document.getElementById('f-dietapasto').value);
         const data = document.getElementById('f-data').value;
-        const quantidade = Number(document.getElementById('f-qtdpasto').value)||0;
+        const qtdPastoVal = document.getElementById('f-qtdpasto').value;
+        if(!validarObrigatorios([[data,'Data'],[qtdPastoVal,'Quantidade']])) return;
+        if(Number(qtdPastoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
+        const quantidade = Number(qtdPastoVal);
         const dieta = state.dietas.find(x=>x.id===dietaId);
         const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
         let pastoId = editDraft._editId;
@@ -3578,11 +3608,16 @@ function attachEvents(){
           }
         }
       } else if(type==='reproducaoCusto'){
+        const dataReprodVal = document.getElementById('f-data').value;
+        const itemVal = document.getElementById('f-item').value;
+        const custoVal = document.getElementById('f-custoreproducao').value;
+        if(!validarObrigatorios([[dataReprodVal,'Data'],[itemVal,'Item'],[custoVal,'Custo']])) return;
+        if(Number(custoVal)<=0){ alert('O custo precisa ser maior que zero.'); return; }
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
-          data: document.getElementById('f-data').value,
-          item: document.getElementById('f-item').value || 'Sem descrição',
-          custo: Number(document.getElementById('f-custoreproducao').value)||0,
+          data: dataReprodVal,
+          item: itemVal,
+          custo: Number(custoVal),
         };
         const row = reproducaoCustoToRow(campos);
         if(editDraft._editId){
@@ -3591,10 +3626,13 @@ function attachEvents(){
           ({error} = await db.from('reproducao_custos').insert(row));
         }
       } else if(type==='parto'){
+        const dataPartoVal = document.getElementById('f-data').value;
+        const numeroMaeVal = document.getElementById('f-numeromae').value;
+        if(!validarObrigatorios([[dataPartoVal,'Data'],[numeroMaeVal,'Número da mãe']])) return;
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
-          data: document.getElementById('f-data').value,
-          numeroMae: document.getElementById('f-numeromae').value,
+          data: dataPartoVal,
+          numeroMae: numeroMaeVal,
           sexoBezerro: document.getElementById('f-sexobezerro').value,
         };
         const row = partoToRow(campos);
@@ -3604,10 +3642,14 @@ function attachEvents(){
           ({error} = await db.from('partos').insert(row));
         }
       } else if(type==='pesagem'){
+        const dataPesagemVal = document.getElementById('f-datapesagem').value;
+        const pesoVal = document.getElementById('f-pesomedio').value;
+        if(!validarObrigatorios([[dataPesagemVal,'Data'],[pesoVal,'Peso médio por animal']])) return;
+        if(Number(pesoVal)<=0){ alert('O peso precisa ser maior que zero.'); return; }
         const campos = {
           loteId: Number(document.getElementById('f-lotepesagem').value),
-          data: document.getElementById('f-datapesagem').value,
-          pesoMedioKg: Number(document.getElementById('f-pesomedio').value)||0,
+          data: dataPesagemVal,
+          pesoMedioKg: Number(pesoVal),
           observacao: document.getElementById('f-obspesagem').value,
         };
         const row = pesagemToRow(campos);

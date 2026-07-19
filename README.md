@@ -6,8 +6,8 @@ O app permite cadastrar ingredientes com sua composição nutricional, controlar
 
 ## Funcionalidades
 
-- **Ingredientes** — cadastro de insumos com categoria, fornecedor, composição nutricional (MS, PB, NDT) e preço por kg. CRUD completo (criar, editar, excluir).
-- **Estoque** — saldo calculado automaticamente a partir das movimentações (entradas e saídas), alerta visual de estoque abaixo do mínimo, valor total em estoque. CRUD completo de movimentações.
+- **Ingredientes** — cadastro de insumos com categoria, fornecedor, composição nutricional (MS, PB, NDT) e preço por kg. O preço por kg só é visível (na lista e no formulário) para Administrador e Proprietário — segue sendo usado normalmente nos cálculos de custo, só não aparece pra quem não tem esse acesso. CRUD completo (criar, editar, excluir).
+- **Estoque** — saldo calculado automaticamente a partir das movimentações (entradas e saídas), alerta visual de estoque abaixo do mínimo. O valor total em estoque e o valor de cada item também ficam visíveis só para Administrador e Proprietário. CRUD completo de movimentações.
 - **Formulação de Dietas** — composição de dietas por percentual de ingrediente, com cálculo automático de MS%, PB%, NDT%, custo por kg e custo por animal/dia. Cada dieta é marcada como **Confinamento** ou **Pasto**, para não misturar as duas na hora de lançar. CRUD completo.
 - **Lotes** — cadastro dos lotes/currais de animais, com número de cabeças e datas de início e encerramento.
 - **Saída de Ração** — lançamento da ração feita e distribuída a um lote a partir de uma dieta de **Confinamento**; o estoque de cada ingrediente é descontado automaticamente na proporção da composição da dieta. CRUD completo.
