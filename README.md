@@ -35,6 +35,16 @@ Também é possível baixar o arquivo `AEpecuaria.html` e abrir localmente, mas 
 
 HTML, CSS e JavaScript puro no frontend (sem frameworks ou build). Persistência via [Supabase](https://supabase.com) (Postgres + API REST), consumido diretamente do navegador com a biblioteca `@supabase/supabase-js`.
 
+## AE Combustível
+
+App novo e independente (`AECombustivel.html`), para controle de combustível (diesel S10/S500, Arla 32, gasolina) das frentes de cana-de-açúcar, grãos e pecuária. Mesma tecnologia do AEpecuária (HTML/CSS/JS puro + Supabase + PWA instalável), mas com **banco de dados próprio e separado** — não interfere no app da pecuária.
+
+Os cadastros centrais (fazenda, cultura/safra, talhão/lote, centro de custo) nascem pensados para as três frentes desde o início, para que o rateio de combustível caia no lugar certo à medida que os módulos de cana e grãos forem criados.
+
+- **Status**: Fase 1 (Fundação + Cadastros base) — login com controle de acesso por papel (Administrador/Gestor/Encarregado/Operador) e CRUD de Fazendas, Produtos, Culturas, Operações, Fornecedores, Safras, Centros de Custo, Talhões/Áreas, Equipamentos, Operadores e Tanques.
+- **Próximas fases**: estoque de combustível (entradas por NF, medição física), abastecimentos com modo offline/comboio, rateio e indicadores de consumo, detecção de anomalias, dashboards.
+- **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e siga o passo a passo no topo de `combustivel_schema.sql` (rodar o schema, criar o primeiro administrador, publicar a Edge Function `criar-usuario-combustivel` e preencher a URL/chave no topo de `AECombustivel.html`).
+
 ## Autor
 
 EduardoSaquy
