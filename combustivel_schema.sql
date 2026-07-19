@@ -1,0 +1,341 @@
+-- ===================================================================
+-- AE Combustível — schema Fase 1 (Fundação + Cadastros base)
+-- ===================================================================
+-- Este schema roda num projeto Supabase PRÓPRIO e SEPARADO do projeto
+-- usado pelo AEpecuaria.html. Não altera nada do banco da pecuária.
+--
+-- PASSO A PASSO PARA COLOCAR NO AR:
+-- 1. Crie um novo projeto em https://supabase.com (organização da empresa).
+-- 2. SQL Editor > cole e rode este arquivo inteiro.
+-- 3. Authentication > Users > Add user: crie sua conta (ex. email
+--    eduardo@aeagropecuaria.local, "Auto Confirm User" marcado). Anote o UUID.
+-- 4. Rode o INSERT no final deste arquivo (troque o UUID e o nome) para
+--    virar o primeiro administrador.
+-- 5. Project Settings > API: copie a "Project URL" e a "anon public key"
+--    e cole nas constantes no topo do AECombustivel.html.
+-- 6. Deploy da Edge Function supabase/functions/criar-usuario-combustivel
+--    (necessária para o admin criar novos usuários pela tela de Administração).
+-- ===================================================================
+
+-- ---------- LOGIN E PERMISSÕES (mesmo padrão do AEpecuaria.html) ----------
+
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  nome text not null,
+  usuario text not null unique, -- login (sem @dominio)
+  papel text not null default 'operador' check (papel in ('admin','gestor','encarregado','operador')),
+  permissoes jsonb not null default '{}'::jsonb, -- {"cadastros":"editar",...}
+  ativo boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+create or replace function is_admin() returns boolean
+language sql security definer set search_path = public stable as $$
+  select exists(
+    select 1 from profiles where id = auth.uid() and papel = 'admin' and ativo = true
+  );
+$$;
+
+create or replace function tem_permissao(modulo text, nivel text) returns boolean
+language sql security definer set search_path = public stable as $$
+  select case
+    when is_admin() then true
+    when nivel = 'visualizar' then (
+      select permissoes->>modulo in ('visualizar','editar')
+      from profiles where id = auth.uid() and ativo = true
+    )
+    else (
+      select permissoes->>modulo = 'editar'
+      from profiles where id = auth.uid() and ativo = true
+    )
+  end;
+$$;
+
+create policy "ver proprio perfil ou admin ve todos" on profiles for select
+  using (auth.uid() = id or is_admin());
+create policy "admin cria perfis" on profiles for insert with check (is_admin());
+create policy "admin atualiza perfis" on profiles for update using (is_admin()) with check (is_admin());
+create policy "admin exclui perfis" on profiles for delete using (is_admin());
+
+-- Trigger reutilizável: mantém updated_at/updated_by corretos em qualquer
+-- update, sem depender do front-end lembrar de mandar esses campos.
+create or replace function trg_set_updated() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+-- ---------- FAZENDAS ----------
+-- Unidade produtiva. estado limitado a TO/SP porque é onde a empresa
+-- opera hoje; ampliar o check quando (se) abrir fazenda em outro estado.
+create table fazendas (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  estado text not null check (estado in ('TO','SP')),
+  area_ha numeric(12,2),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on fazendas for each row execute function trg_set_updated();
+
+-- ---------- CATÁLOGOS GLOBAIS ----------
+-- Produtos, culturas e operações são taxonomia compartilhada por todas as
+-- fazendas e frentes (não fazem sentido duplicados por fazenda_id), por
+-- isso não levam fazenda_id — igual a como "ingredientes"/"dietas" já
+-- funcionam no app da pecuária hoje.
+
+create table produtos (
+  id bigint generated always as identity primary key,
+  nome text not null unique,
+  tipo text not null check (tipo in ('diesel_s10','diesel_s500','arla32','gasolina','outro')),
+  unidade text not null default 'L',
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on produtos for each row execute function trg_set_updated();
+
+create table culturas (
+  id bigint generated always as identity primary key,
+  nome text not null unique,
+  frente text not null check (frente in ('cana','graos','pecuaria')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on culturas for each row execute function trg_set_updated();
+
+create table operacoes (
+  id bigint generated always as identity primary key,
+  nome text not null unique,
+  frente text not null check (frente in ('cana','graos','pecuaria','geral')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on operacoes for each row execute function trg_set_updated();
+
+-- ---------- FORNECEDORES ----------
+create table fornecedores (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  cnpj text,
+  telefone text,
+  obs text,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on fornecedores for each row execute function trg_set_updated();
+
+-- ---------- SAFRAS ----------
+-- Ano-safra de uma cultura numa fazenda (ex: Soja 2024/2025 na Fazenda X).
+create table safras (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  cultura_id bigint not null references culturas(id),
+  nome text not null, -- ex: "2024/2025"
+  data_inicio date,
+  data_fim date,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, cultura_id, nome)
+);
+create index idx_safras_fazenda on safras(fazenda_id);
+create index idx_safras_cultura on safras(cultura_id);
+create trigger set_updated before update on safras for each row execute function trg_set_updated();
+
+-- ---------- CENTROS DE CUSTO ----------
+-- Usado para ratear combustível quando não há um talhão/lote específico
+-- (ex: gerador da sede, veículo de apoio, administrativo).
+create table centros_custo (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  frente text not null check (frente in ('cana','graos','pecuaria','geral')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_centros_custo_fazenda on centros_custo(fazenda_id);
+create trigger set_updated before update on centros_custo for each row execute function trg_set_updated();
+
+-- ---------- TALHÕES / ÁREAS ----------
+-- Representa tanto talhão de lavoura (cana/grãos, com hectares) quanto
+-- lote/curral de pecuária (referência só por nome, sem duplicar o
+-- cadastro que já existe no app da pecuária — o vínculo aqui é só para
+-- ratear combustível, não para controlar o lote em si).
+create table talhoes_areas (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  tipo text not null check (tipo in ('talhao','lote_curral')),
+  area_ha numeric(12,2),
+  cultura_id bigint references culturas(id),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_talhoes_fazenda on talhoes_areas(fazenda_id);
+create index idx_talhoes_cultura on talhoes_areas(cultura_id);
+create trigger set_updated before update on talhoes_areas for each row execute function trg_set_updated();
+
+-- ---------- EQUIPAMENTOS ----------
+create table equipamentos (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  tipo text not null check (tipo in (
+    'colhedora_cana','transbordo','caminhao_canavieiro',
+    'colhedora_graos','plantadeira','pulverizador','secador',
+    'trator','gerador','veiculo_apoio','moto','outro'
+  )),
+  tipo_medidor text not null check (tipo_medidor in ('horimetro','hodometro','nenhum')),
+  consumo_referencia numeric(10,2), -- L/h se horímetro, L/km se hodômetro
+  frente_principal text not null check (frente_principal in ('cana','graos','pecuaria','geral')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_equipamentos_fazenda on equipamentos(fazenda_id);
+create trigger set_updated before update on equipamentos for each row execute function trg_set_updated();
+
+-- ---------- OPERADORES ----------
+-- profile_id é opcional: nem todo operador de máquina/abastecedor
+-- precisa ter login no sistema.
+create table operadores (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  cpf text,
+  profile_id uuid references profiles(id),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_operadores_fazenda on operadores(fazenda_id);
+create index idx_operadores_profile on operadores(profile_id);
+create trigger set_updated before update on operadores for each row execute function trg_set_updated();
+
+-- ---------- TANQUES ----------
+create table tanques (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  produto_id bigint not null references produtos(id),
+  capacidade_litros numeric(12,2) not null check (capacidade_litros > 0),
+  tipo text not null check (tipo in ('fixo','comboio')),
+  fornecedor_id bigint references fornecedores(id), -- comodato, quando houver
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_tanques_fazenda on tanques(fazenda_id);
+create index idx_tanques_produto on tanques(produto_id);
+create trigger set_updated before update on tanques for each row execute function trg_set_updated();
+
+-- ===================================================================
+-- RLS — todas as tabelas de cadastro ficam sob o módulo único
+-- 'cadastros' por enquanto (visualizar/editar). Quando a Fase 3
+-- (abastecimento) chegar, os módulos 'estoque' e 'abastecimento'
+-- entram do mesmo jeito, sem mexer no que já está aqui.
+-- ===================================================================
+
+alter table fazendas enable row level security;
+alter table produtos enable row level security;
+alter table culturas enable row level security;
+alter table operacoes enable row level security;
+alter table fornecedores enable row level security;
+alter table safras enable row level security;
+alter table centros_custo enable row level security;
+alter table talhoes_areas enable row level security;
+alter table equipamentos enable row level security;
+alter table operadores enable row level security;
+alter table tanques enable row level security;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'fazendas','produtos','culturas','operacoes','fornecedores',
+    'safras','centros_custo','talhoes_areas','equipamentos','operadores','tanques'
+  ]
+  loop
+    execute format('create policy "select %1$s" on %1$s for select using (tem_permissao(''cadastros'',''visualizar''));', t);
+    execute format('create policy "inserir %1$s" on %1$s for insert with check (tem_permissao(''cadastros'',''editar''));', t);
+    execute format('create policy "atualizar %1$s" on %1$s for update using (tem_permissao(''cadastros'',''editar'')) with check (tem_permissao(''cadastros'',''editar''));', t);
+    execute format('create policy "excluir %1$s" on %1$s for delete using (tem_permissao(''cadastros'',''editar''));', t);
+  end loop;
+end $$;
+
+-- ===================================================================
+-- SEED — catálogos globais já conhecidos (produto, cultura, operação),
+-- citados no escopo do projeto. Fazendas/tanques/equipamentos ficam
+-- para cadastro manual, pois são específicos da empresa.
+-- ===================================================================
+
+insert into produtos (nome, tipo) values
+  ('Diesel S10', 'diesel_s10'),
+  ('Diesel S500', 'diesel_s500'),
+  ('Arla 32', 'arla32'),
+  ('Gasolina', 'gasolina');
+
+insert into culturas (nome, frente) values
+  ('Cana-de-açúcar', 'cana'),
+  ('Soja', 'graos'),
+  ('Milho', 'graos'),
+  ('Sorgo', 'graos'),
+  ('Feijão', 'graos'),
+  ('Bovinocultura de Corte', 'pecuaria');
+
+insert into operacoes (nome, frente) values
+  ('Colheita', 'geral'),
+  ('Plantio', 'geral'),
+  ('Pulverização', 'geral'),
+  ('Preparo de Solo', 'geral'),
+  ('Transporte', 'geral'),
+  ('Irrigação', 'geral'),
+  ('Trato/Manejo Animal', 'pecuaria'),
+  ('Manutenção', 'geral'),
+  ('Administrativo', 'geral');
+
+-- ===================================================================
+-- ÚLTIMO PASSO MANUAL — descomente e ajuste antes de rodar:
+--
+-- insert into profiles (id, nome, usuario, papel, ativo) values
+--   ('COLE-AQUI-O-UUID-DO-AUTH-USERS', 'Eduardo Saquy', 'eduardo', 'admin', true);
+-- ===================================================================
