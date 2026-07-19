@@ -216,6 +216,16 @@ function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
 function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
+function fmtDataHora(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function datetimeLocalDe(d){
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function agoraDatetimeLocal(){ return datetimeLocalDe(new Date()); }
+function isoParaDatetimeLocal(iso){ return iso ? datetimeLocalDe(new Date(iso)) : agoraDatetimeLocal(); }
 
 /* ===================== OPÇÕES (catálogos de enum) ===================== */
 const OPCOES = {
@@ -346,6 +356,8 @@ const CADASTROS = {
         format:(v,item)=> (v===null||v===undefined||v==='') ? '—' :
           `${fmt(v,2)} ${item.tipoMedidor==='horimetro'?'L/h':item.tipoMedidor==='hodometro'?'L/km':'L'}`},
       {key:'frentePrincipal', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'capacidadeTanqueLitros', label:'Capacidade do tanque (L)', type:'number', step:'0.01', dec:0, suffix:' L', list:false,
+        hint:'Usada para alertar quando um abastecimento excede a capacidade do tanque do equipamento.'},
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
@@ -416,6 +428,19 @@ const CADASTROS = {
       {key:'motivo', label:'Motivo / Justificativa', type:'textarea', required:true},
     ],
   },
+  // Abastecimentos usa esta config só para carregar/mapear linhas do
+  // servidor (loadAll + rowToCadastro) — a tela, o modal e a validação
+  // (offline, leitura de medidor, rateio) são inteiramente sob medida,
+  // então esta entidade nunca passa por PageCadastro/ModalCadastro.
+  abastecimentos: {
+    table:'abastecimentos', label:'Abastecimentos', singular:'Abastecimento', modulo:'abastecimento',
+    orderBy:'data_hora', orderDesc:true,
+    fields:[
+      {key:'fazendaId'}, {key:'tanqueId'}, {key:'equipamentoId'}, {key:'operadorId'},
+      {key:'dataHora'}, {key:'volumeLitros'}, {key:'leituraMedidor'},
+      {key:'talhaoAreaId'}, {key:'centroCustoId'}, {key:'operacaoId'}, {key:'observacao'},
+    ],
+  },
 };
 const CADASTRO_KEYS = Object.keys(CADASTROS);
 
@@ -436,6 +461,7 @@ async function loadAll(){
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
+  salvarCacheLocal();
   render();
 }
 
@@ -444,10 +470,15 @@ const state = {
   page: 'fazendas',
   ...Object.fromEntries(CADASTRO_KEYS.map(k=>[k, []])),
   perfis: [],
-  modal: null, // {type:'cadastro', key} | {type:'usuario'|'permissoes'|'trocarSenha'}
+  modal: null, // {type:'cadastro', key} | {type:'abastecimento'} | {type:'usuario'|'permissoes'|'trocarSenha'}
   search: '',
   cadastroError: '',
   cadastroLoading: false,
+  // ---- abastecimentos (fila offline) ----
+  filaAbastecimentos: [], // registros ainda não sincronizados (IndexedDB)
+  sincronizando: false,
+  abastecimentoError: '',
+  abastecimentoLoading: false,
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -459,6 +490,102 @@ const state = {
   usuarioLoading: false,
 };
 let editDraft = null;
+
+/* ===================== OFFLINE: CACHE LOCAL E FILA DE SINCRONIZAÇÃO =====================
+ * Conectividade no campo é ruim ou inexistente. Duas coisas ficam
+ * salvas no aparelho para o app funcionar sem internet:
+ *   1) Cache dos cadastros (localStorage) — pra abrir o app já offline
+ *      (celular sem sinal) e ainda ter fazenda/tanque/equipamento/etc.
+ *      disponíveis para preencher um abastecimento.
+ *   2) Fila de abastecimentos pendentes (IndexedDB) — cada abastecimento
+ *      registrado offline (ou quando o envio ao Supabase falha) fica
+ *      guardado aqui com um client_uuid próprio, e é reenviado via
+ *      upsert(on_conflict=client_uuid) assim que a conexão volta, sem
+ *      duplicar caso já tenha sido sincronizado antes. */
+const CACHE_LOCAL_KEY = 'combustivel_cache_cadastros_v1';
+function salvarCacheLocal(){
+  try{
+    const snapshot = {};
+    CADASTRO_KEYS.forEach(k=>{ if(k!=='abastecimentos') snapshot[k] = state[k]; });
+    localStorage.setItem(CACHE_LOCAL_KEY, JSON.stringify(snapshot));
+  }catch(e){ /* localStorage indisponível ou cheio — segue sem cache offline */ }
+}
+function carregarCacheLocal(){
+  try{
+    const raw = localStorage.getItem(CACHE_LOCAL_KEY);
+    if(!raw) return;
+    const snapshot = JSON.parse(raw);
+    Object.keys(snapshot).forEach(k=>{ if(CADASTROS[k]) state[k] = snapshot[k]; });
+  }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
+}
+
+const IDB_NOME = 'combustivel_offline';
+const IDB_LOJA = 'fila_abastecimentos';
+function idbAbrir(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(IDB_NOME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(IDB_LOJA, {keyPath:'clientUuid'}); };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbSalvar(registro){
+  const conexao = await idbAbrir();
+  return new Promise((resolve,reject)=>{
+    const tx = conexao.transaction(IDB_LOJA,'readwrite');
+    tx.objectStore(IDB_LOJA).put(registro);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function idbListarTudo(){
+  const conexao = await idbAbrir();
+  return new Promise((resolve,reject)=>{
+    const tx = conexao.transaction(IDB_LOJA,'readonly');
+    const req = tx.objectStore(IDB_LOJA).getAll();
+    req.onsuccess = ()=>resolve(req.result||[]);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbExcluir(clientUuid){
+  const conexao = await idbAbrir();
+  return new Promise((resolve,reject)=>{
+    const tx = conexao.transaction(IDB_LOJA,'readwrite');
+    tx.objectStore(IDB_LOJA).delete(clientUuid);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function atualizarFilaNaTela(){
+  state.filaAbastecimentos = await idbListarTudo();
+  render();
+}
+// Reenvia a fila local ao Supabase. Erros de validação de verdade (ex:
+// leitura de medidor que retrocedeu, capturado pelo trigger do banco)
+// ficam marcados no registro (erroSincronizacao) para revisão humana —
+// não tentamos "resolver" o conflito sozinhos, só deixamos visível.
+async function sincronizarFila(){
+  if(!navigator.onLine) return;
+  const pendentes = await idbListarTudo();
+  if(pendentes.length===0) return;
+  state.sincronizando = true; render();
+  for(const registro of pendentes){
+    const { clientUuid } = registro;
+    const linha = { ...construirLinhaAbastecimento(registro), client_uuid: clientUuid };
+    const { error } = await db.from('abastecimentos').upsert(linha, {onConflict:'client_uuid'});
+    if(!error){
+      await idbExcluir(clientUuid);
+    } else if(error.code){
+      // erro de validação real (não é falta de conexão) — mantém na fila, mas com o motivo visível
+      await idbSalvar({...registro, erroSincronizacao: mensagemErroSupabase(error)});
+    } else {
+      break; // parece falta de conexão no meio do loop — para e tenta de novo depois
+    }
+  }
+  state.sincronizando = false;
+  await atualizarFilaNaTela();
+  await loadAll();
+}
 
 function render(){
   const root = document.getElementById('root');
@@ -477,6 +604,7 @@ function render(){
         ${SubTabs()}
         ${state.page==='adminUsuarios' ? PageAdminUsuarios()
           : state.page==='estoqueResumo' ? PageEstoqueResumo()
+          : state.page==='abastecimentos' ? PageAbastecimentos()
           : PageCadastro(state.page)}
         `}
       </div>
@@ -506,12 +634,16 @@ async function loadPerfil(){
 }
 
 async function initAuth(){
+  carregarCacheLocal(); // mostra os últimos cadastros conhecidos mesmo antes de falar com o servidor (ou offline)
   const { data } = await db.auth.getSession();
   state.session = data.session;
   if(state.session) await loadPerfil();
   state.authChecked = true;
   render();
-  if(state.session && state.perfil?.ativo) loadAll();
+  if(state.session && state.perfil?.ativo){
+    loadAll();
+    atualizarFilaNaTela().then(sincronizarFila);
+  }
 
   let primeiroEvento = true;
   db.auth.onAuthStateChange(async (event, newSession)=>{
@@ -521,12 +653,17 @@ async function initAuth(){
     if(newSession){
       await loadPerfil();
       render();
-      if(state.perfil?.ativo) loadAll();
+      if(state.perfil?.ativo){
+        loadAll();
+        atualizarFilaNaTela().then(sincronizarFila);
+      }
     } else {
       state.perfil = null;
       render();
     }
   });
+
+  window.addEventListener('online', sincronizarFila);
 }
 
 async function fazerLogin(){
@@ -603,6 +740,9 @@ const GROUPS = {
     {key:'medicoesFisicas', label:'Medições Físicas'},
     {key:'ajustesEstoque', label:'Ajustes'},
   ]},
+  abastecimento: {label:'Abastecimento', icon:iconAbastecimento(), pages:[
+    {key:'abastecimentos', label:'Abastecimentos'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -611,6 +751,7 @@ function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.s
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='estoque') return temPermissao('estoque','visualizar');
+  if(key==='abastecimento') return temPermissao('abastecimento','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
@@ -652,6 +793,9 @@ function Header(){
   if(state.page==='estoqueResumo'){
     return headerHtml('Estoque','Resumo','Saldo teórico por tanque, conciliação com a última medição física e alertas de estoque baixo.');
   }
+  if(state.page==='abastecimentos'){
+    return headerHtml('Abastecimento','Abastecimentos','Registro de abastecimento em campo (comboio) ou no tanque fixo, com leitura de medidor e rateio por talhão/centro de custo. Funciona offline — os registros sincronizam sozinhos quando a conexão voltar.');
+  }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='estoque' ? 'Estoque' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
@@ -670,6 +814,7 @@ function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" 
 function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
 function iconFuel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 21h10"/><path d="M14 9h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/><path d="M7 7h5"/></svg>`; }
 function iconEstoque(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
+function iconAbastecimento(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
@@ -798,6 +943,314 @@ function PageEstoqueResumo(){
   </div>`;
 }
 
+/* ===================== ABASTECIMENTOS (núcleo do sistema) =====================
+ * Tela, modal e validação sob medida (não usa o motor genérico de
+ * cadastro) porque abastecimento tem regras próprias: funciona offline
+ * (fila local + sincronização), a leitura do medidor só aparece se o
+ * equipamento tiver horímetro/hodômetro, e o rateio exige talhão/área
+ * OU centro de custo. Reaproveita CADASTROS.abastecimentos.fields só
+ * para montar a linha (camelCase -> snake_case) enviada ao Supabase. */
+function construirLinhaAbastecimento(draft){
+  const linha = {};
+  CADASTROS.abastecimentos.fields.forEach(f=>{ linha[toSnake(f.key)] = draft[f.key] ?? null; });
+  return linha;
+}
+function maiorLeituraConhecida(equipamentoId, ignorarEditId){
+  const doServidor = state.abastecimentos
+    .filter(a=>a.equipamentoId===equipamentoId && a.id!==ignorarEditId)
+    .map(a=>Number(a.leituraMedidor)).filter(n=>!isNaN(n));
+  const daFila = state.filaAbastecimentos
+    .filter(a=>a.equipamentoId===equipamentoId)
+    .map(a=>Number(a.leituraMedidor)).filter(n=>!isNaN(n));
+  const todas = doServidor.concat(daFila);
+  return todas.length ? Math.max(...todas) : null;
+}
+function statusAbastecimentoPill(a){
+  if(a._origem==='servidor') return '<span class="pill pill-ok">Sincronizado</span>';
+  if(a.erroSincronizacao) return `<span class="pill pill-alerta" title="${a.erroSincronizacao}">Erro ao sincronizar</span>`;
+  return '<span class="pill pill-warn">Pendente</span>';
+}
+function PageAbastecimentos(){
+  const podeEditar = temPermissao('abastecimento','editar');
+  const pendentes = state.filaAbastecimentos.length;
+  const comErro = state.filaAbastecimentos.filter(a=>a.erroSincronizacao).length;
+
+  const linhasServidor = state.abastecimentos.map(a=>({...a, _origem:'servidor'}));
+  const linhasFila = state.filaAbastecimentos.map(a=>({...a, _origem:'fila'}));
+  const linhas = [...linhasFila, ...linhasServidor].sort((a,b)=> (b.dataHora||'').localeCompare(a.dataHora||''));
+
+  return `
+  <div class="toolbar">
+    <span class="hint">
+      ${linhas.length} registro(s)
+      ${pendentes>0 ? ` · <strong>${pendentes} pendente(s) de sincronização</strong>${comErro>0?` (${comErro} com erro)`:''}` : ''}
+      ${(typeof navigator!=='undefined' && navigator.onLine===false) ? ' · <span class="pill pill-warn">Offline</span>' : ''}
+    </span>
+    <div style="display:flex; gap:8px;">
+      ${pendentes>0 ? `<button class="btn btn-ghost btn-sm" data-sincronizar-fila="1" ${state.sincronizando?'disabled':''}>${state.sincronizando?'Sincronizando...':'Sincronizar agora'}</button>` : ''}
+      ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-abastecimento="1">+ Novo abastecimento</button>` : ''}
+    </div>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${linhas.length===0 ? Empty('Nenhum abastecimento registrado','Registre o primeiro abastecimento — funciona mesmo sem internet.') : `
+    <table>
+      <thead><tr>
+        <th>Data/Hora</th><th>Tanque</th><th>Equipamento</th><th>Operador</th><th>Volume</th><th>Leitura</th><th>Rateio</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${linhas.map(a=>`
+          <tr>
+            <td class="mono">${fmtDataHora(a.dataHora)}</td>
+            <td>${fkNome('tanques', a.tanqueId)}</td>
+            <td>${fkNome('equipamentos', a.equipamentoId)}</td>
+            <td>${fkNome('operadores', a.operadorId)}</td>
+            <td class="mono">${fmtInt(a.volumeLitros)} L</td>
+            <td class="mono">${a.leituraMedidor!=null && a.leituraMedidor!=='' ? fmt(a.leituraMedidor,1) : '—'}</td>
+            <td>${a.talhaoAreaId ? fkNome('talhoesAreas', a.talhaoAreaId) : (a.centroCustoId ? fkNome('centrosCusto', a.centroCustoId) : '—')}</td>
+            <td>${statusAbastecimentoPill(a)}</td>
+            <td style="display:flex; gap:6px;">
+              ${a._origem==='servidor' && podeEditar ? `
+                <button class="btn-ghost btn-sm" data-edit-abastecimento="${a.id}">Editar</button>
+                <button class="btn-danger-ghost" data-del-abastecimento="${a.id}">Excluir</button>
+              ` : ''}
+              ${a._origem==='fila' ? `<button class="btn-danger-ghost" data-del-fila="${a.clientUuid}">Remover da fila</button>` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function abrirNovoAbastecimento(){
+  editDraft = {
+    tanqueId: state.tanques.find(t=>t.ativo!==false)?.id ?? '',
+    equipamentoId: state.equipamentos.find(e=>e.ativo!==false)?.id ?? '',
+    operadorId: state.operadores.find(o=>o.ativo!==false)?.id ?? '',
+    dataHora: agoraDatetimeLocal(),
+    volumeLitros: '', leituraMedidor: '',
+    talhaoAreaId: '', centroCustoId: '', operacaoId: '',
+    observacao: '',
+  };
+  state.abastecimentoError = '';
+  state.modal = {type:'abastecimento'};
+}
+function abrirEditarAbastecimento(id){
+  const item = state.abastecimentos.find(a=>a.id===id);
+  if(!item) return;
+  editDraft = { ...item, dataHora: isoParaDatetimeLocal(item.dataHora), _editId: item.id };
+  state.abastecimentoError = '';
+  state.modal = {type:'abastecimento'};
+}
+async function excluirAbastecimento(id){
+  if(!confirm('Excluir este abastecimento? Essa ação não pode ser desfeita.')) return;
+  const { error } = await db.from('abastecimentos').delete().eq('id', id);
+  if(error){ alert('Não foi possível excluir: ' + mensagemErroSupabase(error)); return; }
+  await loadAll();
+}
+async function excluirDaFila(clientUuid){
+  if(!confirm('Remover este abastecimento pendente da fila local? Ele não será enviado.')) return;
+  await idbExcluir(clientUuid);
+  await atualizarFilaNaTela();
+}
+async function salvarAbastecimento(){
+  const d = editDraft;
+  const tanqueId = Number(document.getElementById('f-ab-tanque').value) || null;
+  const equipamentoId = Number(document.getElementById('f-ab-equipamento').value) || null;
+  const operadorId = Number(document.getElementById('f-ab-operador').value) || null;
+  const dataHoraLocal = document.getElementById('f-ab-data-hora').value;
+  const volumeLitros = Number(document.getElementById('f-ab-volume').value) || 0;
+  const leituraRaw = document.getElementById('f-ab-leitura').value;
+  const talhaoAreaId = Number(document.getElementById('f-ab-talhao').value) || null;
+  const centroCustoId = Number(document.getElementById('f-ab-centro-custo').value) || null;
+  const operacaoId = Number(document.getElementById('f-ab-operacao').value) || null;
+  const observacao = document.getElementById('f-ab-observacao').value || null;
+  const equipamento = state.equipamentos.find(e=>e.id===equipamentoId);
+  const leituraMedidor = leituraRaw!=='' ? Number(leituraRaw) : null;
+
+  // guarda o que já foi digitado no editDraft antes de validar: se der
+  // erro, o render() do estado de erro reconstrói o modal a partir do
+  // editDraft, e sem isso o formulário voltaria em branco pro usuário.
+  Object.assign(d, {
+    tanqueId, equipamentoId, operadorId, dataHora: dataHoraLocal,
+    volumeLitros, leituraMedidor: leituraRaw, talhaoAreaId, centroCustoId, operacaoId, observacao,
+  });
+
+  let erro = '';
+  if(!tanqueId) erro = erro || 'Selecione o tanque/comboio de origem.';
+  if(!equipamentoId) erro = erro || 'Selecione o equipamento/veículo abastecido.';
+  if(!operadorId) erro = erro || 'Selecione o operador.';
+  if(!dataHoraLocal) erro = erro || 'Informe a data/hora do abastecimento.';
+  if(!volumeLitros || volumeLitros<=0) erro = erro || 'Informe um volume abastecido maior que zero.';
+  if(!talhaoAreaId && !centroCustoId) erro = erro || 'Selecione um talhão/área ou um centro de custo para o rateio.';
+  if(equipamento && equipamento.tipoMedidor!=='nenhum' && leituraMedidor===null){
+    erro = erro || `Informe a leitura do ${equipamento.tipoMedidor==='horimetro'?'horímetro':'hodômetro'} deste equipamento.`;
+  }
+  if(leituraMedidor!==null){
+    const maiorConhecida = maiorLeituraConhecida(equipamentoId, d._editId);
+    if(maiorConhecida!==null && leituraMedidor < maiorConhecida){
+      erro = erro || `A leitura informada (${fmt(leituraMedidor,1)}) é menor que a última leitura conhecida deste equipamento (${fmt(maiorConhecida,1)}). Confira o valor.`;
+    }
+  }
+  if(erro){ state.abastecimentoError = erro; render(); return; }
+
+  const draft = {
+    fazendaId: state.tanques.find(t=>t.id===tanqueId)?.fazendaId || null,
+    tanqueId, equipamentoId, operadorId,
+    dataHora: new Date(dataHoraLocal).toISOString(),
+    volumeLitros, leituraMedidor,
+    talhaoAreaId, centroCustoId, operacaoId, observacao,
+  };
+
+  state.abastecimentoLoading = true; state.abastecimentoError = ''; render();
+
+  if(d._editId){
+    // edição de um registro já sincronizado — sempre online, sem fila
+    const { error } = await db.from('abastecimentos').update(construirLinhaAbastecimento(draft)).eq('id', d._editId);
+    state.abastecimentoLoading = false;
+    if(error){ state.abastecimentoError = mensagemErroSupabase(error); render(); return; }
+    state.modal = null; editDraft = null;
+    await loadAll();
+    return;
+  }
+
+  // registro novo — tenta salvar online; se não der (sem sinal ou rede
+  // instável), cai para a fila local e sincroniza sozinho depois.
+  const clientUuid = crypto.randomUUID();
+  if(navigator.onLine){
+    try{
+      const { error } = await db.from('abastecimentos').insert({ ...construirLinhaAbastecimento(draft), client_uuid: clientUuid });
+      if(!error){
+        state.abastecimentoLoading = false;
+        state.modal = null; editDraft = null;
+        await loadAll();
+        return;
+      }
+      if(error.code){
+        // erro de validação de verdade (ex: leitura retrocedendo) — não é falta de conexão
+        state.abastecimentoLoading = false;
+        state.abastecimentoError = mensagemErroSupabase(error);
+        render();
+        return;
+      }
+      // sem .code: parece falha de rede — segue para a fila offline abaixo
+    }catch(e){ /* falha de rede (fetch) — segue para a fila offline abaixo */ }
+  }
+
+  await idbSalvar({ clientUuid, ...draft });
+  state.abastecimentoLoading = false;
+  state.modal = null; editDraft = null;
+  await atualizarFilaNaTela();
+  alert('Sem conexão no momento — o abastecimento foi salvo neste aparelho e será sincronizado automaticamente quando a internet voltar.');
+}
+function atualizarCamposDependentesAbastecimento(){
+  const equipEl = document.getElementById('f-ab-equipamento');
+  const campo = document.getElementById('campo-leitura-medidor');
+  const label = document.getElementById('label-leitura-medidor');
+  if(!equipEl || !campo || !label) return;
+  const equipamento = state.equipamentos.find(e=>e.id===Number(equipEl.value));
+  if(equipamento && equipamento.tipoMedidor!=='nenhum'){
+    campo.style.display = '';
+    label.textContent = equipamento.tipoMedidor==='horimetro' ? 'Leitura do horímetro (h)' : 'Leitura do hodômetro (km)';
+  } else {
+    campo.style.display = 'none';
+  }
+  atualizarAlertaCapacidadeTanque();
+}
+function atualizarAlertaCapacidadeTanque(){
+  const equipEl = document.getElementById('f-ab-equipamento');
+  const volumeEl = document.getElementById('f-ab-volume');
+  const alertaEl = document.getElementById('alerta-capacidade-tanque');
+  if(!equipEl || !volumeEl || !alertaEl) return;
+  const equipamento = state.equipamentos.find(e=>e.id===Number(equipEl.value));
+  const volume = Number(volumeEl.value) || 0;
+  if(equipamento && equipamento.capacidadeTanqueLitros && volume > Number(equipamento.capacidadeTanqueLitros)){
+    alertaEl.innerHTML = `<div class="login-error" style="margin:0;">⚠ Volume acima da capacidade do tanque deste equipamento (${fmtInt(equipamento.capacidadeTanqueLitros)} L). Confira antes de salvar.</div>`;
+  } else {
+    alertaEl.innerHTML = '';
+  }
+}
+function ModalAbastecimento(){
+  const d = editDraft;
+  const tanques = state.tanques.filter(t=>t.ativo!==false);
+  const equipamentos = state.equipamentos.filter(e=>e.ativo!==false);
+  const operadores = state.operadores.filter(o=>o.ativo!==false);
+  const talhoes = state.talhoesAreas.filter(t=>t.ativo!==false);
+  const centros = state.centrosCusto.filter(c=>c.ativo!==false);
+  const operacoes = state.operacoes.filter(o=>o.ativo!==false);
+  const equipamentoAtual = state.equipamentos.find(e=>e.id===Number(d.equipamentoId));
+  const precisaLeitura = equipamentoAtual && equipamentoAtual.tipoMedidor!=='nenhum';
+  const labelLeitura = equipamentoAtual?.tipoMedidor==='horimetro' ? 'Leitura do horímetro (h)' : equipamentoAtual?.tipoMedidor==='hodometro' ? 'Leitura do hodômetro (km)' : 'Leitura do medidor';
+  const tanqueAtual = state.tanques.find(t=>t.id===Number(d.tanqueId));
+
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar':'Novo'} abastecimento</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${state.abastecimentoError ? `<div class="login-error">${state.abastecimentoError}</div>` : ''}
+        <div class="field-row">
+          <div class="field"><label>Tanque / Comboio de origem</label>
+            <select id="f-ab-tanque" data-ab-tanque-change="1">
+              ${tanques.length===0?'<option value="">—</option>':''}
+              ${tanques.map(t=>`<option value="${t.id}" ${String(d.tanqueId)===String(t.id)?'selected':''}>${t.nome}</option>`).join('')}
+            </select>
+            ${tanqueAtual ? `<span class="hint">${tanqueAtual.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanqueAtual.produtoId)}</span>` : ''}
+          </div>
+          <div class="field"><label>Equipamento / Veículo</label>
+            <select id="f-ab-equipamento" data-ab-equipamento-change="1">
+              ${equipamentos.length===0?'<option value="">—</option>':''}
+              ${equipamentos.map(e=>`<option value="${e.id}" ${String(d.equipamentoId)===String(e.id)?'selected':''}>${e.nome}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Operador</label>
+            <select id="f-ab-operador">
+              ${operadores.length===0?'<option value="">—</option>':''}
+              ${operadores.map(o=>`<option value="${o.id}" ${String(d.operadorId)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Data/Hora</label><input type="datetime-local" id="f-ab-data-hora" value="${d.dataHora}"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Volume abastecido (L)</label><input type="number" step="0.01" id="f-ab-volume" value="${d.volumeLitros}" data-ab-volume-change="1"/></div>
+          <div class="field" id="campo-leitura-medidor" style="${precisaLeitura?'':'display:none;'}">
+            <label id="label-leitura-medidor">${labelLeitura}</label>
+            <input type="number" step="0.01" id="f-ab-leitura" value="${d.leituraMedidor??''}"/>
+          </div>
+        </div>
+        <div id="alerta-capacidade-tanque"></div>
+        <p class="hint">Rateio — escolha o talhão/área ou o centro de custo (pelo menos um dos dois).</p>
+        <div class="field-row">
+          <div class="field"><label>Talhão / Área</label>
+            <select id="f-ab-talhao">
+              <option value="">—</option>
+              ${talhoes.map(t=>`<option value="${t.id}" ${String(d.talhaoAreaId)===String(t.id)?'selected':''}>${t.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Centro de Custo</label>
+            <select id="f-ab-centro-custo">
+              <option value="">—</option>
+              ${centros.map(c=>`<option value="${c.id}" ${String(d.centroCustoId)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Operação</label>
+          <select id="f-ab-operacao">
+            <option value="">—</option>
+            ${operacoes.map(o=>`<option value="${o.id}" ${String(d.operacaoId)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Observação</label><textarea id="f-ab-observacao" rows="2">${d.observacao||''}</textarea></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save-abastecimento="1" ${state.abastecimentoLoading?'disabled':''}>${state.abastecimentoLoading?'Salvando...':'Salvar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== MODAL GENÉRICO DE CADASTRO ===================== */
 function novoCadastroDraft(key){
   const cfg = CADASTROS[key];
@@ -922,7 +1375,7 @@ async function salvarCadastro(key){
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros'],
   ['estoque','Estoque'],
-  // Fases futuras adicionam aqui: ['abastecimento','Abastecimento'], ...
+  ['abastecimento','Abastecimento'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
@@ -1037,6 +1490,7 @@ function ModalTrocarSenha(){
 }
 function Modal(){
   if(state.modal.type==='cadastro') return ModalCadastro();
+  if(state.modal.type==='abastecimento') return ModalAbastecimento();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
@@ -1126,6 +1580,38 @@ function attachEvents(){
   if(saveCadastroBtn){
     saveCadastroBtn.onclick = ()=> salvarCadastro(saveCadastroBtn.dataset.saveCadastro);
   }
+  document.querySelectorAll('[data-novo-abastecimento]').forEach(el=>{
+    el.onclick = ()=>{ abrirNovoAbastecimento(); render(); };
+  });
+  document.querySelectorAll('[data-edit-abastecimento]').forEach(el=>{
+    el.onclick = ()=>{ abrirEditarAbastecimento(Number(el.dataset.editAbastecimento)); render(); };
+  });
+  document.querySelectorAll('[data-del-abastecimento]').forEach(el=>{
+    el.onclick = async ()=>{ await excluirAbastecimento(Number(el.dataset.delAbastecimento)); };
+  });
+  document.querySelectorAll('[data-del-fila]').forEach(el=>{
+    el.onclick = async ()=>{ await excluirDaFila(el.dataset.delFila); };
+  });
+  document.querySelectorAll('[data-sincronizar-fila]').forEach(el=>{
+    el.onclick = ()=> sincronizarFila();
+  });
+  const saveAbastecimentoBtn = document.querySelector('[data-save-abastecimento]');
+  if(saveAbastecimentoBtn){
+    saveAbastecimentoBtn.onclick = ()=> salvarAbastecimento();
+  }
+  document.querySelectorAll('[data-ab-equipamento-change]').forEach(el=>{
+    el.onchange = ()=> atualizarCamposDependentesAbastecimento();
+  });
+  document.querySelectorAll('[data-ab-volume-change]').forEach(el=>{
+    el.oninput = ()=> atualizarAlertaCapacidadeTanque();
+  });
+  document.querySelectorAll('[data-ab-tanque-change]').forEach(el=>{
+    el.onchange = (e)=>{
+      const tanque = state.tanques.find(t=>t.id===Number(e.target.value));
+      const hintEl = e.target.parentElement.querySelector('.hint');
+      if(tanque && hintEl) hintEl.textContent = `${tanque.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanque.produtoId)}`;
+    };
+  });
   document.querySelectorAll('[data-close], [data-close-overlay]').forEach(el=>{
     el.onclick = (e)=>{ if(e.target.dataset.stop) return; state.modal = null; editDraft = null; render(); };
   });
