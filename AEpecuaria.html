@@ -360,6 +360,17 @@
   .painel-tooltip .v{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;}
   .painel-tooltip .l{font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px;}
 
+  /* gráfico de ganho de peso (Pesagem) */
+  .weight-chart{display:block; width:100%; height:auto;}
+  .weight-grid{stroke:var(--cinza-claro); stroke-width:1;}
+  .weight-axis-label{font-family:'IBM Plex Mono',monospace; font-size:10px; fill:var(--cinza);}
+  .weight-line{fill:none; stroke:var(--verde-medio); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;}
+  .weight-area{fill:url(#pesoAreaGrad);}
+  .weight-dot{fill:var(--branco); stroke:var(--verde-medio); stroke-width:2.5;}
+  .weight-dot.last{fill:var(--verde-medio);}
+  .weight-dot-hit{fill:transparent; cursor:pointer;}
+  .lote-select{font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; padding:8px 12px; border:1px solid var(--cinza-claro); border-radius:8px; background:var(--branco); color:var(--verde-escuro); cursor:pointer;}
+
   /* ---------- DEMONSTRATIVO DESPESA x RECEITA ---------- */
   .demonstrativo-bars{display:flex; flex-direction:column; gap:14px; margin-bottom:18px;}
   .demo-bar-row{display:grid; grid-template-columns:70px 1fr 120px; align-items:center; gap:12px;}
@@ -472,6 +483,8 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
+function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||''}; }
+function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, area:r.area||null, diluirPorLote:r.diluir_por_lote!==false}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, area:c.area||null, diluir_por_lote:c.diluirPorLote!==false}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
@@ -483,7 +496,7 @@ function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, cfgFaz, prt] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, cfgFaz, prt, pesag] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -500,6 +513,7 @@ async function loadAll(){
     db.from('profiles').select('*').order('nome'),
     db.from('config_fazenda').select('*').eq('id', 1),
     db.from('partos').select('*').order('id'),
+    db.from('pesagens').select('*').order('id'),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -511,6 +525,7 @@ async function loadAll(){
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
   state.partos = (prt.data||[]).map(rowToParto);
+  state.pesagens = (pesag.data||[]).map(rowToPesagem);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   state.investimentos = (inv.data||[]).map(rowToInvestimento);
   state.receitas = (rec.data||[]).map(rowToReceita);
@@ -533,6 +548,8 @@ const state = {
   pasto: [],
   reproducao: [],
   partos: [],
+  pesagens: [],
+  pesagemLoteSelecionado: {},
   receitas: [],
   precosArroba: [],
   metaMargemPct: null,
@@ -597,6 +614,9 @@ function render(){
         ${state.page==='racaoCria' ? PageSaidaRacao('reproducao') : ''}
         ${state.page==='reproducao' ? PageReproducao() : ''}
         ${state.page==='reproducaoPartos' ? PagePartos() : ''}
+        ${state.page==='pesagemConfinamento' ? PagePesagem('confinamento') : ''}
+        ${state.page==='pesagemPasto' ? PagePesagem('pasto') : ''}
+        ${state.page==='pesagemReproducao' ? PagePesagem('reproducao') : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
@@ -617,6 +637,9 @@ function render(){
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'financeiro', resultados:'resultados'};
+// tipo (mesma chave usada por loteTipo()) -> rótulo de tela e módulo de permissão
+const TIPO_PESAGEM_LABEL = {confinamento:'Confinamento', pasto:'Pasto', reproducao:'Cria'};
+const TIPO_MODULO = {confinamento:'confinamento', pasto:'pasto', reproducao:'cria'};
 const ACAO_MODULOS = {
   ingrediente:['insumos'], movimento:['insumos'],
   dieta:['dietas'],
@@ -624,6 +647,7 @@ const ACAO_MODULOS = {
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'], parto:['cria'],
+  pesagem:['confinamento','pasto','cria'],
   custoFixo:['financeiro'], precoArroba:['financeiro'],
   receita:['resultados'], metaMargem:['resultados'], investimento:['resultados'],
 };
@@ -801,16 +825,19 @@ const GROUPS = {
     {key:'lotes', label:'Lotes'},
     {key:'racao', label:'Saída de Ração'},
     {key:'cocho', label:'Leitura de Cocho'},
+    {key:'pesagemConfinamento', label:'Pesagem'},
   ]},
   pasto: {label:'Pasto', icon:iconPasto(), pages:[
     {key:'lotesPasto', label:'Lotes'},
     {key:'pasto', label:'Saída de Ração'},
+    {key:'pesagemPasto', label:'Pesagem'},
   ]},
   reproducao: {label:'Cria', icon:iconReproducao(), pages:[
     {key:'lotesReproducao', label:'Lotes'},
     {key:'racaoCria', label:'Saída de Ração'},
     {key:'reproducao', label:'Inseminação'},
     {key:'reproducaoPartos', label:'Partos'},
+    {key:'pesagemReproducao', label:'Pesagem'},
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
@@ -908,6 +935,9 @@ function Header(){
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducao:{eyebrow:'Movimentação', title:'Inseminação', desc:'Registre os lançamentos de sêmen e outros insumos usados na reprodução, por lote e data.'},
     reproducaoPartos:{eyebrow:'Movimentação', title:'Partos', desc:'Registre os partos por lote, com o número da mãe e o sexo do bezerro.'},
+    pesagemConfinamento:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Confinamento, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
+    pesagemPasto:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Pasto, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
+    pesagemReproducao:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Cria, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês da operação.'},
     financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
     financeiroCustosFixos:{eyebrow:'Gestão', title:'Despesas', desc:'Despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Pasto ou Cria.'},
@@ -995,6 +1025,16 @@ function openNewModal(type){
     }
     editDraft = {loteId: lotesReprod[0]?.id||'', data:new Date().toISOString().slice(0,10), numeroMae:'', sexoBezerro:'macho'};
     state.modal = {type:'parto'};
+  } else if(type==='pesagem'){
+    const grupoAtual = currentGroupKey();
+    const tipo = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'reproducao' : 'confinamento';
+    const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo);
+    if(lotesTipo.length===0){
+      alert(`Cadastre ao menos um lote com destino ${TIPO_PESAGEM_LABEL[tipo]} (aba Lotes) antes de registrar uma pesagem.`);
+      return false;
+    }
+    editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:''};
+    state.modal = {type:'pesagem'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', area:'', diluirPorLote:true};
     state.modal = {type:'custoFixo'};
@@ -1030,6 +1070,7 @@ function FabMenu(){
     {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'parto', label:'Novo parto'},
+    {type:'pesagem', label:'Nova pesagem'},
     {type:'custoFixo', label:'Nova despesa'},
     {type:'investimento', label:'Novo investimento'},
     {type:'receita', label:'Nova receita'},
@@ -1504,6 +1545,142 @@ function PagePartos(){
   </div>`;
 }
 
+/* ===================== PÁGINA: PESAGEM ===================== */
+// Gráfico de ganho de peso de um lote: linha + área, com ponto final
+// destacado e tooltip ao passar o mouse — mesma técnica de path SVG
+// calculado em JS já usada no painel de resultados (donut chart).
+function GraficoPeso(pesagens, numeroAnimais){
+  if(pesagens.length===0){
+    return Empty('Nenhuma pesagem registrada para este lote','Registre a primeira pesagem pra começar a acompanhar o ganho de peso.');
+  }
+  const pesos = pesagens.map(p=>Number(p.pesoMedioKg));
+  const minPeso = Math.min(...pesos), maxPeso = Math.max(...pesos);
+  const pad = Math.max(5, (maxPeso-minPeso)*0.15);
+  const yMin = Math.max(0, minPeso-pad), yMax = maxPeso+pad;
+  const W=660, H=260, padL=44, padR=20, padT=20, padB=30;
+  const innerW = W-padL-padR, innerH = H-padT-padB;
+  const n = pesagens.length;
+  const xs = pesagens.map((_,i)=> padL + (n===1 ? innerW/2 : i*(innerW/(n-1))));
+  const ys = pesagens.map(p=> padT + (yMax-Number(p.pesoMedioKg))/((yMax-yMin)||1)*innerH);
+
+  const linePath = 'M ' + xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(' L ');
+  const areaPath = linePath + ` L ${xs[n-1].toFixed(1)} ${(padT+innerH).toFixed(1)} L ${xs[0].toFixed(1)} ${(padT+innerH).toFixed(1)} Z`;
+
+  const niveis = 4;
+  const gridLines = Array.from({length:niveis}, (_,i)=>{
+    const frac = i/(niveis-1);
+    const y = padT + frac*innerH;
+    const valor = yMax - frac*(yMax-yMin);
+    return `<line class="weight-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}"></line><text class="weight-axis-label" x="6" y="${(y+4).toFixed(1)}">${Math.round(valor)}</text>`;
+  }).join('');
+
+  const dots = pesagens.map((p,i)=>{
+    const gmd = i>0 ? gmdEntre(Number(pesagens[i-1].pesoMedioKg), Number(p.pesoMedioKg), pesagens[i-1].data, p.data) : null;
+    const dataFmt = p.data.split('-').reverse().join('/');
+    const tipLabel = gmd!==null ? `${dataFmt} · GMD ${gmd>=0?'+':''}${fmt(gmd,2)} kg/dia` : `${dataFmt} · pesagem de entrada`;
+    return `
+      <circle cx="${xs[i]}" cy="${ys[i]}" r="${i===n-1?5:4}" class="weight-dot${i===n-1?' last':''}"></circle>
+      <circle cx="${xs[i]}" cy="${ys[i]}" r="14" class="weight-dot-hit" data-peso-idx="p${i}" data-tip-valor="${fmt(Number(p.pesoMedioKg),1)} kg" data-tip-label="${tipLabel}"></circle>
+    `;
+  }).join('');
+
+  const xLabels = pesagens.map((p,i)=>{
+    const anchor = i===0?'start':(i===n-1?'end':'middle');
+    return `<text class="weight-axis-label" x="${xs[i]}" y="${H-8}" text-anchor="${anchor}">${p.data.split('-').reverse().slice(0,2).join('/')}</text>`;
+  }).join('');
+
+  const primeira = pesagens[0], ultima = pesagens[n-1];
+  const ganhoTotal = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
+  const gmdMedio = gmdEntre(Number(primeira.pesoMedioKg), Number(ultima.pesoMedioKg), primeira.data, ultima.data);
+  const arrobaPorAnimal = ganhoTotal/KG_POR_ARROBA;
+  const arrobaTotal = arrobaPorAnimal * Number(numeroAnimais||0);
+
+  return `
+    <div class="stat-row" style="margin-bottom:18px;">
+      <div class="stat-card"><div class="stat-label">Peso atual (méd.)</div><div class="stat-value">${fmt(Number(ultima.pesoMedioKg),1)} kg</div><div class="hint">${ultima.data.split('-').reverse().join('/')}</div></div>
+      <div class="stat-card"><div class="stat-label">Ganho no período</div><div class="stat-value">${ganhoTotal>=0?'+':''}${fmt(ganhoTotal,1)} kg</div><div class="hint">desde ${primeira.data.split('-').reverse().join('/')}</div></div>
+      <div class="stat-card"><div class="stat-label">GMD médio</div><div class="stat-value">${gmdMedio!==null?fmt(gmdMedio,3)+' kg/dia':'—'}</div><div class="hint">ganho médio diário</div></div>
+      <div class="stat-card"><div class="stat-label">@ produzidas</div><div class="stat-value">${fmt(arrobaTotal,1)} @</div><div class="hint">${fmt(arrobaPorAnimal,2)} @/animal · ${fmtInt(numeroAnimais||0)} animais</div></div>
+    </div>
+    <div style="position:relative;">
+      <svg class="weight-chart" viewBox="0 0 ${W} ${H}">
+        <defs><linearGradient id="pesoAreaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1D5DA8" stop-opacity="0.16"/>
+          <stop offset="100%" stop-color="#1D5DA8" stop-opacity="0"/>
+        </linearGradient></defs>
+        ${gridLines}
+        <path d="${areaPath}" class="weight-area"></path>
+        <path d="${linePath}" class="weight-line"></path>
+        ${dots}
+        ${xLabels}
+      </svg>
+      <div id="peso-tooltip" class="painel-tooltip"></div>
+    </div>
+    <p class="hint" style="margin-top:8px;">Peso médio por animal (kg), a cada pesagem lançada. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho.</p>
+  `;
+}
+
+function PagePesagem(tipo){
+  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo);
+  if(lotesTipo.length===0){
+    return Empty('Nenhum lote cadastrado', `Cadastre um lote com destino ${TIPO_PESAGEM_LABEL[tipo]} (aba Lotes) antes de registrar pesagens.`);
+  }
+  let loteSelId = state.pesagemLoteSelecionado[tipo];
+  if(!loteSelId || !lotesTipo.some(l=>l.id===loteSelId)) loteSelId = lotesTipo[0].id;
+  const loteSel = lotesTipo.find(l=>l.id===loteSelId);
+  const pesagensLoteSel = pesagensDoLote(loteSelId);
+
+  const pesagensTipo = state.pesagens.filter(p=>{
+    const lote = state.lotes.find(l=>l.id===p.loteId);
+    return lote && loteTipo(lote)===tipo;
+  }).sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+
+  return `
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-pad">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
+        <div>
+          <p class="eyebrow" style="margin:0 0 2px;">Ganho de peso</p>
+          <div style="font-size:12px; color:var(--cinza);">${loteSel.nome} · ${fmtInt(loteSel.numeroAnimais)} animais</div>
+        </div>
+        <select class="lote-select" data-peso-lote-select="${tipo}">
+          ${lotesTipo.map(l=>`<option value="${l.id}" ${l.id===loteSelId?'selected':''}>${l.nome}</option>`).join('')}
+        </select>
+      </div>
+      ${GraficoPeso(pesagensLoteSel, loteSel.numeroAnimais)}
+    </div>
+  </div>
+
+  <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
+  <div class="card">
+    ${pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote com data, peso médio e uma observação opcional.') : `
+    <table>
+      <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Observação</th><th></th></tr></thead>
+      <tbody>
+        ${pesagensTipo.map(p=>{
+          const lote = state.lotes.find(l=>l.id===p.loteId);
+          const historico = lote ? pesagensDoLote(lote.id) : [];
+          const idx = historico.findIndex(h=>h.id===p.id);
+          const gmd = idx>0 ? gmdEntre(Number(historico[idx-1].pesoMedioKg), Number(p.pesoMedioKg), historico[idx-1].data, p.data) : null;
+          return `<tr>
+            <td><strong>${lote?lote.nome:'—'}</strong></td>
+            <td class="mono">${p.data.split('-').reverse().join('/')}</td>
+            <td class="mono">${fmt(Number(p.pesoMedioKg),1)} kg</td>
+            <td class="mono">${gmd!==null ? (gmd>=0?'+':'')+fmt(gmd,2)+' kg/dia' : '—'}</td>
+            <td>${p.observacao||'—'}</td>
+            <td style="display:flex; gap:6px;">
+              ${temPermissao(TIPO_MODULO[tipo],'editar') ? `
+              <button class="btn-ghost btn-sm" data-edit-pesagem="${p.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-pesagem="${p.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
 /* ===================== PÁGINA: FINANCEIRO ===================== */
 function custoSaidaRacao(s){
   const dieta = state.dietas.find(d=>d.id===s.dietaId);
@@ -1732,6 +1909,61 @@ function ComparativoMensal(meses){
 // tipo do lote de destino de cada lançamento.
 function racaoLoteTipo(s){ const lote = state.lotes.find(l=>l.id===s.loteId); return lote ? loteTipo(lote) : null; }
 
+// 1 arroba ≈ 30 kg de peso vivo ganho (padrão de mercado — a arroba em si é
+// uma medida de carcaça de 15 kg, mas o rendimento de carcaça de boi gordo
+// gira em torno de 50%, então 30 kg de peso vivo vira ~1 @ de carcaça).
+const KG_POR_ARROBA = 30;
+
+function pesagensDoLote(loteId){
+  return state.pesagens.filter(p=>p.loteId===loteId).sort((a,b)=> a.data.localeCompare(b.data) || a.id-b.id);
+}
+// Ganho de peso (kg/dia) entre duas pesagens consecutivas do mesmo lote.
+function gmdEntre(pesoAnterior, pesoAtual, dataAnterior, dataAtual){
+  const dias = (new Date(dataAtual) - new Date(dataAnterior)) / 86400000;
+  return dias>0 ? (pesoAtual-pesoAnterior)/dias : null;
+}
+// Peso do lote na pesagem mais recente até (incluirIgual=true) ou antes de
+// (incluirIgual=false) uma data — usado pra "ganho de peso dentro do mês",
+// que precisa do peso mais próximo de antes do mês começar.
+function pesoNaData(loteId, dataLimite, incluirIgual){
+  let resultado = null;
+  pesagensDoLote(loteId).forEach(p=>{
+    if(incluirIgual ? p.data<=dataLimite : p.data<dataLimite) resultado = p;
+  });
+  return resultado;
+}
+// Ganho de peso do lote dentro de um mês: usa a pesagem mais recente até o
+// fim do mês menos a pesagem mais recente antes do mês começar; sem pesagem
+// anterior ao mês, cai pra primeira x última pesagem dentro do próprio mês
+// (se houver ao menos duas). Sem dado suficiente, retorna null.
+function ganhoPesoNoMes(loteId, mesStr){
+  const ano = Number(mesStr.slice(0,4)), mes = Number(mesStr.slice(5,7));
+  const fimMes = new Date(ano, mes, 0).toISOString().slice(0,10);
+  const inicioMes = `${mesStr}-01`;
+  const final = pesoNaData(loteId, fimMes, true);
+  if(!final) return null;
+  let inicial = pesoNaData(loteId, inicioMes, false);
+  if(!inicial){
+    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr)).sort((a,b)=>a.data.localeCompare(b.data));
+    if(doMes.length<2) return null;
+    inicial = doMes[0];
+  }
+  if(inicial.data>=final.data) return null;
+  return {ganhoKg: Number(final.pesoMedioKg)-Number(inicial.pesoMedioKg), dataInicial:inicial.data, dataFinal:final.data};
+}
+// @ produzidas por um lote num mês = ganho de peso (kg) ÷ 30 × nº de animais.
+function arrobasProduzidasNoMes(loteId, mesStr, numeroAnimais){
+  const ganho = ganhoPesoNoMes(loteId, mesStr);
+  if(!ganho) return null;
+  return (ganho.ganhoKg/KG_POR_ARROBA) * Number(numeroAnimais||0);
+}
+function arrobasProduzidasFazendaNoMes(mesStr){
+  return state.lotes.filter(l=>!l.dataFim).reduce((a,l)=>{
+    const arrobas = arrobasProduzidasNoMes(l.id, mesStr, l.numeroAnimais);
+    return a + (arrobas||0);
+  }, 0);
+}
+
 function precoArrobaAtual(){
   if(state.precosArroba.length===0) return null;
   return [...state.precosArroba].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
@@ -1917,10 +2149,13 @@ function dadosFinanceiro(){
   const resultadoMes = receitaMes - totalMes;
   const margemAtualPct = receitaMes>0 ? (resultadoMes/receitaMes*100) : null;
 
+  const arrobasMes = arrobasProduzidasFazendaNoMes(mes);
+  const custoPorArrobaMes = arrobasMes>0 ? totalMes/arrobasMes : null;
+
   return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, fixosDiluiveisMes, totalMes,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
-    totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque};
+    totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes};
 }
 
 /* ---- Financeiro: Resumo ---- */
@@ -1952,8 +2187,9 @@ function PageFinanceiroResumo(){
     <div class="stat-card"><div class="stat-label">Custo variável no mês</div><div class="stat-value">R$ ${fmt(d.variavelMes)}</div></div>
     <div class="stat-card"><div class="stat-label">Custos fixos no mês</div><div class="stat-value">R$ ${fmt(d.fixosMes)}</div></div>
     <div class="stat-card"><div class="stat-label">Total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalMes,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo por @ produzida</div><div class="stat-value">${d.custoPorArrobaMes!==null ? 'R$ '+fmt(d.custoPorArrobaMes,2) : '—'}</div><div class="hint" style="margin-top:3px;">${fmt(d.arrobasMes,1)} @ produzidas na fazenda</div></div>
   </div>
-  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário).</p>
+  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário). "@ produzidas" vem das pesagens lançadas em Confinamento, Pasto e Cria — sem pesagem no mês, aparece "—".</p>
 
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -2030,7 +2266,9 @@ function PageFinanceiroCurral(){
     const fixoAlocado = d.totalAnimais>0 ? d.fixosDiluiveisMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
+    const arrobas = arrobasProduzidasNoMes(l.id, d.mes, l.numeroAnimais);
+    const custoPorArroba = arrobas>0 ? total/arrobas : null;
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
   }).sort((a,b)=> b.total-a.total);
 
   return `
@@ -2061,7 +2299,7 @@ function PageFinanceiroCurral(){
   <div class="card" style="margin-bottom:22px;">
     ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo total do mês de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto+Cria no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto+Cria no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th><th>@ produzidas</th><th>Custo/@</th></tr></thead>
       <tbody>
         ${custosMesPorLote.map(r=>`
           <tr>
@@ -2071,12 +2309,14 @@ function PageFinanceiroCurral(){
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
+            <td class="mono">${r.arrobas!==null ? fmt(r.arrobas,1)+' @' : '—'}</td>
+            <td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 0;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos.</p>`;
+  <p class="hint" style="margin:-14px 0 0;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos. "@ produzidas" vem do ganho de peso do lote no mês (Pesagem) ÷ 30 kg × nº de animais — sem pesagem cadastrada no mês, aparece "—".</p>`;
 }
 
 /* ---- Financeiro: Receitas ---- */
@@ -2336,6 +2576,7 @@ function Modal(){
   if(state.modal.type==='pasto') return ModalPasto();
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
   if(state.modal.type==='parto') return ModalParto();
+  if(state.modal.type==='pesagem') return ModalPesagem();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
   if(state.modal.type==='investimento') return ModalInvestimento();
   if(state.modal.type==='receita') return ModalReceita();
@@ -2685,6 +2926,34 @@ function ModalParto(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="parto">${d._editId?'Salvar alterações':'Salvar parto'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalPesagem(){
+  const d = editDraft;
+  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===d.tipo);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar pesagem':'Nova pesagem'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Lote (${TIPO_PESAGEM_LABEL[d.tipo]})</label>
+          <select id="f-lotepesagem">
+            ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Data</label><input id="f-datapesagem" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesomedio" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
+        </div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obspesagem" rows="2" placeholder="Ex: lote pronto pra abate">${d.observacao||''}</textarea></div>
+        <p class="hint">O peso é a média por animal do lote (não o total). O ganho desde a última pesagem (GMD) e a arroba produzida são calculados automaticamente.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="pesagem">${d._editId?'Salvar alterações':'Salvar pesagem'}</button>
       </div>
     </div>
   </div>`;
@@ -3070,6 +3339,28 @@ function attachEvents(){
       await loadAll();
     };
   });
+  document.querySelectorAll('[data-edit-pesagem]').forEach(el=>{
+    el.onclick = ()=>{
+      const p = state.pesagens.find(x=>x.id===Number(el.dataset.editPesagem));
+      const lote = state.lotes.find(l=>l.id===p.loteId);
+      editDraft = {...p, tipo: lote?loteTipo(lote):'confinamento', _editId: p.id};
+      state.modal = {type:'pesagem'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-pesagem]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delPesagem);
+      await db.from('pesagens').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-peso-lote-select]').forEach(el=>{
+    el.onchange = ()=>{
+      state.pesagemLoteSelecionado[el.dataset.pesoLoteSelect] = Number(el.value);
+      render();
+    };
+  });
   document.querySelectorAll('[data-edit-custofixo]').forEach(el=>{
     el.onclick = ()=>{
       const c = state.custosFixos.find(x=>x.id===Number(el.dataset.editCustofixo));
@@ -3312,6 +3603,19 @@ function attachEvents(){
         } else {
           ({error} = await db.from('partos').insert(row));
         }
+      } else if(type==='pesagem'){
+        const campos = {
+          loteId: Number(document.getElementById('f-lotepesagem').value),
+          data: document.getElementById('f-datapesagem').value,
+          pesoMedioKg: Number(document.getElementById('f-pesomedio').value)||0,
+          observacao: document.getElementById('f-obspesagem').value,
+        };
+        const row = pesagemToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('pesagens').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('pesagens').insert(row));
+        }
       } else if(type==='custoFixo'){
         const data = document.getElementById('f-datacustofixo').value || null;
         const area = document.getElementById('f-areacustofixo').value || null;
@@ -3407,6 +3711,21 @@ function attachEvents(){
       await loadAll();
     };
   }
+
+  // gráfico de ganho de peso (Pesagem): tooltip ao passar o mouse num ponto
+  const pesoTooltip = document.getElementById('peso-tooltip');
+  document.querySelectorAll('[data-peso-idx]').forEach(el=>{
+    el.addEventListener('pointerenter', ()=>{
+      if(pesoTooltip){
+        pesoTooltip.innerHTML = `<div class="v">${el.dataset.tipValor}</div><div class="l">${el.dataset.tipLabel}</div>`;
+        pesoTooltip.style.display = 'block';
+      }
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(pesoTooltip){ pesoTooltip.style.left = (e.clientX+14)+'px'; pesoTooltip.style.top = (e.clientY+14)+'px'; }
+    });
+    el.addEventListener('pointerleave', ()=>{ if(pesoTooltip) pesoTooltip.style.display = 'none'; });
+  });
 
   // painel de resultados: hover sincronizado entre gráfico e legenda
   const tooltip = document.getElementById('painel-tooltip');
