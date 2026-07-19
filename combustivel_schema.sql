@@ -420,3 +420,80 @@ begin
     execute format('create policy "excluir %1$s" on %1$s for delete using (tem_permissao(''estoque'',''editar''));', t);
   end loop;
 end $$;
+
+-- ===================================================================
+-- MIGRAÇÃO FASE 3 — Abastecimentos (núcleo do sistema)
+--
+-- Rode este bloco depois que as Fases 1 e 2 já estiverem no ar.
+--
+-- client_uuid é a chave para o app funcionar offline: o app de campo
+-- gera esse UUID no aparelho no momento do abastecimento (mesmo sem
+-- internet) e guarda o registro numa fila local (IndexedDB). Quando a
+-- conexão volta, o app reenvia via upsert(on_conflict=client_uuid) —
+-- se o mesmo registro já tiver sido sincronizado antes (ex: resposta
+-- perdida numa conexão instável), o upsert não duplica a linha.
+--
+-- talhao_area_id/centro_custo_id: pelo menos um dos dois é obrigatório
+-- (é o destino do rateio). Cultura e safra do abastecimento, quando
+-- aplicável, são inferidas na Fase 5 a partir do talhão (que já carrega
+-- cultura_id) — não duplicamos esses campos aqui.
+--
+-- Antifraude: a leitura do medidor não pode retroceder por equipamento
+-- (checado no banco, não só no app, para valer mesmo em sincronizações
+-- concorrentes de dispositivos diferentes).
+-- ===================================================================
+
+alter table equipamentos add column capacidade_tanque_litros numeric(10,2);
+
+create table abastecimentos (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  client_uuid uuid not null unique,
+  tanque_id bigint not null references tanques(id),
+  equipamento_id bigint not null references equipamentos(id),
+  operador_id bigint not null references operadores(id),
+  data_hora timestamptz not null,
+  volume_litros numeric(12,2) not null check (volume_litros > 0),
+  leitura_medidor numeric(14,2),
+  talhao_area_id bigint references talhoes_areas(id),
+  centro_custo_id bigint references centros_custo(id),
+  operacao_id bigint references operacoes(id),
+  observacao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  constraint abastecimento_precisa_rateio check (talhao_area_id is not null or centro_custo_id is not null)
+);
+create index idx_abastecimentos_tanque on abastecimentos(tanque_id);
+create index idx_abastecimentos_equipamento on abastecimentos(equipamento_id);
+create index idx_abastecimentos_data on abastecimentos(data_hora);
+create trigger set_updated before update on abastecimentos for each row execute function trg_set_updated();
+
+-- leitura do medidor não pode retroceder em relação ao maior valor já
+-- registrado para o mesmo equipamento (horímetro/hodômetro é cumulativo).
+create or replace function trg_valida_leitura_medidor() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  maior_leitura numeric;
+begin
+  if new.leitura_medidor is not null then
+    select max(leitura_medidor) into maior_leitura
+    from abastecimentos
+    where equipamento_id = new.equipamento_id
+      and id is distinct from new.id;
+    if maior_leitura is not null and new.leitura_medidor < maior_leitura then
+      raise exception 'A leitura do medidor (%) não pode ser menor que a última leitura já registrada para este equipamento (%).', new.leitura_medidor, maior_leitura;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+create trigger valida_leitura_medidor before insert or update on abastecimentos
+  for each row execute function trg_valida_leitura_medidor();
+
+alter table abastecimentos enable row level security;
+create policy "select abastecimentos" on abastecimentos for select using (tem_permissao('abastecimento','visualizar'));
+create policy "inserir abastecimentos" on abastecimentos for insert with check (tem_permissao('abastecimento','editar'));
+create policy "atualizar abastecimentos" on abastecimentos for update using (tem_permissao('abastecimento','editar')) with check (tem_permissao('abastecimento','editar'));
+create policy "excluir abastecimentos" on abastecimentos for delete using (tem_permissao('abastecimento','editar'));
