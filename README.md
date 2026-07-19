@@ -41,9 +41,11 @@ App novo e independente (`AECombustivel.html`), para controle de combustível (d
 
 Os cadastros centrais (fazenda, cultura/safra, talhão/lote, centro de custo) nascem pensados para as três frentes desde o início, para que o rateio de combustível caia no lugar certo à medida que os módulos de cana e grãos forem criados.
 
-- **Status**: Fase 1 (Fundação + Cadastros base) — login com controle de acesso por papel (Administrador/Gestor/Encarregado/Operador) e CRUD de Fazendas, Produtos, Culturas, Operações, Fornecedores, Safras, Centros de Custo, Talhões/Áreas, Equipamentos, Operadores e Tanques.
-- **Próximas fases**: estoque de combustível (entradas por NF, medição física), abastecimentos com modo offline/comboio, rateio e indicadores de consumo, detecção de anomalias, dashboards.
-- **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e siga o passo a passo no topo de `combustivel_schema.sql` (rodar o schema, criar o primeiro administrador, publicar a Edge Function `criar-usuario-combustivel` e preencher a URL/chave no topo de `AECombustivel.html`).
+- **Status**: Fase 1 (Fundação + Cadastros base) e Fase 2 (Estoque) prontas.
+  - Fase 1 — login com controle de acesso por papel (Administrador/Gestor/Encarregado/Operador) e CRUD de Fazendas, Produtos, Culturas, Operações, Fornecedores, Safras, Centros de Custo, Talhões/Áreas, Equipamentos, Operadores e Tanques.
+  - Fase 2 — Entradas de estoque por nota fiscal, Medições Físicas (régua/sensor) e Ajustes de Estoque (sempre com justificativa), com uma aba de Resumo que mostra o saldo teórico por tanque, a conciliação com a última medição física, o valor aproximado em estoque e alertas de estoque baixo (configurável por tanque). As saídas por abastecimento entram na Fase 4 — até lá, o saldo reflete só entradas e ajustes.
+- **Próximas fases**: abastecimentos com modo offline/comboio, rateio e indicadores de consumo, detecção de anomalias, dashboards.
+- **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e rode `combustivel_schema.sql` do começo ao fim (o arquivo tem as migrações das Fases 1 e 2 em sequência, com passo a passo comentado). Publique a Edge Function `criar-usuario-combustivel` e preencha a URL/chave do projeto no topo de `AECombustivel.html`.
 
 ## Autor
 
