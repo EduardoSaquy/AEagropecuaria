@@ -42,11 +42,12 @@ App novo e independente (`AECombustivel.html`), para controle de combustível (d
 
 Os cadastros centrais (fazenda, cultura/safra, talhão/lote, centro de custo) nascem pensados para as três frentes desde o início, para que o rateio de combustível caia no lugar certo à medida que os módulos de cana e grãos forem criados.
 
-- **Status**: Fase 1 (Fundação + Cadastros base) e Fase 2 (Estoque) prontas.
+- **Status**: Fases 1 (Fundação + Cadastros base), 2 (Estoque) e 3 (Abastecimentos) prontas.
   - Fase 1 — login com controle de acesso por papel (Administrador/Gestor/Encarregado/Operador) e CRUD de Fazendas, Produtos, Culturas, Operações, Fornecedores, Safras, Centros de Custo, Talhões/Áreas, Equipamentos, Operadores e Tanques.
-  - Fase 2 — Entradas de estoque por nota fiscal, Medições Físicas (régua/sensor) e Ajustes de Estoque (sempre com justificativa), com uma aba de Resumo que mostra o saldo teórico por tanque, a conciliação com a última medição física, o valor aproximado em estoque e alertas de estoque baixo (configurável por tanque). As saídas por abastecimento entram na Fase 4 — até lá, o saldo reflete só entradas e ajustes.
-- **Próximas fases**: abastecimentos com modo offline/comboio, rateio e indicadores de consumo, detecção de anomalias, dashboards.
-- **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e rode `combustivel_schema.sql` do começo ao fim (o arquivo tem as migrações das Fases 1 e 2 em sequência, com passo a passo comentado). Publique a Edge Function `criar-usuario-combustivel` e preencha a URL/chave do projeto no topo de `AECombustivel.html`.
+  - Fase 2 — Entradas de estoque por nota fiscal, Medições Físicas (régua/sensor) e Ajustes de Estoque (sempre com justificativa), com uma aba de Resumo que mostra o saldo teórico por tanque, a conciliação com a última medição física, o valor aproximado em estoque e alertas de estoque baixo (configurável por tanque).
+  - Fase 3 — Abastecimentos (núcleo do sistema): registro por tanque fixo ou comboio, com operador, volume, leitura de horímetro/hodômetro (a leitura não pode retroceder — checado no banco) e rateio por talhão/área ou centro de custo. **Funciona offline**: um cache local dos cadastros deixa o app utilizável mesmo sem sinal, e cada abastecimento registrado offline entra numa fila local (IndexedDB) que sincroniza sozinha assim que a conexão volta, sem duplicar registros. Um alerta (não bloqueante) avisa quando o volume abastecido excede a capacidade do tanque do equipamento.
+- **Próximas fases**: rateio e indicadores de consumo (L/h, L/ha, L/km, L/t), detecção de anomalias e alertas configuráveis, dashboards e relatórios.
+- **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e rode `combustivel_schema.sql` do começo ao fim (o arquivo tem as migrações das Fases 1, 2 e 3 em sequência, com passo a passo comentado). Publique a Edge Function `criar-usuario-combustivel` e preencha a URL/chave do projeto no topo de `AECombustivel.html`.
 
 ## Autor
 
