@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AE Combustível</title>
+<link rel="manifest" href="manifest_combustivel.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0F2A4A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --azul-escuro:#0F2A4A;
+    --azul-medio:#1D5DA8;
+    --azul-claro:#9DC0E8;
+    --grafite:#1E2A38;
+    --cinza:#65758A;
+    --cinza-claro:#DEE6F0;
+    --cinza-bg:#F2F5FA;
+    --branco:#FFFFFF;
+    --ambar:#C98A2B;
+    --ambar-bg:#F5E9D7;
+    --alerta:#B3462F;
+    --alerta-bg:#F6E7E2;
+    --ok-bg:#E5EEF9;
+    --bom:#0C7A43;
+    --bom-bg:#E3F1E8;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(15,42,74,0.06), 0 4px 12px rgba(15,42,74,0.06);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:var(--cinza-bg);
+    color:var(--grafite);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{display:flex; min-height:100vh;}
+  /* ---------- SIDEBAR ---------- */
+  .sidebar{
+    width:230px; flex-shrink:0; background:var(--azul-escuro); color:var(--branco);
+    display:flex; flex-direction:column; padding:24px 16px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px; padding:0 8px 24px 8px; margin-bottom:8px;
+    border-bottom:1px solid rgba(255,255,255,0.12);
+  }
+  .brand-mark{width:32px; height:32px; flex-shrink:0;}
+  .brand-name{font-family:'Fraunces',serif; font-weight:600; font-size:19px; letter-spacing:0.2px;}
+  nav{margin-top:18px; display:flex; flex-direction:column; gap:4px;}
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; cursor:pointer;
+    font-size:14px; font-weight:500; color:rgba(255,255,255,0.72);
+    transition:background 0.15s, color 0.15s; border:none; background:none; width:100%; text-align:left;
+  }
+  .nav-item:hover{background:rgba(255,255,255,0.06); color:var(--branco);}
+  .nav-item.active{background:var(--azul-medio); color:var(--branco);}
+  .nav-item svg{flex-shrink:0;}
+  .sidebar-footer{
+    margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);
+    font-size:11px; color:rgba(255,255,255,0.45); line-height:1.5;
+  }
+  /* ---------- MAIN ---------- */
+  .main{flex:1; padding:32px 40px 60px 40px; max-width:1180px;}
+  .page-header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px;}
+  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--azul-medio); font-weight:600; margin:0 0 4px 0;}
+  h1{font-family:'Fraunces',serif; font-size:28px; font-weight:600; margin:0; color:var(--azul-escuro);}
+  .page-desc{color:var(--cinza); font-size:13.5px; margin-top:6px; max-width:560px;}
+  .btn{
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; padding:10px 18px; border-radius:8px;
+    border:none; cursor:pointer; transition:filter 0.15s, transform 0.1s; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--azul-escuro); color:var(--branco);}
+  .btn-primary:hover{filter:brightness(1.15);}
+  .btn-ghost{background:transparent; color:var(--azul-escuro); border:1px solid var(--cinza-claro);}
+  .btn-ghost:hover{background:var(--branco);}
+  .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
+  .btn-danger-ghost:hover{background:var(--alerta-bg);}
+  .btn-sm{padding:6px 12px; font-size:12.5px;}
+  .card{background:var(--branco); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--cinza-claro);}
+  .card-pad{padding:22px 24px;}
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza);
+    font-weight:600; padding:10px 14px; border-bottom:1px solid var(--cinza-claro); white-space:nowrap;
+  }
+  td{padding:12px 14px; border-bottom:1px solid var(--cinza-claro); color:var(--grafite); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .pill{display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;}
+  .pill-ok{background:var(--ok-bg); color:var(--azul-medio);}
+  .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
+  .pill-cat{background:var(--cinza-claro); color:var(--grafite);}
+  .pill-warn{background:var(--ambar-bg); color:var(--ambar);}
+  /* form modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(15,42,74,0.35); display:flex; align-items:flex-start;
+    justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;
+  }
+  .modal{background:var(--branco); border-radius:14px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,0.25);}
+  .modal-head{padding:20px 24px; border-bottom:1px solid var(--cinza-claro); display:flex; justify-content:space-between; align-items:center;}
+  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--azul-escuro);}
+  .modal-close{background:none; border:none; cursor:pointer; color:var(--cinza); font-size:20px; line-height:1;}
+  .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
+  .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  label{font-size:12px; font-weight:600; color:var(--grafite);}
+  input, select, textarea{
+    font-family:'Inter',sans-serif; font-size:13.5px; padding:9px 11px; border:1px solid var(--cinza-claro);
+    border-radius:7px; background:var(--branco); color:var(--grafite); outline:none; width:100%;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--azul-medio); box-shadow:0 0 0 3px rgba(29,93,168,0.12);}
+  .hint{font-size:11px; color:var(--cinza);}
+  .empty{text-align:center; padding:50px 20px; color:var(--cinza);}
+  .empty h4{font-family:'Fraunces',serif; color:var(--azul-escuro); margin:10px 0 6px 0; font-size:16px;}
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;}
+  .search{
+    display:flex; align-items:center; gap:8px; background:var(--branco);
+    border:1px solid var(--cinza-claro); border-radius:8px; padding:8px 12px; width:260px;
+  }
+  .search input{border:none; padding:0; flex:1;}
+  .search input:focus{box-shadow:none;}
+  .subtabs{display:flex; gap:18px; margin-bottom:22px; border-bottom:1px solid var(--cinza-claro); overflow-x:auto;}
+  .subtab{
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; color:var(--cinza); background:none;
+    border:none; padding:10px 2px; cursor:pointer; white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .subtab:hover{color:var(--azul-escuro);}
+  .subtab.active{color:var(--azul-escuro); border-bottom-color:var(--azul-medio);}
+  /* ---------- LOGIN ---------- */
+  .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .login-card{background:var(--branco); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.12); border:1px solid var(--cinza-claro); padding:40px 36px; width:100%; max-width:360px;}
+  .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:28px;}
+  .login-brand .brand-name{color:var(--azul-escuro); font-family:'Fraunces',serif; font-weight:600; font-size:19px;}
+  .login-field{margin-bottom:16px; display:flex; flex-direction:column; gap:5px;}
+  .login-field input{width:100%;}
+  .login-error{background:var(--alerta-bg); color:var(--alerta); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px;}
+  .login-btn{width:100%; margin-top:6px; justify-content:center;}
+  .login-btn:disabled{opacity:0.6; cursor:default;}
+  .login-loading{min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--cinza); font-size:14px;}
+  /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
+  .sidebar-user{
+    margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.12);
+    display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
+  }
+  .sidebar-user-nome{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sidebar-user-actions{display:flex; gap:8px;}
+  .btn-sair{
+    background:rgba(255,255,255,0.1); border:none; color:#fff; padding:6px 10px;
+    border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap; flex:1;
+  }
+  .btn-sair:hover{background:rgba(255,255,255,0.2);}
+  /* ---------- ADMIN ---------- */
+  .perm-matrix{width:100%; border-collapse:collapse; font-size:13px;}
+  .perm-matrix th, .perm-matrix td{padding:8px 10px; border-bottom:1px solid var(--cinza-claro); text-align:left;}
+  .perm-matrix select{width:100%; padding:6px 8px; font-size:12.5px;}
+  .status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
+  .status-dot.ativo{background:var(--bom);}
+  .status-dot.inativo{background:var(--cinza);}
+  /* ---------- RESPONSIVO (celular) ---------- */
+  @media (max-width:760px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%; flex-direction:row; align-items:center; justify-content:space-between; padding:12px 16px; gap:12px; overflow-x:auto;}
+    .brand{border-bottom:none; padding:0; margin-bottom:0; flex-shrink:0;}
+    nav{margin-top:0; flex-direction:row; gap:4px;}
+    .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
+    .sidebar-footer{display:none;}
+    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
+    .main{padding:20px 16px 48px 16px; max-width:100%;}
+    .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
+    h1{font-size:23px;}
+    .btn{width:100%; justify-content:center;}
+    .toolbar{flex-direction:column; align-items:stretch;}
+    .search{width:100%;}
+    .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+    .field-row{grid-template-columns:1fr;}
+    .overlay{padding:16px 10px;}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===================== SUPABASE =====================
+ * ATENÇÃO: este app usa um projeto Supabase PRÓPRIO, separado do banco
+ * do AEpecuaria.html. Antes de usar, crie o projeto (veja o passo a
+ * passo no topo de combustivel_schema.sql) e substitua as duas
+ * constantes abaixo pelos valores de Project Settings > API. */
+const db = supabase.createClient(
+  'https://SUBSTITUA.supabase.co',
+  'SUBSTITUA_PELA_ANON_KEY'
+);
+
+/* ===================== HELPERS DE CONVERSÃO ===================== */
+// camelCase (usado no JS) <-> snake_case (usado no Postgres), genérico,
+// para não precisar de um par rowToX/xToRow escrito à mão por entidade.
+function toSnake(s){ return s.replace(/[A-Z]/g, m => '_'+m.toLowerCase()); }
+function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
+function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
+function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
+
+/* ===================== OPÇÕES (catálogos de enum) ===================== */
+const OPCOES = {
+  ESTADOS: [{value:'TO',label:'Tocantins'},{value:'SP',label:'São Paulo'}],
+  TIPOS_PRODUTO: [
+    {value:'diesel_s10',label:'Diesel S10'}, {value:'diesel_s500',label:'Diesel S500'},
+    {value:'arla32',label:'Arla 32'}, {value:'gasolina',label:'Gasolina'}, {value:'outro',label:'Outro'},
+  ],
+  FRENTES: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'}],
+  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
+  TIPOS_TALHAO: [{value:'talhao',label:'Talhão'},{value:'lote_curral',label:'Lote/Curral'}],
+  TIPOS_EQUIPAMENTO: [
+    {value:'colhedora_cana',label:'Colhedora de Cana'}, {value:'transbordo',label:'Transbordo'},
+    {value:'caminhao_canavieiro',label:'Caminhão Canavieiro'}, {value:'colhedora_graos',label:'Colhedora de Grãos'},
+    {value:'plantadeira',label:'Plantadeira'}, {value:'pulverizador',label:'Pulverizador'}, {value:'secador',label:'Secador'},
+    {value:'trator',label:'Trator'}, {value:'gerador',label:'Gerador'}, {value:'veiculo_apoio',label:'Veículo de Apoio'},
+    {value:'moto',label:'Moto'}, {value:'outro',label:'Outro'},
+  ],
+  TIPOS_MEDIDOR: [{value:'horimetro',label:'Horímetro (horas)'},{value:'hodometro',label:'Hodômetro (km)'},{value:'nenhum',label:'Nenhum'}],
+  TIPOS_TANQUE: [{value:'fixo',label:'Tanque fixo'},{value:'comboio',label:'Comboio'}],
+};
+
+/* ===================== CADASTROS (motor genérico de CRUD) =====================
+ * Cada entidade de cadastro é descrita aqui uma única vez — tabela,
+ * campos, tipo de cada campo — e as telas (lista, modal, salvar, editar,
+ * excluir) são geradas a partir dessa descrição. Isso evita reescrever a
+ * mesma lógica de formulário 11 vezes para 11 cadastros muito parecidos.
+ * Fases futuras (estoque, abastecimento) podem reaproveitar o mesmo motor. */
+const CADASTROS = {
+  fazendas: {
+    table:'fazendas', label:'Fazendas', singular:'Fazenda',
+    desc:'Unidades produtivas da empresa, com estado e área total.',
+    emptyHint:'Cadastre a primeira fazenda para começar.',
+    fields:[
+      {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Fazenda Santa Fé'},
+      {key:'estado', label:'Estado', type:'select', options:OPCOES.ESTADOS, required:true},
+      {key:'areaHa', label:'Área (ha)', type:'number', step:'0.01', suffix:' ha'},
+      {key:'ativo', label:'Fazenda ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  produtos: {
+    table:'produtos', label:'Produtos', singular:'Produto',
+    desc:'Combustíveis e insumos controlados no estoque (Diesel S10/S500, Arla 32, Gasolina).',
+    fields:[
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'tipo', label:'Tipo', type:'select', options:OPCOES.TIPOS_PRODUTO, required:true},
+      {key:'unidade', label:'Unidade', type:'text', required:true},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  culturas: {
+    table:'culturas', label:'Culturas', singular:'Cultura',
+    desc:'Culturas e a frente de negócio a que pertencem (cana, grãos ou pecuária).',
+    fields:[
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES, required:true},
+      {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  operacoes: {
+    table:'operacoes', label:'Operações', singular:'Operação',
+    desc:'Tipos de atividade de campo usados para ratear o combustível (colheita, plantio, trato, etc.).',
+    fields:[
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  fornecedores: {
+    table:'fornecedores', label:'Fornecedores', singular:'Fornecedor',
+    desc:'Distribuidoras de combustível e outros fornecedores.',
+    fields:[
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'cnpj', label:'CNPJ', type:'text'},
+      {key:'telefone', label:'Telefone', type:'text'},
+      {key:'obs', label:'Observações', type:'textarea', list:false},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  safras: {
+    table:'safras', label:'Safras', singular:'Safra',
+    desc:'Ano-safra de uma cultura numa fazenda, usado para ratear o combustível por período.',
+    emptyHint:'Cadastre fazenda e cultura antes de criar uma safra.',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
+      {key:'nome', label:'Safra', type:'text', required:true, placeholder:'Ex: 2024/2025'},
+      {key:'dataInicio', label:'Início', type:'date'},
+      {key:'dataFim', label:'Fim', type:'date'},
+      {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  centrosCusto: {
+    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo',
+    desc:'Classificação de rateio para combustível sem talhão/lote específico (transporte, administrativo, gerador).',
+    emptyHint:'Cadastre uma fazenda antes de criar um centro de custo.',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  talhoesAreas: {
+    table:'talhoes_areas', label:'Talhões / Áreas', singular:'Talhão/Área',
+    desc:'Talhões de lavoura (com hectares) ou lotes/currais de pecuária, para ratear o combustível abastecido neles.',
+    emptyHint:'Cadastre uma fazenda antes de criar um talhão/área.',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'tipo', label:'Tipo', type:'select', options:OPCOES.TIPOS_TALHAO, required:true},
+      {key:'areaHa', label:'Área (ha)', type:'number', step:'0.01', suffix:' ha'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas'},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  equipamentos: {
+    table:'equipamentos', label:'Equipamentos', singular:'Equipamento',
+    desc:'Máquinas e veículos abastecidos, com o tipo de medidor e o consumo de referência.',
+    emptyHint:'Cadastre uma fazenda antes de criar um equipamento.',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome/Identificação', type:'text', required:true, placeholder:'Ex: Trator 04'},
+      {key:'tipo', label:'Tipo', type:'select', options:OPCOES.TIPOS_EQUIPAMENTO, required:true},
+      {key:'tipoMedidor', label:'Medidor', type:'select', options:OPCOES.TIPOS_MEDIDOR, required:true},
+      {key:'consumoReferencia', label:'Consumo ref.', type:'number', step:'0.01',
+        format:(v,item)=> (v===null||v===undefined||v==='') ? '—' :
+          `${fmt(v,2)} ${item.tipoMedidor==='horimetro'?'L/h':item.tipoMedidor==='hodometro'?'L/km':'L'}`},
+      {key:'frentePrincipal', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  operadores: {
+    table:'operadores', label:'Operadores', singular:'Operador',
+    desc:'Motoristas, abastecedores e operadores de máquina.',
+    emptyHint:'Cadastre uma fazenda antes de criar um operador.',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'cpf', label:'CPF', type:'text'},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  tanques: {
+    table:'tanques', label:'Tanques', singular:'Tanque',
+    desc:'Tanques fixos e comboios, com produto armazenado, capacidade e comodato.',
+    emptyHint:'Cadastre uma fazenda e um produto antes de criar um tanque.',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome/Identificação', type:'text', required:true, placeholder:'Ex: Tanque sede / Comboio 01'},
+      {key:'produtoId', label:'Produto', type:'fk', refEntity:'produtos', required:true},
+      {key:'capacidadeLitros', label:'Capacidade (L)', type:'number', step:'1', required:true, dec:0, suffix:' L'},
+      {key:'tipo', label:'Tipo', type:'select', options:OPCOES.TIPOS_TANQUE, required:true},
+      {key:'fornecedorId', label:'Fornecedor (comodato)', type:'fk', refEntity:'fornecedores'},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+};
+const CADASTRO_KEYS = Object.keys(CADASTROS);
+
+function rowToCadastro(row, cfg){
+  const obj = {id: row.id};
+  cfg.fields.forEach(f=>{ obj[f.key] = row[toSnake(f.key)]; });
+  return obj;
+}
+function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
+
+async function loadAll(){
+  const results = await Promise.all([
+    ...CADASTRO_KEYS.map(k => db.from(CADASTROS[k].table).select('*').order('nome')),
+    db.from('profiles').select('*').order('nome'),
+  ]);
+  CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
+  state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
+  render();
+}
+
+/* ===================== ESTADO ===================== */
+const state = {
+  page: 'fazendas',
+  ...Object.fromEntries(CADASTRO_KEYS.map(k=>[k, []])),
+  perfis: [],
+  modal: null, // {type:'cadastro', key} | {type:'usuario'|'permissoes'|'trocarSenha'}
+  search: '',
+  cadastroError: '',
+  cadastroLoading: false,
+  // ---- autenticação ----
+  authChecked: false,
+  session: null,
+  perfil: null,
+  loginDraft: {usuario:'', senha:''},
+  loginError: '',
+  loginLoading: false,
+  usuarioError: '',
+  usuarioLoading: false,
+};
+let editDraft = null;
+
+function render(){
+  const root = document.getElementById('root');
+  if(!state.authChecked){ root.innerHTML = `<div class="login-loading">Carregando...</div>`; return; }
+  if(!state.session){ root.innerHTML = LoginPage(); attachEvents(); return; }
+  if(!state.perfil || !state.perfil.ativo){ root.innerHTML = AguardandoLiberacao(); attachEvents(); return; }
+
+  const grupos = gruposVisiveis();
+  const semModulos = grupos.length===0;
+  root.innerHTML = `
+    <div class="app">
+      ${Sidebar()}
+      <div class="main">
+        ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
+        ${Header()}
+        ${SubTabs()}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : PageCadastro(state.page)}
+        `}
+      </div>
+    </div>
+    ${state.modal ? Modal() : ''}
+  `;
+  attachEvents();
+}
+
+/* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
+const DOMINIO_LOGIN = 'aeagropecuaria.local';
+function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
+function souAdmin(){ return state.perfil?.papel === 'admin'; }
+function temPermissao(modulo, nivel){
+  if(!state.perfil) return false;
+  if(souAdmin()) return true;
+  const atual = state.perfil.permissoes?.[modulo];
+  if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
+  return atual==='editar';
+}
+
+async function loadPerfil(){
+  const uid = state.session?.user?.id;
+  if(!uid){ state.perfil = null; return; }
+  const { data } = await db.from('profiles').select('*').eq('id', uid).single();
+  state.perfil = data ? rowToPerfil(data) : null;
+}
+
+async function initAuth(){
+  const { data } = await db.auth.getSession();
+  state.session = data.session;
+  if(state.session) await loadPerfil();
+  state.authChecked = true;
+  render();
+  if(state.session && state.perfil?.ativo) loadAll();
+
+  let primeiroEvento = true;
+  db.auth.onAuthStateChange(async (event, newSession)=>{
+    if(primeiroEvento){ primeiroEvento = false; return; }
+    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
+    state.session = newSession;
+    if(newSession){
+      await loadPerfil();
+      render();
+      if(state.perfil?.ativo) loadAll();
+    } else {
+      state.perfil = null;
+      render();
+    }
+  });
+}
+
+async function fazerLogin(){
+  const usuario = normalizeUsuario(state.loginDraft.usuario);
+  const senha = state.loginDraft.senha;
+  if(!usuario || !senha){ state.loginError = 'Informe usuário e senha.'; render(); return; }
+  state.loginLoading = true; state.loginError = ''; render();
+  const email = `${usuario}@${DOMINIO_LOGIN}`;
+  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+  state.loginLoading = false;
+  if(error){ state.loginError = 'Usuário ou senha inválidos.'; render(); return; }
+  state.session = data.session;
+  await loadPerfil();
+  state.loginDraft = {usuario:'', senha:''};
+  render();
+  if(state.perfil?.ativo) loadAll();
+}
+async function fazerLogout(){
+  await db.auth.signOut();
+  state.session = null; state.perfil = null; state.page = 'fazendas';
+  render();
+}
+
+function LoginPage(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Combustível</div></div>
+      ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
+      <form data-login-form="1">
+        <div class="login-field"><label>Usuário</label><input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus /></div>
+        <div class="login-field"><label>Senha</label><input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" /></div>
+        <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
+      </form>
+    </div>
+  </div>`;
+}
+function AguardandoLiberacao(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Combustível</div></div>
+      <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
+        Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
+        Fale com o administrador do sistema.
+      </p>
+      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
+    </div>
+  </div>`;
+}
+
+/* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
+const GROUPS = {
+  estrutura: {label:'Estrutura', icon:iconFazenda(), pages:[
+    {key:'fazendas', label:'Fazendas'},
+    {key:'centrosCusto', label:'Centros de Custo'},
+  ]},
+  cultivo: {label:'Cultivo & Pecuária', icon:iconLeaf(), pages:[
+    {key:'culturas', label:'Culturas'},
+    {key:'safras', label:'Safras'},
+    {key:'talhoesAreas', label:'Talhões / Áreas'},
+    {key:'operacoes', label:'Operações'},
+  ]},
+  frota: {label:'Frota & Combustível', icon:iconFuel(), pages:[
+    {key:'produtos', label:'Produtos'},
+    {key:'fornecedores', label:'Fornecedores'},
+    {key:'tanques', label:'Tanques'},
+    {key:'equipamentos', label:'Equipamentos'},
+    {key:'operadores', label:'Operadores'},
+  ]},
+  admin: {label:'Administração', icon:iconAdmin(), pages:[
+    {key:'adminUsuarios', label:'Usuários'},
+  ]},
+};
+function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
+function grupoVisivel(key){
+  if(key==='admin') return souAdmin();
+  return temPermissao('cadastros','visualizar');
+}
+function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
+function primeiraPaginaVisivel(){ const grupos = gruposVisiveis(); return grupos[0] ? grupos[0][1].pages[0].key : null; }
+
+/* ===================== SIDEBAR / HEADER ===================== */
+function Sidebar(){
+  const activeGroup = currentGroupKey();
+  return `
+  <div class="sidebar">
+    <div class="brand">${brandMark()}<div><div class="brand-name">AE Combustível</div></div></div>
+    <div class="sidebar-user">
+      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
+      <div class="sidebar-user-actions">
+        <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
+        <button class="btn-sair" data-logout="1">Sair</button>
+      </div>
+    </div>
+    <nav>
+      ${gruposVisiveis().map(([key,g])=>`
+        <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
+      `).join('')}
+    </nav>
+    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase).</div>
+  </div>`;
+}
+function SubTabs(){
+  const group = GROUPS[currentGroupKey()];
+  if(!group || group.pages.length<2) return '';
+  return `
+  <div class="subtabs">
+    ${group.pages.map(p=>`<button class="subtab ${state.page===p.key?'active':''}" data-subnav="${p.key}">${p.label}</button>`).join('')}
+  </div>`;
+}
+function Header(){
+  if(state.page==='adminUsuarios'){
+    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o papel de cada pessoa.');
+  }
+  const cfg = CADASTROS[state.page];
+  return headerHtml('Cadastro', cfg.label, cfg.desc);
+}
+function headerHtml(eyebrow,title,desc){
+  return `<div class="page-header"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="page-desc">${desc}</p></div></div>`;
+}
+function brandMark(){
+  return `<svg class="brand-mark" viewBox="0 0 32 32" fill="none">
+    <path d="M11 4c-3 4-5 7-5 11a6 6 0 0 0 12 0c0-4-2-7-5-11a1 1 0 0 0-2 0Z" fill="#9DC0E8"/>
+    <rect x="20" y="14" width="7" height="12" rx="1.5" fill="#C98A2B"/>
+    <rect x="22" y="10" width="3" height="5" rx="1" fill="#C98A2B"/>
+  </svg>`;
+}
+function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
+function iconFuel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 21h10"/><path d="M14 9h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/><path d="M7 7h5"/></svg>`; }
+function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
+function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
+function Empty(title, sub){
+  return `<div class="empty">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
+    <h4>${title}</h4><div class="page-desc" style="margin:0 auto;">${sub}</div>
+  </div>`;
+}
+
+/* ===================== PÁGINA GENÉRICA DE CADASTRO ===================== */
+function fkNome(entityKey, id){
+  if(id===null || id===undefined || id==='') return '—';
+  const item = (state[entityKey]||[]).find(x=>String(x.id)===String(id));
+  return item ? item.nome : '—';
+}
+function celulaValor(f, item){
+  const val = item[f.key];
+  if(f.format) return f.format(val, item);
+  if(f.type==='fk') return fkNome(f.refEntity, val);
+  if(f.type==='select') return (f.options.find(o=>o.value===val)||{}).label || val || '—';
+  if(f.type==='date') return fmtData(val);
+  if(f.type==='number') return (val===null||val===undefined||val==='') ? '—' : `${fmt(val, f.dec ?? 2)}${f.suffix||''}`;
+  return val || '—';
+}
+function PageCadastro(key){
+  const cfg = CADASTROS[key];
+  const podeEditar = temPermissao('cadastros','editar');
+  const termo = state.search.toLowerCase();
+  const list = state[key].filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
+  const colunas = cfg.fields.filter(f=>f.list!==false);
+  return `
+  <div class="toolbar">
+    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>
+    <span class="hint">${list.length} registro(s)</span>
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${list.length===0 ? Empty(`Nenhum(a) ${cfg.singular.toLowerCase()} cadastrado(a)`, cfg.emptyHint||'Cadastre o primeiro registro.') : `
+    <table>
+      <thead><tr>${colunas.map(f=>`<th>${f.label}</th>`).join('')}<th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${list.map(item=>`
+          <tr>
+            ${colunas.map(f=>`<td>${celulaValor(f,item)}</td>`).join('')}
+            <td><span class="status-dot ${item.ativo?'ativo':'inativo'}"></span>${item.ativo?'Ativo':'Inativo'}</td>
+            <td style="display:flex; gap:6px;">
+              ${podeEditar ? `
+              <button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== MODAL GENÉRICO DE CADASTRO ===================== */
+function novoCadastroDraft(key){
+  const cfg = CADASTROS[key];
+  const draft = {};
+  cfg.fields.forEach(f=>{
+    if(f.type==='checkbox') draft[f.key] = f.default!==undefined ? f.default : true;
+    else if(f.type==='select') draft[f.key] = f.options[0]?.value ?? '';
+    else if(f.type==='fk') draft[f.key] = (state[f.refEntity]||[]).find(x=>x.ativo!==false)?.id ?? '';
+    else if(f.key==='unidade') draft[f.key] = 'L';
+    else draft[f.key] = '';
+  });
+  return draft;
+}
+function abrirNovoCadastro(key){
+  editDraft = novoCadastroDraft(key);
+  state.cadastroError = '';
+  state.modal = {type:'cadastro', key};
+}
+function abrirEditarCadastro(key, id){
+  const item = state[key].find(x=>x.id===id);
+  if(!item) return;
+  editDraft = {...item, _editId:item.id};
+  state.cadastroError = '';
+  state.modal = {type:'cadastro', key};
+}
+async function excluirCadastro(key, id){
+  const cfg = CADASTROS[key];
+  if(!confirm(`Excluir este(a) ${cfg.singular.toLowerCase()}? Essa ação não pode ser desfeita.`)) return;
+  const { error } = await db.from(cfg.table).delete().eq('id', id);
+  if(error){ alert('Não foi possível excluir: ' + mensagemErroSupabase(error)); return; }
+  await loadAll();
+}
+function mensagemErroSupabase(error){
+  if(error?.code==='23505') return 'Já existe um registro com esse nome (talvez nesta fazenda). Use outro nome ou edite o existente.';
+  if(error?.code==='23503') return 'Não é possível excluir: existem outros cadastros vinculados a este registro.';
+  return error?.message || 'Erro desconhecido.';
+}
+function campoHtml(f, d){
+  const val = d[f.key] ?? '';
+  const id = `f-${f.key}`;
+  if(f.type==='checkbox'){
+    return `<div class="field"><label><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto; margin-right:6px;"/> ${f.label}</label></div>`;
+  }
+  if(f.type==='textarea'){
+    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3">${val}</textarea></div>`;
+  }
+  if(f.type==='select'){
+    return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>`;
+  }
+  if(f.type==='fk'){
+    const lista = (state[f.refEntity]||[]).filter(x=>x.ativo!==false);
+    return `<div class="field"><label>${f.label}</label>
+      <select id="${id}">
+        ${f.required?'':'<option value="">—</option>'}
+        ${lista.map(o=>`<option value="${o.id}" ${String(val)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+      </select>
+      ${lista.length===0?`<span class="hint">Cadastre ${CADASTROS[f.refEntity].singular.toLowerCase()} antes.</span>`:''}
+    </div>`;
+  }
+  if(f.type==='date'){
+    return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${val}"/></div>`;
+  }
+  if(f.type==='number'){
+    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/></div>`;
+  }
+  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
+}
+function ModalCadastro(){
+  const key = state.modal.key;
+  const cfg = CADASTROS[key];
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar':'Novo(a)'} ${cfg.singular}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${state.cadastroError ? `<div class="login-error">${state.cadastroError}</div>` : ''}
+        ${cfg.fields.map(f=>campoHtml(f, d)).join('')}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save-cadastro="${key}" ${state.cadastroLoading?'disabled':''}>${state.cadastroLoading?'Salvando...':'Salvar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function lerCampoDOM(f){
+  const el = document.getElementById(`f-${f.key}`);
+  if(!el) return undefined;
+  return f.type==='checkbox' ? el.checked : el.value;
+}
+async function salvarCadastro(key){
+  const cfg = CADASTROS[key];
+  const row = {};
+  let erro = '';
+  cfg.fields.forEach(f=>{
+    const raw = lerCampoDOM(f);
+    if(f.required && (raw===''||raw===undefined||raw===null)) erro = erro || `Preencha o campo "${f.label}".`;
+    let val = raw;
+    if(f.type==='number') val = (raw===''||raw===undefined||raw===null) ? null : Number(raw);
+    if(f.type==='fk') val = raw ? Number(raw) : null;
+    if(f.type==='date') val = raw || null;
+    if(f.type==='checkbox') val = !!raw;
+    row[toSnake(f.key)] = (val===''? null : val);
+  });
+  if(erro){ state.cadastroError = erro; render(); return; }
+  state.cadastroLoading = true; state.cadastroError = ''; render();
+  let error;
+  if(editDraft._editId){
+    ({error} = await db.from(cfg.table).update(row).eq('id', editDraft._editId));
+  } else {
+    ({error} = await db.from(cfg.table).insert(row));
+  }
+  state.cadastroLoading = false;
+  if(error){ state.cadastroError = mensagemErroSupabase(error); render(); return; }
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+/* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
+const MODULOS_PERMISSAO = [
+  ['cadastros','Cadastros'],
+  // Fases futuras adicionam aqui: ['estoque','Estoque'], ['abastecimento','Abastecimento'], ...
+];
+const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
+function papelPill(papel){
+  const label = PAPEL_LABELS[papel] || papel;
+  const classe = papel==='admin' ? 'pill-cat' : (papel==='gestor' ? 'pill-warn' : 'pill-ok');
+  return `<span class="pill ${classe}">${label}</span>`;
+}
+function PageAdminUsuarios(){
+  return `
+  <div class="toolbar">
+    <span class="hint">${state.perfis.length} usuário(s) cadastrado(s)</span>
+    <button class="btn btn-primary btn-sm" data-novo-usuario="1">+ Novo usuário</button>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para as pessoas da sua equipe.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${state.perfis.map(p=>`
+          <tr>
+            <td><strong>${p.nome}</strong></td>
+            <td class="mono">${p.usuario}</td>
+            <td>${papelPill(p.papel)}</td>
+            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
+            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function ModalUsuario(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-criar-usuario="1" ${state.usuarioLoading?'disabled':''}>${state.usuarioLoading?'Criando...':'Criar usuário'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function ModalPermissoes(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Editar acesso — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
+        <div class="field"><label>Perfil</label>
+          <select id="f-papelusuario">
+            <option value="operador" ${d.papel==='operador'?'selected':''}>Operador</option>
+            <option value="encarregado" ${d.papel==='encarregado'?'selected':''}>Encarregado</option>
+            <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
+            <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
+          </select>
+        </div>
+        <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
+        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis.</p>
+        <table class="perm-matrix">
+          <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
+          <tbody>
+            ${MODULOS_PERMISSAO.map(([key,label])=>`
+              <tr>
+                <td>${label}</td>
+                <td>
+                  <select data-perm-modulo="${key}">
+                    <option value="nenhum" ${(!d.permissoes[key] || d.permissoes[key]==='nenhum')?'selected':''}>Nenhum</option>
+                    <option value="visualizar" ${d.permissoes[key]==='visualizar'?'selected':''}>Visualizar</option>
+                    <option value="editar" ${d.permissoes[key]==='editar'?'selected':''}>Editar</option>
+                  </select>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="permissoes">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+function ModalTrocarSenha(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Trocar senha</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Senha atual</label><input id="f-senhaatual" type="password" autocomplete="current-password" value="${d.senhaAtual}"/></div>
+        <div class="field"><label>Nova senha</label><input id="f-novasenha" type="password" autocomplete="new-password" value="${d.novaSenha}"/></div>
+        <div class="field"><label>Confirmar nova senha</label><input id="f-confirmarsenha" type="password" autocomplete="new-password" value="${d.confirmarSenha}"/></div>
+        <p class="hint">A nova senha precisa ter pelo menos 6 caracteres.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="trocarSenha">Salvar nova senha</button>
+      </div>
+    </div>
+  </div>`;
+}
+function Modal(){
+  if(state.modal.type==='cadastro') return ModalCadastro();
+  if(state.modal.type==='usuario') return ModalUsuario();
+  if(state.modal.type==='permissoes') return ModalPermissoes();
+  if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
+  return '';
+}
+
+/* ===================== EVENTOS ===================== */
+function attachEvents(){
+  const loginForm = document.querySelector('[data-login-form]');
+  if(loginForm){
+    loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };
+    const uEl = document.querySelector('[data-login-usuario]');
+    const sEl = document.querySelector('[data-login-senha]');
+    if(uEl) uEl.oninput = (e)=>{ state.loginDraft.usuario = e.target.value; };
+    if(sEl) sEl.oninput = (e)=>{ state.loginDraft.senha = e.target.value; };
+  }
+  document.querySelectorAll('[data-logout]').forEach(el=>{ el.onclick = ()=> fazerLogout(); });
+  document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
+    el.onclick = ()=>{ editDraft = {senhaAtual:'', novaSenha:'', confirmarSenha:''}; state.modal = {type:'trocarSenha'}; render(); };
+  });
+  document.querySelectorAll('[data-novo-usuario]').forEach(el=>{
+    el.onclick = ()=>{ editDraft = {nome:'', usuario:'', senha:''}; state.usuarioError=''; state.modal = {type:'usuario'}; render(); };
+  });
+  document.querySelectorAll('[data-editar-usuario]').forEach(el=>{
+    el.onclick = ()=>{
+      const perfil = state.perfis.find(p=>p.id===el.dataset.editarUsuario);
+      editDraft = {_perfilId: perfil.id, nome: perfil.nome, usuario: perfil.usuario, papel: perfil.papel, ativo: perfil.ativo, permissoes: {...perfil.permissoes}};
+      state.modal = {type:'permissoes'}; render();
+    };
+  });
+  const criarUsuarioBtn = document.querySelector('[data-criar-usuario]');
+  if(criarUsuarioBtn){
+    criarUsuarioBtn.onclick = async ()=>{
+      const nome = document.getElementById('f-nomeusuario').value.trim();
+      const usuario = document.getElementById('f-usuario').value.trim();
+      const senha = document.getElementById('f-senhausuario').value;
+      if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
+      state.usuarioLoading = true; state.usuarioError = ''; render();
+      const { data, error } = await db.functions.invoke('criar-usuario-combustivel', { body: { nome, usuario, senha } });
+      state.usuarioLoading = false;
+      if(error || data?.error){
+        let msg = data?.error || error?.message || 'Falha ao criar usuário.';
+        if(error?.context && typeof error.context.json === 'function'){
+          try { const corpo = await error.context.json(); if(corpo?.error) msg = corpo.error; } catch(e){}
+        }
+        state.usuarioError = msg; render(); return;
+      }
+      state.modal = null; editDraft = null;
+      await loadAll();
+    };
+  }
+  const searchEl = document.querySelector('[data-search]');
+  if(searchEl){
+    searchEl.oninput = (e)=>{
+      state.search = e.target.value; render();
+      const s = document.querySelector('[data-search]');
+      s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+    };
+  }
+  document.querySelectorAll('[data-nav-group]').forEach(el=>{
+    el.onclick = ()=>{
+      const group = GROUPS[el.dataset.navGroup];
+      if(!group.pages.some(p=>p.key===state.page)) state.page = group.pages[0].key;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-subnav]').forEach(el=>{
+    el.onclick = ()=>{ state.page = el.dataset.subnav; render(); };
+  });
+  document.querySelectorAll('[data-novo-cadastro]').forEach(el=>{
+    el.onclick = ()=>{ abrirNovoCadastro(el.dataset.novoCadastro); render(); };
+  });
+  document.querySelectorAll('[data-edit-cadastro]').forEach(el=>{
+    el.onclick = ()=>{
+      const [key, idStr] = el.dataset.editCadastro.split(':');
+      abrirEditarCadastro(key, Number(idStr));
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-cadastro]').forEach(el=>{
+    el.onclick = async ()=>{
+      const [key, idStr] = el.dataset.delCadastro.split(':');
+      await excluirCadastro(key, Number(idStr));
+    };
+  });
+  const saveCadastroBtn = document.querySelector('[data-save-cadastro]');
+  if(saveCadastroBtn){
+    saveCadastroBtn.onclick = ()=> salvarCadastro(saveCadastroBtn.dataset.saveCadastro);
+  }
+  document.querySelectorAll('[data-close], [data-close-overlay]').forEach(el=>{
+    el.onclick = (e)=>{ if(e.target.dataset.stop) return; state.modal = null; editDraft = null; render(); };
+  });
+  const stopEl = document.querySelector('[data-stop]');
+  if(stopEl) stopEl.onclick = (e)=> e.stopPropagation();
+
+  // ações que não passam pelo motor genérico de cadastro (permissões e troca de senha)
+  const saveBtn = document.querySelector('[data-save]');
+  if(saveBtn){
+    saveBtn.onclick = async ()=>{
+      const type = saveBtn.dataset.save;
+      let error = null;
+      if(type==='permissoes'){
+        const papel = document.getElementById('f-papelusuario').value;
+        const ativo = document.getElementById('f-ativousuario').checked;
+        const permissoes = {};
+        document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoes[sel.dataset.permModulo] = sel.value; });
+        ({error} = await db.from('profiles').update({papel, ativo, permissoes}).eq('id', editDraft._perfilId));
+      } else if(type==='trocarSenha'){
+        const senhaAtual = document.getElementById('f-senhaatual').value;
+        const novaSenha = document.getElementById('f-novasenha').value;
+        const confirmarSenha = document.getElementById('f-confirmarsenha').value;
+        if(!senhaAtual || !novaSenha || !confirmarSenha){ alert('Preencha todos os campos.'); return; }
+        if(novaSenha.length<6){ alert('A nova senha precisa ter pelo menos 6 caracteres.'); return; }
+        if(novaSenha!==confirmarSenha){ alert('A confirmação não bate com a nova senha.'); return; }
+        const email = `${state.perfil.usuario}@${DOMINIO_LOGIN}`;
+        const { error: erroSenhaAtual } = await db.auth.signInWithPassword({ email, password: senhaAtual });
+        if(erroSenhaAtual){ alert('Senha atual incorreta.'); return; }
+        ({error} = await db.auth.updateUser({ password: novaSenha }));
+        if(error){ alert('Não foi possível trocar a senha: ' + error.message); return; }
+        state.modal = null; editDraft = null;
+        alert('Senha alterada com sucesso.');
+        render();
+        return;
+      }
+      if(error){ alert('Não foi possível salvar: ' + error.message); return; }
+      state.modal = null; editDraft = null;
+      await loadAll();
+    };
+  }
+}
+
+initAuth();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_combustivel.js'));
+}
+</script>
+</body>
+</html>
