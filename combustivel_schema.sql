@@ -269,9 +269,10 @@ create trigger set_updated before update on tanques for each row execute functio
 
 -- ===================================================================
 -- RLS — todas as tabelas de cadastro ficam sob o módulo único
--- 'cadastros' por enquanto (visualizar/editar). Quando a Fase 3
--- (abastecimento) chegar, os módulos 'estoque' e 'abastecimento'
--- entram do mesmo jeito, sem mexer no que já está aqui.
+-- 'cadastros' (visualizar/editar). O módulo 'estoque' é adicionado mais
+-- abaixo, na migração da Fase 2. Quando a Fase 4 (abastecimento)
+-- chegar, o módulo 'abastecimento' entra do mesmo jeito, sem mexer no
+-- que já está aqui.
 -- ===================================================================
 
 alter table fazendas enable row level security;
@@ -339,3 +340,83 @@ insert into operacoes (nome, frente) values
 -- insert into profiles (id, nome, usuario, papel, ativo) values
 --   ('COLE-AQUI-O-UUID-DO-AUTH-USERS', 'Eduardo Saquy', 'eduardo', 'admin', true);
 -- ===================================================================
+
+-- ===================================================================
+-- MIGRAÇÃO FASE 2 — Estoque de combustível
+--
+-- Rode este bloco depois que a Fase 1 já estiver no ar. Adiciona:
+--   - estoque mínimo por tanque (para o alerta visual de estoque baixo)
+--   - entradas por nota fiscal (crédito no tanque de destino)
+--   - medições físicas (régua/sensor), para conciliar com o saldo teórico
+--   - ajustes manuais de estoque, sempre com justificativa
+-- O saldo de cada tanque (Fase 2) é: entradas - saídas + ajustes. As
+-- saídas por abastecimento entram na Fase 4 — até lá, saídas = 0 e o
+-- saldo reflete só entradas e ajustes.
+-- ===================================================================
+
+alter table tanques add column estoque_min_litros numeric(12,2);
+
+create table entradas_estoque (
+  id bigint generated always as identity primary key,
+  tanque_id bigint not null references tanques(id),
+  fornecedor_id bigint not null references fornecedores(id),
+  numero_nf text,
+  data date not null,
+  volume_litros numeric(12,2) not null check (volume_litros > 0),
+  valor_total numeric(12,2) not null check (valor_total >= 0),
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_entradas_estoque_tanque on entradas_estoque(tanque_id);
+create index idx_entradas_estoque_fornecedor on entradas_estoque(fornecedor_id);
+create trigger set_updated before update on entradas_estoque for each row execute function trg_set_updated();
+
+create table medicoes_fisicas (
+  id bigint generated always as identity primary key,
+  tanque_id bigint not null references tanques(id),
+  data date not null,
+  volume_medido_litros numeric(12,2) not null check (volume_medido_litros >= 0),
+  metodo text not null check (metodo in ('regua','sensor','outro')),
+  observacao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_medicoes_fisicas_tanque on medicoes_fisicas(tanque_id);
+create trigger set_updated before update on medicoes_fisicas for each row execute function trg_set_updated();
+
+-- volume_ajuste_litros aceita valores negativos (reduz o saldo) ou
+-- positivos (aumenta) — motivo é obrigatório e não pode ser vazio.
+create table ajustes_estoque (
+  id bigint generated always as identity primary key,
+  tanque_id bigint not null references tanques(id),
+  data date not null,
+  volume_ajuste_litros numeric(12,2) not null check (volume_ajuste_litros <> 0),
+  motivo text not null check (length(trim(motivo)) > 0),
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_ajustes_estoque_tanque on ajustes_estoque(tanque_id);
+create trigger set_updated before update on ajustes_estoque for each row execute function trg_set_updated();
+
+alter table entradas_estoque enable row level security;
+alter table medicoes_fisicas enable row level security;
+alter table ajustes_estoque enable row level security;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['entradas_estoque','medicoes_fisicas','ajustes_estoque']
+  loop
+    execute format('create policy "select %1$s" on %1$s for select using (tem_permissao(''estoque'',''visualizar''));', t);
+    execute format('create policy "inserir %1$s" on %1$s for insert with check (tem_permissao(''estoque'',''editar''));', t);
+    execute format('create policy "atualizar %1$s" on %1$s for update using (tem_permissao(''estoque'',''editar'')) with check (tem_permissao(''estoque'',''editar''));', t);
+    execute format('create policy "excluir %1$s" on %1$s for delete using (tem_permissao(''estoque'',''editar''));', t);
+  end loop;
+end $$;
