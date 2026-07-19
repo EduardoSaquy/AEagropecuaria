@@ -83,6 +83,15 @@
   .btn-sm{padding:6px 12px; font-size:12.5px;}
   .card{background:var(--branco); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--cinza-claro);}
   .card-pad{padding:22px 24px;}
+  .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
+  .stat-card{background:var(--branco); border:1px solid var(--cinza-claro); border-radius:var(--radius); padding:16px 18px;}
+  .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
+  .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--azul-escuro); margin-top:6px;}
+  .stat-value.alerta{color:var(--alerta);}
+  .silo-wrap{display:flex; align-items:center; gap:8px;}
+  .silo{width:14px; height:30px; border:1.5px solid var(--azul-escuro); border-radius:3px; position:relative; overflow:hidden; background:var(--cinza-claro); flex-shrink:0;}
+  .silo-fill{position:absolute; bottom:0; left:0; right:0; background:var(--azul-medio);}
+  .silo-fill.alerta{background:var(--alerta);}
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
   th{
     text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza);
@@ -175,6 +184,7 @@
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
     .btn{width:100%; justify-content:center;}
+    .stat-row{grid-template-columns:repeat(2,1fr);}
     .toolbar{flex-direction:column; align-items:stretch;}
     .search{width:100%;}
     .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
@@ -226,6 +236,7 @@ const OPCOES = {
   ],
   TIPOS_MEDIDOR: [{value:'horimetro',label:'Horímetro (horas)'},{value:'hodometro',label:'Hodômetro (km)'},{value:'nenhum',label:'Nenhum'}],
   TIPOS_TANQUE: [{value:'fixo',label:'Tanque fixo'},{value:'comboio',label:'Comboio'}],
+  METODOS_MEDICAO: [{value:'regua',label:'Régua'},{value:'sensor',label:'Sensor'},{value:'outro',label:'Outro'}],
 };
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
@@ -360,7 +371,49 @@ const CADASTROS = {
       {key:'capacidadeLitros', label:'Capacidade (L)', type:'number', step:'1', required:true, dec:0, suffix:' L'},
       {key:'tipo', label:'Tipo', type:'select', options:OPCOES.TIPOS_TANQUE, required:true},
       {key:'fornecedorId', label:'Fornecedor (comodato)', type:'fk', refEntity:'fornecedores'},
+      {key:'estoqueMinLitros', label:'Estoque mínimo (L)', type:'number', step:'1', dec:0, suffix:' L', list:false},
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  entradasEstoque: {
+    table:'entradas_estoque', label:'Entradas (NF)', singular:'Entrada', semStatus:true, semBusca:true, modulo:'estoque',
+    orderBy:'data', orderDesc:true,
+    desc:'Entradas de combustível por nota fiscal — cada entrada credita volume no tanque de destino.',
+    emptyHint:'Cadastre um tanque e um fornecedor antes de lançar uma entrada.',
+    fields:[
+      {key:'tanqueId', label:'Tanque', type:'fk', refEntity:'tanques', required:true},
+      {key:'fornecedorId', label:'Fornecedor', type:'fk', refEntity:'fornecedores', required:true},
+      {key:'numeroNf', label:'Nº da NF', type:'text'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'volumeLitros', label:'Volume (L)', type:'number', step:'0.01', required:true, dec:0, suffix:' L'},
+      {key:'valorTotal', label:'Valor total', type:'number', step:'0.01', required:true,
+        format:(v)=> (v===null||v===undefined||v==='') ? '—' : `R$ ${fmt(v,2)}`},
+    ],
+  },
+  medicoesFisicas: {
+    table:'medicoes_fisicas', label:'Medições Físicas', singular:'Medição', semStatus:true, semBusca:true, modulo:'estoque',
+    orderBy:'data', orderDesc:true,
+    desc:'Leitura de régua/sensor do tanque, para conciliar com o saldo teórico do estoque.',
+    emptyHint:'Cadastre um tanque antes de registrar uma medição.',
+    fields:[
+      {key:'tanqueId', label:'Tanque', type:'fk', refEntity:'tanques', required:true},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'volumeMedidoLitros', label:'Volume medido (L)', type:'number', step:'0.01', required:true, dec:0, suffix:' L'},
+      {key:'metodo', label:'Método', type:'select', options:OPCOES.METODOS_MEDICAO, required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  ajustesEstoque: {
+    table:'ajustes_estoque', label:'Ajustes de Estoque', singular:'Ajuste', semStatus:true, semBusca:true, modulo:'estoque',
+    orderBy:'data', orderDesc:true,
+    desc:'Correções manuais de saldo do tanque — sempre com justificativa; quem ajustou fica registrado na auditoria.',
+    emptyHint:'Cadastre um tanque antes de registrar um ajuste.',
+    fields:[
+      {key:'tanqueId', label:'Tanque', type:'fk', refEntity:'tanques', required:true},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'volumeAjusteLitros', label:'Ajuste (L)', type:'number', step:'0.01', required:true, dec:0, suffix:' L',
+        hint:'Use valor negativo para reduzir o saldo do tanque.'},
+      {key:'motivo', label:'Motivo / Justificativa', type:'textarea', required:true},
     ],
   },
 };
@@ -375,7 +428,10 @@ function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:
 
 async function loadAll(){
   const results = await Promise.all([
-    ...CADASTRO_KEYS.map(k => db.from(CADASTROS[k].table).select('*').order('nome')),
+    ...CADASTRO_KEYS.map(k => {
+      const cfg = CADASTROS[k];
+      return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
+    }),
     db.from('profiles').select('*').order('nome'),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
@@ -419,7 +475,9 @@ function render(){
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
         ${Header()}
         ${SubTabs()}
-        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : PageCadastro(state.page)}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios()
+          : state.page==='estoqueResumo' ? PageEstoqueResumo()
+          : PageCadastro(state.page)}
         `}
       </div>
     </div>
@@ -539,6 +597,12 @@ const GROUPS = {
     {key:'equipamentos', label:'Equipamentos'},
     {key:'operadores', label:'Operadores'},
   ]},
+  estoque: {label:'Estoque', icon:iconEstoque(), pages:[
+    {key:'estoqueResumo', label:'Resumo'},
+    {key:'entradasEstoque', label:'Entradas (NF)'},
+    {key:'medicoesFisicas', label:'Medições Físicas'},
+    {key:'ajustesEstoque', label:'Ajustes'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -546,6 +610,7 @@ const GROUPS = {
 function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
+  if(key==='estoque') return temPermissao('estoque','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
@@ -584,8 +649,12 @@ function Header(){
   if(state.page==='adminUsuarios'){
     return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o papel de cada pessoa.');
   }
+  if(state.page==='estoqueResumo'){
+    return headerHtml('Estoque','Resumo','Saldo teórico por tanque, conciliação com a última medição física e alertas de estoque baixo.');
+  }
   const cfg = CADASTROS[state.page];
-  return headerHtml('Cadastro', cfg.label, cfg.desc);
+  const eyebrow = cfg.modulo==='estoque' ? 'Estoque' : 'Cadastro';
+  return headerHtml(eyebrow, cfg.label, cfg.desc);
 }
 function headerHtml(eyebrow,title,desc){
   return `<div class="page-header"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="page-desc">${desc}</p></div></div>`;
@@ -600,6 +669,7 @@ function brandMark(){
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
 function iconFuel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 21h10"/><path d="M14 9h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/><path d="M7 7h5"/></svg>`; }
+function iconEstoque(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
@@ -626,25 +696,25 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao('cadastros','editar');
+  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar');
   const termo = state.search.toLowerCase();
-  const list = state[key].filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
+  const list = (cfg.semBusca ? state[key] : state[key].filter(item => !termo || (item.nome||'').toLowerCase().includes(termo)));
   const colunas = cfg.fields.filter(f=>f.list!==false);
   return `
   <div class="toolbar">
-    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>
+    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
   </div>
   <div class="card" style="overflow-x:auto;">
     ${list.length===0 ? Empty(`Nenhum(a) ${cfg.singular.toLowerCase()} cadastrado(a)`, cfg.emptyHint||'Cadastre o primeiro registro.') : `
     <table>
-      <thead><tr>${colunas.map(f=>`<th>${f.label}</th>`).join('')}<th>Status</th><th></th></tr></thead>
+      <thead><tr>${colunas.map(f=>`<th>${f.label}</th>`).join('')}${cfg.semStatus?'':'<th>Status</th>'}<th></th></tr></thead>
       <tbody>
         ${list.map(item=>`
           <tr>
             ${colunas.map(f=>`<td>${celulaValor(f,item)}</td>`).join('')}
-            <td><span class="status-dot ${item.ativo?'ativo':'inativo'}"></span>${item.ativo?'Ativo':'Inativo'}</td>
+            ${cfg.semStatus?'':`<td><span class="status-dot ${item.ativo?'ativo':'inativo'}"></span>${item.ativo?'Ativo':'Inativo'}</td>`}
             <td style="display:flex; gap:6px;">
               ${podeEditar ? `
               <button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>
@@ -655,6 +725,76 @@ function PageCadastro(key){
         `).join('')}
       </tbody>
     </table>`}
+  </div>`;
+}
+
+/* ===================== ESTOQUE: RESUMO / CONCILIAÇÃO ===================== */
+// Saldo teórico = entradas - saídas + ajustes. Saídas por abastecimento
+// ainda não existem (chegam na Fase 4) — até lá a função soma 0, mas já
+// fica pronta para quando os abastecimentos passarem a dar baixa aqui.
+function saidasAbastecimento(tanqueId){ return 0; }
+function saldoTanque(tanqueId){
+  const entradas = state.entradasEstoque.filter(e=>e.tanqueId===tanqueId).reduce((a,e)=>a+Number(e.volumeLitros||0),0);
+  const ajustes = state.ajustesEstoque.filter(a=>a.tanqueId===tanqueId).reduce((a,x)=>a+Number(x.volumeAjusteLitros||0),0);
+  return entradas - saidasAbastecimento(tanqueId) + ajustes;
+}
+function ultimaMedicao(tanqueId){
+  const meds = state.medicoesFisicas.filter(m=>m.tanqueId===tanqueId).sort((a,b)=> b.data.localeCompare(a.data));
+  return meds[0] || null;
+}
+// Custo médio ponderado, calculado só a partir das entradas por NF deste
+// tanque (prévia simples; o rateio completo por cultura/talhão é da Fase 5).
+function custoMedioPonderado(tanqueId){
+  const entradas = state.entradasEstoque.filter(e=>e.tanqueId===tanqueId);
+  const volumeTotal = entradas.reduce((a,e)=>a+Number(e.volumeLitros||0),0);
+  if(volumeTotal<=0) return null;
+  const valorTotal = entradas.reduce((a,e)=>a+Number(e.valorTotal||0),0);
+  return valorTotal / volumeTotal;
+}
+function PageEstoqueResumo(){
+  const tanques = state.tanques.filter(t=>t.ativo!==false);
+  if(tanques.length===0){
+    return `<div class="card">${Empty('Nenhum tanque ativo','Cadastre um tanque em Frota & Combustível > Tanques para acompanhar o estoque.')}</div>`;
+  }
+  const linhas = tanques.map(t=>{
+    const saldo = saldoTanque(t.id);
+    const pct = t.capacidadeLitros>0 ? Math.max(0, Math.min(saldo/t.capacidadeLitros,1)) : 0;
+    const med = ultimaMedicao(t.id);
+    const diff = med ? saldo - Number(med.volumeMedidoLitros||0) : null;
+    const baixo = t.estoqueMinLitros!=null && saldo < Number(t.estoqueMinLitros);
+    const custoMedio = custoMedioPonderado(t.id);
+    return {t, saldo, pct, med, diff, baixo, custoMedio};
+  });
+  const valorTotalEstoque = linhas.reduce((a,l)=> a + (l.custoMedio!=null ? l.saldo*l.custoMedio : 0), 0);
+  const alertas = linhas.filter(l=>l.baixo).length;
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Volume total em estoque</div><div class="stat-value">${fmtInt(linhas.reduce((a,l)=>a+l.saldo,0))} L</div></div>
+    <div class="stat-card"><div class="stat-label">Valor aprox. em estoque</div><div class="stat-value">R$ ${fmt(valorTotalEstoque)}</div></div>
+    <div class="stat-card"><div class="stat-label">Tanques cadastrados</div><div class="stat-value">${tanques.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Alertas de estoque baixo</div><div class="stat-value ${alertas>0?'alerta':''}">${alertas}</div></div>
+  </div>
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th>Nível</th><th>Tanque</th><th>Fazenda</th><th>Produto</th><th>Saldo teórico</th>
+        <th>Última medição</th><th>Diferença</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${linhas.map(l=>`
+          <tr>
+            <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${l.baixo?'alerta':''}" style="height:${Math.round(l.pct*100)}%"></div></div></div></td>
+            <td><strong>${l.t.nome}</strong></td>
+            <td>${fkNome('fazendas', l.t.fazendaId)}</td>
+            <td>${fkNome('produtos', l.t.produtoId)}</td>
+            <td class="mono">${fmtInt(l.saldo)} L ${l.t.capacidadeLitros?`<span class="hint">/ ${fmtInt(l.t.capacidadeLitros)} L</span>`:''}</td>
+            <td class="mono">${l.med ? `${fmtInt(l.med.volumeMedidoLitros)} L <span class="hint">(${fmtData(l.med.data)})</span>` : '—'}</td>
+            <td class="mono">${l.diff===null ? '—' : `${l.diff>0?'+':''}${fmtInt(l.diff)} L`}</td>
+            <td>${l.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
   </div>`;
 }
 
@@ -693,6 +833,7 @@ async function excluirCadastro(key, id){
 function mensagemErroSupabase(error){
   if(error?.code==='23505') return 'Já existe um registro com esse nome (talvez nesta fazenda). Use outro nome ou edite o existente.';
   if(error?.code==='23503') return 'Não é possível excluir: existem outros cadastros vinculados a este registro.';
+  if(error?.code==='23514') return 'Verifique os valores informados (ex: volume precisa ser maior que zero, ajuste não pode ser zero).';
   return error?.message || 'Erro desconhecido.';
 }
 function campoHtml(f, d){
@@ -721,7 +862,7 @@ function campoHtml(f, d){
     return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${val}"/></div>`;
   }
   if(f.type==='number'){
-    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/></div>`;
+    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
   return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
 }
@@ -780,7 +921,8 @@ async function salvarCadastro(key){
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros'],
-  // Fases futuras adicionam aqui: ['estoque','Estoque'], ['abastecimento','Abastecimento'], ...
+  ['estoque','Estoque'],
+  // Fases futuras adicionam aqui: ['abastecimento','Abastecimento'], ...
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
