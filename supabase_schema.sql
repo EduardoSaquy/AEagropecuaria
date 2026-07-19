@@ -594,3 +594,35 @@ alter table custos_fixos add column if not exists diluir_por_lote boolean not nu
 -- ===================================================================
 alter table custos_fixos add column if not exists area text check (area in ('confinamento','pasto','cria'));
 alter table custos_fixos add column if not exists data date;
+
+-- ===================================================================
+-- MIGRAÇÃO: Pesagem (Confinamento, Pasto e Cria)
+-- Nova aba "Pesagem", dentro de Confinamento, Pasto e Cria, pra registrar
+-- o peso médio por animal de um lote, com data e observação. A partir do
+-- histórico de pesagens dá pra calcular o ganho de peso (GMD) e a arroba
+-- produzida de cada lote — usados no Financeiro pra mostrar o custo por
+-- arroba produzida (@), por lote e da fazenda inteira.
+-- Pode rodar a qualquer momento, sem ordem especial.
+-- ===================================================================
+create table pesagens (
+  id bigint generated always as identity primary key,
+  lote_id bigint references lotes(id) on delete cascade,
+  data date not null,
+  peso_medio_kg numeric not null,
+  observacao text
+);
+alter table pesagens enable row level security;
+create policy "select pesagens" on pesagens for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('pasto','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir pesagens" on pesagens for insert with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "atualizar pesagens" on pesagens for update using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+) with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "excluir pesagens" on pesagens for delete using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
