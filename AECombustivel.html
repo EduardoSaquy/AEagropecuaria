@@ -171,6 +171,16 @@
   .status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
   .status-dot.ativo{background:var(--bom);}
   .status-dot.inativo{background:var(--cinza);}
+  /* ---------- RELATÓRIOS: impressão / salvar PDF ---------- */
+  .relatorio-cabecalho-impressao{display:none;}
+  @media print{
+    .sidebar, .no-print, .subtabs, .page-header{display:none !important;}
+    .main{padding:0; max-width:100%;}
+    .card{box-shadow:none; border:none;}
+    .relatorio-cabecalho-impressao{display:block; margin-bottom:16px;}
+    .relatorio-cabecalho-impressao h2{font-family:'Fraunces',serif; color:var(--azul-escuro); margin:0 0 4px 0;}
+    .relatorio-cabecalho-impressao p{color:var(--cinza); font-size:12px; margin:0;}
+  }
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -487,7 +497,7 @@ async function recarregarAlertas(){
 
 /* ===================== ESTADO ===================== */
 const state = {
-  page: 'fazendas',
+  page: 'painel',
   ...Object.fromEntries(CADASTRO_KEYS.map(k=>[k, []])),
   perfis: [],
   modal: null, // {type:'cadastro', key} | {type:'abastecimento'} | {type:'usuario'|'permissoes'|'trocarSenha'}
@@ -505,6 +515,8 @@ const state = {
   alertas: [],
   logAuditoria: [],
   alertasMostrarResolvidos: false,
+  // ---- painel & relatórios ----
+  relatorioFiltro: { tipo:'abastecimentos', dataInicio: primeiroDiaMesISO(), dataFim: hojeISO(), fazendaId:'', equipamentoId:'', centroCustoId:'', culturaId:'' },
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -633,6 +645,8 @@ function render(){
           : state.page==='abastecimentos' ? PageAbastecimentos()
           : state.page==='alertas' ? PageAlertas()
           : state.page==='auditoria' ? PageAuditoria()
+          : state.page==='painel' ? PagePainel()
+          : state.page==='relatorios' ? PageRelatorios()
           : RATEIO_PAGES[state.page] ? RATEIO_PAGES[state.page].render()
           : PageCadastro(state.page)}
         `}
@@ -660,6 +674,10 @@ async function loadPerfil(){
   if(!uid){ state.perfil = null; return; }
   const { data } = await db.from('profiles').select('*').eq('id', uid).single();
   state.perfil = data ? rowToPerfil(data) : null;
+  if(state.perfil?.ativo && !paginaAcessivel(state.page)){
+    const primeira = primeiraPaginaVisivel();
+    if(primeira) state.page = primeira;
+  }
 }
 
 async function initAuth(){
@@ -712,7 +730,7 @@ async function fazerLogin(){
 }
 async function fazerLogout(){
   await db.auth.signOut();
-  state.session = null; state.perfil = null; state.page = 'fazendas';
+  state.session = null; state.perfil = null; state.page = 'painel';
   render();
 }
 
@@ -746,6 +764,10 @@ function AguardandoLiberacao(){
 
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
 const GROUPS = {
+  painelRelatorios: {label:'Painel & Relatórios', icon:iconPainel(), pages:[
+    {key:'painel', label:'Painel'},
+    {key:'relatorios', label:'Relatórios'},
+  ]},
   estrutura: {label:'Estrutura', icon:iconFazenda(), pages:[
     {key:'fazendas', label:'Fazendas'},
     {key:'centrosCusto', label:'Centros de Custo'},
@@ -793,6 +815,7 @@ function grupoVisivel(key){
   if(key==='abastecimento') return temPermissao('abastecimento','visualizar');
   if(key==='rateio') return temPermissao('rateio','visualizar');
   if(key==='oversight') return temPermissao('alertas','visualizar') || temPermissao('auditoria','visualizar');
+  if(key==='painelRelatorios') return temPermissao('estoque','visualizar') || temPermissao('abastecimento','visualizar') || temPermissao('rateio','visualizar') || temPermissao('alertas','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 // algumas páginas dentro de um grupo visível podem exigir um módulo
@@ -800,7 +823,16 @@ function grupoVisivel(key){
 function paginaVisivel(key){
   if(key==='alertas') return temPermissao('alertas','visualizar');
   if(key==='auditoria') return temPermissao('auditoria','visualizar');
+  if(key==='relatorios') return temPermissao('rateio','visualizar');
   return true;
+}
+// combina a visibilidade do grupo (aba do menu) com a da página
+// específica dentro dele — usado para saber se a página atual do
+// usuário logado continua acessível (ex: depois de login/permissão mudar).
+function paginaAcessivel(page){
+  const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
+  if(!grupo) return false;
+  return grupoVisivel(grupo[0]) && paginaVisivel(page);
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
 function primeiraPaginaVisivel(){
@@ -861,6 +893,12 @@ function Header(){
   if(state.page==='auditoria'){
     return headerHtml('Alertas & Auditoria','Trilha de Auditoria','Quem registrou, editou ou excluiu cada entrada de estoque, medição, ajuste e abastecimento, com data e hora.');
   }
+  if(state.page==='painel'){
+    return headerHtml('Painel & Relatórios','Painel','Estoque atual, consumo e custo do mês por frente, e os alertas abertos — visão geral da operação.');
+  }
+  if(state.page==='relatorios'){
+    return headerHtml('Painel & Relatórios','Relatórios','Relatórios por período, fazenda, cultura, equipamento e centro de custo, exportáveis em CSV (Excel) ou PDF.');
+  }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='estoque' ? 'Estoque' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
@@ -876,6 +914,7 @@ function brandMark(){
   </svg>`;
 }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconPainel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>`; }
 function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
 function iconFuel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 21h10"/><path d="M14 9h2l3 3v6a1.5 1.5 0 0 1-3 0v-2h-2"/><path d="M7 7h5"/></svg>`; }
 function iconEstoque(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
@@ -1783,6 +1822,203 @@ function PageAuditoria(){
   </div>`;
 }
 
+/* ===================== PAINEL ===================== */
+function PagePainel(){
+  const inicioMes = primeiroDiaMesISO(), fimMes = hojeISO();
+  const abastecimentosMes = state.abastecimentos.filter(a=>{
+    const d = String(a.dataHora||'').slice(0,10);
+    return d>=inicioMes && d<=fimMes;
+  });
+  const volumeMes = abastecimentosMes.reduce((a,x)=>a+Number(x.volumeLitros||0),0);
+  const custoMes = abastecimentosMes.reduce((a,x)=>{ const c = custoAbastecimento(x); return a+(c||0); }, 0);
+  const estoqueTotal = state.tanques.filter(t=>t.ativo!==false).reduce((a,t)=>a+saldoTanque(t.id),0);
+  const podeVerCusto = temPermissao('rateio','visualizar');
+  const podeVerAlertas = temPermissao('alertas','visualizar');
+  const alertasAbertos = state.alertas.filter(a=>a.status==='aberto');
+  const porFrenteMes = agruparPorFrente(abastecimentosMes);
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Estoque atual (todos os tanques)</div><div class="stat-value">${fmtInt(estoqueTotal)} L</div></div>
+    <div class="stat-card"><div class="stat-label">Consumo no mês</div><div class="stat-value">${fmtInt(volumeMes)} L</div></div>
+    <div class="stat-card"><div class="stat-label">Custo no mês</div><div class="stat-value">${podeVerCusto ? 'R$ '+fmt(custoMes) : '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">Alertas abertos</div><div class="stat-value ${podeVerAlertas && alertasAbertos.length>0?'alerta':''}">${podeVerAlertas ? alertasAbertos.length : '—'}</div></div>
+  </div>
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-pad" style="padding-bottom:0;"><p class="eyebrow" style="margin:0 0 12px 0;">Custo do mês por frente</p></div>
+    ${!podeVerCusto ? Empty('Sem acesso a Rateio & Indicadores','Fale com o administrador para liberar esse módulo.') : porFrenteMes.length===0 ? Empty('Nenhum abastecimento este mês','Assim que houver abastecimentos, o resumo aparece aqui.') : `
+    <table>
+      <thead><tr><th>Frente</th><th>Volume</th><th>Custo</th></tr></thead>
+      <tbody>${porFrenteMes.map(g=>`<tr><td><span class="pill ${pillFrente(g.frente)}">${labelFrente(g.frente)}</span></td><td class="mono">${fmtInt(g.volume)} L</td><td class="mono">R$ ${fmt(g.custo)}</td></tr>`).join('')}</tbody>
+    </table>`}
+  </div>
+  <div class="card">
+    <div class="card-pad" style="padding-bottom:0;"><p class="eyebrow" style="margin:0 0 12px 0;">Alertas abertos</p></div>
+    ${!podeVerAlertas ? Empty('Sem acesso a Alertas','Fale com o administrador para liberar esse módulo.') : alertasAbertos.length===0 ? Empty('Nenhum alerta aberto','Tudo certo por aqui.') : `
+    <table>
+      <thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th></tr></thead>
+      <tbody>${alertasAbertos.slice(0,10).map(a=>`<tr><td><span class="pill ${pillSeveridade(a.severidade)}">${a.severidade==='critico'?'Crítico':a.severidade==='atencao'?'Atenção':'Info'}</span></td><td>${TIPO_ALERTA_LABELS[a.tipo]||a.tipo}</td><td>${a.titulo}</td></tr>`).join('')}</tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== RELATÓRIOS EXPORTÁVEIS (CSV/Excel e impressão em PDF) =====================
+ * Reaproveita as mesmas agregações da Fase 4 (Rateio & Indicadores) —
+ * cada "tipo" de relatório aqui é só uma lista de colunas (usada tanto
+ * na tela quanto na exportação) sobre os mesmos dados. Exportação em
+ * CSV (abre direto no Excel) em vez de .xlsx pra não depender de
+ * nenhuma biblioteca externa; "PDF" usa a caixa de impressão nativa do
+ * navegador (Salvar como PDF) sobre uma versão da tela só com a
+ * tabela, sem menu nem filtros — não precisa de servidor nem lib.
+ */
+function abastecimentosFiltradosRelatorio(){
+  const f = state.relatorioFiltro;
+  return state.abastecimentos.filter(a=>{
+    const d = String(a.dataHora||'').slice(0,10);
+    if(f.dataInicio && d<f.dataInicio) return false;
+    if(f.dataFim && d>f.dataFim) return false;
+    if(f.fazendaId && String(a.fazendaId)!==String(f.fazendaId)) return false;
+    if(f.equipamentoId && String(a.equipamentoId)!==String(f.equipamentoId)) return false;
+    if(f.centroCustoId && String(a.centroCustoId)!==String(f.centroCustoId)) return false;
+    if(f.culturaId){
+      const talhao = state.talhoesAreas.find(t=>t.id===a.talhaoAreaId);
+      if(!talhao || String(talhao.culturaId)!==String(f.culturaId)) return false;
+    }
+    return true;
+  });
+}
+const RELATORIO_TIPOS = {
+  abastecimentos: {
+    label:'Abastecimentos (detalhado)',
+    linhas: ()=> abastecimentosFiltradosRelatorio().map(a=>({...a, custo:custoAbastecimento(a)})),
+    colunas: [
+      {label:'Data/Hora', get:l=>fmtDataHora(l.dataHora)},
+      {label:'Fazenda', get:l=>fkNome('fazendas', l.fazendaId)},
+      {label:'Tanque', get:l=>fkNome('tanques', l.tanqueId)},
+      {label:'Equipamento', get:l=>fkNome('equipamentos', l.equipamentoId)},
+      {label:'Operador', get:l=>fkNome('operadores', l.operadorId)},
+      {label:'Volume (L)', get:l=>fmtInt(l.volumeLitros)},
+      {label:'Leitura', get:l=>l.leituraMedidor!=null ? fmt(l.leituraMedidor,1) : '—'},
+      {label:'Talhão/Área', get:l=>l.talhaoAreaId ? fkNome('talhoesAreas', l.talhaoAreaId) : '—'},
+      {label:'Centro de Custo', get:l=>l.centroCustoId ? fkNome('centrosCusto', l.centroCustoId) : '—'},
+      {label:'Operação', get:l=>l.operacaoId ? fkNome('operacoes', l.operacaoId) : '—'},
+      {label:'Custo (R$)', get:l=>l.custo!=null ? fmt(l.custo,2) : '—'},
+    ],
+  },
+  frente: {
+    label:'Resumo por Frente',
+    linhas: ()=> agruparPorFrente(abastecimentosFiltradosRelatorio()),
+    colunas: [
+      {label:'Frente', get:g=>labelFrente(g.frente)},
+      {label:'Volume (L)', get:g=>fmtInt(g.volume)},
+      {label:'Custo (R$)', get:g=>fmt(g.custo,2)},
+      {label:'Abastecimentos', get:g=>g.qtd},
+    ],
+  },
+  talhao: {
+    label:'Resumo por Talhão/Área',
+    linhas: ()=> agruparPorTalhao(abastecimentosFiltradosRelatorio()),
+    colunas: [
+      {label:'Talhão/Área', get:g=>g.nome},
+      {label:'Área (ha)', get:g=>g.areaHa ? fmt(g.areaHa,1) : '—'},
+      {label:'Volume (L)', get:g=>fmtInt(g.volume)},
+      {label:'L/ha', get:g=>g.volumePorHa!=null ? fmt(g.volumePorHa,2) : '—'},
+      {label:'Custo (R$)', get:g=>fmt(g.custo,2)},
+      {label:'R$/ha', get:g=>g.custoPorHa!=null ? fmt(g.custoPorHa,2) : '—'},
+    ],
+  },
+  centroCusto: {
+    label:'Resumo por Centro de Custo',
+    linhas: ()=> agruparPorCentroCusto(abastecimentosFiltradosRelatorio()),
+    colunas: [
+      {label:'Centro de Custo', get:g=>g.nome},
+      {label:'Frente', get:g=>labelFrente(g.frente)},
+      {label:'Volume (L)', get:g=>fmtInt(g.volume)},
+      {label:'Custo (R$)', get:g=>fmt(g.custo,2)},
+    ],
+  },
+  equipamento: {
+    label:'Resumo por Equipamento',
+    linhas: ()=> agruparPorEquipamento(abastecimentosFiltradosRelatorio()),
+    colunas: [
+      {label:'Equipamento', get:g=>g.nome},
+      {label:'Tipo', get:g=>(OPCOES.TIPOS_EQUIPAMENTO.find(t=>t.value===g.tipo)||{}).label || g.tipo || '—'},
+      {label:'Abastecimentos', get:g=>g.qtd},
+      {label:'Volume (L)', get:g=>fmtInt(g.volume)},
+      {label:'Consumo', get:g=>g.consumo!=null ? `${fmt(g.consumo,2)} ${g.unidade}` : '—'},
+      {label:'Custo (R$)', get:g=>fmt(g.custo,2)},
+    ],
+  },
+};
+function exportarCSV(nomeArquivo, colunas, linhas){
+  const separador = ';'; // ; é mais compatível com Excel em pt-BR (a vírgula já é o separador decimal)
+  const escapar = (v)=>{ const s = v==null ? '' : String(v); return /[;"\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const linhasCsv = [
+    colunas.map(c=>escapar(c.label)).join(separador),
+    ...linhas.map(l => colunas.map(c=>escapar(c.get(l))).join(separador)),
+  ];
+  const conteudo = '﻿' + linhasCsv.join('\r\n'); // BOM: acentuação abre certo no Excel
+  const blob = new Blob([conteudo], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nomeArquivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function FiltroRelatorio(){
+  const f = state.relatorioFiltro;
+  return `
+  <div class="toolbar no-print" style="flex-wrap:wrap; row-gap:14px;">
+    <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+      <div class="field" style="margin:0;"><label>Relatório</label>
+        <select id="f-relatorio-tipo" data-relatorio-campo="tipo">
+          ${Object.entries(RELATORIO_TIPOS).map(([k,r])=>`<option value="${k}" ${f.tipo===k?'selected':''}>${r.label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin:0;"><label>De</label><input type="date" id="f-relatorio-inicio" data-relatorio-campo="dataInicio" value="${f.dataInicio}"/></div>
+      <div class="field" style="margin:0;"><label>Até</label><input type="date" id="f-relatorio-fim" data-relatorio-campo="dataFim" value="${f.dataFim}"/></div>
+      <div class="field" style="margin:0;"><label>Fazenda</label>
+        <select data-relatorio-campo="fazendaId"><option value="">Todas</option>${state.fazendas.map(fz=>`<option value="${fz.id}" ${String(f.fazendaId)===String(fz.id)?'selected':''}>${fz.nome}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="margin:0;"><label>Equipamento</label>
+        <select data-relatorio-campo="equipamentoId"><option value="">Todos</option>${state.equipamentos.map(e=>`<option value="${e.id}" ${String(f.equipamentoId)===String(e.id)?'selected':''}>${e.nome}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="margin:0;"><label>Centro de Custo</label>
+        <select data-relatorio-campo="centroCustoId"><option value="">Todos</option>${state.centrosCusto.map(c=>`<option value="${c.id}" ${String(f.centroCustoId)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="margin:0;"><label>Cultura</label>
+        <select data-relatorio-campo="culturaId"><option value="">Todas</option>${state.culturas.map(c=>`<option value="${c.id}" ${String(f.culturaId)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}</select>
+      </div>
+    </div>
+  </div>`;
+}
+function PageRelatorios(){
+  if(!temPermissao('rateio','visualizar')){
+    return `<div class="card">${Empty('Sem acesso a Relatórios','Fale com o administrador para liberar o módulo Rateio & Indicadores.')}</div>`;
+  }
+  const cfg = RELATORIO_TIPOS[state.relatorioFiltro.tipo];
+  const linhas = cfg.linhas();
+  return `
+  ${FiltroRelatorio()}
+  <div class="toolbar no-print">
+    <span class="hint">${linhas.length} registro(s)</span>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-ghost btn-sm" data-exportar-csv="1">Exportar CSV (Excel)</button>
+      <button class="btn btn-primary btn-sm" data-imprimir-relatorio="1">Imprimir / Salvar PDF</button>
+    </div>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <div class="relatorio-cabecalho-impressao">
+      <h2>${cfg.label}</h2>
+      <p>Período: ${fmtData(state.relatorioFiltro.dataInicio)} a ${fmtData(state.relatorioFiltro.dataFim)} · Gerado em ${fmtDataHora(new Date().toISOString())}</p>
+    </div>
+    ${linhas.length===0 ? Empty('Nenhum registro no período/filtro','Ajuste os filtros acima.') : `
+    <table>
+      <thead><tr>${cfg.colunas.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead>
+      <tbody>${linhas.map(l=>`<tr>${cfg.colunas.map(c=>`<td>${c.get(l)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>`}
+  </div>`;
+}
+
 /* ===================== MODAL GENÉRICO DE CADASTRO ===================== */
 function novoCadastroDraft(key){
   const cfg = CADASTROS[key];
@@ -2158,6 +2394,20 @@ function attachEvents(){
       render();
     };
   });
+  document.querySelectorAll('[data-relatorio-campo]').forEach(el=>{
+    el.onchange = ()=>{ state.relatorioFiltro[el.dataset.relatorioCampo] = el.value; render(); };
+  });
+  const exportarCsvBtn = document.querySelector('[data-exportar-csv]');
+  if(exportarCsvBtn){
+    exportarCsvBtn.onclick = ()=>{
+      const cfg = RELATORIO_TIPOS[state.relatorioFiltro.tipo];
+      exportarCSV(`relatorio_${state.relatorioFiltro.tipo}_${hojeISO()}.csv`, cfg.colunas, cfg.linhas());
+    };
+  }
+  const imprimirRelatorioBtn = document.querySelector('[data-imprimir-relatorio]');
+  if(imprimirRelatorioBtn){
+    imprimirRelatorioBtn.onclick = ()=> window.print();
+  }
   const mostrarResolvidosEl = document.getElementById('f-mostrar-resolvidos');
   if(mostrarResolvidosEl){
     mostrarResolvidosEl.onchange = (e)=>{ state.alertasMostrarResolvidos = e.target.checked; render(); };
