@@ -497,3 +497,104 @@ create policy "select abastecimentos" on abastecimentos for select using (tem_pe
 create policy "inserir abastecimentos" on abastecimentos for insert with check (tem_permissao('abastecimento','editar'));
 create policy "atualizar abastecimentos" on abastecimentos for update using (tem_permissao('abastecimento','editar')) with check (tem_permissao('abastecimento','editar'));
 create policy "excluir abastecimentos" on abastecimentos for delete using (tem_permissao('abastecimento','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO FASE 5 — Alertas e trilha de auditoria
+--
+-- Rode este bloco depois que as Fases 1 a 4 já estiverem no ar.
+--
+-- Alertas: em vez de um job periódico no servidor (o app não tem
+-- backend próprio, só Supabase + páginas estáticas), a detecção roda
+-- no navegador de quem tem acesso ao módulo, logo depois do login —
+-- compara o estado atual dos dados (saldo x estoque mínimo, saldo x
+-- última medição física, abastecimentos acima da capacidade do
+-- equipamento, consumo fora do padrão de referência) e grava só o que
+-- for novidade (dedupe por tipo+referência) ou resolve sozinho os
+-- alertas cuja condição já deixou de ser verdadeira (estoque baixo e
+-- divergência de medição, que são condições "vivas"; os outros dois
+-- tipos são sobre um abastecimento específico que já aconteceu, então
+-- só se resolvem manualmente).
+--
+-- Trilha de auditoria: log_auditoria grava, via trigger, quem criou,
+-- editou ou excluiu cada linha das quatro tabelas onde uma divergência
+-- pesa mais (estoque e abastecimento) — os cadastros (fazenda, tanque,
+-- equipamento etc.) já guardam created_by/updated_by nas próprias
+-- colunas, o que é suficiente pra esse risco menor.
+-- ===================================================================
+
+create table alertas (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint references fazendas(id),
+  tipo text not null check (tipo in ('estoque_baixo','divergencia_medicao','volume_excede_capacidade','consumo_anomalo')),
+  severidade text not null check (severidade in ('info','atencao','critico')),
+  titulo text not null,
+  descricao text not null,
+  tanque_id bigint references tanques(id),
+  equipamento_id bigint references equipamentos(id),
+  abastecimento_id bigint references abastecimentos(id),
+  status text not null default 'aberto' check (status in ('aberto','resolvido')),
+  data_hora timestamptz not null default now(),
+  resolvido_em timestamptz,
+  resolvido_por uuid references profiles(id),
+  observacao_resolucao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_alertas_status on alertas(status);
+create index idx_alertas_tanque on alertas(tanque_id);
+create index idx_alertas_equipamento on alertas(equipamento_id);
+create trigger set_updated before update on alertas for each row execute function trg_set_updated();
+
+alter table alertas enable row level security;
+create policy "select alertas" on alertas for select using (tem_permissao('alertas','visualizar'));
+-- inserir exige só "visualizar": a detecção é um efeito colateral de
+-- abrir a tela, não uma edição deliberada — qualquer um que pode ver
+-- alertas pode fazer o sistema registrar um novo. Resolver (update),
+-- manual ou automático, exige "editar".
+create policy "inserir alertas" on alertas for insert with check (tem_permissao('alertas','visualizar'));
+create policy "atualizar alertas" on alertas for update using (tem_permissao('alertas','editar')) with check (tem_permissao('alertas','editar'));
+
+create table log_auditoria (
+  id bigint generated always as identity primary key,
+  tabela text not null,
+  registro_id bigint not null,
+  acao text not null check (acao in ('insert','update','delete')),
+  dados_antigos jsonb,
+  dados_novos jsonb,
+  usuario_id uuid references profiles(id),
+  criado_em timestamptz not null default now()
+);
+create index idx_log_auditoria_tabela_registro on log_auditoria(tabela, registro_id);
+create index idx_log_auditoria_criado_em on log_auditoria(criado_em desc);
+
+alter table log_auditoria enable row level security;
+create policy "select log_auditoria" on log_auditoria for select using (tem_permissao('auditoria','visualizar'));
+-- sem policy de insert/update/delete: só o trigger abaixo escreve aqui
+-- (roda como security definer, então não precisa de permissão própria).
+
+create or replace function trg_log_auditoria() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if TG_OP = 'INSERT' then
+    insert into log_auditoria(tabela, registro_id, acao, dados_novos, usuario_id)
+    values (TG_TABLE_NAME, new.id, 'insert', to_jsonb(new), auth.uid());
+    return new;
+  elsif TG_OP = 'UPDATE' then
+    insert into log_auditoria(tabela, registro_id, acao, dados_antigos, dados_novos, usuario_id)
+    values (TG_TABLE_NAME, new.id, 'update', to_jsonb(old), to_jsonb(new), auth.uid());
+    return new;
+  elsif TG_OP = 'DELETE' then
+    insert into log_auditoria(tabela, registro_id, acao, dados_antigos, usuario_id)
+    values (TG_TABLE_NAME, old.id, 'delete', to_jsonb(old), auth.uid());
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+create trigger log_abastecimentos after insert or update or delete on abastecimentos for each row execute function trg_log_auditoria();
+create trigger log_entradas_estoque after insert or update or delete on entradas_estoque for each row execute function trg_log_auditoria();
+create trigger log_medicoes_fisicas after insert or update or delete on medicoes_fisicas for each row execute function trg_log_auditoria();
+create trigger log_ajustes_estoque after insert or update or delete on ajustes_estoque for each row execute function trg_log_auditoria();
