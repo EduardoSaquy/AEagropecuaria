@@ -572,6 +572,7 @@ const state = {
   authChecked: false, // já verificamos se existe sessão salva?
   session: null,
   perfil: null, // {nome, usuario, papel, permissoes, ativo} do usuário logado
+  perfilErroRede: false, // true quando não deu pra buscar o perfil por falta de conexão (e não há um salvo neste aparelho)
   loginDraft: {usuario:'', senha:''},
   loginError: '',
   loginLoading: false,
@@ -690,11 +691,36 @@ function primeiraPaginaVisivel(){
   return grupos[0] ? grupos[0][1].pages[0].key : null;
 }
 
+// Perfil (nome/papel/permissões) fica salvo neste aparelho depois de toda
+// busca com sucesso — se depois a busca falhar por falta de conexão (não
+// por um erro real, tipo perfil removido), usamos o último salvo em vez de
+// mostrar "sem acesso liberado" pra quem só está sem sinal.
+const PERFIL_CACHE_KEY = 'aepecuaria_perfil_cache_v1';
+function lerPerfilCache(uid){
+  try{
+    const cache = JSON.parse(localStorage.getItem(PERFIL_CACHE_KEY)||'null');
+    return (cache && cache.uid===uid) ? cache.perfil : null;
+  }catch(e){ return null; }
+}
+function salvarPerfilCache(uid, perfil){
+  try{ localStorage.setItem(PERFIL_CACHE_KEY, JSON.stringify({uid, perfil})); }
+  catch(e){ /* localStorage indisponível (modo privado etc.) — sem o que fazer aqui */ }
+}
 async function loadPerfil(){
   const uid = state.session?.user?.id;
-  if(!uid){ state.perfil = null; return; }
-  const { data } = await db.from('profiles').select('*').eq('id', uid).single();
-  state.perfil = data ? rowToPerfil(data) : null;
+  if(!uid){ state.perfil = null; state.perfilErroRede = false; return; }
+  const { data, error } = await db.from('profiles').select('*').eq('id', uid).single();
+  state.perfilErroRede = false;
+  if(data){
+    state.perfil = rowToPerfil(data);
+    salvarPerfilCache(uid, state.perfil);
+  } else if(error && pareceErroDeRede(error)){
+    const cache = lerPerfilCache(uid);
+    if(cache){ state.perfil = cache; }
+    else { state.perfil = null; state.perfilErroRede = true; }
+  } else {
+    state.perfil = null;
+  }
   if(state.perfil && state.perfil.ativo && !gruposVisiveis().some(([k])=>k===currentGroupKey())){
     const primeira = primeiraPaginaVisivel();
     if(primeira) state.page = primeira;
@@ -780,6 +806,7 @@ function LoginPage(){
 }
 
 function AguardandoLiberacao(){
+  const semRede = state.perfilErroRede;
   return `
   <div class="login-wrap">
     <div class="login-card">
@@ -788,9 +815,11 @@ function AguardandoLiberacao(){
         <div class="brand-name">AE Pecuária</div>
       </div>
       <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
-        Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
-        Fale com o administrador do sistema.
+        ${semRede
+          ? 'Não foi possível confirmar seu perfil de acesso porque este aparelho está sem conexão com a internet, e ele ainda não tem um perfil salvo de um acesso anterior. Conecte-se à internet e tente de novo.'
+          : 'Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta. Fale com o administrador do sistema.'}
       </p>
+      ${semRede ? `<button class="btn btn-primary login-btn" data-retry-perfil="1" style="margin-bottom:10px;">Tentar novamente</button>` : ''}
       <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
     </div>
   </div>`;
@@ -3408,6 +3437,13 @@ function attachEvents(){
   }
   document.querySelectorAll('[data-logout]').forEach(el=>{
     el.onclick = ()=> fazerLogout();
+  });
+  document.querySelectorAll('[data-retry-perfil]').forEach(el=>{
+    el.onclick = async ()=>{
+      await loadPerfil();
+      render();
+      if(state.perfil?.ativo) loadAll();
+    };
   });
   document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
     el.onclick = ()=>{
