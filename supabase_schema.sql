@@ -626,3 +626,14 @@ create policy "atualizar pesagens" on pesagens for update using (
 create policy "excluir pesagens" on pesagens for delete using (
   tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Observação em Despesas e Receitas
+-- Cocho e Pesagem já tinham um campo de observação opcional; Despesas
+-- (custos_fixos) e Receitas não tinham como anotar um detalhe do
+-- lançamento (ex: número da nota fiscal, comprador, motivo do valor).
+-- Pode rodar a qualquer momento — todo lançamento existente continua
+-- com observação em branco.
+-- ===================================================================
+alter table custos_fixos add column if not exists observacao text;
+alter table receitas add column if not exists observacao text;

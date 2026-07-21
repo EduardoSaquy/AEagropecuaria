@@ -491,10 +491,10 @@ function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMa
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||''}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, area:r.area||null, diluirPorLote:r.diluir_por_lote!==false}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, area:c.area||null, diluir_por_lote:c.diluirPorLote!==false}; }
-function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor}; }
-function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, area:r.area||null, diluirPorLote:r.diluir_por_lote!==false, observacao:r.observacao||''}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, area:c.area||null, diluir_por_lote:c.diluirPorLote!==false, observacao:c.observacao||''}; }
+function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||''}; }
+function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor, observacao:r.observacao||''}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
@@ -1247,13 +1247,13 @@ function openNewModal(type){
     editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:''};
     state.modal = {type:'pesagem'};
   } else if(type==='custoFixo'){
-    editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', area:'', diluirPorLote:true};
+    editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', area:'', diluirPorLote:true, observacao:''};
     state.modal = {type:'custoFixo'};
   } else if(type==='investimento'){
     editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
     state.modal = {type:'investimento'};
   } else if(type==='receita'){
-    editDraft = {loteId:'', descricao:'', arrobas:'', valor:'', data:new Date().toISOString().slice(0,10)};
+    editDraft = {loteId:'', descricao:'', arrobas:'', valor:'', data:new Date().toISOString().slice(0,10), observacao:''};
     state.modal = {type:'receita'};
   } else if(type==='precoArroba'){
     const hoje = new Date().toISOString().slice(0,10);
@@ -2596,7 +2596,7 @@ function PageResultadosReceitas(){
   <div class="card">
     ${list.length===0 ? Empty('Nenhuma receita registrada','Registre a venda de animais e outras receitas da operação.') : `
     <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Descrição</th><th>Arrobas</th><th>Valor</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Lote</th><th>Descrição</th><th>Arrobas</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
       <tbody>
         ${list.map(r=>{
           const lote = state.lotes.find(l=>l.id===r.loteId);
@@ -2606,6 +2606,7 @@ function PageResultadosReceitas(){
             <td>${r.descricao}</td>
             <td class="mono">${r.arrobas ? fmt(r.arrobas,2) : '—'}</td>
             <td class="mono">R$ ${fmt(r.valor)}</td>
+            <td>${r.observacao || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('resultados','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
@@ -2617,6 +2618,7 @@ function PageResultadosReceitas(){
         <tr>
           <td colspan="4" style="text-align:right; font-weight:600;">Total recebido</td>
           <td class="mono" style="font-weight:600;">R$ ${fmt(list.reduce((a,r)=>a+Number(r.valor||0),0))}</td>
+          <td></td>
           <td></td>
         </tr>
       </tbody>
@@ -2642,7 +2644,7 @@ function PageFinanceiroCustosFixos(){
   <div class="card">
     ${list.length===0 ? Empty(state.custosFixos.length===0 ? 'Nenhuma despesa cadastrada' : 'Nenhuma despesa encontrada', state.custosFixos.length===0 ? 'Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.' : 'Nenhuma despesa bate com essa busca.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Área</th><th>Valor</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Área</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
       <tbody>
         ${list.map(c=>`
           <tr>
@@ -2651,6 +2653,7 @@ function PageFinanceiroCustosFixos(){
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
             <td>${c.area ? `<span class="pill pill-cat">${AREA_LABEL[c.area]}</span>` : (c.diluirPorLote!==false ? `<span class="pill pill-ok">Geral · rateado</span>` : `<span class="pill">Geral · só total</span>`)}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
+            <td>${c.observacao || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
@@ -3273,6 +3276,7 @@ function ModalCustoFixo(){
           </label>
           <p class="hint">Só vale quando a Área acima é "Geral". Desmarque para um custo geral que conta só no total (Financeiro/Resultados), sem entrar em Por Lote nem no gráfico por área — use pra algo (ex: nutrição sem área definida) que já é/será coberto pelos lançamentos diários de ração, cocho ou pasto, evitando contar duas vezes.</p>
         </div>
+        <div class="field" style="margin-top:6px;"><label>Observação (opcional)</label><textarea id="f-obscustofixo" rows="2" placeholder="Ex: referente à nota fiscal 1234">${d.observacao||''}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -3326,6 +3330,7 @@ function ModalReceita(){
           <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobas" type="number" step="0.01" value="${d.arrobas||''}"/></div>
           <div class="field"><label>Valor recebido (R$)</label><input id="f-valorreceita" type="number" step="0.01" value="${d.valor}"/></div>
         </div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsreceita" rows="2" placeholder="Ex: comprador, nº da nota fiscal">${d.observacao||''}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -4024,6 +4029,7 @@ function attachEvents(){
           // um custo com área direta já vai inteiro pra aquela área — não faz
           // sentido também diluir por cabeça entre lotes (dobraria a conta).
           diluirPorLote: area ? false : document.getElementById('f-diluircustofixo').checked,
+          observacao: document.getElementById('f-obscustofixo').value,
         };
         const row = custoFixoToRow(campos);
         if(editDraft._editId){
@@ -4051,6 +4057,7 @@ function attachEvents(){
           descricao: document.getElementById('f-descricaoreceita').value || 'Sem descrição',
           arrobas: document.getElementById('f-arrobas').value ? Number(document.getElementById('f-arrobas').value) : null,
           valor: Number(document.getElementById('f-valorreceita').value)||0,
+          observacao: document.getElementById('f-obsreceita').value,
         };
         const row = receitaToRow(campos);
         if(editDraft._editId){
