@@ -566,6 +566,7 @@ const state = {
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
   search: '',
+  searchDespesas: '',
   fabOpen: false,
   // ---- autenticação ----
   authChecked: false, // já verificamos se existe sessão salva?
@@ -2597,14 +2598,20 @@ function PageResultadosReceitas(){
 /* ---- Financeiro: Despesas ---- */
 const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
 function PageFinanceiroCustosFixos(){
-  const list = [...state.custosFixos].sort((a,b)=>{
+  const busca = state.searchDespesas.toLowerCase();
+  const list = [...state.custosFixos].filter(c=>
+    !busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca)
+  ).sort((a,b)=>{
     if(!a.mes && b.mes) return -1;
     if(a.mes && !b.mes) return 1;
     return (b.mes||'').localeCompare(a.mes||'');
   });
   return `
+  <div class="field" style="max-width:340px; margin-bottom:14px;">
+    <input type="text" placeholder="Buscar por nome ou centro de custo..." value="${state.searchDespesas}" data-search-despesas="1"/>
+  </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma despesa cadastrada','Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.') : `
+    ${list.length===0 ? Empty(state.custosFixos.length===0 ? 'Nenhuma despesa cadastrada' : 'Nenhuma despesa encontrada', state.custosFixos.length===0 ? 'Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.' : 'Nenhuma despesa bate com essa busca.') : `
     <table>
       <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Área</th><th>Valor</th><th></th></tr></thead>
       <tbody>
@@ -3470,6 +3477,13 @@ function attachEvents(){
     searchEl.oninput = (e)=>{ state.search = e.target.value; render();
       // refocus + cursor at end after re-render
       const s = document.querySelector('[data-search]');
+      s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+    };
+  }
+  const searchDespesasEl = document.querySelector('[data-search-despesas]');
+  if(searchDespesasEl){
+    searchDespesasEl.oninput = (e)=>{ state.searchDespesas = e.target.value; render();
+      const s = document.querySelector('[data-search-despesas]');
       s.focus(); s.setSelectionRange(s.value.length, s.value.length);
     };
   }
