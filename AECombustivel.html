@@ -450,6 +450,17 @@ function rowToCadastro(row, cfg){
   return obj;
 }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
+function rowToAlerta(r){
+  return {
+    id:r.id, fazendaId:r.fazenda_id, tipo:r.tipo, severidade:r.severidade, titulo:r.titulo, descricao:r.descricao,
+    tanqueId:r.tanque_id, equipamentoId:r.equipamento_id, abastecimentoId:r.abastecimento_id,
+    status:r.status, dataHora:r.data_hora, resolvidoEm:r.resolvido_em, resolvidoPor:r.resolvido_por,
+    observacaoResolucao:r.observacao_resolucao,
+  };
+}
+function rowToLog(r){
+  return { id:r.id, tabela:r.tabela, registroId:r.registro_id, acao:r.acao, dadosAntigos:r.dados_antigos, dadosNovos:r.dados_novos, usuarioId:r.usuario_id, criadoEm:r.criado_em };
+}
 
 async function loadAll(){
   const results = await Promise.all([
@@ -458,10 +469,19 @@ async function loadAll(){
       return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
     }),
     db.from('profiles').select('*').order('nome'),
+    db.from('alertas').select('*').order('data_hora', {ascending:false}),
+    db.from('log_auditoria').select('*').order('criado_em', {ascending:false}).limit(300),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
+  state.alertas = (results[CADASTRO_KEYS.length+1].data||[]).map(rowToAlerta);
+  state.logAuditoria = (results[CADASTRO_KEYS.length+2].data||[]).map(rowToLog);
   salvarCacheLocal();
+  render();
+}
+async function recarregarAlertas(){
+  const { data } = await db.from('alertas').select('*').order('data_hora', {ascending:false});
+  state.alertas = (data||[]).map(rowToAlerta);
   render();
 }
 
@@ -481,6 +501,10 @@ const state = {
   abastecimentoLoading: false,
   // ---- rateio & indicadores ----
   rateioFiltro: { dataInicio: primeiroDiaMesISO(), dataFim: hojeISO() },
+  // ---- alertas & auditoria ----
+  alertas: [],
+  logAuditoria: [],
+  alertasMostrarResolvidos: false,
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -607,6 +631,8 @@ function render(){
         ${state.page==='adminUsuarios' ? PageAdminUsuarios()
           : state.page==='estoqueResumo' ? PageEstoqueResumo()
           : state.page==='abastecimentos' ? PageAbastecimentos()
+          : state.page==='alertas' ? PageAlertas()
+          : state.page==='auditoria' ? PageAuditoria()
           : RATEIO_PAGES[state.page] ? RATEIO_PAGES[state.page].render()
           : PageCadastro(state.page)}
         `}
@@ -644,7 +670,7 @@ async function initAuth(){
   state.authChecked = true;
   render();
   if(state.session && state.perfil?.ativo){
-    loadAll();
+    loadAll().then(detectarAlertas);
     atualizarFilaNaTela().then(sincronizarFila);
   }
 
@@ -657,7 +683,7 @@ async function initAuth(){
       await loadPerfil();
       render();
       if(state.perfil?.ativo){
-        loadAll();
+        loadAll().then(detectarAlertas);
         atualizarFilaNaTela().then(sincronizarFila);
       }
     } else {
@@ -682,7 +708,7 @@ async function fazerLogin(){
   await loadPerfil();
   state.loginDraft = {usuario:'', senha:''};
   render();
-  if(state.perfil?.ativo) loadAll();
+  if(state.perfil?.ativo) loadAll().then(detectarAlertas);
 }
 async function fazerLogout(){
   await db.auth.signOut();
@@ -752,6 +778,10 @@ const GROUPS = {
     {key:'rateioCentroCusto', label:'Por Centro de Custo'},
     {key:'rateioEquipamento', label:'Por Equipamento'},
   ]},
+  oversight: {label:'Alertas & Auditoria', icon:iconAlerta(), pages:[
+    {key:'alertas', label:'Alertas'},
+    {key:'auditoria', label:'Trilha de Auditoria'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -762,10 +792,24 @@ function grupoVisivel(key){
   if(key==='estoque') return temPermissao('estoque','visualizar');
   if(key==='abastecimento') return temPermissao('abastecimento','visualizar');
   if(key==='rateio') return temPermissao('rateio','visualizar');
+  if(key==='oversight') return temPermissao('alertas','visualizar') || temPermissao('auditoria','visualizar');
   return temPermissao('cadastros','visualizar');
 }
+// algumas páginas dentro de um grupo visível podem exigir um módulo
+// próprio (ex: dentro de Alertas & Auditoria, cada aba tem seu módulo).
+function paginaVisivel(key){
+  if(key==='alertas') return temPermissao('alertas','visualizar');
+  if(key==='auditoria') return temPermissao('auditoria','visualizar');
+  return true;
+}
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
-function primeiraPaginaVisivel(){ const grupos = gruposVisiveis(); return grupos[0] ? grupos[0][1].pages[0].key : null; }
+function primeiraPaginaVisivel(){
+  for(const [,g] of gruposVisiveis()){
+    const pagina = g.pages.find(p=>paginaVisivel(p.key));
+    if(pagina) return pagina.key;
+  }
+  return null;
+}
 
 /* ===================== SIDEBAR / HEADER ===================== */
 function Sidebar(){
@@ -790,10 +834,11 @@ function Sidebar(){
 }
 function SubTabs(){
   const group = GROUPS[currentGroupKey()];
-  if(!group || group.pages.length<2) return '';
+  const paginas = group ? group.pages.filter(p=>paginaVisivel(p.key)) : [];
+  if(paginas.length<2) return '';
   return `
   <div class="subtabs">
-    ${group.pages.map(p=>`<button class="subtab ${state.page===p.key?'active':''}" data-subnav="${p.key}">${p.label}</button>`).join('')}
+    ${paginas.map(p=>`<button class="subtab ${state.page===p.key?'active':''}" data-subnav="${p.key}">${p.label}</button>`).join('')}
   </div>`;
 }
 function Header(){
@@ -809,6 +854,12 @@ function Header(){
   if(RATEIO_PAGES[state.page]){
     const r = RATEIO_PAGES[state.page];
     return headerHtml('Rateio & Indicadores', r.label, r.desc);
+  }
+  if(state.page==='alertas'){
+    return headerHtml('Alertas & Auditoria','Alertas','Detecção automática de estoque baixo, divergência de medição, volume acima da capacidade do equipamento e consumo fora do padrão.');
+  }
+  if(state.page==='auditoria'){
+    return headerHtml('Alertas & Auditoria','Trilha de Auditoria','Quem registrou, editou ou excluiu cada entrada de estoque, medição, ajuste e abastecimento, com data e hora.');
   }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='estoque' ? 'Estoque' : 'Cadastro';
@@ -830,6 +881,7 @@ function iconFuel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fil
 function iconEstoque(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
 function iconAbastecimento(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>`; }
 function iconRateio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12V3a9 9 0 1 1-9 9h9Z"/><path d="M21 12A9 9 0 0 0 12 3v9h9Z" opacity="0.45"/></svg>`; }
+function iconAlerta(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.7 18a1.6 1.6 0 0 0 1.4 2.4h15.8a1.6 1.6 0 0 0 1.4-2.4L13.7 3.9a1.6 1.6 0 0 0-2.8 0Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
@@ -1500,6 +1552,237 @@ const RATEIO_PAGES = {
   rateioEquipamento: {label:'Por Equipamento', desc:'Consumo (L/h ou L/km) e custo por equipamento no período, para comparar eficiência e ranquear os maiores consumidores.', render:PageRateioEquipamento},
 };
 
+/* ===================== ALERTAS (detecção automática) =====================
+ * Sem backend próprio para rodar um job periódico, a detecção acontece
+ * no navegador de quem tem acesso ao módulo, logo após o login (veja
+ * initAuth/fazerLogin): compara o estado atual dos dados e grava só o
+ * que for novidade (dedupe por tipo+referência). Estoque baixo e
+ * divergência de medição são condições "vivas" — quando deixam de ser
+ * verdade, o próprio sistema resolve o alerta sozinho. Volume acima da
+ * capacidade e consumo fora do padrão são sobre um abastecimento
+ * específico que já aconteceu, então só se resolvem manualmente. */
+const TIPO_ALERTA_LABELS = {
+  estoque_baixo:'Estoque baixo', divergencia_medicao:'Divergência de medição',
+  volume_excede_capacidade:'Volume acima da capacidade', consumo_anomalo:'Consumo fora do padrão',
+};
+function pillSeveridade(sev){
+  if(sev==='critico') return 'pill-alerta';
+  if(sev==='atencao') return 'pill-warn';
+  return 'pill-cat';
+}
+function chaveAlerta(a){ return `${a.tipo}:${a.tanqueId||''}:${a.equipamentoId||''}:${a.abastecimentoId||''}`; }
+async function detectarAlertas(){
+  if(!temPermissao('alertas','visualizar')) return;
+  const abertosPorChave = {};
+  state.alertas.filter(a=>a.status==='aberto').forEach(a=>{ abertosPorChave[chaveAlerta(a)] = a; });
+  const todasAsChaves = new Set(state.alertas.map(chaveAlerta));
+
+  const novos = [];
+  const resolverAutomaticamente = [];
+
+  // A. Estoque baixo (condição viva — se resolve sozinha)
+  state.tanques.filter(t=>t.ativo!==false && t.estoqueMinLitros!=null).forEach(t=>{
+    const chave = `estoque_baixo:${t.id}::`;
+    const existente = abertosPorChave[chave];
+    const saldo = saldoTanque(t.id);
+    if(saldo < Number(t.estoqueMinLitros)){
+      if(!existente){
+        novos.push({ tipo:'estoque_baixo', severidade:'atencao', tanqueId:t.id, equipamentoId:null, abastecimentoId:null,
+          titulo:`Estoque baixo — ${t.nome}`,
+          descricao:`Saldo teórico de ${fmtInt(saldo)} L, abaixo do mínimo definido de ${fmtInt(t.estoqueMinLitros)} L.` });
+      }
+    } else if(existente){
+      resolverAutomaticamente.push({ alerta:existente, motivo:'Saldo voltou a ficar acima do mínimo definido.' });
+    }
+  });
+
+  // B. Divergência entre saldo teórico e última medição física (condição viva)
+  state.tanques.filter(t=>t.ativo!==false).forEach(t=>{
+    const chave = `divergencia_medicao:${t.id}::`;
+    const existente = abertosPorChave[chave];
+    const med = ultimaMedicao(t.id);
+    if(!med){
+      if(existente) resolverAutomaticamente.push({ alerta:existente, motivo:'Sem medição física recente para comparar.' });
+      return;
+    }
+    const saldo = saldoTanque(t.id);
+    const diff = Math.abs(saldo - Number(med.volumeMedidoLitros||0));
+    const limite = Math.max(200, Number(t.capacidadeLitros||0)*0.05);
+    if(diff > limite){
+      if(!existente){
+        novos.push({ tipo:'divergencia_medicao', severidade: diff>limite*2 ? 'critico' : 'atencao', tanqueId:t.id, equipamentoId:null, abastecimentoId:null,
+          titulo:`Divergência de medição — ${t.nome}`,
+          descricao:`Saldo teórico de ${fmtInt(saldo)} L difere ${fmtInt(diff)} L da última medição física (${fmtInt(med.volumeMedidoLitros)} L em ${fmtData(med.data)}).` });
+      }
+    } else if(existente){
+      resolverAutomaticamente.push({ alerta:existente, motivo:'Divergência voltou a ficar dentro da margem aceitável.' });
+    }
+  });
+
+  // C. Volume de um abastecimento acima da capacidade do tanque do equipamento (evento pontual)
+  state.abastecimentos.forEach(a=>{
+    const equip = state.equipamentos.find(e=>e.id===a.equipamentoId);
+    if(!equip || !equip.capacidadeTanqueLitros) return;
+    if(Number(a.volumeLitros) <= Number(equip.capacidadeTanqueLitros)) return;
+    const chave = `volume_excede_capacidade::${equip.id}:${a.id}`;
+    if(todasAsChaves.has(chave)) return;
+    novos.push({ tipo:'volume_excede_capacidade', severidade:'atencao', tanqueId:null, equipamentoId:equip.id, abastecimentoId:a.id,
+      titulo:`Volume acima da capacidade — ${equip.nome}`,
+      descricao:`Abastecimento de ${fmtInt(a.volumeLitros)} L em ${fmtDataHora(a.dataHora)} excede a capacidade de ${fmtInt(equip.capacidadeTanqueLitros)} L do tanque deste equipamento.` });
+  });
+
+  // D. Consumo fora do padrão de referência do equipamento (evento pontual)
+  const porEquip = {};
+  state.abastecimentos.forEach(a=>{ (porEquip[a.equipamentoId]=porEquip[a.equipamentoId]||[]).push(a); });
+  Object.entries(porEquip).forEach(([idStr, registros])=>{
+    const equip = state.equipamentos.find(e=>e.id===Number(idStr));
+    if(!equip || equip.tipoMedidor==='nenhum' || !equip.consumoReferencia) return;
+    const ordenados = registros.filter(r=>r.leituraMedidor!=null).sort((x,y)=>Number(x.leituraMedidor)-Number(y.leituraMedidor));
+    for(let i=1;i<ordenados.length;i++){
+      const anterior = ordenados[i-1], atual = ordenados[i];
+      const percorrido = Number(atual.leituraMedidor) - Number(anterior.leituraMedidor);
+      if(percorrido<=0) continue;
+      const taxa = Number(atual.volumeLitros)/percorrido;
+      const ref = Number(equip.consumoReferencia);
+      const desvio = Math.abs(taxa-ref)/ref;
+      if(desvio<=0.4) continue;
+      const chave = `consumo_anomalo::${equip.id}:${atual.id}`;
+      if(todasAsChaves.has(chave)) continue;
+      const unidade = equip.tipoMedidor==='horimetro' ? 'L/h' : 'L/km';
+      novos.push({ tipo:'consumo_anomalo', severidade: desvio>0.8 ? 'critico' : 'atencao', tanqueId:null, equipamentoId:equip.id, abastecimentoId:atual.id,
+        titulo:`Consumo fora do padrão — ${equip.nome}`,
+        descricao:`Abastecimento de ${fmtDataHora(atual.dataHora)}: ${fmt(taxa,2)} ${unidade}, ${fmt(desvio*100,0)}% ${taxa>ref?'acima':'abaixo'} da referência (${fmt(ref,2)} ${unidade}).` });
+    }
+  });
+
+  for(const alerta of novos){
+    const fazendaId = alerta.tanqueId ? state.tanques.find(t=>t.id===alerta.tanqueId)?.fazendaId
+      : alerta.equipamentoId ? state.equipamentos.find(e=>e.id===alerta.equipamentoId)?.fazendaId : null;
+    await db.from('alertas').insert({
+      fazenda_id: fazendaId, tipo: alerta.tipo, severidade: alerta.severidade, titulo: alerta.titulo, descricao: alerta.descricao,
+      tanque_id: alerta.tanqueId, equipamento_id: alerta.equipamentoId, abastecimento_id: alerta.abastecimentoId,
+    });
+  }
+  // resolver sozinho só quem também tem permissão de editar (a policy de update exige isso)
+  if(temPermissao('alertas','editar')){
+    for(const { alerta, motivo } of resolverAutomaticamente){
+      await db.from('alertas').update({ status:'resolvido', resolvido_em:new Date().toISOString(), resolvido_por:null, observacao_resolucao:motivo }).eq('id', alerta.id);
+    }
+  }
+  if(novos.length || resolverAutomaticamente.length) await recarregarAlertas();
+}
+function PageAlertas(){
+  if(!temPermissao('alertas','visualizar')){
+    return `<div class="card">${Empty('Sem acesso a Alertas','Fale com o administrador para liberar o módulo Alertas.')}</div>`;
+  }
+  const podeResolver = temPermissao('alertas','editar');
+  const abertos = state.alertas.filter(a=>a.status==='aberto');
+  const lista = state.alertasMostrarResolvidos ? state.alertas : abertos;
+  const contagem = {
+    critico: abertos.filter(a=>a.severidade==='critico').length,
+    atencao: abertos.filter(a=>a.severidade==='atencao').length,
+    info: abertos.filter(a=>a.severidade==='info').length,
+  };
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Críticos</div><div class="stat-value ${contagem.critico>0?'alerta':''}">${contagem.critico}</div></div>
+    <div class="stat-card"><div class="stat-label">Atenção</div><div class="stat-value">${contagem.atencao}</div></div>
+    <div class="stat-card"><div class="stat-label">Informativos</div><div class="stat-value">${contagem.info}</div></div>
+    <div class="stat-card"><div class="stat-label">Total aberto</div><div class="stat-value">${abertos.length}</div></div>
+  </div>
+  <div class="toolbar">
+    <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--cinza);">
+      <input type="checkbox" id="f-mostrar-resolvidos" ${state.alertasMostrarResolvidos?'checked':''} style="width:auto;"/> Mostrar resolvidos
+    </label>
+    <span class="hint">${lista.length} alerta(s)</span>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${lista.length===0 ? Empty('Nenhum alerta', abertos.length===0 && !state.alertasMostrarResolvidos ? 'Tudo certo por aqui — nenhuma pendência detectada.' : 'Ajuste os filtros acima.') : `
+    <table>
+      <thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th><th>Detectado em</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${lista.map(a=>`
+          <tr>
+            <td><span class="pill ${pillSeveridade(a.severidade)}">${a.severidade==='critico'?'Crítico':a.severidade==='atencao'?'Atenção':'Info'}</span></td>
+            <td>${TIPO_ALERTA_LABELS[a.tipo]||a.tipo}</td>
+            <td><strong>${a.titulo}</strong><br/><span class="hint">${a.descricao}</span>${a.status==='resolvido' && a.observacaoResolucao ? `<br/><span class="hint">Resolução: ${a.observacaoResolucao}</span>` : ''}</td>
+            <td class="mono">${fmtDataHora(a.dataHora)}</td>
+            <td>${a.status==='aberto' ? '<span class="pill pill-alerta">Aberto</span>' : '<span class="pill pill-ok">Resolvido</span>'}</td>
+            <td>${a.status==='aberto' && podeResolver ? `<button class="btn-ghost btn-sm" data-resolver-alerta="${a.id}">Resolver</button>` : ''}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function ModalResolverAlerta(){
+  const d = editDraft;
+  const alerta = state.alertas.find(a=>a.id===d.alertaId);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Resolver alerta</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="page-desc" style="margin:0;">${alerta?.titulo||''}</p>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obs-resolucao" rows="3" placeholder="O que foi feito para resolver?"></textarea></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-confirmar-resolucao="1">Confirmar resolução</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== TRILHA DE AUDITORIA ===================== */
+const TABELA_LABELS = { abastecimentos:'Abastecimento', entradas_estoque:'Entrada de Estoque', medicoes_fisicas:'Medição Física', ajustes_estoque:'Ajuste de Estoque' };
+const ACAO_LABELS = { insert:'Criado', update:'Editado', delete:'Excluído' };
+function nomeUsuarioAuditoria(usuarioId){
+  if(!usuarioId) return 'Sistema';
+  const perfil = state.perfis.find(p=>p.id===usuarioId);
+  return perfil ? perfil.nome : 'Usuário removido';
+}
+const CAMPOS_AUDITORIA_IGNORADOS = ['created_at','updated_at','created_by','updated_by'];
+function camposAlterados(log){
+  if(log.acao!=='update' || !log.dadosAntigos || !log.dadosNovos) return [];
+  const alterados = [];
+  Object.keys(log.dadosNovos).forEach(k=>{
+    if(CAMPOS_AUDITORIA_IGNORADOS.includes(k)) return;
+    const antigo = log.dadosAntigos[k], novo = log.dadosNovos[k];
+    if(JSON.stringify(antigo)!==JSON.stringify(novo)) alterados.push({campo:k, antigo, novo});
+  });
+  return alterados;
+}
+function PageAuditoria(){
+  if(!temPermissao('auditoria','visualizar')){
+    return `<div class="card">${Empty('Sem acesso à Trilha de Auditoria','Fale com o administrador para liberar o módulo Auditoria.')}</div>`;
+  }
+  const lista = state.logAuditoria;
+  return `
+  <div class="toolbar"><span class="hint">${lista.length} registro(s) — últimos eventos em Estoque e Abastecimento</span></div>
+  <div class="card" style="overflow-x:auto;">
+    ${lista.length===0 ? Empty('Nenhum evento registrado ainda','A trilha de auditoria passa a registrar a partir de agora — entradas de estoque, medições, ajustes e abastecimentos.') : `
+    <table>
+      <thead><tr><th>Data/Hora</th><th>Tabela</th><th>Ação</th><th>Usuário</th><th>Detalhe</th></tr></thead>
+      <tbody>
+        ${lista.map(l=>{
+          const alterados = camposAlterados(l);
+          const detalhe = l.acao==='update'
+            ? (alterados.length ? alterados.map(c=>`${c.campo}: ${JSON.stringify(c.antigo)} → ${JSON.stringify(c.novo)}`).join('<br/>') : 'Sem alterações relevantes')
+            : `Registro #${l.registroId}`;
+          return `<tr>
+            <td class="mono">${fmtDataHora(l.criadoEm)}</td>
+            <td>${TABELA_LABELS[l.tabela]||l.tabela}</td>
+            <td><span class="pill ${l.acao==='delete'?'pill-alerta':l.acao==='insert'?'pill-ok':'pill-warn'}">${ACAO_LABELS[l.acao]||l.acao}</span></td>
+            <td>${nomeUsuarioAuditoria(l.usuarioId)}</td>
+            <td style="font-size:12px; color:var(--cinza);">${detalhe}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
 /* ===================== MODAL GENÉRICO DE CADASTRO ===================== */
 function novoCadastroDraft(key){
   const cfg = CADASTROS[key];
@@ -1626,6 +1909,8 @@ const MODULOS_PERMISSAO = [
   ['estoque','Estoque'],
   ['abastecimento','Abastecimento'],
   ['rateio','Rateio & Indicadores'],
+  ['alertas','Alertas'],
+  ['auditoria','Trilha de Auditoria'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
@@ -1741,6 +2026,7 @@ function ModalTrocarSenha(){
 function Modal(){
   if(state.modal.type==='cadastro') return ModalCadastro();
   if(state.modal.type==='abastecimento') return ModalAbastecimento();
+  if(state.modal.type==='resolverAlerta') return ModalResolverAlerta();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
@@ -1803,7 +2089,10 @@ function attachEvents(){
   document.querySelectorAll('[data-nav-group]').forEach(el=>{
     el.onclick = ()=>{
       const group = GROUPS[el.dataset.navGroup];
-      if(!group.pages.some(p=>p.key===state.page)) state.page = group.pages[0].key;
+      if(!group.pages.some(p=>p.key===state.page)){
+        const pagina = group.pages.find(p=>paginaVisivel(p.key)) || group.pages[0];
+        state.page = pagina.key;
+      }
       render();
     };
   });
@@ -1869,6 +2158,25 @@ function attachEvents(){
       render();
     };
   });
+  const mostrarResolvidosEl = document.getElementById('f-mostrar-resolvidos');
+  if(mostrarResolvidosEl){
+    mostrarResolvidosEl.onchange = (e)=>{ state.alertasMostrarResolvidos = e.target.checked; render(); };
+  }
+  document.querySelectorAll('[data-resolver-alerta]').forEach(el=>{
+    el.onclick = ()=>{ editDraft = {alertaId:Number(el.dataset.resolverAlerta)}; state.modal = {type:'resolverAlerta'}; render(); };
+  });
+  const confirmarResolucaoBtn = document.querySelector('[data-confirmar-resolucao]');
+  if(confirmarResolucaoBtn){
+    confirmarResolucaoBtn.onclick = async ()=>{
+      const observacao = document.getElementById('f-obs-resolucao').value || null;
+      const { error } = await db.from('alertas').update({
+        status:'resolvido', resolvido_em: new Date().toISOString(), resolvido_por: state.perfil.id, observacao_resolucao: observacao,
+      }).eq('id', editDraft.alertaId);
+      if(error){ alert('Não foi possível resolver: ' + mensagemErroSupabase(error)); return; }
+      state.modal = null; editDraft = null;
+      await recarregarAlertas();
+    };
+  }
   document.querySelectorAll('[data-close], [data-close-overlay]').forEach(el=>{
     el.onclick = (e)=>{ if(e.target.dataset.stop) return; state.modal = null; editDraft = null; render(); };
   });
