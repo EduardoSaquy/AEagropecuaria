@@ -2278,6 +2278,7 @@ function composicaoPorAreaAno(){
   const animaisConfinamento = animaisPorTipo('confinamento');
   const animaisPasto = animaisPorTipo('pasto');
   const animaisCria = animaisPorTipo('reproducao');
+  const animaisPastoCria = animaisPasto + animaisCria;
 
   let confinamento=0, pasto=0, cria=0;
   mesesDoAnoAteAgora().forEach(mesStr=>{
@@ -2286,9 +2287,10 @@ function composicaoPorAreaAno(){
     const pastoMes = state.pasto.filter(p=>p.data.startsWith(mesStr)).reduce((a,p)=>a+custoPasto(p),0);
     const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
     const fixosDiluiveis = fixosDiluiveisDoMes(mesStr);
+    const pastoCriaDireto = custosDiretosDoMes(mesStr,'pasto_cria');
     const fixoConfinamento = custosDiretosDoMes(mesStr,'confinamento') + (totalAnimais>0 ? fixosDiluiveis*(animaisConfinamento/totalAnimais) : 0);
-    const fixoPasto = custosDiretosDoMes(mesStr,'pasto') + (totalAnimais>0 ? fixosDiluiveis*(animaisPasto/totalAnimais) : 0);
-    const fixoCria = custosDiretosDoMes(mesStr,'cria') + (totalAnimais>0 ? fixosDiluiveis*(animaisCria/totalAnimais) : 0);
+    const fixoPasto = custosDiretosDoMes(mesStr,'pasto') + (animaisPastoCria>0 ? pastoCriaDireto*(animaisPasto/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveis*(animaisPasto/totalAnimais) : 0);
+    const fixoCria = custosDiretosDoMes(mesStr,'cria') + (animaisPastoCria>0 ? pastoCriaDireto*(animaisCria/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveis*(animaisCria/totalAnimais) : 0);
     confinamento += racaoConf + fixoConfinamento;
     pasto += pastoMes + fixoPasto;
     cria += racaoCria + reproducaoMes + fixoCria;
@@ -2346,9 +2348,16 @@ function dadosFinanceiro(){
   const animaisConfinamento = animaisPorTipo('confinamento');
   const animaisPasto = animaisPorTipo('pasto');
   const animaisCria = animaisPorTipo('reproducao');
+  // Além da área direta única (Confinamento/Pasto/Cria) e do rateio geral
+  // (todas as áreas), uma conta pode ser direta de "Pasto + Cria" — vai só
+  // pra essas duas, rateada por cabeça entre elas, sem pesar no
+  // Confinamento (ex: insumo agrícola de manejo de pasto, usado tanto por
+  // quem tá solto quanto pela Cria, mas não pelo confinado).
+  const animaisPastoCria = animaisPasto + animaisCria;
+  const pastoCriaDiretoMes = custosDiretosDoMes(mes,'pasto_cria');
   const fixoConfinamento = custosDiretosDoMes(mes,'confinamento') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisConfinamento/totalAnimais) : 0);
-  const fixoPasto = custosDiretosDoMes(mes,'pasto') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisPasto/totalAnimais) : 0);
-  const fixoCria = custosDiretosDoMes(mes,'cria') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisCria/totalAnimais) : 0);
+  const fixoPasto = custosDiretosDoMes(mes,'pasto') + (animaisPastoCria>0 ? pastoCriaDiretoMes*(animaisPasto/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveisMes*(animaisPasto/totalAnimais) : 0);
+  const fixoCria = custosDiretosDoMes(mes,'cria') + (animaisPastoCria>0 ? pastoCriaDiretoMes*(animaisCria/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveisMes*(animaisCria/totalAnimais) : 0);
   const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamento;
   const custoTotalPastoMes = pastoMes + fixoPasto;
   const custoTotalCriaMes = criaMes + fixoCria;
@@ -2476,6 +2485,16 @@ function PageFinanceiroCurral(){
     const totalAnimaisArea = animaisPorAreaMes[tipo];
     return totalAnimaisArea>0 ? valorMensalDaArea*(Number(lote.numeroAnimais||0)/totalAnimaisArea) : 0;
   }
+  // Uma despesa direta de "Pasto + Cria" (ex: insumo agrícola de manejo de
+  // pasto, usado por quem tá solto e pela Cria, mas não pelo confinado) é
+  // rateada só entre os lotes de Pasto e Cria, por número de animais das
+  // duas juntas — sem pesar no Confinamento.
+  const animaisPastoCriaMes = animaisPorAreaMes.pasto + animaisPorAreaMes.reproducao;
+  function fixoPastoCriaAlocado(lote, valorMensalPastoCria){
+    const tipo = loteTipo(lote);
+    if(tipo!=='pasto' && tipo!=='reproducao') return 0;
+    return animaisPastoCriaMes>0 ? valorMensalPastoCria*(Number(lote.numeroAnimais||0)/animaisPastoCriaMes) : 0;
+  }
 
   const custosPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
@@ -2483,7 +2502,7 @@ function PageFinanceiroCurral(){
     const reproducao = state.reproducao.filter(r=>r.data===d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
     const variavel = racao + pasto + reproducao;
     const fixoGeral = d.totalAnimais>0 ? fixoDiarioMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
-    const fixoDireto = fixoDiretoAlocado(l, diretoMesPorArea[loteTipo(l)]/30);
+    const fixoDireto = fixoDiretoAlocado(l, diretoMesPorArea[loteTipo(l)]/30) + fixoPastoCriaAlocado(l, custosDiretosDoMes(d.mes,'pasto_cria')/30);
     const fixoAlocado = fixoGeral + fixoDireto;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
@@ -2496,7 +2515,7 @@ function PageFinanceiroCurral(){
     const reproducao = state.reproducao.filter(r=>r.data.startsWith(d.mes) && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
     const variavel = racao + pasto + reproducao;
     const fixoGeral = d.totalAnimais>0 ? d.fixosDiluiveisMes*(Number(l.numeroAnimais||0)/d.totalAnimais) : 0;
-    const fixoDireto = fixoDiretoAlocado(l, diretoMesPorArea[loteTipo(l)]);
+    const fixoDireto = fixoDiretoAlocado(l, diretoMesPorArea[loteTipo(l)]) + fixoPastoCriaAlocado(l, custosDiretosDoMes(d.mes,'pasto_cria'));
     const fixoAlocado = fixoGeral + fixoDireto;
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
@@ -2627,7 +2646,7 @@ function PageResultadosReceitas(){
 }
 
 /* ---- Financeiro: Despesas ---- */
-const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
+const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria', pasto_cria:'Pasto + Cria'};
 function PageFinanceiroCustosFixos(){
   const busca = state.searchDespesas.toLowerCase();
   const list = [...state.custosFixos].filter(c=>
@@ -3265,10 +3284,11 @@ function ModalCustoFixo(){
               <option value="confinamento" ${d.area==='confinamento'?'selected':''}>Confinamento</option>
               <option value="pasto" ${d.area==='pasto'?'selected':''}>Pasto</option>
               <option value="cria" ${d.area==='cria'?'selected':''}>Cria</option>
+              <option value="pasto_cria" ${d.area==='pasto_cria'?'selected':''}>Pasto + Cria (rateado só entre as duas)</option>
             </select>
           </div>
         </div>
-        <p class="hint">Deixe a data em branco para um valor recorrente (vale como padrão pra qualquer mês sem lançamento próprio). Preenchendo a data, o valor conta só no mês dela. Quando a Área é Confinamento/Pasto/Cria, o valor inteiro vai pra aquela área (sem rateio); em "Geral", ele é rateado por nº de animais entre as áreas — a não ser que a diluição por lote esteja desmarcada abaixo.</p>
+        <p class="hint">Deixe a data em branco para um valor recorrente (vale como padrão pra qualquer mês sem lançamento próprio). Preenchendo a data, o valor conta só no mês dela. Quando a Área é Confinamento/Pasto/Cria, o valor inteiro vai pra aquela área (sem rateio). "Pasto + Cria" rateia por nº de animais só entre essas duas áreas, sem pesar no Confinamento — use pra um custo que não é do confinado (ex: insumo agrícola de manejo de pasto). Em "Geral", o valor é rateado por nº de animais entre as três áreas — a não ser que a diluição por lote esteja desmarcada abaixo.</p>
         <div class="field" style="margin-top:6px;">
           <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
             <input id="f-diluircustofixo" type="checkbox" ${d.diluirPorLote!==false?'checked':''}/>
