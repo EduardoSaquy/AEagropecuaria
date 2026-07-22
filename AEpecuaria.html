@@ -481,15 +481,15 @@ function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categori
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento'}; }
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino}; }
 function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino}; }
-function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg}; }
-function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||''}; }
+function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
+function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
-function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade}; }
-function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, item:r.item, custo:r.custo}; }
+function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade, criadoPor:r.criado_por||''}; }
+function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, item:r.item, custo:r.custo, criadoPor:r.criado_por||''}; }
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, item:r.item, custo:r.custo}; }
-function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro}; }
+function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, criadoPor:r.criado_por||''}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
-function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||''}; }
+function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, area:r.area||null, diluirPorLote:r.diluir_por_lote!==false, observacao:r.observacao||''}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, area:c.area||null, diluir_por_lote:c.diluirPorLote!==false, observacao:c.observacao||''}; }
@@ -567,6 +567,8 @@ const state = {
   openDietId: null,
   search: '',
   searchDespesas: '',
+  filtroMesDespesas: '',
+  filtroMesReceitas: '',
   fabOpen: false,
   // ---- autenticação ----
   authChecked: false, // já verificamos se existe sessão salva?
@@ -885,10 +887,14 @@ function pareceErroDeRede(err){
 // Executa de fato o insert (+ efeitos colaterais, como descontar estoque) de
 // um lançamento novo — usado tanto pelo salvamento normal quanto por essa
 // mesma função sendo chamada de novo depois, ao sincronizar a fila.
+// Nome de quem está logado no momento do lançamento — grava em cada
+// lançamento de campo pra saber quem fez, sem afetar edições posteriores
+// (só o insert grava; editar não troca o autor original).
+function autorAtual(){ return state.perfil?.nome || state.perfil?.usuario || null; }
 async function executarInsertLancamento(type, campos){
   if(type==='saidaRacao' || type==='saidaRacaoCria'){
     const dieta = state.dietas.find(x=>x.id===campos.dietaId);
-    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg};
+    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual()};
     const res = await db.from('saidas_racao').insert(row).select().single();
     if(res.error) return {error:res.error};
     const saidaId = res.data.id;
@@ -906,12 +912,12 @@ async function executarInsertLancamento(type, campos){
     return {error:null};
   }
   if(type==='cocho'){
-    const {error} = await db.from('leituras_cocho').insert(leituraCochoToRow(campos));
+    const {error} = await db.from('leituras_cocho').insert({...leituraCochoToRow(campos), criado_por:autorAtual()});
     return {error};
   }
   if(type==='pasto'){
     const dieta = state.dietas.find(x=>x.id===campos.dietaId);
-    const row = {data:campos.data, lote_id:campos.loteId, dieta_id:campos.dietaId, quantidade:campos.quantidade};
+    const row = {data:campos.data, lote_id:campos.loteId, dieta_id:campos.dietaId, quantidade:campos.quantidade, criado_por:autorAtual()};
     const res = await db.from('pasto').insert(row).select().single();
     if(res.error) return {error:res.error};
     const pastoId = res.data.id;
@@ -929,15 +935,15 @@ async function executarInsertLancamento(type, campos){
     return {error:null};
   }
   if(type==='reproducaoCusto'){
-    const {error} = await db.from('reproducao_custos').insert(reproducaoCustoToRow(campos));
+    const {error} = await db.from('reproducao_custos').insert({...reproducaoCustoToRow(campos), criado_por:autorAtual()});
     return {error};
   }
   if(type==='parto'){
-    const {error} = await db.from('partos').insert(partoToRow(campos));
+    const {error} = await db.from('partos').insert({...partoToRow(campos), criado_por:autorAtual()});
     return {error};
   }
   if(type==='pesagem'){
-    const {error} = await db.from('pesagens').insert(pesagemToRow(campos));
+    const {error} = await db.from('pesagens').insert({...pesagemToRow(campos), criado_por:autorAtual()});
     return {error};
   }
   return {error:{message:'Tipo de lançamento desconhecido: '+type}};
@@ -1499,15 +1505,19 @@ function PageLotes(tipo){
     ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Lote</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+        <th>Lote</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Peso médio (última pesagem)</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(l=>`
+        ${list.map(l=>{
+          const historicoPeso = pesagensDoLote(l.id);
+          const ultimaPesagem = historicoPeso[historicoPeso.length-1];
+          return `
           <tr>
             <td><strong>${l.nome}</strong></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
+            <td class="mono">${ultimaPesagem ? `${fmt(ultimaPesagem.pesoMedioKg,1)} kg <span class="hint">(${ultimaPesagem.data.split('-').reverse().join('/')})</span>` : '—'}</td>
             <td>${l.dataFim ? '<span class="pill pill-cat">Encerrado</span>' : '<span class="pill pill-ok">Ativo</span>'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
@@ -1516,7 +1526,7 @@ function PageLotes(tipo){
               ` : ''}
             </td>
           </tr>
-        `).join('')}
+        `;}).join('')}
       </tbody>
     </table>`}
   </div>`;
@@ -1573,7 +1583,7 @@ function PageSaidaRacao(tipo){
     ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th><th>Custo estimado</th><th></th>
+        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th><th>Custo estimado</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(s=>{
@@ -1586,6 +1596,7 @@ function PageSaidaRacao(tipo){
             <td>${lote?lote.nome:'—'}</td>
             <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
             <td class="mono">R$ ${fmt(custo)}</td>
+            <td>${s.criadoPor || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>
@@ -1618,7 +1629,7 @@ function PageCocho(){
     ${list.length===0 ? Empty('Nenhuma leitura de cocho registrada','Registre diariamente a avaliação de sobra no cocho de cada curral.') : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Curral</th><th>Leitura</th><th>Observação</th><th></th>
+        <th>Data</th><th>Curral</th><th>Leitura</th><th>Observação</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(c=>{
@@ -1629,6 +1640,7 @@ function PageCocho(){
             <td>${lote?lote.nome:'—'}</td>
             <td><span class="pill ${n.pill}">${n.label}</span></td>
             <td>${c.observacao || '—'}</td>
+            <td>${c.criadoPor || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('confinamento','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-cocho="${c.id}">Editar</button>
@@ -1659,7 +1671,7 @@ function PagePasto(){
     ${list.length===0 ? Empty('Nenhuma reposição de pasto registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.') : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th><th>Custo estimado</th><th></th>
+        <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th><th>Custo estimado</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(p=>{
@@ -1671,6 +1683,7 @@ function PagePasto(){
             <td>${dieta?dieta.nome:'—'}</td>
             <td class="mono">${fmtInt(p.quantidade)} kg</td>
             <td class="mono">R$ ${fmt(custoPasto(p))}</td>
+            <td>${p.criadoPor || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('pasto','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
@@ -1698,7 +1711,7 @@ function PageReproducao(){
     ${list.length===0 ? Empty('Nenhum lançamento de reprodução registrado','Registre as doses de sêmen e outros insumos usados na reprodução de cada lote.') : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Item</th><th>Custo</th><th></th>
+        <th>Data</th><th>Lote</th><th>Item</th><th>Custo</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(r=>{
@@ -1708,6 +1721,7 @@ function PageReproducao(){
             <td>${lote?lote.nome:'—'}</td>
             <td>${r.item}</td>
             <td class="mono">R$ ${fmt(custoReproducao(r))}</td>
+            <td>${r.criadoPor || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-reproducao="${r.id}">Editar</button>
@@ -1735,7 +1749,7 @@ function PagePartos(){
     ${list.length===0 ? Empty('Nenhum parto registrado','Registre os partos por lote, com o número da mãe e o sexo do bezerro.') : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th></th>
+        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(p=>{
@@ -1745,6 +1759,7 @@ function PagePartos(){
             <td>${lote?lote.nome:'—'}</td>
             <td class="mono">${p.numeroMae||'—'}</td>
             <td>${SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—'}</td>
+            <td>${p.criadoPor || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-parto="${p.id}">Editar</button>
@@ -1868,7 +1883,7 @@ function PagePesagem(tipo){
   <div class="card">
     ${pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote com data, peso médio e uma observação opcional.') : `
     <table>
-      <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Observação</th><th></th></tr></thead>
+      <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Observação</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
         ${pesagensTipo.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
@@ -1881,6 +1896,7 @@ function PagePesagem(tipo){
             <td class="mono">${fmt(Number(p.pesoMedioKg),1)} kg</td>
             <td class="mono">${gmd!==null ? (gmd>=0?'+':'')+fmt(gmd,2)+' kg/dia' : '—'}</td>
             <td>${p.observacao||'—'}</td>
+            <td>${p.criadoPor || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(TIPO_MODULO[tipo],'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pesagem="${p.id}">Editar</button>
@@ -2610,10 +2626,17 @@ function PageFinanceiroCurral(){
 
 /* ---- Financeiro: Receitas ---- */
 function PageResultadosReceitas(){
-  const list = [...state.receitas].sort((a,b)=> b.data.localeCompare(a.data));
+  const mesesDisponiveis = [...new Set(state.receitas.map(r=>r.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const list = [...state.receitas].filter(r=> !state.filtroMesReceitas || r.data.startsWith(state.filtroMesReceitas)).sort((a,b)=> b.data.localeCompare(a.data));
   return `
+  <div class="field" style="max-width:220px; margin-bottom:14px;">
+    <select data-filtro-mes-receitas="1">
+      <option value="">Todos os meses</option>
+      ${mesesDisponiveis.map(m=>`<option value="${m}" ${state.filtroMesReceitas===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
+    </select>
+  </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma receita registrada','Registre a venda de animais e outras receitas da operação.') : `
+    ${list.length===0 ? Empty(state.receitas.length===0 ? 'Nenhuma receita registrada' : 'Nenhuma receita nesse mês', state.receitas.length===0 ? 'Registre a venda de animais e outras receitas da operação.' : 'Escolha outro mês ou limpe o filtro.') : `
     <table>
       <thead><tr><th>Data</th><th>Lote</th><th>Descrição</th><th>Arrobas</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
       <tbody>
@@ -2649,27 +2672,39 @@ function PageResultadosReceitas(){
 const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria', pasto_cria:'Pasto + Cria'};
 function PageFinanceiroCustosFixos(){
   const busca = state.searchDespesas.toLowerCase();
+  const mesesDisponiveis = [...new Set(state.custosFixos.map(c=>c.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
   const list = [...state.custosFixos].filter(c=>
-    !busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca)
+    (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca))
+    && (!state.filtroMesDespesas || (state.filtroMesDespesas==='__recorrente__' ? !c.mes : c.mes===state.filtroMesDespesas))
   ).sort((a,b)=>{
     if(!a.mes && b.mes) return -1;
     if(a.mes && !b.mes) return 1;
     return (b.mes||'').localeCompare(a.mes||'');
   });
   return `
-  <div class="field" style="max-width:340px; margin-bottom:14px;">
-    <input type="text" placeholder="Buscar por nome ou centro de custo..." value="${state.searchDespesas}" data-search-despesas="1"/>
+  <div class="field-row" style="margin-bottom:14px;">
+    <div class="field" style="max-width:340px;">
+      <input type="text" placeholder="Buscar por nome ou centro de custo..." value="${state.searchDespesas}" data-search-despesas="1"/>
+    </div>
+    <div class="field" style="max-width:220px;">
+      <select data-filtro-mes-despesas="1">
+        <option value="">Todos os meses</option>
+        <option value="__recorrente__" ${state.filtroMesDespesas==='__recorrente__'?'selected':''}>Só recorrentes</option>
+        ${mesesDisponiveis.map(m=>`<option value="${m}" ${state.filtroMesDespesas===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
+      </select>
+    </div>
   </div>
   <div class="card">
-    ${list.length===0 ? Empty(state.custosFixos.length===0 ? 'Nenhuma despesa cadastrada' : 'Nenhuma despesa encontrada', state.custosFixos.length===0 ? 'Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.' : 'Nenhuma despesa bate com essa busca.') : `
+    ${list.length===0 ? Empty(state.custosFixos.length===0 ? 'Nenhuma despesa cadastrada' : 'Nenhuma despesa encontrada', state.custosFixos.length===0 ? 'Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.' : 'Nenhuma despesa bate com essa busca/filtro.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Área</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Data</th><th>Área</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
       <tbody>
         ${list.map(c=>`
           <tr>
             <td><strong>${c.nome}</strong></td>
             <td>${c.categoria || '—'}</td>
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
+            <td class="mono">${c.data ? c.data.split('-').reverse().join('/') : '—'}</td>
             <td>${c.area ? `<span class="pill pill-cat">${AREA_LABEL[c.area]}</span>` : (c.diluirPorLote!==false ? `<span class="pill pill-ok">Geral · rateado</span>` : `<span class="pill">Geral · só total</span>`)}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td>${c.observacao || '—'}</td>
@@ -3547,6 +3582,14 @@ function attachEvents(){
       const s = document.querySelector('[data-search-despesas]');
       s.focus(); s.setSelectionRange(s.value.length, s.value.length);
     };
+  }
+  const filtroMesDespesasEl = document.querySelector('[data-filtro-mes-despesas]');
+  if(filtroMesDespesasEl){
+    filtroMesDespesasEl.onchange = (e)=>{ state.filtroMesDespesas = e.target.value; render(); };
+  }
+  const filtroMesReceitasEl = document.querySelector('[data-filtro-mes-receitas]');
+  if(filtroMesReceitasEl){
+    filtroMesReceitasEl.onchange = (e)=>{ state.filtroMesReceitas = e.target.value; render(); };
   }
   document.querySelectorAll('[data-nav-group]').forEach(el=>{
     el.onclick = ()=>{
