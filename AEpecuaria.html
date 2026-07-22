@@ -360,17 +360,6 @@
   .painel-tooltip .v{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;}
   .painel-tooltip .l{font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px;}
 
-  /* gráfico de ganho de peso (Pesagem) */
-  .weight-chart{display:block; width:100%; height:auto;}
-  .weight-grid{stroke:var(--cinza-claro); stroke-width:1;}
-  .weight-axis-label{font-family:'IBM Plex Mono',monospace; font-size:10px; fill:var(--cinza);}
-  .weight-line{fill:none; stroke:var(--verde-medio); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;}
-  .weight-area{fill:url(#pesoAreaGrad);}
-  .weight-dot{fill:var(--branco); stroke:var(--verde-medio); stroke-width:2.5;}
-  .weight-dot.last{fill:var(--verde-medio);}
-  .weight-dot-hit{fill:transparent; cursor:pointer;}
-  .lote-select{font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; padding:8px 12px; border:1px solid var(--cinza-claro); border-radius:8px; background:var(--branco); color:var(--verde-escuro); cursor:pointer;}
-
   /* ---------- DEMONSTRATIVO DESPESA x RECEITA ---------- */
   .demonstrativo-bars{display:flex; flex-direction:column; gap:14px; margin-bottom:18px;}
   .demo-bar-row{display:grid; grid-template-columns:70px 1fr 120px; align-items:center; gap:12px;}
@@ -555,7 +544,6 @@ const state = {
   reproducao: [],
   partos: [],
   pesagens: [],
-  pesagemLoteSelecionado: {},
   receitas: [],
   precosArroba: [],
   metaMargemPct: null,
@@ -1775,78 +1763,44 @@ function PagePartos(){
 }
 
 /* ===================== PÁGINA: PESAGEM ===================== */
-// Gráfico de ganho de peso de um lote: linha + área, com ponto final
-// destacado e tooltip ao passar o mouse — mesma técnica de path SVG
-// calculado em JS já usada no painel de resultados (donut chart).
-function GraficoPeso(pesagens, numeroAnimais){
-  if(pesagens.length===0){
-    return Empty('Nenhuma pesagem registrada para este lote','Registre a primeira pesagem pra começar a acompanhar o ganho de peso.');
-  }
-  const pesos = pesagens.map(p=>Number(p.pesoMedioKg));
-  const minPeso = Math.min(...pesos), maxPeso = Math.max(...pesos);
-  const pad = Math.max(5, (maxPeso-minPeso)*0.15);
-  const yMin = Math.max(0, minPeso-pad), yMax = maxPeso+pad;
-  const W=660, H=260, padL=44, padR=20, padT=20, padB=30;
-  const innerW = W-padL-padR, innerH = H-padT-padB;
-  const n = pesagens.length;
-  const xs = pesagens.map((_,i)=> padL + (n===1 ? innerW/2 : i*(innerW/(n-1))));
-  const ys = pesagens.map(p=> padT + (yMax-Number(p.pesoMedioKg))/((yMax-yMin)||1)*innerH);
-
-  const linePath = 'M ' + xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(' L ');
-  const areaPath = linePath + ` L ${xs[n-1].toFixed(1)} ${(padT+innerH).toFixed(1)} L ${xs[0].toFixed(1)} ${(padT+innerH).toFixed(1)} Z`;
-
-  const niveis = 4;
-  const gridLines = Array.from({length:niveis}, (_,i)=>{
-    const frac = i/(niveis-1);
-    const y = padT + frac*innerH;
-    const valor = yMax - frac*(yMax-yMin);
-    return `<line class="weight-grid" x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}"></line><text class="weight-axis-label" x="6" y="${(y+4).toFixed(1)}">${Math.round(valor)}</text>`;
-  }).join('');
-
-  const dots = pesagens.map((p,i)=>{
-    const gmd = i>0 ? gmdEntre(Number(pesagens[i-1].pesoMedioKg), Number(p.pesoMedioKg), pesagens[i-1].data, p.data) : null;
-    const dataFmt = p.data.split('-').reverse().join('/');
-    const tipLabel = gmd!==null ? `${dataFmt} · GMD ${gmd>=0?'+':''}${fmt(gmd,2)} kg/dia` : `${dataFmt} · pesagem de entrada`;
-    return `
-      <circle cx="${xs[i]}" cy="${ys[i]}" r="${i===n-1?5:4}" class="weight-dot${i===n-1?' last':''}"></circle>
-      <circle cx="${xs[i]}" cy="${ys[i]}" r="14" class="weight-dot-hit" data-peso-idx="p${i}" data-tip-valor="${fmt(Number(p.pesoMedioKg),1)} kg" data-tip-label="${tipLabel}"></circle>
-    `;
-  }).join('');
-
-  const xLabels = pesagens.map((p,i)=>{
-    const anchor = i===0?'start':(i===n-1?'end':'middle');
-    return `<text class="weight-axis-label" x="${xs[i]}" y="${H-8}" text-anchor="${anchor}">${p.data.split('-').reverse().slice(0,2).join('/')}</text>`;
-  }).join('');
-
-  const primeira = pesagens[0], ultima = pesagens[n-1];
-  const ganhoTotal = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
-  const gmdMedio = gmdEntre(Number(primeira.pesoMedioKg), Number(ultima.pesoMedioKg), primeira.data, ultima.data);
-  const arrobaPorAnimal = ganhoTotal/KG_POR_ARROBA;
-  const arrobaTotal = arrobaPorAnimal * Number(numeroAnimais||0);
-
+// Painel de resultado dos lotes: resumo (peso inicial x atual, ganho,
+// GMD médio e @ produzidas) de cada lote lado a lado, sem precisar
+// escolher/filtrar um lote de cada vez pra ver o resultado.
+function PainelResultadoLotes(lotesTipo){
+  const linhas = lotesTipo.map(l=>{
+    const historico = pesagensDoLote(l.id);
+    if(historico.length===0) return {lote:l, semDados:true};
+    const primeira = historico[0], ultima = historico[historico.length-1];
+    const ganhoTotal = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
+    const gmdMedio = gmdEntre(Number(primeira.pesoMedioKg), Number(ultima.pesoMedioKg), primeira.data, ultima.data);
+    const arrobaPorAnimal = ganhoTotal/KG_POR_ARROBA;
+    const arrobaTotal = arrobaPorAnimal * Number(l.numeroAnimais||0);
+    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaTotal};
+  });
   return `
-    <div class="stat-row" style="margin-bottom:18px;">
-      <div class="stat-card"><div class="stat-label">Peso atual (méd.)</div><div class="stat-value">${fmt(Number(ultima.pesoMedioKg),1)} kg</div><div class="hint">${ultima.data.split('-').reverse().join('/')}</div></div>
-      <div class="stat-card"><div class="stat-label">Ganho no período</div><div class="stat-value">${ganhoTotal>=0?'+':''}${fmt(ganhoTotal,1)} kg</div><div class="hint">desde ${primeira.data.split('-').reverse().join('/')}</div></div>
-      <div class="stat-card"><div class="stat-label">GMD médio</div><div class="stat-value">${gmdMedio!==null?fmt(gmdMedio,3)+' kg/dia':'—'}</div><div class="hint">ganho médio diário</div></div>
-      <div class="stat-card"><div class="stat-label">@ produzidas</div><div class="stat-value">${fmt(arrobaTotal,1)} @</div><div class="hint">${fmt(arrobaPorAnimal,2)} @/animal · ${fmtInt(numeroAnimais||0)} animais</div></div>
-    </div>
-    <div style="position:relative;">
-      <svg class="weight-chart" viewBox="0 0 ${W} ${H}">
-        <defs><linearGradient id="pesoAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#1D5DA8" stop-opacity="0.16"/>
-          <stop offset="100%" stop-color="#1D5DA8" stop-opacity="0"/>
-        </linearGradient></defs>
-        ${gridLines}
-        <path d="${areaPath}" class="weight-area"></path>
-        <path d="${linePath}" class="weight-line"></path>
-        ${dots}
-        ${xLabels}
-      </svg>
-      <div id="peso-tooltip" class="painel-tooltip"></div>
-    </div>
-    <p class="hint" style="margin-top:8px;">Peso médio por animal (kg), a cada pesagem lançada. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho.</p>
-  `;
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@ produzidas</th>
+      </tr></thead>
+      <tbody>
+        ${linhas.map(r=>`
+          <tr>
+            <td><strong>${r.lote.nome}</strong></td>
+            <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
+            ${r.semDados ? `<td class="mono" colspan="5">Nenhuma pesagem registrada ainda</td>` : `
+            <td class="mono">${fmt(Number(r.primeira.pesoMedioKg),1)} kg <span class="hint">(${r.primeira.data.split('-').reverse().join('/')})</span></td>
+            <td class="mono">${fmt(Number(r.ultima.pesoMedioKg),1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span></td>
+            <td class="mono">${r.ganhoTotal>=0?'+':''}${fmt(r.ganhoTotal,1)} kg</td>
+            <td class="mono">${r.gmdMedio!==null?fmt(r.gmdMedio,3)+' kg/dia':'—'}</td>
+            <td class="mono">${fmt(r.arrobaTotal,1)} @</td>
+            `}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin:10px 0 18px;">Ganho e @ produzidas contam desde a primeira pesagem lançada de cada lote até a mais recente. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho.</p>`;
 }
 
 function PagePesagem(tipo){
@@ -1854,10 +1808,6 @@ function PagePesagem(tipo){
   if(lotesTipo.length===0){
     return Empty('Nenhum lote cadastrado', `Cadastre um lote com destino ${TIPO_PESAGEM_LABEL[tipo]} (aba Lotes) antes de registrar pesagens.`);
   }
-  let loteSelId = state.pesagemLoteSelecionado[tipo];
-  if(!loteSelId || !lotesTipo.some(l=>l.id===loteSelId)) loteSelId = lotesTipo[0].id;
-  const loteSel = lotesTipo.find(l=>l.id===loteSelId);
-  const pesagensLoteSel = pesagensDoLote(loteSelId);
 
   const pesagensTipo = state.pesagens.filter(p=>{
     const lote = state.lotes.find(l=>l.id===p.loteId);
@@ -1865,20 +1815,8 @@ function PagePesagem(tipo){
   }).sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
 
   return `
-  <div class="card" style="margin-bottom:18px;">
-    <div class="card-pad">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
-        <div>
-          <p class="eyebrow" style="margin:0 0 2px;">Ganho de peso</p>
-          <div style="font-size:12px; color:var(--cinza);">${loteSel.nome} · ${fmtInt(loteSel.numeroAnimais)} animais</div>
-        </div>
-        <select class="lote-select" data-peso-lote-select="${tipo}">
-          ${lotesTipo.map(l=>`<option value="${l.id}" ${l.id===loteSelId?'selected':''}>${l.nome}</option>`).join('')}
-        </select>
-      </div>
-      ${GraficoPeso(pesagensLoteSel, loteSel.numeroAnimais)}
-    </div>
-  </div>
+  <p class="eyebrow" style="margin:0 0 10px;">Painel de resultado dos lotes</p>
+  ${PainelResultadoLotes(lotesTipo)}
 
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
   <div class="card">
@@ -3781,12 +3719,6 @@ function attachEvents(){
       await loadAll();
     };
   });
-  document.querySelectorAll('[data-peso-lote-select]').forEach(el=>{
-    el.onchange = ()=>{
-      state.pesagemLoteSelecionado[el.dataset.pesoLoteSelect] = Number(el.value);
-      render();
-    };
-  });
   document.querySelectorAll('[data-edit-custofixo]').forEach(el=>{
     el.onclick = ()=>{
       const c = state.custosFixos.find(x=>x.id===Number(el.dataset.editCustofixo));
@@ -4213,21 +4145,6 @@ function attachEvents(){
       await loadAll();
     };
   }
-
-  // gráfico de ganho de peso (Pesagem): tooltip ao passar o mouse num ponto
-  const pesoTooltip = document.getElementById('peso-tooltip');
-  document.querySelectorAll('[data-peso-idx]').forEach(el=>{
-    el.addEventListener('pointerenter', ()=>{
-      if(pesoTooltip){
-        pesoTooltip.innerHTML = `<div class="v">${el.dataset.tipValor}</div><div class="l">${el.dataset.tipLabel}</div>`;
-        pesoTooltip.style.display = 'block';
-      }
-    });
-    el.addEventListener('pointermove', (e)=>{
-      if(pesoTooltip){ pesoTooltip.style.left = (e.clientX+14)+'px'; pesoTooltip.style.top = (e.clientY+14)+'px'; }
-    });
-    el.addEventListener('pointerleave', ()=>{ if(pesoTooltip) pesoTooltip.style.display = 'none'; });
-  });
 
   // painel de resultados: hover sincronizado entre gráfico e legenda
   const tooltip = document.getElementById('painel-tooltip');
