@@ -698,3 +698,30 @@ alter table movimentos add column if not exists preco_kg numeric;
 -- antigos).
 -- ===================================================================
 alter table saidas_racao add column if not exists criado_em timestamptz;
+
+-- ===================================================================
+-- MIGRAÇÃO: Múltiplas atividades por despesa (rateio automático generalizado)
+-- Substitui a área única (area: confinamento/pasto/cria/pasto_cria/geral)
+-- e a diluição opcional (diluir_por_lote) por uma lista de atividades
+-- (areas: subconjunto de confinamento/pasto/cria, de 0 a 3 itens):
+--   - 0 marcadas (Geral): valor sempre rateado por nº de animais entre as
+--     três atividades (não existe mais opção de "Geral, não diluído").
+--   - 1 marcada: valor inteiro vai pra aquela atividade, sem rateio.
+--   - 2 ou 3 marcadas: valor rateado por nº de animais só entre as
+--     marcadas (generaliza o antigo "Pasto + Cria" pra qualquer par, e
+--     3 marcadas dá no mesmo resultado que Geral).
+-- O backfill abaixo converte o dado antigo (coluna area + diluir_por_lote)
+-- pro novo formato, preservando o comportamento de cada despesa já
+-- cadastrada. As colunas antigas ficam pra trás (não usadas pelo app),
+-- sem dropar nada.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table custos_fixos add column if not exists areas text[] not null default '{}';
+update custos_fixos set areas = case
+  when area = 'confinamento' then array['confinamento']
+  when area = 'pasto' then array['pasto']
+  when area = 'cria' then array['cria']
+  when area = 'pasto_cria' then array['pasto','cria']
+  else '{}'
+end
+where areas = '{}';
