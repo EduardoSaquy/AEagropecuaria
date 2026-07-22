@@ -650,3 +650,35 @@ alter table receitas add column if not exists observacao text;
 -- ===================================================================
 alter table custos_fixos drop constraint if exists custos_fixos_area_check;
 alter table custos_fixos add constraint custos_fixos_area_check check (area in ('confinamento','pasto','cria','pasto_cria'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Quem lançou (autor do lançamento)
+-- Cada lançamento de campo (Saída de Ração, Leitura de Cocho, Pasto,
+-- Reprodução, Partos e Pesagem) passa a guardar o nome de quem estava
+-- logado ao criar o registro — mostrado como coluna "Lançado por" nas
+-- respectivas listas. Só grava no momento de criar (insert); editar um
+-- lançamento existente não troca o autor original.
+-- Pode rodar a qualquer momento — nenhum lançamento existente é afetado
+-- (fica com "Lançado por" em branco, já que não tem como recuperar quem
+-- fez os lançamentos antigos).
+-- ===================================================================
+alter table saidas_racao add column if not exists criado_por text;
+alter table leituras_cocho add column if not exists criado_por text;
+alter table pasto add column if not exists criado_por text;
+alter table reproducao_custos add column if not exists criado_por text;
+alter table partos add column if not exists criado_por text;
+alter table pesagens add column if not exists criado_por text;
+
+-- ===================================================================
+-- MIGRAÇÃO: Preço da entrada e média ponderada de custo
+-- Uma "Entrada" de estoque passa a poder informar o preço pago (R$/kg)
+-- daquela compra. Se informado, o preço/kg do ingrediente é recalculado
+-- automaticamente pela média ponderada entre o estoque que já existia
+-- (antes dessa entrada) e a quantidade que está entrando — refletindo
+-- reajustes de preço sem precisar editar o ingrediente manualmente.
+-- Só acontece ao registrar uma entrada nova (não ao editar uma já
+-- existente) e só quando o preço é informado (campo opcional).
+-- Pode rodar a qualquer momento — todo movimento existente fica com
+-- preco_kg em branco, sem efeito nenhum sobre o preço já cadastrado.
+-- ===================================================================
+alter table movimentos add column if not exists preco_kg numeric;
