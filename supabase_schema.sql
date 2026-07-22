@@ -626,3 +626,27 @@ create policy "atualizar pesagens" on pesagens for update using (
 create policy "excluir pesagens" on pesagens for delete using (
   tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Observação em Despesas e Receitas
+-- Cocho e Pesagem já tinham um campo de observação opcional; Despesas
+-- (custos_fixos) e Receitas não tinham como anotar um detalhe do
+-- lançamento (ex: número da nota fiscal, comprador, motivo do valor).
+-- Pode rodar a qualquer momento — todo lançamento existente continua
+-- com observação em branco.
+-- ===================================================================
+alter table custos_fixos add column if not exists observacao text;
+alter table receitas add column if not exists observacao text;
+
+-- ===================================================================
+-- MIGRAÇÃO: Área direta combinada "Pasto + Cria"
+-- Além da área direta única (Confinamento/Pasto/Cria) e do rateio geral
+-- (entre as três), uma despesa pode ser direta de "Pasto + Cria" — vai só
+-- pra essas duas, rateada por nº de animais entre elas, sem pesar no
+-- Confinamento (ex: insumo agrícola de manejo de pasto/forragem, usado
+-- tanto por quem tá solto quanto pela Cria, mas não pelo confinado).
+-- Pode rodar a qualquer momento — nenhuma despesa existente usa esse
+-- valor ainda, então nada muda até alguém escolher essa área.
+-- ===================================================================
+alter table custos_fixos drop constraint if exists custos_fixos_area_check;
+alter table custos_fixos add constraint custos_fixos_area_check check (area in ('confinamento','pasto','cria','pasto_cria'));
