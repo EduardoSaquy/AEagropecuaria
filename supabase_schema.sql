@@ -725,3 +725,17 @@ update custos_fixos set areas = case
   else '{}'
 end
 where areas = '{}';
+
+-- ===================================================================
+-- MIGRAÇÃO: Dieta de Cria
+-- Até aqui uma dieta só podia ser "Confinamento" ou "Pasto" — a Saída de
+-- Ração da Cria reaproveitava as dietas de Confinamento, sem opção
+-- própria. Agora existe um terceiro tipo, "Cria", e cada tela de Saída
+-- de Ração (Confinamento/Cria) só lista as dietas do seu próprio tipo.
+-- Dietas já cadastradas como "confinamento" continuam nesse tipo — se
+-- alguma foi criada pra uso da Cria, edite-a e troque o Tipo pra "Cria"
+-- pra ela aparecer na Saída de Ração da Cria.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table dietas drop constraint if exists dietas_tipo_check;
+alter table dietas add constraint dietas_tipo_check check (tipo in ('confinamento','cria','pasto'));

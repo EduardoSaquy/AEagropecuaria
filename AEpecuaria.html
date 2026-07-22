@@ -639,6 +639,7 @@ const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confina
 // tipo (mesma chave usada por loteTipo()) -> rótulo de tela e módulo de permissão
 const TIPO_PESAGEM_LABEL = {confinamento:'Confinamento', pasto:'Pasto', reproducao:'Cria'};
 const TIPO_MODULO = {confinamento:'confinamento', pasto:'pasto', reproducao:'cria'};
+const DIETA_TIPO_LABEL = {confinamento:'Confinamento', cria:'Cria', pasto:'Pasto'};
 const ACAO_MODULOS = {
   ingrediente:['insumos'], movimento:['insumos'],
   dieta:['dietas'],
@@ -1178,7 +1179,7 @@ function openNewModal(type){
     editDraft = {nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:'', destino:destinoPadrao};
     state.modal = {type:'lote'};
   } else if(type==='saidaRacao'){
-    const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
+    const dietasConf = state.dietas.filter(x=>x.tipo==='confinamento');
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
     if(dietasConf.length===0 || lotesConf.length===0){
       alert('Cadastre ao menos uma dieta de Confinamento e um lote com destino Confinamento (aba Lotes) antes de registrar uma saída de ração.');
@@ -1187,13 +1188,13 @@ function openNewModal(type){
     editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
   } else if(type==='saidaRacaoCria'){
-    const dietasConf = state.dietas.filter(x=>x.tipo!=='pasto');
+    const dietasCria = state.dietas.filter(x=>x.tipo==='cria');
     const lotesCria = state.lotes.filter(l=>loteTipo(l)==='reproducao');
-    if(dietasConf.length===0 || lotesCria.length===0){
-      alert('Cadastre ao menos uma dieta de Confinamento e um lote com destino Cria (aba Lotes) antes de registrar uma saída de ração para a Cria.');
+    if(dietasCria.length===0 || lotesCria.length===0){
+      alert('Cadastre ao menos uma dieta de Cria e um lote com destino Cria (aba Lotes) antes de registrar uma saída de ração para a Cria.');
       return false;
     }
-    editDraft = {dietaId: dietasConf[0]?.id||'', loteId: lotesCria[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
+    editDraft = {dietaId: dietasCria[0]?.id||'', loteId: lotesCria[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacaoCria'};
   } else if(type==='cocho'){
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
@@ -1433,7 +1434,7 @@ function PageDietas(){
     <div class="diet-card">
       <div class="diet-head" data-toggle-diet="${d.id}">
         <div>
-          <div class="diet-title">${d.nome} <span class="pill ${d.tipo==='pasto'?'pill-warn':'pill-ok'}">${d.tipo==='pasto'?'Pasto':'Confinamento'}</span></div>
+          <div class="diet-title">${d.nome} <span class="pill ${d.tipo==='pasto'?'pill-warn':d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[d.tipo]||'Confinamento'}</span></div>
           <div class="diet-sub">${d.categoriaAnimal} · ${fmt(d.kgAnimalDia,1)} kg MN/animal/dia</div>
         </div>
         <div class="diet-metrics">
@@ -2966,13 +2967,14 @@ function ModalDieta(){
           <div class="field"><label>Tipo</label>
             <select id="f-tipodieta">
               <option value="confinamento" ${d.tipo==='confinamento'?'selected':''}>Confinamento</option>
+              <option value="cria" ${d.tipo==='cria'?'selected':''}>Cria</option>
               <option value="pasto" ${d.tipo==='pasto'?'selected':''}>Pasto</option>
             </select>
           </div>
           <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${d.categoriaAnimal}" placeholder="Ex: Boi terminação"/></div>
         </div>
         <div class="field"><label>Kg de dieta / animal / dia</label><input id="f-kganimal" type="number" step="0.1" value="${d.kgAnimalDia}"/></div>
-        <p class="hint">Dietas de "Confinamento" aparecem em Saída de Ração; dietas de "Pasto" aparecem no lançamento de Pasto.</p>
+        <p class="hint">Dietas de "Confinamento" aparecem em Saída de Ração (Confinamento); dietas de "Cria" aparecem em Saída de Ração (Cria); dietas de "Pasto" aparecem no lançamento de Pasto.</p>
         <label>Composição (% da dieta)</label>
         <div style="display:flex; flex-direction:column; gap:8px;">
           ${d.itens.map((it,idx)=>`
@@ -3038,7 +3040,7 @@ function ModalSaidaRacao(){
         <div class="field-row">
           <div class="field"><label>Dieta (Confinamento)</label>
             <select id="f-dieta">
-              ${state.dietas.filter(x=>x.tipo!=='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+              ${state.dietas.filter(x=>x.tipo==='confinamento').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Lote de destino (Confinamento)</label>
@@ -3071,9 +3073,9 @@ function ModalSaidaRacaoCria(){
       <div class="modal-head"><h3>${d._editId?'Editar saída de ração':'Nova saída de ração (Cria)'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Dieta</label>
+          <div class="field"><label>Dieta (Cria)</label>
             <select id="f-dieta">
-              ${state.dietas.filter(x=>x.tipo!=='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+              ${state.dietas.filter(x=>x.tipo==='cria').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Lote de destino (Cria)</label>
