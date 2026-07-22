@@ -682,3 +682,19 @@ alter table pesagens add column if not exists criado_por text;
 -- preco_kg em branco, sem efeito nenhum sobre o preço já cadastrado.
 -- ===================================================================
 alter table movimentos add column if not exists preco_kg numeric;
+
+-- ===================================================================
+-- MIGRAÇÃO: Horário do lançamento e bloqueio de edição da data (Saída de Ração)
+-- Toda Saída de Ração passa a guardar o momento exato (data + hora) em
+-- que foi lançada, mostrado como "Lançado em" na lista e no modal de
+-- edição. Além disso, a Data do lançamento (a data operacional escolhida
+-- por quem lança, diferente do "Lançado em" automático) só pode ser
+-- alterada por Administrador ou Proprietário — outros papéis veem o
+-- campo desabilitado ao editar um lançamento já existente (continuam
+-- podendo editar dieta, lote e quantidade normalmente). Só vale pra
+-- edição; lançar um registro novo continua liberado pra quem tem acesso.
+-- Pode rodar a qualquer momento — todo lançamento existente fica com
+-- "Lançado em" em branco (sem como recuperar o horário de lançamentos
+-- antigos).
+-- ===================================================================
+alter table saidas_racao add column if not exists criado_em timestamptz;

@@ -481,7 +481,7 @@ function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categori
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento'}; }
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino}; }
 function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino}; }
-function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
+function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||'', criadoEm:r.criado_em||null}; }
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
 function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade, criadoPor:r.criado_por||''}; }
@@ -894,7 +894,7 @@ function autorAtual(){ return state.perfil?.nome || state.perfil?.usuario || nul
 async function executarInsertLancamento(type, campos){
   if(type==='saidaRacao' || type==='saidaRacaoCria'){
     const dieta = state.dietas.find(x=>x.id===campos.dietaId);
-    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual()};
+    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual(), criado_em:new Date().toISOString()};
     const res = await db.from('saidas_racao').insert(row).select().single();
     if(res.error) return {error:res.error};
     const saidaId = res.data.id;
@@ -1583,7 +1583,7 @@ function PageSaidaRacao(tipo){
     ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th><th>Custo estimado</th><th>Lançado por</th><th></th>
+        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th><th>Custo estimado</th><th>Lançado por</th><th>Lançado em</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(s=>{
@@ -1597,6 +1597,7 @@ function PageSaidaRacao(tipo){
             <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
             <td class="mono">R$ ${fmt(custo)}</td>
             <td>${s.criadoPor || '—'}</td>
+            <td class="mono">${s.criadoEm ? new Date(s.criadoEm).toLocaleString('pt-BR') : '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>
@@ -3099,9 +3100,11 @@ function ModalSaidaRacao(){
           </div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}" ${d._editId && !souAdmin() ? 'disabled' : ''}/></div>
           <div class="field"><label>Quantidade total de ração (kg)</label><input id="f-qtdracao" type="number" step="0.1" value="${d.quantidadeKg}"/></div>
         </div>
+        ${d._editId && !souAdmin() ? `<p class="hint">A data desse lançamento já registrado só pode ser alterada por um Administrador ou Proprietário.</p>` : ''}
+        ${d.criadoEm ? `<p class="hint">Lançado em ${new Date(d.criadoEm).toLocaleString('pt-BR')}</p>` : ''}
         <p class="hint">Ao salvar, o app desconta automaticamente do estoque cada ingrediente da dieta escolhida, na proporção da composição cadastrada.</p>
       </div>
       <div class="modal-foot">
@@ -3132,9 +3135,11 @@ function ModalSaidaRacaoCria(){
           </div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}" ${d._editId && !souAdmin() ? 'disabled' : ''}/></div>
           <div class="field"><label>Quantidade total de ração (kg)</label><input id="f-qtdracao" type="number" step="0.1" value="${d.quantidadeKg}"/></div>
         </div>
+        ${d._editId && !souAdmin() ? `<p class="hint">A data desse lançamento já registrado só pode ser alterada por um Administrador ou Proprietário.</p>` : ''}
+        ${d.criadoEm ? `<p class="hint">Lançado em ${new Date(d.criadoEm).toLocaleString('pt-BR')}</p>` : ''}
         <p class="hint">Ao salvar, o app desconta automaticamente do estoque cada ingrediente da dieta escolhida, na proporção da composição cadastrada.</p>
       </div>
       <div class="modal-foot">
@@ -3952,7 +3957,11 @@ function attachEvents(){
       } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaId = Number(document.getElementById('f-dieta').value);
         const loteId = Number(document.getElementById('f-lote').value);
-        const data = document.getElementById('f-data').value;
+        // A data de um lançamento já registrado só pode ser alterada por
+        // Administrador/Proprietário — o campo fica desabilitado na tela pra
+        // quem não é, e aqui ignoramos qualquer valor diferente do original
+        // por segurança (o input desabilitado não deveria mudar mesmo).
+        const data = (editDraft._editId && !souAdmin()) ? editDraft.data : document.getElementById('f-data').value;
         const qtdRacaoVal = document.getElementById('f-qtdracao').value;
         if(!validarObrigatorios([[data,'Data'],[qtdRacaoVal,'Quantidade (kg)']])) return;
         if(Number(qtdRacaoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
