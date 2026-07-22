@@ -3829,12 +3829,26 @@ function attachEvents(){
   const stopEl = document.querySelector('[data-stop]');
   if(stopEl) stopEl.onclick = (e)=> e.stopPropagation();
 
-  // dieta item add/remove/change
+  // dieta item add/remove/change — Nome/Categoria/Kg só são lidos do DOM no
+  // salvar, então antes de re-renderizar (o que redesenha o formulário a
+  // partir do editDraft) é preciso salvar o que já foi digitado nesses
+  // campos, senão o re-render (pra mostrar a nova linha de ingrediente) apaga
+  // o que a pessoa já tinha escrito.
+  function sincronizarCamposDieta(){
+    const nomeEl = document.getElementById('f-nome');
+    const categoriaEl = document.getElementById('f-categoria');
+    const kgEl = document.getElementById('f-kganimal');
+    const tipoEl = document.getElementById('f-tipodieta');
+    if(nomeEl) editDraft.nome = nomeEl.value;
+    if(categoriaEl) editDraft.categoriaAnimal = categoriaEl.value;
+    if(kgEl) editDraft.kgAnimalDia = kgEl.value;
+    if(tipoEl) editDraft.tipo = tipoEl.value;
+  }
   document.querySelectorAll('[data-item-add]').forEach(el=>{
-    el.onclick = ()=>{ editDraft.itens.push({ingredienteId:state.ingredientes[0]?.id||'', pct:''}); render(); };
+    el.onclick = ()=>{ sincronizarCamposDieta(); editDraft.itens.push({ingredienteId:state.ingredientes[0]?.id||'', pct:''}); render(); };
   });
   document.querySelectorAll('[data-item-del]').forEach(el=>{
-    el.onclick = ()=>{ editDraft.itens.splice(Number(el.dataset.itemDel),1); render(); };
+    el.onclick = ()=>{ sincronizarCamposDieta(); editDraft.itens.splice(Number(el.dataset.itemDel),1); render(); };
   });
   document.querySelectorAll('[data-item-ing]').forEach(el=>{
     el.onchange = (e)=>{ editDraft.itens[Number(el.dataset.itemIng)].ingredienteId = Number(e.target.value); };
