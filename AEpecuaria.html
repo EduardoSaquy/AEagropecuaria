@@ -1901,19 +1901,13 @@ function composicaoPorArea(confMes, pastoMes, criaMes){
   return entries.map(e=>({...e, pct: total>0 ? e.valor/total*100 : 0, cor: cores[e.nome]}));
 }
 
-// Painel global: todas as categorias juntas (Confinamento/Pasto/Cria +
-// cada centro de custo fixo), como fatia de 100% do custo total do mês.
-// Puro centro de custo fixo — não mistura com as áreas, porque essa fatia já
-// foi diluída dentro de cada área no gráfico "por área" acima.
-// Categorias que nunca somem dentro de "Outros", mesmo fora do top 7 —
-// nutrição é um centro de custo que a operação quer acompanhar sempre,
-// e os lançamentos diários (ração/pasto/cria) representam o custo real
-// do dia a dia, não histórico de relatório.
-const CENTRO_CUSTO_SEMPRE_VISIVEL = ['Nutrição Animal', 'Ração/Pasto/Cria (lançamentos diários)'];
+// Painel de despesas por centro de custo — só o que está cadastrado em
+// Despesas, sem misturar com o lançamento diário de ração/pasto/cria (que
+// é custo operacional do dia a dia, já mostrado em Financeiro).
+// Nutrição Animal nunca some dentro de "Outros", mesmo fora do top 7 — é um
+// centro de custo que a operação quer acompanhar sempre.
+const CENTRO_CUSTO_SEMPRE_VISIVEL = ['Nutrição Animal'];
 
-// extras: itens adicionais fora de custosFixos (ex: o total de ração/pasto/
-// cria lançado no dia a dia), pra esse painel poder mostrar todos os custos
-// juntos (fixos + variáveis), não só os custos fixos.
 function composicaoCentrosCusto(custosFixos, extras){
   const grupos = {};
   custosFixos.forEach(c=>{
@@ -2235,31 +2229,30 @@ function composicaoPorAreaAno(){
   const animaisCria = animaisPorTipo('reproducao');
   const animaisPastoCria = animaisPasto + animaisCria;
 
+  // Só a despesa cadastrada (fixo diluído/direto) entra aqui — o lançamento
+  // diário de ração/pasto/cria é custo operacional do dia a dia, já visível
+  // em Financeiro, e não deve se misturar no resultado por área/centro de
+  // custo (que é sobre despesa formal, não sobre consumo diário).
   let confinamento=0, pasto=0, cria=0;
   mesesDoAnoAteAgora().forEach(mesStr=>{
-    const racaoConf = state.saidasRacao.filter(s=>s.data.startsWith(mesStr) && racaoLoteTipo(s)==='confinamento').reduce((a,s)=>a+custoSaidaRacao(s),0);
-    const racaoCria = state.saidasRacao.filter(s=>s.data.startsWith(mesStr) && racaoLoteTipo(s)==='reproducao').reduce((a,s)=>a+custoSaidaRacao(s),0);
-    const pastoMes = state.pasto.filter(p=>p.data.startsWith(mesStr)).reduce((a,p)=>a+custoPasto(p),0);
-    const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
     const fixosDiluiveis = fixosDiluiveisDoMes(mesStr);
     const pastoCriaDireto = custosDiretosDoMes(mesStr,'pasto_cria');
     const fixoConfinamento = custosDiretosDoMes(mesStr,'confinamento') + (totalAnimais>0 ? fixosDiluiveis*(animaisConfinamento/totalAnimais) : 0);
     const fixoPasto = custosDiretosDoMes(mesStr,'pasto') + (animaisPastoCria>0 ? pastoCriaDireto*(animaisPasto/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveis*(animaisPasto/totalAnimais) : 0);
     const fixoCria = custosDiretosDoMes(mesStr,'cria') + (animaisPastoCria>0 ? pastoCriaDireto*(animaisCria/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveis*(animaisCria/totalAnimais) : 0);
-    confinamento += racaoConf + fixoConfinamento;
-    pasto += pastoMes + fixoPasto;
-    cria += racaoCria + reproducaoMes + fixoCria;
+    confinamento += fixoConfinamento;
+    pasto += fixoPasto;
+    cria += fixoCria;
   });
   return composicaoPorArea(confinamento, pasto, cria);
 }
 
-// Custos do ano (fixos + lançamentos diários de ração/pasto/cria) por
-// centro de custo — mesma lógica do mês, somando todos os meses do ano.
+// Custos do ano por centro de custo — só despesa cadastrada (custos fixos),
+// sem o lançamento diário de ração/pasto/cria (ver comentário acima).
 function composicaoCentrosCustoAno(){
   const meses = mesesDoAnoAteAgora();
   const todosFixos = [].concat(...meses.map(m=>custosFixosDoMes(m)));
-  const variavelAno = meses.reduce((a,m)=>a+custoVariavelDoMes(m),0);
-  return composicaoCentrosCusto(todosFixos, [{nome:'Ração/Pasto/Cria (lançamentos diários)', valor: variavelAno}]);
+  return composicaoCentrosCusto(todosFixos);
 }
 
 function dadosFinanceiro(){
@@ -2331,6 +2324,7 @@ function dadosFinanceiro(){
 
   return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, fixosDiluiveisMes, totalMes,
+    fixoConfinamento, fixoPasto, fixoCria,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes};
 }
@@ -2384,8 +2378,8 @@ function PageFinanceiroResumo(){
 /* ---- Resultados: Resumo ---- */
 function PageResultadosResumo(){
   const d = dadosFinanceiro();
-  const composicaoArea = composicaoPorArea(d.custoTotalConfinamentoMes, d.custoTotalPastoMes, d.custoTotalCriaMes);
-  const composicaoFixos = composicaoCentrosCusto(custosFixosDoMes(d.mes), [{nome:'Ração/Pasto/Cria (lançamentos diários)', valor: d.variavelMes}]);
+  const composicaoArea = composicaoPorArea(d.fixoConfinamento, d.fixoPasto, d.fixoCria);
+  const composicaoFixos = composicaoCentrosCusto(custosFixosDoMes(d.mes));
   const composicaoAreaAno = composicaoPorAreaAno();
   const composicaoFixosAno = composicaoCentrosCustoAno();
   const meses = comparativoMensal();
@@ -2412,10 +2406,11 @@ function PageResultadosResumo(){
   ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
-  ${PainelResultados(composicaoArea, 'area', 'Painel de resultados', 'Custo total do mês por área (Confinamento, Pasto e Cria, já com a fatia do custo fixo diluída)', 'Lance ração, pasto ou reprodução, e cadastre lotes ativos, para ver a composição por área aqui.')}
-  ${PainelResultados(composicaoAreaAno, 'area-ano', 'Painel de resultados', 'Custo total do ano por área (Confinamento, Pasto e Cria, já com a fatia do custo fixo diluída)', 'Lance ração, pasto ou reprodução, e cadastre lotes ativos, para ver a composição por área aqui.', 'no ano')}
-  ${PainelResultados(composicaoFixos, 'fixos', 'Painel de resultados', 'Custos do mês por centro de custo (fixos + lançamentos diários)', 'Cadastre custos fixos ou lance ração/pasto/cria para ver a composição por centro de custo aqui.')}
-  ${PainelResultados(composicaoFixosAno, 'fixos-ano', 'Painel de resultados', 'Custos do ano por centro de custo (fixos + lançamentos diários)', 'Cadastre custos fixos ou lance ração/pasto/cria para ver a composição por centro de custo aqui.', 'no ano')}
+  ${PainelResultados(composicaoArea, 'area', 'Painel de resultados', 'Despesa do mês por área (Confinamento, Pasto e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.')}
+  ${PainelResultados(composicaoAreaAno, 'area-ano', 'Painel de resultados', 'Despesa do ano por área (Confinamento, Pasto e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.', 'no ano')}
+  ${PainelResultados(composicaoFixos, 'fixos', 'Painel de resultados', 'Despesa do mês por centro de custo', 'Cadastre despesas em Financeiro para ver a composição por centro de custo aqui.')}
+  ${PainelResultados(composicaoFixosAno, 'fixos-ano', 'Painel de resultados', 'Despesa do ano por centro de custo', 'Cadastre despesas em Financeiro para ver a composição por centro de custo aqui.', 'no ano')}
+  <p class="hint" style="margin:-8px 0 20px;">Esses quatro gráficos mostram só a despesa cadastrada em Financeiro (custos fixos) — o consumo diário de ração, pasto e reprodução não entra aqui; ele já aparece em Financeiro &gt; Resumo e Por Lote.</p>
   <div id="painel-tooltip" class="painel-tooltip"></div>`;
 }
 
