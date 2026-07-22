@@ -739,3 +739,42 @@ where areas = '{}';
 -- ===================================================================
 alter table dietas drop constraint if exists dietas_tipo_check;
 alter table dietas add constraint dietas_tipo_check check (tipo in ('confinamento','cria','pasto'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Estoque de Ração Pronta (produto já misturado)
+-- Até aqui, lançar uma Saída de Ração ou uma reposição de Pasto descontava
+-- direto o estoque de cada INGREDIENTE CRU (milho, farelo, etc.) na
+-- proporção da composição da dieta. Agora existe um estágio intermediário,
+-- a "ração pronta" (o produto já misturado): um novo lançamento, "Produção
+-- de Ração" (tabela producoes_racao), registra que X kg de uma dieta foram
+-- misturados — isso desconta os ingredientes crus (mesma lógica de antes,
+-- só que agora só acontece na produção) e soma X kg no estoque de ração
+-- pronta daquela dieta. A Saída de Ração e a reposição de Pasto passam a
+-- só descontar desse estoque de ração pronta (não descontam mais o
+-- ingrediente cru diretamente) — o app calcula esse saldo (produzido menos
+-- consumido) sem precisar de uma coluna de saldo por dieta.
+-- Cada dieta também ganha um "estoque mínimo de ração pronta (kg)", pra
+-- mostrar um alerta na nova aba Estoque de Ração quando o saldo cair
+-- abaixo disso — mesmo princípio do estoque mínimo dos ingredientes.
+-- Pode rodar a qualquer momento — nenhuma dieta ou lançamento existente
+-- muda de comportamento sozinho (estoque mínimo começa em 0 = sem
+-- alerta; o estoque de ração pronta começa em 0 até a primeira produção
+-- ser registrada).
+-- ===================================================================
+alter table dietas add column if not exists estoque_min_pronta numeric not null default 0;
+
+create table if not exists producoes_racao (
+  id bigint generated always as identity primary key,
+  data date not null,
+  dieta_id bigint references dietas(id) on delete set null,
+  quantidade_kg numeric not null,
+  criado_por text,
+  criado_em timestamptz default now()
+);
+alter table movimentos add column if not exists producao_racao_id bigint references producoes_racao(id) on delete cascade;
+
+alter table producoes_racao enable row level security;
+create policy "select producoes_racao" on producoes_racao for select using (tem_permissao('dietas','visualizar'));
+create policy "inserir producoes_racao" on producoes_racao for insert with check (tem_permissao('dietas','editar'));
+create policy "atualizar producoes_racao" on producoes_racao for update using (tem_permissao('dietas','editar')) with check (tem_permissao('dietas','editar'));
+create policy "excluir producoes_racao" on producoes_racao for delete using (tem_permissao('dietas','editar'));
