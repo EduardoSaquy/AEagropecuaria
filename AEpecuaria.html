@@ -555,6 +555,7 @@ const state = {
   openDietId: null,
   search: '',
   searchDespesas: '',
+  paineisResultadosDados: {},
   filtroMesDespesas: '',
   filtroMesReceitas: '',
   fabOpen: false,
@@ -1889,12 +1890,13 @@ function coresPorCentroCusto(nomes){
 // cabeça somado (mesmo critério do Por Curral), então as 3 fatias juntas
 // somam 100% do custo total do mês — sem precisar repetir os centros de
 // custo fixo como fatias à parte.
-function composicaoPorArea(confMes, pastoMes, criaMes){
+function composicaoPorArea(confMes, pastoMes, criaMes, detalhesPorArea){
+  detalhesPorArea = detalhesPorArea || {confinamento:[], pasto:[], cria:[]};
   const grupos = {};
-  if(confMes>0) grupos['Confinamento'] = confMes;
-  if(pastoMes>0) grupos['Pasto'] = pastoMes;
-  if(criaMes>0) grupos['Cria'] = criaMes;
-  let entries = Object.entries(grupos).map(([nome,valor])=>({nome,valor}));
+  if(confMes>0) grupos['Confinamento'] = {valor:confMes, itens:detalhesPorArea.confinamento};
+  if(pastoMes>0) grupos['Pasto'] = {valor:pastoMes, itens:detalhesPorArea.pasto};
+  if(criaMes>0) grupos['Cria'] = {valor:criaMes, itens:detalhesPorArea.cria};
+  let entries = Object.entries(grupos).map(([nome,g])=>({nome, valor:g.valor, itens:g.itens}));
   entries.sort((a,b)=>b.valor-a.valor);
   const cores = coresPorArea();
   const total = entries.reduce((a,e)=>a+e.valor,0);
@@ -1912,21 +1914,26 @@ function composicaoCentrosCusto(custosFixos, extras){
   const grupos = {};
   custosFixos.forEach(c=>{
     const cat = (c.categoria||'').trim() || 'Outros';
-    grupos[cat] = (grupos[cat]||0) + Number(c.valorMensal||0);
+    if(!grupos[cat]) grupos[cat] = {valor:0, itens:[]};
+    grupos[cat].valor += Number(c.valorMensal||0);
+    grupos[cat].itens.push({id:c.id, nome:c.nome, mes:c.mes, valor:Number(c.valorMensal||0)});
   });
   (extras||[]).forEach(e=>{
-    grupos[e.nome] = (grupos[e.nome]||0) + Number(e.valor||0);
+    if(!grupos[e.nome]) grupos[e.nome] = {valor:0, itens:[]};
+    grupos[e.nome].valor += Number(e.valor||0);
   });
-  let entries = Object.entries(grupos).map(([nome,valor])=>({nome,valor})).filter(e=>e.valor>0);
+  let entries = Object.entries(grupos).map(([nome,g])=>({nome, valor:g.valor, itens:g.itens})).filter(e=>e.valor>0);
   entries.sort((a,b)=>b.valor-a.valor);
   if(entries.length>8){
     const fixas = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
     const resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
     const vagas = Math.max(0, 7-fixas.length);
     const principais = resto.slice(0, vagas);
-    const restoValor = resto.slice(vagas).reduce((a,e)=>a+e.valor,0);
+    const dobra = resto.slice(vagas);
+    const restoValor = dobra.reduce((a,e)=>a+e.valor,0);
+    const restoItens = [].concat(...dobra.map(e=>e.itens));
     entries = [...fixas, ...principais];
-    if(restoValor>0) entries.push({nome:'Outros', valor:restoValor});
+    if(restoValor>0) entries.push({nome:'Outros', valor:restoValor, itens:restoItens});
     entries.sort((a,b)=>b.valor-a.valor);
   }
   const cores = coresPorCentroCusto(entries.map(e=>e.nome));
@@ -1951,6 +1958,11 @@ function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
 // (ex: um custo fixo não diluído por área, que não aparece no gráfico "por área").
 function PainelResultados(entries, panelId, eyebrow, titulo, vazioMsg, labelPeriodo){
   labelPeriodo = labelPeriodo || 'no mês';
+  // Guarda os dados desse painel (com o detalhe despesa-por-despesa de cada
+  // fatia) pra o clique numa fatia/linha da legenda poder abrir o detalhe —
+  // a única forma de recuperar isso depois, já que o SVG em si só tem o
+  // índice da fatia, não os dados.
+  state.paineisResultadosDados[panelId] = entries;
   if(entries.length===0){
     return `<div class="card" style="margin-bottom:22px;">${Empty(`Sem custos ${labelPeriodo==='no ano'?'no ano':'no mês'} para compor o gráfico`, vazioMsg)}</div>`;
   }
@@ -2184,6 +2196,41 @@ function custosDiretosDoMes(mesStr, area){
 function receitaDoMes(mesStr){
   return state.receitas.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+Number(r.valor||0),0);
 }
+// Quanto de UMA despesa (já filtrada pro mês) cai em cada área — mesmo
+// critério usado nos totais (direto vai 100% pra área dele; "Pasto + Cria"
+// rateia só entre as duas; Geral rateia por cabeça entre as três; Geral não
+// diluído não entra em nenhuma). Usado tanto pra somar o total de cada área
+// quanto pra listar, despesa por despesa, o que compõe cada fatia do
+// gráfico "por área" (clique numa fatia pra ver o detalhe).
+function alocarDespesaPorArea(c, ctx){
+  const v = Number(c.valorMensal||0);
+  if(c.area==='confinamento') return {confinamento:v, pasto:0, cria:0};
+  if(c.area==='pasto') return {confinamento:0, pasto:v, cria:0};
+  if(c.area==='cria') return {confinamento:0, pasto:0, cria:v};
+  if(c.area==='pasto_cria'){
+    return ctx.animaisPastoCria>0
+      ? {confinamento:0, pasto:v*(ctx.animaisPasto/ctx.animaisPastoCria), cria:v*(ctx.animaisCria/ctx.animaisPastoCria)}
+      : {confinamento:0, pasto:0, cria:0};
+  }
+  if(c.diluirPorLote===false) return {confinamento:0, pasto:0, cria:0};
+  return ctx.totalAnimais>0
+    ? {confinamento:v*(ctx.animaisConfinamento/ctx.totalAnimais), pasto:v*(ctx.animaisPasto/ctx.totalAnimais), cria:v*(ctx.animaisCria/ctx.totalAnimais)}
+    : {confinamento:0, pasto:0, cria:0};
+}
+// Soma (e detalha, despesa por despesa) o custo fixo de cada área para um
+// conjunto de linhas de despesa já filtradas pro(s) mês(es) desejado(s).
+function alocarDespesasPorArea(rows, ctx){
+  let confinamento=0, pasto=0, cria=0;
+  const detalhes = {confinamento:[], pasto:[], cria:[]};
+  rows.forEach(c=>{
+    const aloc = alocarDespesaPorArea(c, ctx);
+    confinamento += aloc.confinamento; pasto += aloc.pasto; cria += aloc.cria;
+    if(aloc.confinamento>0) detalhes.confinamento.push({id:c.id, nome:c.nome, mes:c.mes, valor:aloc.confinamento});
+    if(aloc.pasto>0) detalhes.pasto.push({id:c.id, nome:c.nome, mes:c.mes, valor:aloc.pasto});
+    if(aloc.cria>0) detalhes.cria.push({id:c.id, nome:c.nome, mes:c.mes, valor:aloc.cria});
+  });
+  return {confinamento, pasto, cria, detalhes};
+}
 
 // Custo fixo não tem histórico por mês no app (só o valor mensal atual),
 // então o mesmo total é aplicado a todos os meses do ano ao montar o
@@ -2233,18 +2280,19 @@ function composicaoPorAreaAno(){
   // diário de ração/pasto/cria é custo operacional do dia a dia, já visível
   // em Financeiro, e não deve se misturar no resultado por área/centro de
   // custo (que é sobre despesa formal, não sobre consumo diário).
+  const ctxArea = {animaisConfinamento, animaisPasto, animaisCria, animaisPastoCria, totalAnimais};
   let confinamento=0, pasto=0, cria=0;
+  const detalhesPorArea = {confinamento:[], pasto:[], cria:[]};
   mesesDoAnoAteAgora().forEach(mesStr=>{
-    const fixosDiluiveis = fixosDiluiveisDoMes(mesStr);
-    const pastoCriaDireto = custosDiretosDoMes(mesStr,'pasto_cria');
-    const fixoConfinamento = custosDiretosDoMes(mesStr,'confinamento') + (totalAnimais>0 ? fixosDiluiveis*(animaisConfinamento/totalAnimais) : 0);
-    const fixoPasto = custosDiretosDoMes(mesStr,'pasto') + (animaisPastoCria>0 ? pastoCriaDireto*(animaisPasto/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveis*(animaisPasto/totalAnimais) : 0);
-    const fixoCria = custosDiretosDoMes(mesStr,'cria') + (animaisPastoCria>0 ? pastoCriaDireto*(animaisCria/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveis*(animaisCria/totalAnimais) : 0);
-    confinamento += fixoConfinamento;
-    pasto += fixoPasto;
-    cria += fixoCria;
+    const aloc = alocarDespesasPorArea(custosFixosDoMes(mesStr), ctxArea);
+    confinamento += aloc.confinamento;
+    pasto += aloc.pasto;
+    cria += aloc.cria;
+    detalhesPorArea.confinamento.push(...aloc.detalhes.confinamento);
+    detalhesPorArea.pasto.push(...aloc.detalhes.pasto);
+    detalhesPorArea.cria.push(...aloc.detalhes.cria);
   });
-  return composicaoPorArea(confinamento, pasto, cria);
+  return composicaoPorArea(confinamento, pasto, cria, detalhesPorArea);
 }
 
 // Custos do ano por centro de custo — só despesa cadastrada (custos fixos),
@@ -2302,10 +2350,12 @@ function dadosFinanceiro(){
   // Confinamento (ex: insumo agrícola de manejo de pasto, usado tanto por
   // quem tá solto quanto pela Cria, mas não pelo confinado).
   const animaisPastoCria = animaisPasto + animaisCria;
-  const pastoCriaDiretoMes = custosDiretosDoMes(mes,'pasto_cria');
-  const fixoConfinamento = custosDiretosDoMes(mes,'confinamento') + (totalAnimais>0 ? fixosDiluiveisMes*(animaisConfinamento/totalAnimais) : 0);
-  const fixoPasto = custosDiretosDoMes(mes,'pasto') + (animaisPastoCria>0 ? pastoCriaDiretoMes*(animaisPasto/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveisMes*(animaisPasto/totalAnimais) : 0);
-  const fixoCria = custosDiretosDoMes(mes,'cria') + (animaisPastoCria>0 ? pastoCriaDiretoMes*(animaisCria/animaisPastoCria) : 0) + (totalAnimais>0 ? fixosDiluiveisMes*(animaisCria/totalAnimais) : 0);
+  const ctxArea = {animaisConfinamento, animaisPasto, animaisCria, animaisPastoCria, totalAnimais};
+  const alocacaoArea = alocarDespesasPorArea(custosFixosDoMes(mes), ctxArea);
+  const fixoConfinamento = alocacaoArea.confinamento;
+  const fixoPasto = alocacaoArea.pasto;
+  const fixoCria = alocacaoArea.cria;
+  const detalhesPorArea = alocacaoArea.detalhes;
   const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamento;
   const custoTotalPastoMes = pastoMes + fixoPasto;
   const custoTotalCriaMes = criaMes + fixoCria;
@@ -2324,7 +2374,7 @@ function dadosFinanceiro(){
 
   return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, fixosDiluiveisMes, totalMes,
-    fixoConfinamento, fixoPasto, fixoCria,
+    fixoConfinamento, fixoPasto, fixoCria, detalhesPorArea,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
     totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes};
 }
@@ -2378,7 +2428,7 @@ function PageFinanceiroResumo(){
 /* ---- Resultados: Resumo ---- */
 function PageResultadosResumo(){
   const d = dadosFinanceiro();
-  const composicaoArea = composicaoPorArea(d.fixoConfinamento, d.fixoPasto, d.fixoCria);
+  const composicaoArea = composicaoPorArea(d.fixoConfinamento, d.fixoPasto, d.fixoCria, d.detalhesPorArea);
   const composicaoFixos = composicaoCentrosCusto(custosFixosDoMes(d.mes));
   const composicaoAreaAno = composicaoPorAreaAno();
   const composicaoFixosAno = composicaoCentrosCustoAno();
@@ -2854,6 +2904,7 @@ function Modal(){
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
   if(state.modal.type==='hectares') return ModalHectares();
   if(state.modal.type==='pendencias') return ModalPendencias();
+  if(state.modal.type==='detalheGrafico') return ModalDetalheGrafico();
   return '';
 }
 
@@ -3423,6 +3474,50 @@ function ModalPendencias(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Fechar</button>
         ${fila.length>0 ? `<button class="btn btn-primary" data-tentar-sincronizar="1">Tentar sincronizar agora</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// Detalhe de uma fatia dos gráficos de Resultados: lista despesa por
+// despesa o que compõe aquele valor, com botão de editar cada uma (reabre
+// o cadastro de Despesas — dá pra trocar o centro de custo ou a área dali
+// mesmo, sem precisar ir em Financeiro procurar o lançamento).
+function ModalDetalheGrafico(){
+  const {panelId, idx} = state.modal;
+  const entry = (state.paineisResultadosDados[panelId]||[])[idx];
+  if(!entry){
+    return `<div class="overlay" data-close-overlay="1"><div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Detalhe</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body"><p class="hint">Esse gráfico foi atualizado — feche e clique na fatia de novo.</p></div>
+      <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
+    </div></div>`;
+  }
+  const ehPorArea = panelId==='area' || panelId==='area-ano';
+  const itens = [...(entry.itens||[])].sort((a,b)=>b.valor-a.valor);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${entry.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:14px;">R$ ${fmt(entry.valor)} (${fmt(entry.pct,1)}% do total)${ehPorArea ? ' — valor já rateado pra essa área; uma despesa "Geral" aparece aqui só com a fatia que cabe a essa área, não o valor cheio.' : ''}</p>
+        ${itens.length===0 ? `<p class="hint">Sem despesas cadastradas detalhadas pra essa fatia.</p>` : `
+        <table>
+          <thead><tr><th>Despesa</th><th>Mês</th><th>Valor${ehPorArea ? ' (nessa área)' : ''}</th><th></th></tr></thead>
+          <tbody>
+            ${itens.map(it=>`
+              <tr>
+                <td><strong>${it.nome}</strong></td>
+                <td>${it.mes ? `<span class="pill pill-cat">${mesLabel(it.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
+                <td class="mono">R$ ${fmt(it.valor)}</td>
+                <td>${temPermissao('financeiro','editar') && it.id ? `<button class="btn-ghost btn-sm" data-edit-custofixo="${it.id}">Editar</button>` : ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
       </div>
     </div>
   </div>`;
@@ -4182,6 +4277,25 @@ function attachEvents(){
       if(slice) slice.classList.add('hover');
     });
     el.addEventListener('pointerleave', clearHovers);
+  });
+  // Clique numa fatia do donut ou linha da legenda abre o detalhe (as
+  // despesas que compõem aquela fatia, com botão de editar cada uma).
+  // A chave é "painelId-idx" — o painelId em si pode ter hífen (ex:
+  // "area-ano"), então separamos só no último hífen (o idx nunca tem).
+  const abrirDetalheFatia = (chave)=>{
+    const idx = Number(chave.slice(chave.lastIndexOf('-')+1));
+    const panelId = chave.slice(0, chave.lastIndexOf('-'));
+    const entry = (state.paineisResultadosDados[panelId]||[])[idx];
+    if(!entry) return;
+    state.modal = {type:'detalheGrafico', panelId, idx};
+    render();
+  };
+  document.querySelectorAll('[data-slice-idx]').forEach(el=>{
+    el.addEventListener('click', ()=>abrirDetalheFatia(el.dataset.sliceIdx));
+    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrirDetalheFatia(el.dataset.sliceIdx); } });
+  });
+  document.querySelectorAll('[data-legenda-idx]').forEach(el=>{
+    el.addEventListener('click', ()=>abrirDetalheFatia(el.dataset.legendaIdx));
   });
 }
 
