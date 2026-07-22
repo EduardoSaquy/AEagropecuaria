@@ -1997,7 +1997,8 @@ function PainelResultados(entries, panelId, eyebrow, titulo, vazioMsg, labelPeri
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad">
       <p class="eyebrow" style="margin:0 0 4px;">${eyebrow}</p>
-      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">${titulo}</h3>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 ${labelPeriodo==='no ano'?'4px':'16px'};">${titulo}</h3>
+      ${labelPeriodo==='no ano' ? `<p class="hint" style="margin:0 0 16px;">Estimativa: soma, mês a mês, a despesa real cadastrada quando existe ou o valor recorrente atual como substituto — não é o gasto já efetivamente lançado, e sim uma projeção pro ano.</p>` : ''}
       <div class="painel-resultados">
         <div class="donut-wrap">
           <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
@@ -2022,7 +2023,8 @@ function DemonstrativoReceitaDespesa(despesa, receita, margemAtualPct, metaMarge
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad">
       <p class="eyebrow" style="margin:0 0 4px;">Painel de resultados</p>
-      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 16px;">Despesa vs Receita ${rotulo}</h3>
+      <h3 style="font-family:'Fraunces',serif; font-size:16px; color:var(--verde-escuro); margin:0 0 ${periodo==='ano'?'4px':'16px'};">Despesa vs Receita ${rotulo}</h3>
+      ${periodo==='ano' ? `<p class="hint" style="margin:0 0 16px;">Estimativa: cada mês do ano usa a despesa real cadastrada pra ele, quando existe, ou o valor recorrente atual como substituto — não é o gasto já efetivamente lançado, e sim uma projeção de "quanto o ano fecharia no ritmo atual".</p>` : ''}
       <div class="demonstrativo-bars">
         <div class="demo-bar-row">
           <span class="demo-bar-label">Despesa</span>
