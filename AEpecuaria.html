@@ -546,7 +546,16 @@ async function loadAll(){
   state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);
   state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
   state.hectares = (cfgFaz.data||[])[0]?.hectares ?? null;
-  if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
+  // Abre a primeira dieta da lista automaticamente, mas só na primeira vez
+  // que os dados carregam — sem esse controle à parte, loadAll() (chamado
+  // depois de QUALQUER lançamento salvo em qualquer aba do app, não só em
+  // Dietas) reabria a primeira dieta sempre que o usuário já tinha
+  // minimizado ela (openDietId volta a null ao fechar, indistinguível do
+  // estado inicial "nunca abri nenhuma").
+  if(!state.openDietIdAutoAberto && state.dietas[0]){
+    state.openDietId = state.dietas[0].id;
+    state.openDietIdAutoAberto = true;
+  }
   render();
 }
 
@@ -575,6 +584,7 @@ const state = {
   perfis: [],
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
+  openDietIdAutoAberto: false,
   search: '',
   searchDespesas: '',
   paineisResultadosDados: {},
@@ -1572,6 +1582,22 @@ function calcDieta(d){
     pctTotal += it.pct;
   });
   return {ms, pb, ndt, custoKg, pctTotal, custoAnimalDia: custoKg*d.kgAnimalDia};
+}
+
+// Se a composição de uma dieta não soma 100%, todo lançamento que a usa
+// (Saída de Ração, Produção de Ração, Pasto) desconta só a fração
+// correspondente do estoque de ingrediente cru — ex: composição somando
+// 60% desconta só 60% da quantidade de ração realmente lançada, deixando
+// "sobrar" ingrediente no estoque que na verdade já foi consumido. Por
+// isso lançamentos com uma dieta incompleta são bloqueados. Soma o
+// percentual direto de dieta.itens (não usa calcDieta/pctTotal, que
+// ignora item cujo ingrediente foi excluído — aqui o que importa é só a
+// soma dos percentuais cadastrados, não se o ingrediente ainda existe).
+function composicaoIncompleta(dietaId){
+  const dieta = state.dietas.find(d=>d.id===dietaId);
+  if(!dieta) return null;
+  const pctTotal = dieta.itens.reduce((a,it)=>a+Number(it.pct||0),0);
+  return Math.abs(pctTotal-100)>0.01 ? {dieta, pctTotal} : null;
 }
 
 function PageDietas(){
@@ -4335,6 +4361,11 @@ function attachEvents(){
           estoqueMinPronta: Number(document.getElementById('f-estoqueminpronta').value)||0,
           itens: editDraft.itens.map(it=>({ingredienteId:Number(it.ingredienteId), pct:Number(it.pct)||0})),
         };
+        const pctTotalDieta = campos.itens.reduce((a,it)=>a+it.pct,0);
+        if(Math.abs(pctTotalDieta-100)>0.01){
+          alert(`A composição soma ${fmt(pctTotalDieta,1)}%, precisa somar 100% pra salvar. Ajuste os percentuais dos ingredientes antes de continuar — senão o desconto de estoque nos lançamentos com essa dieta fica errado.`);
+          return;
+        }
         const row = dietaToRow(campos);
         if(editDraft._editId){
           ({error} = await db.from('dietas').update(row).eq('id', editDraft._editId));
@@ -4369,6 +4400,11 @@ function attachEvents(){
         const qtdRacaoVal = document.getElementById('f-qtdracao').value;
         if(!validarObrigatorios([[data,'Data'],[qtdRacaoVal,'Quantidade (kg)']])) return;
         if(Number(qtdRacaoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
+        const incompletaRacao = composicaoIncompleta(dietaId);
+        if(incompletaRacao){
+          alert(`A dieta "${incompletaRacao.dieta.nome}" tem uma composição que soma ${fmt(incompletaRacao.pctTotal,1)}%, não 100% — ajuste em Formulação de Dietas antes de lançar, senão o desconto de estoque fica errado.`);
+          return;
+        }
         const quantidadeKg = Number(qtdRacaoVal);
         if(editDraft._editId){
           const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
@@ -4430,6 +4466,11 @@ function attachEvents(){
         const qtdPastoVal = document.getElementById('f-qtdpasto').value;
         if(!validarObrigatorios([[data,'Data'],[qtdPastoVal,'Quantidade']])) return;
         if(Number(qtdPastoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
+        const incompletaPasto = composicaoIncompleta(dietaId);
+        if(incompletaPasto){
+          alert(`A dieta "${incompletaPasto.dieta.nome}" tem uma composição que soma ${fmt(incompletaPasto.pctTotal,1)}%, não 100% — ajuste em Formulação de Dietas antes de lançar, senão o desconto de estoque fica errado.`);
+          return;
+        }
         const quantidade = Number(qtdPastoVal);
         if(editDraft._editId){
           const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
@@ -4449,6 +4490,11 @@ function attachEvents(){
         const qtdProduzidaVal = document.getElementById('f-qtdproduzida').value;
         if(!validarObrigatorios([[data,'Data'],[qtdProduzidaVal,'Quantidade produzida']])) return;
         if(Number(qtdProduzidaVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
+        const incompletaProducao = composicaoIncompleta(dietaId);
+        if(incompletaProducao){
+          alert(`A dieta "${incompletaProducao.dieta.nome}" tem uma composição que soma ${fmt(incompletaProducao.pctTotal,1)}%, não 100% — ajuste em Formulação de Dietas antes de lançar, senão o desconto de estoque fica errado.`);
+          return;
+        }
         const quantidadeKg = Number(qtdProduzidaVal);
         if(editDraft._editId){
           const dieta = state.dietas.find(x=>x.id===dietaId);
