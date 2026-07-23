@@ -55,6 +55,16 @@ Os cadastros centrais (fazenda, cultura/safra, talhão/lote, centro de custo) na
 - Fora do escopo do sistema por enquanto (sem dado-fonte disponível): custo por tonelada colhida/produzida — depende do volume de colheita, que só existirá quando os apps de cana e grãos forem criados.
 - **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e rode `combustivel_schema.sql` do começo ao fim (o arquivo tem as migrações das Fases 1 a 5 em sequência — as Fases 4 e 6 são só leitura, sem migração própria — com passo a passo comentado). Publique a Edge Function `criar-usuario-combustivel` e preencha a URL/chave do projeto no topo de `AECombustivel.html`.
 
+## AE Matriz
+
+App novo e independente (`AEMatriz.html`), pensado para ser o hub central da AE Agropecuária — o ponto de entrada de onde se abre o AE Pecuária, o AE Combustível e os próximos apps da operação (cana-de-açúcar e cereais, ainda por vir). Mesma tecnologia dos outros dois (HTML/CSS/JS puro + Supabase + PWA instalável), com **banco de dados próprio e separado**.
+
+A matriz não duplica os dados dos outros apps nem centraliza o financeiro deles — cada app continua com seu próprio login, banco e módulo financeiro, exatamente como hoje. Ela mantém só o que é central: cadastro de fazendas, login próprio dos usuários da matriz, e o registro dos apps que aparecem no Painel (nome, link, cor e status). O card do AE Pecuária no Painel já mostra indicadores ao vivo (lotes ativos, animais e dietas), lidos diretamente do banco da pecuária.
+
+- **Status**: MVP (hub leve) — cadastro central de Fazendas, login e permissões (Administrador/Gestor), e o Painel com os cards dos apps. Quando o financeiro ou outros dados precisarem ser realmente unificados entre os apps, isso é decidido e implementado à parte, sem migrar o que já está em produção.
+- **Apps registrados por padrão**: AE Pecuária (ativo) e AE Combustível (em breve, até o projeto Supabase dele ser publicado) — AE Cana e AE Cereais entram como "em breve", só com o cadastro, até serem desenvolvidos. Um Administrador pode editar, adicionar ou remover apps do Painel a qualquer momento pela própria tela, sem precisar mexer em código.
+- **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e rode `matriz_schema.sql` do começo ao fim (o arquivo já semeia o cadastro inicial dos apps e tem o passo a passo comentado para criar o primeiro administrador). Publique a Edge Function `criar-usuario-matriz` e preencha a URL/chave do projeto no topo de `AEMatriz.html`.
+
 ## Autor
 
 EduardoSaquy
