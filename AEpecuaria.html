@@ -908,7 +908,33 @@ function pareceErroDeRede(err){
 // (só o insert grava; editar não troca o autor original).
 function autorAtual(){ return state.perfil?.nome || state.perfil?.usuario || null; }
 async function executarInsertLancamento(type, campos){
-  if(type==='saidaRacao' || type==='saidaRacaoCria'){
+  if(type==='saidaRacao'){
+    // Confinamento: a ração é formulada e servida na hora (sem virar um lote
+    // guardado) — desconta o ingrediente cru direto, igual antes de existir
+    // o estoque de ração pronta (que só faz sentido pra dieta produzida em
+    // lote e guardada, como a da Cria).
+    const dieta = state.dietas.find(x=>x.id===campos.dietaId);
+    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual(), criado_em:new Date().toISOString()};
+    const res = await db.from('saidas_racao').insert(row).select().single();
+    if(res.error) return {error:res.error};
+    const saidaId = res.data.id;
+    if(dieta){
+      const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+        const ing = getIng(it.ingredienteId);
+        const consumoKg = campos.quantidadeKg*it.pct/100;
+        return {data:campos.data, ingrediente_id:it.ingredienteId, tipo:'saida', quantidade:kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id:saidaId};
+      });
+      if(movs.length){
+        const {error} = await db.from('movimentos').insert(movs);
+        if(error) return {error};
+      }
+    }
+    return {error:null};
+  }
+  if(type==='saidaRacaoCria'){
+    // Cria: a ração é produzida em lote e guardada (estoque de ração
+    // pronta) — a Saída de Ração só consome desse estoque; quem desconta o
+    // ingrediente cru é a Produção de Ração.
     const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual(), criado_em:new Date().toISOString()};
     const {error} = await db.from('saidas_racao').insert(row);
     return {error};
@@ -1028,6 +1054,13 @@ function saldoIngrediente(id){
     saldo += m.tipo==='entrada' ? m.quantidade : -m.quantidade;
   });
   return saldo;
+}
+
+// Dietas que fazem sentido controlar por estoque de ração pronta (produzida
+// em lote e guardada — Cria, Pasto). Confinamento é formulado e servido na
+// hora, sem virar um lote guardado, então não entra aqui.
+function dietasComEstoquePronto(){
+  return state.dietas.filter(d=>d.tipo!=='confinamento');
 }
 
 // Estoque (kg) de ração já pronta/misturada de uma dieta: soma das produções
@@ -1208,11 +1241,12 @@ function openNewModal(type){
     editDraft = {nome:'', tipo:'confinamento', categoriaAnimal:'', kgAnimalDia:9, estoqueMinPronta:'', itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
     state.modal = {type:'dieta'};
   } else if(type==='producaoRacao'){
-    if(state.dietas.length===0){
-      alert('Cadastre ao menos uma dieta (aba Formulação de Dietas) antes de registrar uma produção de ração.');
+    const dietasEstocaveis = dietasComEstoquePronto();
+    if(dietasEstocaveis.length===0){
+      alert('Cadastre ao menos uma dieta de Cria ou Pasto (aba Formulação de Dietas) antes de registrar uma produção de ração. Confinamento não usa estoque de ração pronta — a ração é formulada e servida na hora.');
       return false;
     }
-    editDraft = {dietaId: state.dietas[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
+    editDraft = {dietaId: dietasEstocaveis[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'producaoRacao'};
   } else if(type==='lote'){
     const grupoAtual = currentGroupKey();
@@ -1520,10 +1554,11 @@ function PageDietas(){
 
 /* ===================== PÁGINA: ESTOQUE DE RAÇÃO (produto pronto) ===================== */
 function PageEstoqueRacao(){
-  if(state.dietas.length===0){
-    return `<div class="card">${Empty('Nenhuma dieta formulada','Formule uma dieta antes de registrar uma produção de ração.')}</div>`;
+  const dietasEstocaveis = dietasComEstoquePronto();
+  if(dietasEstocaveis.length===0){
+    return `<div class="card">${Empty('Nenhuma dieta de Cria ou Pasto formulada','O estoque de ração pronta vale pra dieta produzida em lote e guardada (Cria, Pasto) — Confinamento é formulado e servido na hora, sem entrar aqui.')}</div>`;
   }
-  const rows = state.dietas.map(d=>{
+  const rows = dietasEstocaveis.map(d=>{
     const saldo = estoqueRacaoPronta(d.id);
     const min = Number(d.estoqueMinPronta||0);
     const pctMin = min>0 ? Math.min(saldo/(min*2),1) : 1;
@@ -1534,8 +1569,9 @@ function PageEstoqueRacao(){
   const producoesRows = [...state.producoesRacao].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id).slice(0,8);
 
   return `
+  <p class="hint" style="margin:0 0 14px;">Vale pra dieta produzida em lote e guardada (Cria, Pasto) — Confinamento é formulado e servido na hora, sem passar por aqui.</p>
   <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Dietas cadastradas</div><div class="stat-value">${state.dietas.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Dietas com estoque de ração pronta</div><div class="stat-value">${dietasEstocaveis.length}</div></div>
     <div class="stat-card"><div class="stat-label">Alertas de estoque baixo</div><div class="stat-value ${alertas>0?'alerta':''}">${alertas}</div></div>
     <div class="stat-card"><div class="stat-label">Produções registradas</div><div class="stat-value">${state.producoesRacao.length}</div></div>
   </div>
@@ -3121,7 +3157,7 @@ function ModalProducaoRacao(){
         <div class="field-row">
           <div class="field"><label>Dieta</label>
             <select id="f-dietaproducao">
-              ${state.dietas.map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
+              ${dietasComEstoquePronto().map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
@@ -4120,7 +4156,28 @@ function attachEvents(){
         const quantidadeKg = Number(qtdRacaoVal);
         if(editDraft._editId){
           const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
-          ({error} = await db.from('saidas_racao').update(row).eq('id', editDraft._editId));
+          const saidaId = editDraft._editId;
+          ({error} = await db.from('saidas_racao').update(row).eq('id', saidaId));
+          if(type==='saidaRacao'){
+            // Confinamento desconta o ingrediente cru direto — refaz os
+            // movimentos dessa saída com os valores novos (mesmo esquema
+            // de antes de existir o estoque de ração pronta).
+            const dieta = state.dietas.find(x=>x.id===dietaId);
+            if(!error) await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
+            if(!error && dieta){
+              const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+                const ing = getIng(it.ingredienteId);
+                const consumoKg = quantidadeKg*it.pct/100;
+                return {
+                  data, ingrediente_id: it.ingredienteId, tipo: 'saida',
+                  quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
+                };
+              });
+              if(movs.length){
+                ({error} = await db.from('movimentos').insert(movs));
+              }
+            }
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, {dietaId, loteId, data, quantidadeKg});
           if(resultado.enfileirado){
