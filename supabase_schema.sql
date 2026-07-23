@@ -828,3 +828,26 @@ create policy "excluir abates" on abates for delete using (
   (tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar'))
   and tem_permissao('resultados','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Venda por animal ou por kg (generaliza a tabela "abates")
+-- Até aqui a tabela "abates" só cobria venda por abate (peso de carcaça +
+-- valor da arroba). Agora ela cobre qualquer venda de animais — mantém o
+-- nome da tabela (já em produção) e ganha um "tipo_venda" pra diferenciar:
+--   - 'arroba' (abate): usa peso_medio_kg (carcaça) + valor_arroba — igual
+--     já funcionava, e continua sendo o valor padrão pra linha existente.
+--   - 'cabeca' (venda por animal): usa só valor_por_animal (valor fechado
+--     por cabeça, sem depender de peso).
+--   - 'kg' (venda por kg vivo): usa peso_medio_kg (peso vivo, não carcaça)
+--     + valor_kg.
+-- peso_medio_kg e valor_arroba deixam de ser obrigatórios (só valem pro
+-- tipo 'arroba' agora); as duas colunas novas (valor_por_animal, valor_kg)
+-- só são usadas pelos tipos 'cabeca'/'kg'.
+-- Pode rodar a qualquer momento — toda venda já cadastrada vira tipo_venda
+-- = 'arroba' (o que já era, sem mudar de comportamento).
+-- ===================================================================
+alter table abates add column if not exists tipo_venda text not null default 'arroba' check (tipo_venda in ('arroba','cabeca','kg'));
+alter table abates add column if not exists valor_por_animal numeric;
+alter table abates add column if not exists valor_kg numeric;
+alter table abates alter column peso_medio_kg drop not null;
+alter table abates alter column valor_arroba drop not null;
