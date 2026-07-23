@@ -2111,7 +2111,7 @@ function PageAbates(tipo){
   <div class="card">
     ${abatesTipo.length===0 ? Empty('Nenhum abate registrado', 'Registre o abate de um lote pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : `
     <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Qtd. animais</th><th>Peso médio</th><th>@ produzidas</th><th>Valor da @</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Lote</th><th>Qtd. animais</th><th>Peso de carcaça</th><th>@ produzidas</th><th>Valor da @</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
         ${abatesTipo.map(a=>{
           const lote = state.lotes.find(l=>l.id===a.loteId);
@@ -2377,9 +2377,11 @@ function racaoLoteTipo(s){ const lote = state.lotes.find(l=>l.id===s.loteId); re
 // gira em torno de 50%, então 30 kg de peso vivo vira ~1 @ de carcaça).
 const KG_POR_ARROBA = 30;
 
-// Arrobas e valor de um abate: peso médio por animal × quantidade abatida,
-// convertido pra arroba (mesmo critério de peso vivo → @ usado na Pesagem).
-function arrobasAbate(a){ return (Number(a.pesoMedioKg||0)/KG_POR_ARROBA) * Number(a.quantidade||0); }
+// No abate, o peso lançado é o peso de CARCAÇA vindo do frigorífico (não
+// peso vivo) — então a conversão usa a arroba "cheia" de 15 kg, sem o
+// desconto de rendimento de carcaça usado na Pesagem (que parte de peso vivo).
+const KG_POR_ARROBA_CARCACA = 15;
+function arrobasAbate(a){ return (Number(a.pesoMedioKg||0)/KG_POR_ARROBA_CARCACA) * Number(a.quantidade||0); }
 function valorAbate(a){ return arrobasAbate(a) * Number(a.valorArroba||0); }
 
 function pesagensDoLote(loteId){
@@ -3604,13 +3606,13 @@ function ModalAbate(){
           <div class="field"><label>Quantidade de animais abatidos</label><input id="f-qtdabate" type="number" step="1" value="${d.quantidade}"/></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesoabate" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
-          <div class="field"><label>Valor da arroba (R$/@)</label><input id="f-valorarrobaabate" type="number" step="0.01" value="${d.valorArroba}"/></div>
+          <div class="field"><label>Peso de carcaça por animal (kg, do frigorífico)</label><input id="f-pesoabate" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
+          <div class="field"><label>Valor da arroba paga (R$/@)</label><input id="f-valorarrobaabate" type="number" step="0.01" value="${d.valorArroba}"/></div>
         </div>
         <div class="total-bar ok">
           <span>${fmt(arrobas,2)} @ produzidas</span><span>R$ ${fmt(valorTotal)}</span>
         </div>
-        <p class="hint">Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
+        <p class="hint">Peso de carcaça (não peso vivo) — 1 @ = 15 kg. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro. Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obsabate" rows="2">${d.observacao||''}</textarea></div>
       </div>
       <div class="modal-foot">
@@ -4531,7 +4533,7 @@ function attachEvents(){
         const pesoVal = document.getElementById('f-pesoabate').value;
         const valorArrobaVal = document.getElementById('f-valorarrobaabate').value;
         const observacao = document.getElementById('f-obsabate').value;
-        if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais'],[pesoVal,'Peso médio'],[valorArrobaVal,'Valor da arroba']])) return;
+        if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais'],[pesoVal,'Peso de carcaça'],[valorArrobaVal,'Valor da arroba']])) return;
         if(Number(qtdVal)<=0){ alert('A quantidade de animais precisa ser maior que zero.'); return; }
         if(Number(pesoVal)<=0){ alert('O peso médio precisa ser maior que zero.'); return; }
         if(Number(valorArrobaVal)<=0){ alert('O valor da arroba precisa ser maior que zero.'); return; }
