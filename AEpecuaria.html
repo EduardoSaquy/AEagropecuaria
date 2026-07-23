@@ -598,10 +598,12 @@ function render(){
 
   const grupos = gruposVisiveis();
   const semModulos = grupos.length===0;
-  root.innerHTML = `
-    <div class="app">
-      ${Sidebar()}
-      <div class="main">
+  // Se qualquer Page/Modal explodir (erro de JS), melhor mostrar o erro e
+  // deixar a navegação (Sidebar) funcionando do que travar a tela inteira
+  // sem pista nenhuma do que aconteceu.
+  let conteudo;
+  try{
+    conteudo = `
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos módulos.') : `
         ${Header()}
         ${SubTabs()}
@@ -631,9 +633,30 @@ function render(){
         ${state.page==='fazendaConfig' ? PageFazenda() : ''}
         ${state.page==='adminUsuarios' ? PageAdminUsuarios() : ''}
         `}
-      </div>
+    `;
+  } catch(e){
+    console.error('Erro ao montar a tela:', e);
+    conteudo = `<div class="card" style="margin:20px;">
+      <h3 style="color:var(--alerta);">Ocorreu um erro ao carregar esta tela</h3>
+      <p class="hint">Mande um print desta mensagem: <strong>${String(e && e.message || e)}</strong></p>
+      <button class="btn btn-ghost btn-sm" data-voltar-erro="1" style="margin-top:10px;">Voltar pro Resumo</button>
+    </div>`;
+  }
+  let modalHtml = '';
+  if(state.modal){
+    try{ modalHtml = Modal(); }
+    catch(e){
+      console.error('Erro ao abrir modal:', e);
+      state.modal = null;
+      alert('Ocorreu um erro ao abrir esta janela: ' + String(e && e.message || e));
+    }
+  }
+  root.innerHTML = `
+    <div class="app">
+      ${Sidebar()}
+      <div class="main">${conteudo}</div>
     </div>
-    ${state.modal ? Modal() : ''}
+    ${modalHtml}
     ${!semModulos ? FabMenu() : ''}
   `;
   attachEvents();
@@ -1139,6 +1162,7 @@ function Header(){
     ingredientes:{eyebrow:'Cadastro', title:'Ingredientes', desc:'Composição nutricional, fornecedor e preço de cada insumo da fazenda.'},
     estoque:{eyebrow:'Movimentação', title:'Estoque', desc:'Saldo atual por ingrediente, calculado a partir das entradas e saídas registradas.'},
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
+    estoqueRacao:{eyebrow:'Produto acabado', title:'Estoque de Ração', desc:'Registre a produção (mistura) de ração de cada dieta e acompanhe o saldo já pronto, com alerta de estoque baixo.'},
     lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
@@ -3713,6 +3737,10 @@ function attachEvents(){
   document.querySelectorAll('[data-subnav]').forEach(el=>{
     el.onclick = ()=>{ state.page = el.dataset.subnav; render(); };
   });
+  const voltarErroBtn = document.querySelector('[data-voltar-erro]');
+  if(voltarErroBtn){
+    voltarErroBtn.onclick = ()=>{ state.page = 'financeiroResumo'; render(); };
+  }
   const fabToggle = document.querySelector('[data-fab-toggle]');
   if(fabToggle){
     fabToggle.onclick = ()=>{ state.fabOpen = !state.fabOpen; render(); };
