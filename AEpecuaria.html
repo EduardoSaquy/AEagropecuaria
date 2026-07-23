@@ -495,10 +495,13 @@ function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id
 function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantidade_kg:p.quantidadeKg}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
 function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
-function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||'', abateId:r.abate_id||null}; }
+function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||'', vendaId:r.abate_id||null}; }
 function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor, observacao:r.observacao||''}; }
-function rowToAbate(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantidade:r.quantidade, pesoMedioKg:r.peso_medio_kg, valorArroba:r.valor_arroba, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
-function abateToRow(a){ return {data:a.data, lote_id:a.loteId, quantidade:a.quantidade, peso_medio_kg:a.pesoMedioKg, valor_arroba:a.valorArroba, observacao:a.observacao||''}; }
+// Guardado na tabela "abates" (nome antigo, de quando só existia venda por
+// abate) — mantido por já estar em produção; agora cobre qualquer venda de
+// animais (abate por @, por animal ou por kg vivo), diferenciada por tipoVenda.
+function rowToVenda(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantidade:r.quantidade, tipoVenda:r.tipo_venda||'arroba', pesoMedioKg:r.peso_medio_kg, valorArroba:r.valor_arroba, valorPorAnimal:r.valor_por_animal, valorKg:r.valor_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
+function vendaToRow(v){ return {data:v.data, lote_id:v.loteId, quantidade:v.quantidade, tipo_venda:v.tipoVenda||'arroba', peso_medio_kg:v.pesoMedioKg||null, valor_arroba:v.valorArroba||null, valor_por_animal:v.valorPorAnimal||null, valor_kg:v.valorKg||null, observacao:v.observacao||''}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
@@ -538,7 +541,7 @@ async function loadAll(){
   state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
   state.partos = (prt.data||[]).map(rowToParto);
   state.pesagens = (pesag.data||[]).map(rowToPesagem);
-  state.abates = (abt.data||[]).map(rowToAbate);
+  state.vendas = (abt.data||[]).map(rowToVenda);
   state.producoesRacao = (prod.data||[]).map(rowToProducaoRacao);
   state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
   state.investimentos = (inv.data||[]).map(rowToInvestimento);
@@ -574,7 +577,7 @@ const state = {
   partos: [],
   pesagens: [],
   producoesRacao: [],
-  abates: [],
+  vendas: [],
   receitas: [],
   precosArroba: [],
   metaMargemPct: null,
@@ -639,6 +642,7 @@ function render(){
         ${state.page==='dietas' ? PageDietas() : ''}
         ${state.page==='estoqueRacao' ? PageEstoqueRacao() : ''}
         ${state.page==='lotesGeral' ? PageLotesGeral() : ''}
+        ${state.page==='vendasGeral' ? PageVendasGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao('confinamento') : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
@@ -722,17 +726,19 @@ function temPermissao(modulo, nivel){
 function podeEditarAcao(type){
   return (ACAO_MODULOS[type]||[]).some(m=>temPermissao(m,'editar'));
 }
-// Abate lança uma Receita automaticamente (módulo Resultados, mantido
-// separado do resto de propósito pra controlar quem vê receita/resultado
-// da operação) — por isso exige editar tanto no módulo do lote
-// (Confinamento/Pasto/Cria) quanto em Resultados, não só um dos dois.
-function podeRegistrarAbate(tipo){
+// Venda (abate, venda por animal ou por kg) lança uma Receita
+// automaticamente (módulo Resultados, mantido separado do resto de
+// propósito pra controlar quem vê receita/resultado da operação) — por
+// isso exige editar tanto no módulo do lote (Confinamento/Pasto/Cria)
+// quanto em Resultados, não só um dos dois.
+function podeRegistrarVenda(tipo){
   return temPermissao(TIPO_MODULO[tipo],'editar') && temPermissao('resultados','editar');
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
   if(key==='fazenda') return souAdmin();
+  if(key==='vendas') return temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 function gruposVisiveis(){
@@ -1001,16 +1007,16 @@ async function executarInsertLancamento(type, campos){
     }
     return {error:null};
   }
-  if(type==='abate'){
+  if(type==='venda'){
     const lote = state.lotes.find(l=>l.id===campos.loteId);
-    const row = {...abateToRow(campos), criado_por:autorAtual()};
+    const row = {...vendaToRow(campos), criado_por:autorAtual()};
     const res = await db.from('abates').insert(row).select().single();
     if(res.error) return {error:res.error};
-    const abateId = res.data.id;
-    const arrobas = arrobasAbate(campos);
-    const valorTotal = arrobas*Number(campos.valorArroba||0);
-    const descricao = `Abate — ${lote?lote.nome:'Lote'} (${fmtInt(campos.quantidade)} animais)`;
-    const receitaRow = {data:campos.data, lote_id:campos.loteId, descricao, arrobas, valor:valorTotal, observacao:'', abate_id:abateId};
+    const vendaId = res.data.id;
+    const arrobas = campos.tipoVenda==='arroba' ? arrobasVenda(campos) : null;
+    const valorTotal = valorVenda(campos);
+    const descricao = `${TIPO_VENDA_LABEL[campos.tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(campos.quantidade)} animais)`;
+    const receitaRow = {data:campos.data, lote_id:campos.loteId, descricao, arrobas, valor:valorTotal, observacao:'', abate_id:vendaId};
     const {error:errReceita} = await db.from('receitas').insert(receitaRow);
     if(errReceita) return {error:errReceita};
     if(lote){
@@ -1161,6 +1167,9 @@ const GROUPS = {
     {key:'reproducaoPartos', label:'Partos'},
     {key:'pesagemReproducao', label:'Pesagem'},
   ]},
+  vendas: {label:'Vendas', icon:iconVenda(), pages:[
+    {key:'vendasGeral', label:'Vendas'},
+  ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
     {key:'financeiroCurral', label:'Por Lote'},
@@ -1248,6 +1257,7 @@ function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 2
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconVenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M4 7h16"/><path d="M6 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M18 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M12 15v6"/><path d="M8 21h8"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -1257,6 +1267,7 @@ function Header(){
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
     estoqueRacao:{eyebrow:'Produto acabado', title:'Estoque de Ração', desc:'Registre a produção (mistura) de ração de cada dieta e acompanhe o saldo já pronto, com alerta de estoque baixo.'},
     lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
+    vendasGeral:{eyebrow:'Movimentação', title:'Vendas', desc:'Todas as vendas de animais de Confinamento, Pasto e Cria juntas numa lista só (abate por @, venda por animal ou por kg) — cada uma desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
@@ -1374,6 +1385,15 @@ function openNewModal(type){
     }
     editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:''};
     state.modal = {type:'pesagem'};
+  } else if(type==='venda'){
+    const lotesElegiveis = state.lotes.filter(l=>!l.dataFim && Number(l.numeroAnimais||0)>0);
+    if(lotesElegiveis.length===0){
+      alert('Cadastre ao menos um lote ativo com animais (Confinamento, Pasto ou Cria) antes de registrar uma venda.');
+      return false;
+    }
+    const primeiroLote = lotesElegiveis[0];
+    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:new Date().toISOString().slice(0,10), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
+    state.modal = {type:'venda'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
     state.modal = {type:'custoFixo'};
@@ -1411,12 +1431,14 @@ function FabMenu(){
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'parto', label:'Novo parto'},
     {type:'pesagem', label:'Nova pesagem'},
+    {type:'venda', label:'Nova venda'},
     {type:'custoFixo', label:'Nova despesa'},
     {type:'investimento', label:'Novo investimento'},
     {type:'receita', label:'Nova receita'},
     {type:'precoArroba', label:'Atualizar preço da arroba'},
     {type:'metaMargem', label:'Definir meta de margem'},
   ].filter(a=>{
+    if(a.type==='venda') return currentGroupKey()==='vendas' && (podeRegistrarVenda('confinamento') || podeRegistrarVenda('pasto') || podeRegistrarVenda('reproducao'));
     const nestaAba = (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]);
     if(a.type==='lote') return nestaAba && podeCriarLote();
     return nestaAba && podeEditarAcao(a.type);
@@ -1730,53 +1752,14 @@ function PageLotes(tipo){
               <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
               ` : ''}
-              ${!l.dataFim && Number(l.numeroAnimais||0)>0 && podeRegistrarAbate(tipo) ? `
-              <button class="btn-ghost btn-sm" data-abater-lote="${l.id}">Abater</button>
+              ${!l.dataFim && Number(l.numeroAnimais||0)>0 && podeRegistrarVenda(tipo) ? `
+              <button class="btn-ghost btn-sm" data-vender-lote="${l.id}">Vender</button>
               ` : ''}
             </td>
           </tr>
         `;}).join('')}
       </tbody>
     </table>`}
-  </div>
-  ${PainelAbatesDoTipo(tipo)}`;
-}
-
-// Histórico de abates das lotes desse tipo (Confinamento/Pasto/Cria) — mora
-// dentro da própria aba Lotes, junto do lote (sem sub-aba separada), já que
-// abater é uma ação sobre um lote específico.
-function PainelAbatesDoTipo(tipo){
-  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo);
-  const loteIds = new Set(lotesTipo.map(l=>l.id));
-  const abatesTipo = state.abates.filter(a=>loteIds.has(a.loteId)).sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
-  if(abatesTipo.length===0) return '';
-  return `
-  <p class="eyebrow" style="margin:22px 0 10px;">Abates</p>
-  <div class="card">
-    <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Qtd. animais</th><th>Peso de carcaça</th><th>@ produzidas</th><th>Valor da @</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
-      <tbody>
-        ${abatesTipo.map(a=>{
-          const lote = state.lotes.find(l=>l.id===a.loteId);
-          return `<tr>
-            <td class="mono">${a.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
-            <td class="mono">${fmtInt(a.quantidade)}</td>
-            <td class="mono">${fmt(Number(a.pesoMedioKg),1)} kg</td>
-            <td class="mono">${fmt(arrobasAbate(a),2)} @</td>
-            <td class="mono">R$ ${fmt(a.valorArroba)}</td>
-            <td class="mono">R$ ${fmt(valorAbate(a))}</td>
-            <td>${a.criadoPor || '—'}</td>
-            <td style="display:flex; gap:6px;">
-              ${podeRegistrarAbate(tipo) ? `
-              <button class="btn-ghost btn-sm" data-edit-abate="${a.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-abate="${a.id}">Excluir</button>
-              ` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
   </div>`;
 }
 
@@ -1810,6 +1793,58 @@ function PageLotesGeral(){
             </td>
           </tr>
         `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+// Descreve o preço de uma venda de acordo com o tipo, já que os campos que
+// importam mudam (peso+arroba / só valor por animal / peso+valor do kg).
+function detalhePrecoVenda(v){
+  if(v.tipoVenda==='cabeca') return `R$ ${fmt(v.valorPorAnimal)} / animal`;
+  if(v.tipoVenda==='kg') return `${fmt(Number(v.pesoMedioKg),1)} kg vivo × R$ ${fmt(v.valorKg)}/kg`;
+  return `${fmt(arrobasVenda(v),2)} @ (${fmt(Number(v.pesoMedioKg),1)} kg carcaça) × R$ ${fmt(v.valorArroba)}/@`;
+}
+
+function PageVendasGeral(){
+  const podeCriar = podeRegistrarVenda('confinamento') || podeRegistrarVenda('pasto') || podeRegistrarVenda('reproducao');
+  const vendas = [...state.vendas].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+  const totalAnimais = vendas.reduce((acc,v)=>acc+Number(v.quantidade||0),0);
+  const totalValor = vendas.reduce((acc,v)=>acc+valorVenda(v),0);
+  return `
+  <div class="toolbar">
+    <span class="hint">${vendas.length} venda(s) registrada(s)</span>
+    ${podeCriar ? `<button class="btn btn-primary btn-sm" data-fab-action="venda">+ Nova venda</button>` : ''}
+  </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Animais vendidos</div><div class="stat-value">${fmtInt(totalAnimais)}</div></div>
+    <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(totalValor)}</div></div>
+  </div>
+  <div class="card">
+    ${vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Pasto ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : `
+    <table>
+      <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Tipo</th><th>Qtd. animais</th><th>Preço</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
+      <tbody>
+        ${vendas.map(v=>{
+          const lote = state.lotes.find(l=>l.id===v.loteId);
+          const tipo = lote ? loteTipo(lote) : null;
+          return `<tr>
+            <td class="mono">${v.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td>${tipo ? `<span class="pill pill-cat">${TIPO_PESAGEM_LABEL[tipo]}</span>` : '—'}</td>
+            <td><span class="pill pill-ok">${TIPO_VENDA_LABEL[v.tipoVenda]||'Abate'}</span></td>
+            <td class="mono">${fmtInt(v.quantidade)}</td>
+            <td class="mono">${detalhePrecoVenda(v)}</td>
+            <td class="mono">R$ ${fmt(valorVenda(v))}</td>
+            <td>${v.criadoPor || '—'}</td>
+            <td style="display:flex; gap:6px;">
+              ${tipo && podeRegistrarVenda(tipo) ? `
+              <button class="btn-ghost btn-sm" data-edit-venda="${v.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-venda="${v.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>`}
   </div>`;
@@ -2350,12 +2385,25 @@ function racaoLoteTipo(s){ const lote = state.lotes.find(l=>l.id===s.loteId); re
 // gira em torno de 50%, então 30 kg de peso vivo vira ~1 @ de carcaça).
 const KG_POR_ARROBA = 30;
 
-// No abate, o peso lançado é o peso de CARCAÇA vindo do frigorífico (não
-// peso vivo) — então a conversão usa a arroba "cheia" de 15 kg, sem o
-// desconto de rendimento de carcaça usado na Pesagem (que parte de peso vivo).
+// Numa venda por abate, o peso lançado é o peso de CARCAÇA vindo do
+// frigorífico (não peso vivo) — então a conversão usa a arroba "cheia" de
+// 15 kg, sem o desconto de rendimento de carcaça usado na Pesagem (que
+// parte de peso vivo).
 const KG_POR_ARROBA_CARCACA = 15;
-function arrobasAbate(a){ return (Number(a.pesoMedioKg||0)/KG_POR_ARROBA_CARCACA) * Number(a.quantidade||0); }
-function valorAbate(a){ return arrobasAbate(a) * Number(a.valorArroba||0); }
+const TIPO_VENDA_LABEL = {arroba:'Abate', cabeca:'Venda por animal', kg:'Venda por kg'};
+// Só faz sentido calcular @ na venda por abate (tipoVenda==='arroba') — nos
+// outros dois tipos o preço já não depende de arroba nenhuma.
+function arrobasVenda(v){ return (Number(v.pesoMedioKg||0)/KG_POR_ARROBA_CARCACA) * Number(v.quantidade||0); }
+// Valor total de uma venda, de acordo com o tipo escolhido:
+// - 'arroba' (abate): arrobas de carcaça × valor da arroba paga.
+// - 'cabeca' (venda por animal): valor fechado por animal × quantidade.
+// - 'kg' (venda por peso vivo): peso por animal × quantidade × valor do kg.
+function valorVenda(v){
+  const qtd = Number(v.quantidade||0);
+  if(v.tipoVenda==='cabeca') return qtd * Number(v.valorPorAnimal||0);
+  if(v.tipoVenda==='kg') return qtd * Number(v.pesoMedioKg||0) * Number(v.valorKg||0);
+  return arrobasVenda(v) * Number(v.valorArroba||0);
+}
 
 function pesagensDoLote(loteId){
   return state.pesagens.filter(p=>p.loteId===loteId).sort((a,b)=> a.data.localeCompare(b.data) || a.id-b.id);
@@ -3129,7 +3177,7 @@ function Modal(){
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
   if(state.modal.type==='parto') return ModalParto();
   if(state.modal.type==='pesagem') return ModalPesagem();
-  if(state.modal.type==='abate') return ModalAbate();
+  if(state.modal.type==='venda') return ModalVenda();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
   if(state.modal.type==='investimento') return ModalInvestimento();
   if(state.modal.type==='receita') return ModalReceita();
@@ -3558,39 +3606,62 @@ function ModalPesagem(){
   </div>`;
 }
 
-function ModalAbate(){
+function ModalVenda(){
   const d = editDraft;
-  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===d.tipo);
-  const lote = lotesTipo.find(l=>l.id==d.loteId);
-  const arrobas = arrobasAbate(d);
-  const valorTotal = valorAbate(d);
+  // Mostra lote de qualquer atividade (Confinamento/Pasto/Cria) — inclui o
+  // lote já selecionado mesmo se ele não estiver mais ativo/com animais
+  // (caso de editar uma venda cujo lote já fechou por causa dela mesma).
+  const lotesDisponiveis = state.lotes.filter(l=>(!l.dataFim && Number(l.numeroAnimais||0)>0) || l.id==d.loteId);
+  const lote = lotesDisponiveis.find(l=>l.id==d.loteId);
+  const tipoVenda = d.tipoVenda || 'arroba';
+  const arrobas = arrobasVenda(d);
+  const valorTotal = valorVenda(d);
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar abate':'Novo abate'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar venda':'Nova venda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Lote (${TIPO_PESAGEM_LABEL[d.tipo]})</label>
-          <select id="f-loteabate">
-            ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome} (${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
+        <div class="field"><label>Lote</label>
+          <select id="f-lotevenda">
+            ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
-          <div class="field"><label>Data</label><input id="f-dataabate" type="date" value="${d.data}"/></div>
-          <div class="field"><label>Quantidade de animais abatidos</label><input id="f-qtdabate" type="number" step="1" value="${d.quantidade}"/></div>
+          <div class="field"><label>Data</label><input id="f-datavenda" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Quantidade de animais</label><input id="f-qtdvenda" type="number" step="1" value="${d.quantidade}"/></div>
         </div>
+        <div class="field">
+          <label>Tipo de venda</label>
+          <select id="f-tipovenda">
+            <option value="arroba" ${tipoVenda==='arroba'?'selected':''}>Abate — valor da arroba (peso de carcaça)</option>
+            <option value="cabeca" ${tipoVenda==='cabeca'?'selected':''}>Venda por animal (valor fechado por cabeça)</option>
+            <option value="kg" ${tipoVenda==='kg'?'selected':''}>Venda por kg (peso vivo)</option>
+          </select>
+        </div>
+        ${tipoVenda==='arroba' ? `
         <div class="field-row">
-          <div class="field"><label>Peso de carcaça por animal (kg, do frigorífico)</label><input id="f-pesoabate" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
-          <div class="field"><label>Valor da arroba paga (R$/@)</label><input id="f-valorarrobaabate" type="number" step="0.01" value="${d.valorArroba}"/></div>
+          <div class="field"><label>Peso de carcaça por animal (kg, do frigorífico)</label><input id="f-pesovenda" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
+          <div class="field"><label>Valor da arroba paga (R$/@)</label><input id="f-valorarrobavenda" type="number" step="0.01" value="${d.valorArroba}"/></div>
         </div>
+        ` : ''}
+        ${tipoVenda==='cabeca' ? `
+        <div class="field"><label>Valor por animal (R$)</label><input id="f-valorporanimalvenda" type="number" step="0.01" value="${d.valorPorAnimal}"/></div>
+        ` : ''}
+        ${tipoVenda==='kg' ? `
+        <div class="field-row">
+          <div class="field"><label>Peso por animal (kg, peso vivo)</label><input id="f-pesovenda" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
+          <div class="field"><label>Valor do kg (R$/kg)</label><input id="f-valorkgvenda" type="number" step="0.01" value="${d.valorKg}"/></div>
+        </div>
+        ` : ''}
         <div class="total-bar ok">
-          <span>${fmt(arrobas,2)} @ produzidas</span><span>R$ ${fmt(valorTotal)}</span>
+          <span>${tipoVenda==='arroba' ? `${fmt(arrobas,2)} @ produzidas` : `${fmtInt(Number(d.quantidade)||0)} animais`}</span><span>R$ ${fmt(valorTotal)}</span>
         </div>
-        <p class="hint">Peso de carcaça (não peso vivo) — 1 @ = 15 kg. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro. Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsabate" rows="2">${d.observacao||''}</textarea></div>
+        <p class="hint">${tipoVenda==='arroba' ? 'Peso de carcaça (não peso vivo) — 1 @ = 15 kg. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro.' : tipoVenda==='cabeca' ? 'Valor fechado por animal, sem depender de peso.' : 'Valor por kg de peso vivo — comum em venda de bezerros/animais magros.'} Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsvenda" rows="2">${d.observacao||''}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="abate">${d._editId?'Salvar alterações':'Registrar abate'}</button>
+        <button class="btn btn-primary" data-save="venda">${d._editId?'Salvar alterações':'Registrar venda'}</button>
       </div>
     </div>
   </div>`;
@@ -4018,12 +4089,12 @@ function attachEvents(){
       await loadAll();
     };
   });
-  document.querySelectorAll('[data-abater-lote]').forEach(el=>{
+  document.querySelectorAll('[data-vender-lote]').forEach(el=>{
     el.onclick = ()=>{
-      const lote = state.lotes.find(l=>l.id===Number(el.dataset.abaterLote));
+      const lote = state.lotes.find(l=>l.id===Number(el.dataset.venderLote));
       if(!lote) return;
-      editDraft = {tipo: loteTipo(lote), loteId: lote.id, data:new Date().toISOString().slice(0,10), quantidade:'', pesoMedioKg:'', valorArroba:'', observacao:''};
-      state.modal = {type:'abate'};
+      editDraft = {tipo: loteTipo(lote), loteId: lote.id, data:new Date().toISOString().slice(0,10), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
+      state.modal = {type:'venda'};
       render();
     };
   });
@@ -4137,27 +4208,27 @@ function attachEvents(){
       await loadAll();
     };
   });
-  document.querySelectorAll('[data-edit-abate]').forEach(el=>{
+  document.querySelectorAll('[data-edit-venda]').forEach(el=>{
     el.onclick = ()=>{
-      const a = state.abates.find(x=>x.id===Number(el.dataset.editAbate));
-      const lote = state.lotes.find(l=>l.id===a.loteId);
+      const v = state.vendas.find(x=>x.id===Number(el.dataset.editVenda));
+      const lote = state.lotes.find(l=>l.id===v.loteId);
       // guarda a quantidade/lote originais à parte: o preview ao vivo do
       // formulário sobrescreve editDraft.quantidade/loteId a cada tecla, e a
       // reversão no lote antigo precisa do valor de antes da edição, não do
       // que está sendo digitado agora.
-      editDraft = {...a, tipo: lote?loteTipo(lote):'confinamento', _editId: a.id, _quantidadeOriginal: a.quantidade, _loteIdOriginal: a.loteId};
-      state.modal = {type:'abate'};
+      editDraft = {...v, tipo: lote?loteTipo(lote):'confinamento', _editId: v.id, _quantidadeOriginal: v.quantidade, _loteIdOriginal: v.loteId};
+      state.modal = {type:'venda'};
       render();
     };
   });
-  document.querySelectorAll('[data-del-abate]').forEach(el=>{
+  document.querySelectorAll('[data-del-venda]').forEach(el=>{
     el.onclick = async ()=>{
-      const id = Number(el.dataset.delAbate);
-      const abate = state.abates.find(x=>x.id===id);
-      if(abate && abate.loteId){
-        const lote = state.lotes.find(l=>l.id===abate.loteId);
+      const id = Number(el.dataset.delVenda);
+      const venda = state.vendas.find(x=>x.id===id);
+      if(venda && venda.loteId){
+        const lote = state.lotes.find(l=>l.id===venda.loteId);
         if(lote){
-          await db.from('lotes').update({numero_animais: Number(lote.numeroAnimais||0)+Number(abate.quantidade||0)}).eq('id', lote.id);
+          await db.from('lotes').update({numero_animais: Number(lote.numeroAnimais||0)+Number(venda.quantidade||0)}).eq('id', lote.id);
         }
       }
       await db.from('abates').delete().eq('id', id);
@@ -4257,11 +4328,11 @@ function attachEvents(){
     el.oninput = (e)=>{ editDraft.itens[Number(el.dataset.itemPct)].pct = e.target.value; };
   });
 
-  // abate: recalcula @ e valor total ao vivo conforme digita (refoca depois
+  // venda: recalcula @/valor total ao vivo conforme digita (refoca depois
   // do re-render, senão perde o foco a cada tecla — mesmo truque já usado na
   // busca de Ingredientes/Despesas; sem setSelectionRange aqui porque esses
   // campos são type="number", que não suporta seleção de texto).
-  function refazAbateInput(id, campo){
+  function refazVendaInput(id, campo){
     const el = document.getElementById(id);
     if(!el) return;
     el.oninput = (e)=>{
@@ -4271,11 +4342,15 @@ function attachEvents(){
       s.focus();
     };
   }
-  const loteAbateEl = document.getElementById('f-loteabate');
-  if(loteAbateEl) loteAbateEl.onchange = (e)=>{ editDraft.loteId = Number(e.target.value); render(); };
-  refazAbateInput('f-qtdabate', 'quantidade');
-  refazAbateInput('f-pesoabate', 'pesoMedioKg');
-  refazAbateInput('f-valorarrobaabate', 'valorArroba');
+  const loteVendaEl = document.getElementById('f-lotevenda');
+  if(loteVendaEl) loteVendaEl.onchange = (e)=>{ editDraft.loteId = Number(e.target.value); render(); };
+  const tipoVendaEl = document.getElementById('f-tipovenda');
+  if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ editDraft.tipoVenda = e.target.value; render(); };
+  refazVendaInput('f-qtdvenda', 'quantidade');
+  refazVendaInput('f-pesovenda', 'pesoMedioKg');
+  refazVendaInput('f-valorarrobavenda', 'valorArroba');
+  refazVendaInput('f-valorporanimalvenda', 'valorPorAnimal');
+  refazVendaInput('f-valorkgvenda', 'valorKg');
 
   // save handlers
   const saveBtn = document.querySelector('[data-save]');
@@ -4508,25 +4583,38 @@ function attachEvents(){
           }
           error = resultado.error;
         }
-      } else if(type==='abate'){
-        const loteId = Number(document.getElementById('f-loteabate').value);
-        const data = document.getElementById('f-dataabate').value;
-        const qtdVal = document.getElementById('f-qtdabate').value;
-        const pesoVal = document.getElementById('f-pesoabate').value;
-        const valorArrobaVal = document.getElementById('f-valorarrobaabate').value;
-        const observacao = document.getElementById('f-obsabate').value;
-        if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais'],[pesoVal,'Peso de carcaça'],[valorArrobaVal,'Valor da arroba']])) return;
+      } else if(type==='venda'){
+        const loteId = Number(document.getElementById('f-lotevenda').value);
+        const data = document.getElementById('f-datavenda').value;
+        const qtdVal = document.getElementById('f-qtdvenda').value;
+        const tipoVenda = document.getElementById('f-tipovenda').value;
+        const observacao = document.getElementById('f-obsvenda').value;
+        if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais']])) return;
         if(Number(qtdVal)<=0){ alert('A quantidade de animais precisa ser maior que zero.'); return; }
-        if(Number(pesoVal)<=0){ alert('O peso médio precisa ser maior que zero.'); return; }
-        if(Number(valorArrobaVal)<=0){ alert('O valor da arroba precisa ser maior que zero.'); return; }
-        const quantidade = Number(qtdVal), pesoMedioKg = Number(pesoVal), valorArroba = Number(valorArrobaVal);
-        const arrobas = arrobasAbate({quantidade, pesoMedioKg});
-        const valorTotal = arrobas*valorArroba;
+        let pesoMedioKg=0, valorArroba=0, valorPorAnimal=0, valorKg=0;
+        if(tipoVenda==='cabeca'){
+          valorPorAnimal = Number(document.getElementById('f-valorporanimalvenda').value)||0;
+          if(valorPorAnimal<=0){ alert('O valor por animal precisa ser maior que zero.'); return; }
+        } else if(tipoVenda==='kg'){
+          pesoMedioKg = Number(document.getElementById('f-pesovenda').value)||0;
+          valorKg = Number(document.getElementById('f-valorkgvenda').value)||0;
+          if(pesoMedioKg<=0){ alert('O peso por animal precisa ser maior que zero.'); return; }
+          if(valorKg<=0){ alert('O valor do kg precisa ser maior que zero.'); return; }
+        } else {
+          pesoMedioKg = Number(document.getElementById('f-pesovenda').value)||0;
+          valorArroba = Number(document.getElementById('f-valorarrobavenda').value)||0;
+          if(pesoMedioKg<=0){ alert('O peso de carcaça precisa ser maior que zero.'); return; }
+          if(valorArroba<=0){ alert('O valor da arroba precisa ser maior que zero.'); return; }
+        }
+        const quantidade = Number(qtdVal);
+        const campos = {quantidade, tipoVenda, pesoMedioKg, valorArroba, valorPorAnimal, valorKg};
+        const arrobas = tipoVenda==='arroba' ? arrobasVenda(campos) : null;
+        const valorTotal = valorVenda(campos);
         if(editDraft._editId){
-          const abateId = editDraft._editId;
+          const vendaId = editDraft._editId;
           const loteAntigoId = editDraft._loteIdOriginal;
           const quantidadeAntiga = Number(editDraft._quantidadeOriginal||0);
-          // desfaz o efeito do abate antigo no lote antigo antes de aplicar o novo
+          // desfaz o efeito da venda antiga no lote antigo antes de aplicar a nova
           if(loteAntigoId){
             const loteAntigo = state.lotes.find(l=>l.id===loteAntigoId);
             if(loteAntigo){
@@ -4534,13 +4622,13 @@ function attachEvents(){
             }
           }
           if(!error){
-            const row = {data, lote_id: loteId, quantidade, peso_medio_kg: pesoMedioKg, valor_arroba: valorArroba, observacao};
-            ({error} = await db.from('abates').update(row).eq('id', abateId));
+            const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, observacao};
+            ({error} = await db.from('abates').update(row).eq('id', vendaId));
           }
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
-            const descricao = `Abate — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
-            ({error} = await db.from('receitas').update({data, lote_id:loteId, descricao, arrobas, valor:valorTotal}).eq('abate_id', abateId));
+            const descricao = `${TIPO_VENDA_LABEL[tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
+            ({error} = await db.from('receitas').update({data, lote_id:loteId, descricao, arrobas, valor:valorTotal}).eq('abate_id', vendaId));
           }
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
@@ -4553,7 +4641,7 @@ function attachEvents(){
             }
           }
         } else {
-          const resultado = await salvarOuEnfileirar(type, {loteId, data, quantidade, pesoMedioKg, valorArroba, observacao});
+          const resultado = await salvarOuEnfileirar(type, {loteId, data, quantidade, tipoVenda, pesoMedioKg, valorArroba, valorPorAnimal, valorKg, observacao});
           if(resultado.enfileirado){
             alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
             state.modal = null; editDraft = null; render();
