@@ -639,6 +639,7 @@ function render(){
         ${state.page==='dietas' ? PageDietas() : ''}
         ${state.page==='estoqueRacao' ? PageEstoqueRacao() : ''}
         ${state.page==='lotesGeral' ? PageLotesGeral() : ''}
+        ${state.page==='abatesGeral' ? PageAbatesGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao('confinamento') : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
@@ -733,6 +734,7 @@ function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
   if(key==='fazenda') return souAdmin();
+  if(key==='abates') return temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 function gruposVisiveis(){
@@ -1161,6 +1163,9 @@ const GROUPS = {
     {key:'reproducaoPartos', label:'Partos'},
     {key:'pesagemReproducao', label:'Pesagem'},
   ]},
+  abates: {label:'Abates', icon:iconAbate(), pages:[
+    {key:'abatesGeral', label:'Abates'},
+  ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'financeiroResumo', label:'Resumo'},
     {key:'financeiroCurral', label:'Por Lote'},
@@ -1248,6 +1253,7 @@ function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 2
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconAbate(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M4 7h16"/><path d="M6 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M18 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M12 15v6"/><path d="M8 21h8"/></svg>`; }
 
 /* ===================== HEADER ===================== */
 function Header(){
@@ -1257,6 +1263,7 @@ function Header(){
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
     estoqueRacao:{eyebrow:'Produto acabado', title:'Estoque de Ração', desc:'Registre a produção (mistura) de ração de cada dieta e acompanhe o saldo já pronto, com alerta de estoque baixo.'},
     lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
+    abatesGeral:{eyebrow:'Movimentação', title:'Abates', desc:'Todos os abates de Confinamento, Pasto e Cria juntos numa lista só — cada um desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
@@ -1374,6 +1381,15 @@ function openNewModal(type){
     }
     editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:''};
     state.modal = {type:'pesagem'};
+  } else if(type==='abate'){
+    const lotesElegiveis = state.lotes.filter(l=>!l.dataFim && Number(l.numeroAnimais||0)>0);
+    if(lotesElegiveis.length===0){
+      alert('Cadastre ao menos um lote ativo com animais (Confinamento, Pasto ou Cria) antes de registrar um abate.');
+      return false;
+    }
+    const primeiroLote = lotesElegiveis[0];
+    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:new Date().toISOString().slice(0,10), quantidade:'', pesoMedioKg:'', valorArroba:'', observacao:''};
+    state.modal = {type:'abate'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
     state.modal = {type:'custoFixo'};
@@ -1411,12 +1427,14 @@ function FabMenu(){
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'parto', label:'Novo parto'},
     {type:'pesagem', label:'Nova pesagem'},
+    {type:'abate', label:'Novo abate'},
     {type:'custoFixo', label:'Nova despesa'},
     {type:'investimento', label:'Novo investimento'},
     {type:'receita', label:'Nova receita'},
     {type:'precoArroba', label:'Atualizar preço da arroba'},
     {type:'metaMargem', label:'Definir meta de margem'},
   ].filter(a=>{
+    if(a.type==='abate') return currentGroupKey()==='abates' && (podeRegistrarAbate('confinamento') || podeRegistrarAbate('pasto') || podeRegistrarAbate('reproducao'));
     const nestaAba = (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]);
     if(a.type==='lote') return nestaAba && podeCriarLote();
     return nestaAba && podeEditarAcao(a.type);
@@ -1738,45 +1756,6 @@ function PageLotes(tipo){
         `;}).join('')}
       </tbody>
     </table>`}
-  </div>
-  ${PainelAbatesDoTipo(tipo)}`;
-}
-
-// Histórico de abates das lotes desse tipo (Confinamento/Pasto/Cria) — mora
-// dentro da própria aba Lotes, junto do lote (sem sub-aba separada), já que
-// abater é uma ação sobre um lote específico.
-function PainelAbatesDoTipo(tipo){
-  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo);
-  const loteIds = new Set(lotesTipo.map(l=>l.id));
-  const abatesTipo = state.abates.filter(a=>loteIds.has(a.loteId)).sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
-  if(abatesTipo.length===0) return '';
-  return `
-  <p class="eyebrow" style="margin:22px 0 10px;">Abates</p>
-  <div class="card">
-    <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Qtd. animais</th><th>Peso de carcaça</th><th>@ produzidas</th><th>Valor da @</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
-      <tbody>
-        ${abatesTipo.map(a=>{
-          const lote = state.lotes.find(l=>l.id===a.loteId);
-          return `<tr>
-            <td class="mono">${a.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
-            <td class="mono">${fmtInt(a.quantidade)}</td>
-            <td class="mono">${fmt(Number(a.pesoMedioKg),1)} kg</td>
-            <td class="mono">${fmt(arrobasAbate(a),2)} @</td>
-            <td class="mono">R$ ${fmt(a.valorArroba)}</td>
-            <td class="mono">R$ ${fmt(valorAbate(a))}</td>
-            <td>${a.criadoPor || '—'}</td>
-            <td style="display:flex; gap:6px;">
-              ${podeRegistrarAbate(tipo) ? `
-              <button class="btn-ghost btn-sm" data-edit-abate="${a.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-abate="${a.id}">Excluir</button>
-              ` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
   </div>`;
 }
 
@@ -1810,6 +1789,53 @@ function PageLotesGeral(){
             </td>
           </tr>
         `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+function PageAbatesGeral(){
+  const podeCriar = podeRegistrarAbate('confinamento') || podeRegistrarAbate('pasto') || podeRegistrarAbate('reproducao');
+  const abates = [...state.abates].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+  const totalAnimais = abates.reduce((acc,a)=>acc+Number(a.quantidade||0),0);
+  const totalArrobas = abates.reduce((acc,a)=>acc+arrobasAbate(a),0);
+  const totalValor = abates.reduce((acc,a)=>acc+valorAbate(a),0);
+  return `
+  <div class="toolbar">
+    <span class="hint">${abates.length} abate(s) registrado(s)</span>
+    ${podeCriar ? `<button class="btn btn-primary btn-sm" data-fab-action="abate">+ Novo abate</button>` : ''}
+  </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Animais abatidos</div><div class="stat-value">${fmtInt(totalAnimais)}</div></div>
+    <div class="stat-card"><div class="stat-label">@ produzidas</div><div class="stat-value">${fmt(totalArrobas,1)}</div></div>
+    <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(totalValor)}</div></div>
+  </div>
+  <div class="card">
+    ${abates.length===0 ? Empty('Nenhum abate registrado','Registre o abate de um lote (Confinamento, Pasto ou Cria) pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : `
+    <table>
+      <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Qtd. animais</th><th>Peso de carcaça</th><th>@ produzidas</th><th>Valor da @</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
+      <tbody>
+        ${abates.map(a=>{
+          const lote = state.lotes.find(l=>l.id===a.loteId);
+          const tipo = lote ? loteTipo(lote) : null;
+          return `<tr>
+            <td class="mono">${a.data.split('-').reverse().join('/')}</td>
+            <td>${lote?lote.nome:'—'}</td>
+            <td>${tipo ? `<span class="pill pill-cat">${TIPO_PESAGEM_LABEL[tipo]}</span>` : '—'}</td>
+            <td class="mono">${fmtInt(a.quantidade)}</td>
+            <td class="mono">${fmt(Number(a.pesoMedioKg),1)} kg</td>
+            <td class="mono">${fmt(arrobasAbate(a),2)} @</td>
+            <td class="mono">R$ ${fmt(a.valorArroba)}</td>
+            <td class="mono">R$ ${fmt(valorAbate(a))}</td>
+            <td>${a.criadoPor || '—'}</td>
+            <td style="display:flex; gap:6px;">
+              ${tipo && podeRegistrarAbate(tipo) ? `
+              <button class="btn-ghost btn-sm" data-edit-abate="${a.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-abate="${a.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>`}
   </div>`;
@@ -3560,8 +3586,11 @@ function ModalPesagem(){
 
 function ModalAbate(){
   const d = editDraft;
-  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===d.tipo);
-  const lote = lotesTipo.find(l=>l.id==d.loteId);
+  // Mostra lote de qualquer atividade (Confinamento/Pasto/Cria) — inclui o
+  // lote já selecionado mesmo se ele não estiver mais ativo/com animais
+  // (caso de editar um abate cujo lote já fechou por causa dele mesmo).
+  const lotesDisponiveis = state.lotes.filter(l=>(!l.dataFim && Number(l.numeroAnimais||0)>0) || l.id==d.loteId);
+  const lote = lotesDisponiveis.find(l=>l.id==d.loteId);
   const arrobas = arrobasAbate(d);
   const valorTotal = valorAbate(d);
   return `
@@ -3569,9 +3598,9 @@ function ModalAbate(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar abate':'Novo abate'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Lote (${TIPO_PESAGEM_LABEL[d.tipo]})</label>
+        <div class="field"><label>Lote</label>
           <select id="f-loteabate">
-            ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome} (${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
+            ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
