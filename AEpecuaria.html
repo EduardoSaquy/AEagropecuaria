@@ -418,17 +418,28 @@
   .status-dot.inativo{background:var(--cinza);}
 
   /* ---------- RESPONSIVO (celular) ---------- */
+  .mobile-nav-toggle{display:none;}
   @media (max-width:760px){
     .app{flex-direction:column;}
     .sidebar{
-      width:100%; flex-direction:row; align-items:center; justify-content:space-between;
-      padding:12px 16px; gap:12px; overflow-x:auto;
+      width:100%; flex-direction:column; align-items:stretch;
+      padding:12px 16px; gap:10px;
     }
-    .brand{border-bottom:none; padding:0; margin-bottom:0; flex-shrink:0;}
-    nav{margin-top:0; flex-direction:row; gap:4px;}
-    .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
+    .brand{border-bottom:none; padding:0; margin-bottom:0;}
+    .mobile-nav-toggle{
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      width:100%; background:rgba(255,255,255,0.08); color:var(--branco);
+      border:none; border-radius:8px; padding:11px 14px; font-size:14px; font-weight:600;
+      cursor:pointer; font-family:'Inter',sans-serif;
+    }
+    .mobile-nav-toggle-label{display:flex; align-items:center; gap:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+    .mobile-nav-toggle-chevron{flex-shrink:0; transition:transform 0.15s;}
+    .mobile-nav-toggle.open .mobile-nav-toggle-chevron{transform:rotate(180deg);}
+    nav{display:none; margin-top:0; flex-direction:column; gap:2px;}
+    nav.nav-open{display:flex;}
+    .nav-item{padding:10px 12px; font-size:14px;}
     .sidebar-footer{display:none;}
-    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
+    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none;}
     .main{padding:20px 16px 48px 16px; max-width:100%;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
@@ -538,6 +549,7 @@ async function loadAll(){
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'financeiroResumo',
+  mobileNavOpen: false,
   ingredientes: [],
   movimentos: [],
   dietas: [],
@@ -1130,6 +1142,7 @@ function currentGroupKey(){
 /* ===================== SIDEBAR ===================== */
 function Sidebar(){
   const activeGroup = currentGroupKey();
+  const grupoAtual = GROUPS[activeGroup];
   return `
   <div class="sidebar">
     <div class="brand">
@@ -1145,10 +1158,14 @@ function Sidebar(){
         <button class="btn-sair" data-logout="1">Sair</button>
       </div>
     </div>
+    <button class="mobile-nav-toggle ${state.mobileNavOpen?'open':''}" data-mobile-nav-toggle="1">
+      <span class="mobile-nav-toggle-label">${grupoAtual?grupoAtual.icon:''} ${grupoAtual?grupoAtual.label:'Menu'}</span>
+      <svg class="mobile-nav-toggle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
     ${lerFilaOffline().length>0 ? `
     <button class="btn-pendencias" data-ver-pendencias="1">⏳ ${lerFilaOffline().length} pendente(s) de sincronização</button>
     ` : ''}
-    <nav>
+    <nav class="${state.mobileNavOpen?'nav-open':''}">
       ${gruposVisiveis().map(([key,g])=>`
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">
           ${g.icon} ${g.label}
@@ -3767,11 +3784,16 @@ function attachEvents(){
     el.onclick = ()=>{
       const group = GROUPS[el.dataset.navGroup];
       if(!group.pages.some(p=>p.key===state.page)) state.page = group.pages[0].key;
+      state.mobileNavOpen = false;
       render();
     };
   });
+  const mobileNavToggle = document.querySelector('[data-mobile-nav-toggle]');
+  if(mobileNavToggle){
+    mobileNavToggle.onclick = ()=>{ state.mobileNavOpen = !state.mobileNavOpen; render(); };
+  }
   document.querySelectorAll('[data-subnav]').forEach(el=>{
-    el.onclick = ()=>{ state.page = el.dataset.subnav; render(); };
+    el.onclick = ()=>{ state.page = el.dataset.subnav; state.mobileNavOpen = false; render(); };
   });
   const voltarErroBtn = document.querySelector('[data-voltar-erro]');
   if(voltarErroBtn){
