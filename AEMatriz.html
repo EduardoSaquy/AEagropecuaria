@@ -112,6 +112,7 @@
   input:focus, select:focus, textarea:focus{border-color:var(--verde-medio); box-shadow:0 0 0 3px rgba(61,107,79,0.12);}
   input[type=color]{padding:3px; height:38px; width:100%;}
   .hint{font-size:11px; color:var(--cinza);}
+  .composicao-row{display:grid; grid-template-columns: 1fr 90px 32px; gap:8px; align-items:center;}
 
   .empty{text-align:center; padding:50px 20px; color:var(--cinza);}
   .empty h4{font-family:'Fraunces',serif; color:var(--verde-escuro); margin:10px 0 6px 0; font-size:16px;}
@@ -170,6 +171,7 @@
     .field-row{grid-template-columns:1fr;}
     .overlay{padding:16px 10px;}
     .app-grid{grid-template-columns:1fr;}
+    .composicao-row{grid-template-columns:1fr 68px 28px; gap:6px;}
   }
 </style>
 </head>
@@ -197,21 +199,29 @@ const dbPecuaria = supabase.createClient(
 
 function rowToFazenda(r){ return {id:r.id, nome:r.nome, areaHa:r.area_ha, localizacao:r.localizacao||'', observacao:r.observacao||''}; }
 function fazendaToRow(f){ return {nome:f.nome, area_ha:f.areaHa||null, localizacao:f.localizacao||'', observacao:f.observacao||''}; }
+function rowToOperacao(r){ return {id:r.id, fazendaId:r.fazenda_id, operacao:r.operacao, areaHa:r.area_ha}; }
 function rowToApp(r){ return {id:r.id, nome:r.nome, slug:r.slug, descricao:r.descricao||'', url:r.url||'', cor:r.cor||'#1D5DA8', ordem:r.ordem||0, status:r.status||'em_breve'}; }
 function appToRow(a){ return {nome:a.nome, slug:a.slug, descricao:a.descricao||'', url:a.url||null, cor:a.cor||'#1D5DA8', ordem:a.ordem||0, status:a.status||'em_breve'}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo}; }
 
 async function loadAll(){
-  const [faz, ap, perfis] = await Promise.all([
+  const [faz, op, ap, perfis] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
+    db.from('fazenda_operacoes').select('*'),
     db.from('apps').select('*').order('ordem'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
   ]);
   state.fazendas = (faz.data||[]).map(rowToFazenda);
+  state.fazendaOperacoes = {};
+  (op.data||[]).map(rowToOperacao).forEach(o=>{
+    if(!state.fazendaOperacoes[o.fazendaId]) state.fazendaOperacoes[o.fazendaId] = [];
+    state.fazendaOperacoes[o.fazendaId].push(o);
+  });
   state.apps = (ap.data||[]).map(rowToApp);
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   render();
   carregarIndicadoresPecuaria();
+  carregarResultadoPecuaria();
 }
 
 async function carregarIndicadoresPecuaria(){
@@ -237,14 +247,101 @@ async function carregarIndicadoresPecuaria(){
   render();
 }
 
+// Resultado (receita x despesa) da pecuária, lido direto do banco dela —
+// mesma lógica de "custo variável do mês" (ração/pasto/cria) e "custo fixo
+// do mês" (com fallback pro recorrente) que o próprio AE Pecuária usa em
+// Financeiro/Resultados, só que sem o detalhamento por área (aqui o que
+// interessa é o total da fazenda inteira, pra comparar com as outras
+// operações). Se essa lógica mudar lá, precisa atualizar aqui também.
+function mesesDoAnoAtePecuaria(){
+  const hoje = new Date();
+  const meses = [];
+  for(let m=0; m<=hoje.getMonth(); m++) meses.push(`${hoje.getFullYear()}-${String(m+1).padStart(2,'0')}`);
+  return meses;
+}
+async function carregarResultadoPecuaria(){
+  state.resultados.pecuaria = {...state.resultados.pecuaria, loading:true, erro:''};
+  render();
+  try{
+    const [ingRes, dietRes, srRes, ptRes, rcRes, cfRes, recRes] = await Promise.all([
+      dbPecuaria.from('ingredientes').select('id, preco_kg'),
+      dbPecuaria.from('dietas').select('id, itens'),
+      dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg'),
+      dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
+      dbPecuaria.from('reproducao_custos').select('data, custo'),
+      dbPecuaria.from('custos_fixos').select('nome, categoria, valor_mensal, mes, areas'),
+      dbPecuaria.from('receitas').select('data, valor'),
+    ]);
+    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, cfRes, recRes]) if(r.error) throw r.error;
+
+    const ingredientes = ingRes.data||[];
+    const custoKgPorDieta = new Map();
+    (dietRes.data||[]).forEach(d=>{
+      let custoKg = 0;
+      (d.itens||[]).forEach(it=>{
+        const ing = ingredientes.find(i=>i.id===it.ingredienteId);
+        if(ing) custoKg += Number(ing.preco_kg||0) * (Number(it.pct||0)/100);
+      });
+      custoKgPorDieta.set(d.id, custoKg);
+    });
+
+    function custoVariavelDoMes(prefixo){
+      const racao = (srRes.data||[]).filter(s=>s.data.startsWith(prefixo)).reduce((a,s)=>a+(custoKgPorDieta.get(s.dieta_id)||0)*Number(s.quantidade_kg||0), 0);
+      const pasto = (ptRes.data||[]).filter(p=>p.data.startsWith(prefixo)).reduce((a,p)=>a+(custoKgPorDieta.get(p.dieta_id)||0)*Number(p.quantidade||0), 0);
+      const reproducao = (rcRes.data||[]).filter(r=>r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.custo||0), 0);
+      return racao + pasto + reproducao;
+    }
+    function fixosDoMes(mesFiltro){
+      const grupos = new Map();
+      (cfRes.data||[]).forEach(c=>{
+        const chaveAreas = (c.areas||[]).slice().sort().join(',');
+        const chave = `${c.nome}||${c.categoria||''}||${chaveAreas}`;
+        if(!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(c);
+      });
+      let total = 0;
+      grupos.forEach(rows=>{
+        const doMes = rows.filter(c=>c.mes===mesFiltro);
+        const usar = doMes.length>0 ? doMes : rows.filter(c=>!c.mes);
+        total += usar.reduce((a,c)=>a+Number(c.valor_mensal||0),0);
+      });
+      return total;
+    }
+    function receitaNoPrefixo(prefixo){
+      return (recRes.data||[]).filter(r=>r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.valor||0),0);
+    }
+
+    const meses = mesesDoAnoAtePecuaria();
+    const mesAtual = meses[meses.length-1];
+    const despesaMes = custoVariavelDoMes(mesAtual) + fixosDoMes(mesAtual);
+    const receitaMes = receitaNoPrefixo(mesAtual);
+    let despesaAno = 0, receitaAno = 0;
+    meses.forEach(prefixo=>{
+      despesaAno += custoVariavelDoMes(prefixo) + fixosDoMes(prefixo);
+      receitaAno += receitaNoPrefixo(prefixo);
+    });
+
+    state.resultados.pecuaria = {
+      loading:false, erro:'',
+      despesaMes, receitaMes, resultadoMes: receitaMes-despesaMes,
+      despesaAno, receitaAno, resultadoAno: receitaAno-despesaAno,
+    };
+  } catch(e){
+    state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', despesaMes:null, receitaMes:null, resultadoMes:null, despesaAno:null, receitaAno:null, resultadoAno:null};
+  }
+  render();
+}
+
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'painel',
   fazendas: [],
+  fazendaOperacoes: {}, // fazendaId -> [{id, fazendaId, operacao, areaHa}]
   apps: [],
   perfis: [],
   modal: null, // {type:'fazenda'|'app'|'usuario'|'papelUsuario'|'trocarSenha', data:{...}}
   indicadores: { pecuaria: {loading:false, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null} },
+  resultados: { pecuaria: {loading:false, erro:'', despesaMes:null, receitaMes:null, resultadoMes:null, despesaAno:null, receitaAno:null, resultadoAno:null} },
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -285,6 +382,7 @@ function render(){
     conteudo = `
       ${Header()}
       ${state.page==='painel' ? PagePainel() : ''}
+      ${state.page==='resultados' ? PageResultados() : ''}
       ${state.page==='fazendas' ? PageFazendas() : ''}
       ${state.page==='usuarios' ? PageUsuarios() : ''}
     `;
@@ -319,6 +417,7 @@ function render(){
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 const PAGES = [
   {key:'painel', label:'Painel', adminOnly:false},
+  {key:'resultados', label:'Resultados', adminOnly:false},
   {key:'fazendas', label:'Fazendas', adminOnly:false},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
@@ -461,8 +560,10 @@ function iconPainel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" f
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconAbrir(){ return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>`; }
+function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
 
-const PAGE_LABEL = {painel:'Painel', fazendas:'Fazendas', usuarios:'Usuários'};
+const PAGE_LABEL = {painel:'Painel', fazendas:'Fazendas', usuarios:'Usuários', resultados:'Resultados'};
+const OPERACOES = {pecuaria:'Pecuária', cana:'Cana-de-açúcar', cereais:'Grãos/Cereais'};
 
 function Sidebar(){
   return `
@@ -478,7 +579,7 @@ function Sidebar(){
     <nav>
       ${paginasVisiveis().map(p=>`
         <button class="nav-item ${state.page===p.key?'active':''}" data-nav="${p.key}">
-          ${p.key==='painel'?iconPainel():p.key==='fazendas'?iconFazenda():iconAdmin()} ${p.label}
+          ${p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():iconAdmin()} ${p.label}
         </button>
       `).join('')}
     </nav>
@@ -489,7 +590,8 @@ function Sidebar(){
 function Header(){
   const titles = {
     painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},
-    fazendas:{eyebrow:'Cadastro central', title:'Fazendas', desc:'Cadastro único de fazendas, usado como referência pelos demais apps.'},
+    resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado do mês e do ano, somados de todas as operações.'},
+    fazendas:{eyebrow:'Cadastro central', title:'Fazendas', desc:'Cadastro único de fazendas, com as operações (pecuária, cana, cereais) e hectares de cada uma.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso à matriz. Cada app (Pecuária, Combustível...) continua com seu próprio login.'},
   };
   const t = titles[state.page] || titles.painel;
@@ -546,20 +648,84 @@ function PagePainel(){
   return `<div class="app-grid">${state.apps.map(AppCard).join('')}</div>`;
 }
 
+/* ===================== RESULTADOS (geral, todas as operações) ===================== */
+// Cada app com dados ligados vira uma linha aqui. Por enquanto só a
+// Pecuária está com o banco real; Combustível, Cana e Cereais aparecem
+// como "sem dados" até serem implantados e ganharem seu próprio cálculo.
+function linhasResultado(){
+  return state.apps.map(a=>({
+    app: a,
+    resultado: a.slug==='pecuaria' ? state.resultados.pecuaria : null,
+  }));
+}
+function resultadoTotal(campo){
+  return linhasResultado().reduce((soma,l)=> soma + (l.resultado && l.resultado[campo]!=null ? l.resultado[campo] : 0), 0);
+}
+function algumResultadoCarregando(){
+  return linhasResultado().some(l=>l.resultado?.loading);
+}
+function PageResultados(){
+  if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz para ver os resultados aqui.');
+  if(algumResultadoCarregando()){
+    return `<div class="card card-pad"><p class="hint">Carregando resultados...</p></div>`;
+  }
+  const despesaMes = resultadoTotal('despesaMes'), receitaMes = resultadoTotal('receitaMes'), resultadoMes = receitaMes-despesaMes;
+  const despesaAno = resultadoTotal('despesaAno'), receitaAno = resultadoTotal('receitaAno'), resultadoAno = receitaAno-despesaAno;
+  return `
+  <p class="eyebrow" style="margin-bottom:10px;">Mês atual — todas as operações</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Receita</div><div class="stat-value">R$ ${fmt(receitaMes)}</div></div>
+    <div class="stat-card"><div class="stat-label">Despesa</div><div class="stat-value">R$ ${fmt(despesaMes)}</div></div>
+    <div class="stat-card"><div class="stat-label">Resultado</div><div class="stat-value ${resultadoMes<0?'alerta':''}">R$ ${fmt(resultadoMes)}</div></div>
+  </div>
+  <p class="eyebrow" style="margin-bottom:10px;">Ano atual — todas as operações</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Receita</div><div class="stat-value">R$ ${fmt(receitaAno)}</div></div>
+    <div class="stat-card"><div class="stat-label">Despesa</div><div class="stat-value">R$ ${fmt(despesaAno)}</div></div>
+    <div class="stat-card"><div class="stat-label">Resultado</div><div class="stat-value ${resultadoAno<0?'alerta':''}">R$ ${fmt(resultadoAno)}</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Operação</th><th>Receita (mês)</th><th>Despesa (mês)</th><th>Resultado (mês)</th><th>Receita (ano)</th><th>Despesa (ano)</th><th>Resultado (ano)</th></tr></thead>
+      <tbody>
+        ${linhasResultado().map(l=>{
+          const r = l.resultado;
+          if(!r || r.erro) return `<tr><td><strong>${l.app.nome}</strong></td><td colspan="6" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
+          return `<tr>
+            <td><strong>${l.app.nome}</strong></td>
+            <td class="mono">R$ ${fmt(r.receitaMes)}</td>
+            <td class="mono">R$ ${fmt(r.despesaMes)}</td>
+            <td class="mono">R$ ${fmt(r.resultadoMes)}</td>
+            <td class="mono">R$ ${fmt(r.receitaAno)}</td>
+            <td class="mono">R$ ${fmt(r.despesaAno)}</td>
+            <td class="mono">R$ ${fmt(r.resultadoAno)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:14px;">Números da Pecuária calculados a partir de receitas, despesas fixas e custo de ração/pasto/cria lançados no AE Pecuária. Não inclui investimentos (compra de animais, máquinas etc.) nem rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
+}
+
 /* ===================== FAZENDAS ===================== */
+function operacoesLabel(fazendaId){
+  const ops = state.fazendaOperacoes[fazendaId]||[];
+  if(ops.length===0) return '—';
+  return ops.map(o=>`${OPERACOES[o.operacao]||o.operacao}${o.areaHa!=null ? ': '+fmtInt(o.areaHa)+' ha' : ''}`).join(' · ');
+}
 function PageFazendas(){
   return `
   <div class="card" style="overflow-x:auto;">
     ${state.fazendas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — esse cadastro é a referência central usada pelos demais apps.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Área (ha)</th><th>Localização</th><th>Observação</th>${souAdmin()?'<th></th>':''}</tr></thead>
+      <thead><tr><th>Nome</th><th>Área total (ha)</th><th>Operações</th><th>Localização</th>${souAdmin()?'<th></th>':''}</tr></thead>
       <tbody>
         ${state.fazendas.map(f=>`
           <tr>
             <td><strong>${f.nome}</strong></td>
             <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
+            <td>${operacoesLabel(f.id)}</td>
             <td>${f.localizacao || '—'}</td>
-            <td>${f.observacao || '—'}</td>
             ${souAdmin() ? `<td style="display:flex; gap:8px;">
               <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-fazenda="${f.id}">Excluir</button>
@@ -580,10 +746,23 @@ function ModalFazenda(){
       <div class="modal-body">
         <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${d.nome}" placeholder="Ex: Fazenda Santo Antônio"/></div>
         <div class="field-row">
-          <div class="field"><label>Área (ha)</label><input id="f-areafazenda" type="number" step="1" value="${d.areaHa??''}"/></div>
+          <div class="field"><label>Área total (ha)</label><input id="f-areafazenda" type="number" step="1" value="${d.areaHa??''}"/></div>
           <div class="field"><label>Localização</label><input id="f-localfazenda" value="${d.localizacao}" placeholder="Cidade/UF"/></div>
         </div>
         <div class="field"><label>Observação</label><textarea id="f-obsfazenda" rows="2">${d.observacao}</textarea></div>
+        <label>Operações rodando nesta fazenda</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          ${d.operacoes.map((op,idx)=>`
+            <div class="composicao-row">
+              <select data-op-tipo="${idx}">
+                ${Object.entries(OPERACOES).map(([k,l])=>`<option value="${k}" ${op.operacao===k?'selected':''}>${l}</option>`).join('')}
+              </select>
+              <input data-op-area="${idx}" type="number" step="1" value="${op.areaHa??''}" placeholder="ha"/>
+              <button class="btn-danger-ghost" data-op-del="${idx}" style="padding:6px;">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        <button class="btn btn-ghost btn-sm" data-op-add="1" style="align-self:flex-start;">+ Adicionar operação</button>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -760,13 +939,14 @@ function attachEvents(){
   // ---- fazendas ----
   const novaFazendaBtn = document.querySelector('[data-nova-fazenda]');
   if(novaFazendaBtn) novaFazendaBtn.onclick = ()=>{
-    editDraft = {nome:'', areaHa:null, localizacao:'', observacao:''};
+    editDraft = {nome:'', areaHa:null, localizacao:'', observacao:'', operacoes:[]};
     state.modal = {type:'fazenda'}; render();
   };
   document.querySelectorAll('[data-editar-fazenda]').forEach(el=>{
     el.onclick = ()=>{
       const f = state.fazendas.find(x=>x.id===Number(el.dataset.editarFazenda));
-      editDraft = {...f, _editId:f.id};
+      const operacoes = (state.fazendaOperacoes[f.id]||[]).map(o=>({operacao:o.operacao, areaHa:o.areaHa}));
+      editDraft = {...f, _editId:f.id, operacoes};
       state.modal = {type:'fazenda'}; render();
     };
   });
@@ -776,6 +956,31 @@ function attachEvents(){
       await db.from('fazendas').delete().eq('id', Number(el.dataset.delFazenda));
       await loadAll();
     };
+  });
+
+  // fazenda: operações (linhas dinâmicas) — sincroniza os outros campos
+  // antes de re-renderizar, senão o que já foi digitado se perde.
+  function sincronizarCamposFazenda(){
+    const nomeEl = document.getElementById('f-nomefazenda');
+    const areaEl = document.getElementById('f-areafazenda');
+    const localEl = document.getElementById('f-localfazenda');
+    const obsEl = document.getElementById('f-obsfazenda');
+    if(nomeEl) editDraft.nome = nomeEl.value;
+    if(areaEl) editDraft.areaHa = areaEl.value;
+    if(localEl) editDraft.localizacao = localEl.value;
+    if(obsEl) editDraft.observacao = obsEl.value;
+  }
+  document.querySelectorAll('[data-op-add]').forEach(el=>{
+    el.onclick = ()=>{ sincronizarCamposFazenda(); editDraft.operacoes.push({operacao:'pecuaria', areaHa:''}); render(); };
+  });
+  document.querySelectorAll('[data-op-del]').forEach(el=>{
+    el.onclick = ()=>{ sincronizarCamposFazenda(); editDraft.operacoes.splice(Number(el.dataset.opDel),1); render(); };
+  });
+  document.querySelectorAll('[data-op-tipo]').forEach(el=>{
+    el.onchange = (e)=>{ editDraft.operacoes[Number(el.dataset.opTipo)].operacao = e.target.value; };
+  });
+  document.querySelectorAll('[data-op-area]').forEach(el=>{
+    el.oninput = (e)=>{ editDraft.operacoes[Number(el.dataset.opArea)].areaHa = e.target.value; };
   });
 
   // ---- apps ----
@@ -861,10 +1066,22 @@ function attachEvents(){
           observacao: document.getElementById('f-obsfazenda').value.trim(),
         };
         if(!f.nome){ alert('Informe o nome da fazenda.'); return; }
-        if(editDraft._editId){
-          ({error} = await db.from('fazendas').update(fazendaToRow(f)).eq('id', editDraft._editId));
+        let fazendaId = editDraft._editId;
+        if(fazendaId){
+          ({error} = await db.from('fazendas').update(fazendaToRow(f)).eq('id', fazendaId));
         } else {
-          ({error} = await db.from('fazendas').insert(fazendaToRow(f)));
+          const inserted = await db.from('fazendas').insert(fazendaToRow(f)).select().single();
+          error = inserted.error;
+          fazendaId = inserted.data?.id;
+        }
+        if(!error && fazendaId){
+          await db.from('fazenda_operacoes').delete().eq('fazenda_id', fazendaId);
+          const linhas = (editDraft.operacoes||[])
+            .filter(op=>op.operacao)
+            .map(op=>({fazenda_id: fazendaId, operacao: op.operacao, area_ha: op.areaHa ? Number(op.areaHa) : null}));
+          if(linhas.length>0){
+            ({error} = await db.from('fazenda_operacoes').insert(linhas));
+          }
         }
       } else if(type==='app'){
         const a = {

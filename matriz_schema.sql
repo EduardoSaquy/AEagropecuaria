@@ -30,6 +30,20 @@ create table fazendas (
 
 alter table fazendas enable row level security;
 
+-- ---------- OPERAÇÕES DE CADA FAZENDA ----------
+-- Quais operações (pecuária, cana, grãos/cereais) rodam em cada fazenda,
+-- e quantos hectares cada uma ocupa nela. Uma fazenda pode ter mais de
+-- uma operação (ex: parte em pecuária, parte em cana).
+create table fazenda_operacoes (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id) on delete cascade,
+  operacao text not null check (operacao in ('pecuaria','cana','cereais')),
+  area_ha numeric,
+  created_at timestamptz not null default now()
+);
+
+alter table fazenda_operacoes enable row level security;
+
 -- ---------- APPS (registro dos apps que compõem a matriz) ----------
 create table apps (
   id bigint generated always as identity primary key,
@@ -94,6 +108,11 @@ create policy "logados veem fazendas" on fazendas for select using (esta_logado(
 create policy "admin cria fazendas" on fazendas for insert with check (is_admin());
 create policy "admin edita fazendas" on fazendas for update using (is_admin()) with check (is_admin());
 create policy "admin exclui fazendas" on fazendas for delete using (is_admin());
+
+create policy "logados veem operacoes" on fazenda_operacoes for select using (esta_logado());
+create policy "admin cria operacoes" on fazenda_operacoes for insert with check (is_admin());
+create policy "admin edita operacoes" on fazenda_operacoes for update using (is_admin()) with check (is_admin());
+create policy "admin exclui operacoes" on fazenda_operacoes for delete using (is_admin());
 
 create policy "logados veem apps" on apps for select using (esta_logado());
 create policy "admin cria apps" on apps for insert with check (is_admin());
