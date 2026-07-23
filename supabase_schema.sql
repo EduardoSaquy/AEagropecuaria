@@ -778,3 +778,53 @@ create policy "select producoes_racao" on producoes_racao for select using (tem_
 create policy "inserir producoes_racao" on producoes_racao for insert with check (tem_permissao('dietas','editar'));
 create policy "atualizar producoes_racao" on producoes_racao for update using (tem_permissao('dietas','editar')) with check (tem_permissao('dietas','editar'));
 create policy "excluir producoes_racao" on producoes_racao for delete using (tem_permissao('dietas','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Abate
+-- Nova aba "Abates", dentro de Confinamento, Pasto e Cria, pra registrar
+-- o abate de animais de um lote: quantidade abatida, peso médio por
+-- animal e o valor da arroba na venda. Ao salvar:
+--   - desconta a quantidade abatida do número de animais do lote (fecha
+--     o lote automaticamente — data de encerramento = data do abate —
+--     se isso zerar o número de animais);
+--   - lança uma Receita automática em Resultados (arrobas = peso médio
+--     ÷ 30 × quantidade; valor = arrobas × valor da arroba), vinculada
+--     ao abate (excluir/editar o abate também exclui/atualiza a receita).
+-- Como isso mexe em Receita (módulo Resultados, mantido separado
+-- justamente pra controlar quem vê receita/resultado da operação),
+-- registrar um abate exige editar tanto no módulo do lote quanto em
+-- Resultados — não só um dos dois.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table abates (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete set null,
+  quantidade numeric not null,
+  peso_medio_kg numeric not null,
+  valor_arroba numeric not null,
+  observacao text default '',
+  criado_por text,
+  criado_em timestamptz default now()
+);
+alter table receitas add column if not exists abate_id bigint references abates(id) on delete cascade;
+
+alter table abates enable row level security;
+create policy "select abates" on abates for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('pasto','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir abates" on abates for insert with check (
+  (tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar'))
+  and tem_permissao('resultados','editar')
+);
+create policy "atualizar abates" on abates for update using (
+  (tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar'))
+  and tem_permissao('resultados','editar')
+) with check (
+  (tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar'))
+  and tem_permissao('resultados','editar')
+);
+create policy "excluir abates" on abates for delete using (
+  (tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar'))
+  and tem_permissao('resultados','editar')
+);
