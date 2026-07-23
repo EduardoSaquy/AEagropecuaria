@@ -546,7 +546,16 @@ async function loadAll(){
   state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);
   state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
   state.hectares = (cfgFaz.data||[])[0]?.hectares ?? null;
-  if(state.openDietId===null && state.dietas[0]) state.openDietId = state.dietas[0].id;
+  // Abre a primeira dieta da lista automaticamente, mas só na primeira vez
+  // que os dados carregam — sem esse controle à parte, loadAll() (chamado
+  // depois de QUALQUER lançamento salvo em qualquer aba do app, não só em
+  // Dietas) reabria a primeira dieta sempre que o usuário já tinha
+  // minimizado ela (openDietId volta a null ao fechar, indistinguível do
+  // estado inicial "nunca abri nenhuma").
+  if(!state.openDietIdAutoAberto && state.dietas[0]){
+    state.openDietId = state.dietas[0].id;
+    state.openDietIdAutoAberto = true;
+  }
   render();
 }
 
@@ -575,6 +584,7 @@ const state = {
   perfis: [],
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
+  openDietIdAutoAberto: false,
   search: '',
   searchDespesas: '',
   paineisResultadosDados: {},
