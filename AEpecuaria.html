@@ -2391,18 +2391,26 @@ const KG_POR_ARROBA = 30;
 // parte de peso vivo).
 const KG_POR_ARROBA_CARCACA = 15;
 const TIPO_VENDA_LABEL = {arroba:'Abate', cabeca:'Venda por animal', kg:'Venda por kg'};
+// Campos de peso/valor da Venda aceitam vírgula decimal (padrão brasileiro) —
+// Number('480,5') dá NaN, então esses campos passam por aqui em vez de Number()
+// direto. Valores já numéricos (vindos do banco) passam direto, sem mudança.
+function numDecimal(v){
+  if(typeof v === 'number') return v;
+  if(v==null || v==='') return 0;
+  return Number(String(v).replace(',','.')) || 0;
+}
 // Só faz sentido calcular @ na venda por abate (tipoVenda==='arroba') — nos
 // outros dois tipos o preço já não depende de arroba nenhuma.
-function arrobasVenda(v){ return (Number(v.pesoMedioKg||0)/KG_POR_ARROBA_CARCACA) * Number(v.quantidade||0); }
+function arrobasVenda(v){ return (numDecimal(v.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(v.quantidade||0); }
 // Valor total de uma venda, de acordo com o tipo escolhido:
 // - 'arroba' (abate): arrobas de carcaça × valor da arroba paga.
 // - 'cabeca' (venda por animal): valor fechado por animal × quantidade.
 // - 'kg' (venda por peso vivo): peso por animal × quantidade × valor do kg.
 function valorVenda(v){
   const qtd = Number(v.quantidade||0);
-  if(v.tipoVenda==='cabeca') return qtd * Number(v.valorPorAnimal||0);
-  if(v.tipoVenda==='kg') return qtd * Number(v.pesoMedioKg||0) * Number(v.valorKg||0);
-  return arrobasVenda(v) * Number(v.valorArroba||0);
+  if(v.tipoVenda==='cabeca') return qtd * numDecimal(v.valorPorAnimal);
+  if(v.tipoVenda==='kg') return qtd * numDecimal(v.pesoMedioKg) * numDecimal(v.valorKg);
+  return arrobasVenda(v) * numDecimal(v.valorArroba);
 }
 
 function pesagensDoLote(loteId){
@@ -3640,17 +3648,17 @@ function ModalVenda(){
         </div>
         ${tipoVenda==='arroba' ? `
         <div class="field-row">
-          <div class="field"><label>Peso de carcaça por animal (kg, do frigorífico)</label><input id="f-pesovenda" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
-          <div class="field"><label>Valor da arroba paga (R$/@)</label><input id="f-valorarrobavenda" type="number" step="0.01" value="${d.valorArroba}"/></div>
+          <div class="field"><label>Peso de carcaça por animal (kg, do frigorífico)</label><input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg}"/></div>
+          <div class="field"><label>Valor da arroba paga (R$/@)</label><input id="f-valorarrobavenda" type="text" inputmode="decimal" value="${d.valorArroba}"/></div>
         </div>
         ` : ''}
         ${tipoVenda==='cabeca' ? `
-        <div class="field"><label>Valor por animal (R$)</label><input id="f-valorporanimalvenda" type="number" step="0.01" value="${d.valorPorAnimal}"/></div>
+        <div class="field"><label>Valor por animal (R$)</label><input id="f-valorporanimalvenda" type="text" inputmode="decimal" value="${d.valorPorAnimal}"/></div>
         ` : ''}
         ${tipoVenda==='kg' ? `
         <div class="field-row">
-          <div class="field"><label>Peso por animal (kg, peso vivo)</label><input id="f-pesovenda" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
-          <div class="field"><label>Valor do kg (R$/kg)</label><input id="f-valorkgvenda" type="number" step="0.01" value="${d.valorKg}"/></div>
+          <div class="field"><label>Peso por animal (kg, peso vivo)</label><input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg}"/></div>
+          <div class="field"><label>Valor do kg (R$/kg)</label><input id="f-valorkgvenda" type="text" inputmode="decimal" value="${d.valorKg}"/></div>
         </div>
         ` : ''}
         <div class="total-bar ok">
@@ -4330,9 +4338,10 @@ function attachEvents(){
 
   // venda: recalcula @/valor total ao vivo conforme digita (refoca depois
   // do re-render, senão perde o foco a cada tecla — mesmo truque já usado na
-  // busca de Ingredientes/Despesas; sem setSelectionRange aqui porque esses
-  // campos são type="number", que não suporta seleção de texto).
-  function refazVendaInput(id, campo){
+  // busca de Ingredientes/Despesas). Campos de peso/valor são type="text"
+  // (aceitam vírgula decimal), então usam setSelectionRange igual à busca;
+  // quantidade continua type="number" (inteiro, sem vírgula), sem isso.
+  function refazVendaInput(id, campo, decimal){
     const el = document.getElementById(id);
     if(!el) return;
     el.oninput = (e)=>{
@@ -4340,6 +4349,7 @@ function attachEvents(){
       render();
       const s = document.getElementById(id);
       s.focus();
+      if(decimal) s.setSelectionRange(s.value.length, s.value.length);
     };
   }
   const loteVendaEl = document.getElementById('f-lotevenda');
@@ -4347,10 +4357,10 @@ function attachEvents(){
   const tipoVendaEl = document.getElementById('f-tipovenda');
   if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ editDraft.tipoVenda = e.target.value; render(); };
   refazVendaInput('f-qtdvenda', 'quantidade');
-  refazVendaInput('f-pesovenda', 'pesoMedioKg');
-  refazVendaInput('f-valorarrobavenda', 'valorArroba');
-  refazVendaInput('f-valorporanimalvenda', 'valorPorAnimal');
-  refazVendaInput('f-valorkgvenda', 'valorKg');
+  refazVendaInput('f-pesovenda', 'pesoMedioKg', true);
+  refazVendaInput('f-valorarrobavenda', 'valorArroba', true);
+  refazVendaInput('f-valorporanimalvenda', 'valorPorAnimal', true);
+  refazVendaInput('f-valorkgvenda', 'valorKg', true);
 
   // save handlers
   const saveBtn = document.querySelector('[data-save]');
@@ -4593,16 +4603,16 @@ function attachEvents(){
         if(Number(qtdVal)<=0){ alert('A quantidade de animais precisa ser maior que zero.'); return; }
         let pesoMedioKg=0, valorArroba=0, valorPorAnimal=0, valorKg=0;
         if(tipoVenda==='cabeca'){
-          valorPorAnimal = Number(document.getElementById('f-valorporanimalvenda').value)||0;
+          valorPorAnimal = numDecimal(document.getElementById('f-valorporanimalvenda').value);
           if(valorPorAnimal<=0){ alert('O valor por animal precisa ser maior que zero.'); return; }
         } else if(tipoVenda==='kg'){
-          pesoMedioKg = Number(document.getElementById('f-pesovenda').value)||0;
-          valorKg = Number(document.getElementById('f-valorkgvenda').value)||0;
+          pesoMedioKg = numDecimal(document.getElementById('f-pesovenda').value);
+          valorKg = numDecimal(document.getElementById('f-valorkgvenda').value);
           if(pesoMedioKg<=0){ alert('O peso por animal precisa ser maior que zero.'); return; }
           if(valorKg<=0){ alert('O valor do kg precisa ser maior que zero.'); return; }
         } else {
-          pesoMedioKg = Number(document.getElementById('f-pesovenda').value)||0;
-          valorArroba = Number(document.getElementById('f-valorarrobavenda').value)||0;
+          pesoMedioKg = numDecimal(document.getElementById('f-pesovenda').value);
+          valorArroba = numDecimal(document.getElementById('f-valorarrobavenda').value);
           if(pesoMedioKg<=0){ alert('O peso de carcaça precisa ser maior que zero.'); return; }
           if(valorArroba<=0){ alert('O valor da arroba precisa ser maior que zero.'); return; }
         }
