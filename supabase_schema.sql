@@ -851,3 +851,15 @@ alter table abates add column if not exists valor_por_animal numeric;
 alter table abates add column if not exists valor_kg numeric;
 alter table abates alter column peso_medio_kg drop not null;
 alter table abates alter column valor_arroba drop not null;
+
+-- ===================================================================
+-- MIGRAÇÃO: Descrição detalhada em Despesas
+-- "Nome" em Despesas (custos_fixos) vinha sendo usado como categoria
+-- genérica (ex: "Insumos Agrícolas"), sem espaço pra anotar o que
+-- especificamente foi aquele gasto (ex: "20 sacos de ureia, NF 4521").
+-- Novo campo opcional "descricao", mostrado como uma segunda linha
+-- abaixo do nome na lista de Despesas, e incluído na busca por texto.
+-- Pode rodar a qualquer momento — toda despesa existente fica com
+-- descrição em branco.
+-- ===================================================================
+alter table custos_fixos add column if not exists descricao text;

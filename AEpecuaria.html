@@ -493,8 +493,8 @@ function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMe
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
 function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantidade_kg:p.quantidadeKg}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, descricao:r.descricao||'', valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, descricao:c.descricao||'', valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||'', vendaId:r.abate_id||null}; }
 function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor, observacao:r.observacao||''}; }
 // Guardado na tabela "abates" (nome antigo, de quando só existia venda por
@@ -1396,7 +1396,7 @@ function openNewModal(type){
     editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:new Date().toISOString().slice(0,10), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
     state.modal = {type:'venda'};
   } else if(type==='custoFixo'){
-    editDraft = {nome:'', categoria:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
+    editDraft = {nome:'', categoria:'', descricao:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
     state.modal = {type:'custoFixo'};
   } else if(type==='investimento'){
     editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
@@ -2983,7 +2983,7 @@ function PageFinanceiroCustosFixos(){
   const busca = state.searchDespesas.toLowerCase();
   const mesesDisponiveis = [...new Set(state.custosFixos.map(c=>c.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
   const list = [...state.custosFixos].filter(c=>
-    (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca))
+    (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca) || (c.descricao||'').toLowerCase().includes(busca))
     && (!state.filtroMesDespesas || (state.filtroMesDespesas==='__recorrente__' ? !c.mes : c.mes===state.filtroMesDespesas))
   ).sort((a,b)=>{
     if(!a.mes && b.mes) return -1;
@@ -3010,7 +3010,7 @@ function PageFinanceiroCustosFixos(){
       <tbody>
         ${list.map(c=>`
           <tr>
-            <td><strong>${c.nome}</strong></td>
+            <td><strong>${c.nome}</strong>${c.descricao ? `<div class="hint" style="margin-top:2px;">${c.descricao}</div>` : ''}</td>
             <td>${c.categoria || '—'}</td>
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
             <td class="mono">${c.data ? c.data.split('-').reverse().join('/') : '—'}</td>
@@ -3717,7 +3717,8 @@ function ModalCustoFixo(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar despesa':'Nova despesa'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome / descrição</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
+        <div class="field"><label>Nome (categoria)</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
+        <div class="field"><label>Descrição detalhada (opcional)</label><input id="f-descricaocustofixo" value="${d.descricao||''}" placeholder="Ex: 20 sacos de ureia, NF 4521"/></div>
         <div class="field-row">
           <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Mão-de-obra Operacional"/></div>
           <div class="field"><label>Valor (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
@@ -4780,6 +4781,7 @@ function attachEvents(){
         const campos = {
           nome: document.getElementById('f-nome').value || 'Sem nome',
           categoria: document.getElementById('f-categoria').value,
+          descricao: document.getElementById('f-descricaocustofixo').value,
           valorMensal: Number(document.getElementById('f-valormensal').value)||0,
           data,
           mes: data ? data.slice(0,7) : null,
