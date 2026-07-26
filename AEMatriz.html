@@ -94,17 +94,34 @@
   .stat-value.alerta{color:var(--alerta);}
   .stat-value.bom{color:var(--bom);}
 
-  /* barras comparativas de receita x despesa */
-  .rbar-wrap{display:flex; flex-direction:column; gap:10px; margin:4px 0 22px 0;}
-  .rbar-row{display:grid; grid-template-columns:76px 1fr 110px; align-items:center; gap:12px;}
-  .rbar-label{font-size:11px; color:var(--cinza); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;}
-  .rbar-track{background:var(--cinza-claro); border-radius:20px; height:12px; overflow:hidden;}
-  .rbar-fill{height:100%; border-radius:20px; transition:width 0.3s;}
-  .rbar-fill.receita{background:var(--bom);}
-  .rbar-fill.despesa{background:var(--trigo);}
-  .rbar-valor{font-family:'IBM Plex Mono',monospace; font-size:12.5px; text-align:right; color:var(--grafite); font-variant-numeric:tabular-nums;}
   .op-chip{display:inline-flex; align-items:center; gap:8px;}
   .op-chip-ic{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+
+  /* ---------- DONUTS (Resultados por operação) ---------- */
+  .donuts-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:18px; margin-bottom:22px;}
+  .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
+  .donut-wrap{flex-shrink:0;}
+  .donut-svg{display:block;}
+  .donut-slice{cursor:pointer; transition:opacity 0.15s;}
+  .donut-slice:hover, .donut-slice.hover{opacity:0.82;}
+  .donut-slice:focus{outline:2px solid var(--verde-medio); outline-offset:2px;}
+  .donut-label{font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; fill:#fff; pointer-events:none;}
+  .donut-center-value{font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; fill:var(--verde-escuro);}
+  .donut-center-label{font-family:'Inter',sans-serif; font-size:9.5px; fill:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
+  .painel-legenda{flex:1; min-width:180px; display:flex; flex-direction:column; gap:2px;}
+  .legenda-row{display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px; padding:7px 8px; border-radius:6px;}
+  .legenda-row:hover, .legenda-row.hover{background:var(--cinza-bg);}
+  .legenda-swatch{width:12px; height:12px; border-radius:3px; flex-shrink:0;}
+  .legenda-nome{font-size:13px; color:var(--grafite);}
+  .legenda-valor{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--grafite); font-variant-numeric:tabular-nums;}
+  .legenda-pct{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--cinza); min-width:48px; text-align:right; font-variant-numeric:tabular-nums;}
+  .painel-tooltip{
+    position:fixed; pointer-events:none; z-index:80; display:none; max-width:220px;
+    background:var(--verde-escuro); color:#fff; padding:8px 12px; border-radius:8px;
+    font-size:12.5px; box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  }
+  .painel-tooltip .v{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;}
+  .painel-tooltip .l{font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px;}
 
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
   th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza); font-weight:600; padding:10px 14px; border-bottom:1px solid var(--cinza-claro); white-space:nowrap;}
@@ -790,6 +807,18 @@ function resultadoTotal(campo){
 function algumResultadoCarregando(){
   return linhasResultado().some(l=>l.resultado?.loading);
 }
+// Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
+// insumo consumido pelas outras, não uma operação com receita/despesa
+// própria, então não entra nesse recorte.
+const OPERACOES_ORDEM = ['pecuaria','cana','cereais'];
+function fatiasOperacoes(campo){
+  return OPERACOES_ORDEM.map(slug=>{
+    const app = state.apps.find(a=>a.slug===slug);
+    const r = slug==='pecuaria' ? state.resultados.pecuaria : null;
+    const valor = (r && !r.erro && r[campo]!=null) ? r[campo] : 0;
+    return {nome: app ? app.nome : (OPERACOES[slug]||slug), valor, cor: OPERACAO_COR[slug]};
+  });
+}
 function StatCard(label, valor, tipo){
   // tipo: 'receita' | 'despesa' | 'resultado'
   const positivo = valor>=0;
@@ -803,18 +832,71 @@ function StatCard(label, valor, tipo){
     <div class="stat-value ${tipo==='resultado' ? (positivo?'bom':'alerta') : ''}">R$ ${fmt(valor)}</div>
   </div>`;
 }
-function BarraComparativa(label, receita, despesa){
-  const max = Math.max(receita, despesa, 1);
-  return `
-  <div class="rbar-row">
-    <div class="rbar-label">${label}</div>
-    <div style="display:flex; flex-direction:column; gap:5px;">
-      <div class="rbar-track"><div class="rbar-fill receita" style="width:${Math.min(100, receita/max*100)}%"></div></div>
-      <div class="rbar-track"><div class="rbar-fill despesa" style="width:${Math.min(100, despesa/max*100)}%"></div></div>
+// Paleta categórica validada (contraste + daltonismo) pras 3 operações —
+// ver skill de dataviz: as cores de marca (azul/verde/marrom) usadas nos
+// chips de Fazendas não passavam no piso de croma nem na separação de
+// daltonismo, então as 3 operações usam esta paleta em todo canto onde
+// aparecem lado a lado (chips e os donuts abaixo).
+const OPERACAO_COR = {pecuaria:'#2a78d6', cana:'#eb6834', cereais:'#1baf7a'};
+
+function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
+function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
+  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
+  const [x0,y0] = polarXY(cx,cy,rOut,a0);
+  const [x1,y1] = polarXY(cx,cy,rOut,a1);
+  const [x2,y2] = polarXY(cx,cy,rIn,a1);
+  const [x3,y3] = polarXY(cx,cy,rIn,a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+}
+// fatias: [{nome, valor, cor}]. panelId identifica o gráfico (usado só pra
+// não colidir os data-attributes de hover entre os dois donuts da tela).
+function Donut(fatias, panelId, titulo){
+  const total = fatias.reduce((a,f)=>a+Number(f.valor||0),0);
+  if(total<=0){
+    return `<div class="card card-pad" style="flex:1;"><p class="stat-label" style="margin-bottom:10px;">${titulo}</p>${Empty('Sem dados ainda', 'Nenhuma operação com valor lançado neste período.')}</div>`;
+  }
+  const cx=90, cy=90, rOut=80, rIn=50;
+  const gap = fatias.length>1 ? 0.03 : 0;
+  let angle = 0;
+  const slices = fatias.map((f,idx)=>{
+    const valor = Number(f.valor||0);
+    const pct = valor/total*100;
+    const frac = valor/total;
+    const sweep = frac*Math.PI*2;
+    const a0 = angle + (sweep>0?gap/2:0);
+    const a1 = angle + sweep - (sweep>0?gap/2:0);
+    angle += sweep;
+    if(sweep<=0) return '';
+    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
+    const midAngle = (a0+a1)/2;
+    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
+    const showLabel = pct>=8;
+    return `
+      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${f.nome}" data-tip-valor="${fmt(valor)}" data-tip-pct="${fmt(pct,1)}"
+        d="${path}" fill="${f.cor}" tabindex="0" role="img" aria-label="${f.nome}: R$ ${fmt(valor)}, ${fmt(pct,1)}%"></path>
+      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
+    `;
+  }).join('');
+  const legenda = fatias.map((f,idx)=>`
+    <div class="legenda-row" data-legenda-idx="${panelId}-${idx}">
+      <span class="legenda-swatch" style="background:${f.cor}"></span>
+      <span class="legenda-nome">${f.nome}</span>
+      <span class="legenda-valor">R$ ${fmt(f.valor,0)}</span>
+      <span class="legenda-pct">${total>0?fmt(f.valor/total*100,1):'0,0'}%</span>
     </div>
-    <div style="display:flex; flex-direction:column; gap:5px;">
-      <div class="rbar-valor">R$ ${fmt(receita,0)}</div>
-      <div class="rbar-valor">R$ ${fmt(despesa,0)}</div>
+  `).join('');
+  return `
+  <div class="card card-pad" style="flex:1;">
+    <p class="stat-label" style="margin-bottom:14px;">${titulo}</p>
+    <div class="painel-resultados">
+      <div class="donut-wrap">
+        <svg class="donut-svg" viewBox="0 0 180 180" width="180" height="180">
+          ${slices}
+          <text class="donut-center-value" x="90" y="86" text-anchor="middle">R$ ${fmt(total,0)}</text>
+          <text class="donut-center-label" x="90" y="102" text-anchor="middle">total</text>
+        </svg>
+      </div>
+      <div class="painel-legenda">${legenda}</div>
     </div>
   </div>`;
 }
@@ -838,12 +920,12 @@ function PageResultados(){
     ${StatCard('Despesa', despesaAno, 'despesa')}
     ${StatCard('Resultado', resultadoAno, 'resultado')}
   </div>
-  <div class="card card-pad">
-    <p class="stat-label" style="margin-bottom:14px;">Receita x despesa, por operação (mês atual)</p>
-    <div class="rbar-wrap">
-      ${linhasResultado().filter(l=>l.resultado && !l.resultado.erro).map(l=>BarraComparativa(l.app.nome, l.resultado.receitaMes, l.resultado.despesaMes)).join('')}
-    </div>
+  <p class="eyebrow" style="margin-bottom:10px;">Impacto de cada operação (mês atual)</p>
+  <div class="donuts-row">
+    ${Donut(fatiasOperacoes('despesaMes'), 'donut-despesa', 'Despesa por operação')}
+    ${Donut(fatiasOperacoes('receitaMes'), 'donut-receita', 'Receita por operação')}
   </div>
+  <div id="painel-tooltip" class="painel-tooltip"></div>
   <div class="card" style="overflow-x:auto; margin-top:18px;">
     <table>
       <thead><tr><th>Operação</th><th>Receita (mês)</th><th>Despesa (mês)</th><th>Resultado (mês)</th><th>Receita (ano)</th><th>Despesa (ano)</th><th>Resultado (ano)</th></tr></thead>
@@ -869,7 +951,6 @@ function PageResultados(){
 }
 
 /* ===================== FAZENDAS ===================== */
-const OPERACAO_COR = {pecuaria:'#1D5DA8', cana:'#0C7A43', cereais:'#8A5A2B'};
 function operacoesLabel(fazendaId){
   const ops = state.fazendaOperacoes[fazendaId]||[];
   if(ops.length===0) return '<span class="hint">Nenhuma operação cadastrada</span>';
@@ -1291,6 +1372,46 @@ function attachEvents(){
       await loadAll();
     };
   }
+
+  // donuts de Resultados: hover sincronizado entre gráfico e legenda + tooltip
+  const tooltip = document.getElementById('painel-tooltip');
+  const clearHovers = ()=>{
+    document.querySelectorAll('.donut-slice.hover, .legenda-row.hover').forEach(el=>el.classList.remove('hover'));
+  };
+  document.querySelectorAll('[data-slice-idx]').forEach(el=>{
+    const idx = el.dataset.sliceIdx;
+    el.addEventListener('pointerenter', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
+      if(row) row.classList.add('hover');
+      if(tooltip){
+        tooltip.innerHTML = `<div class="v">R$ ${el.dataset.tipValor}</div><div class="l">${el.dataset.tipNome} · ${el.dataset.tipPct}%</div>`;
+        tooltip.style.display = 'block';
+      }
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(tooltip){ tooltip.style.left = (e.clientX+14)+'px'; tooltip.style.top = (e.clientY+14)+'px'; }
+    });
+    el.addEventListener('pointerleave', ()=>{ clearHovers(); if(tooltip) tooltip.style.display = 'none'; });
+    el.addEventListener('focus', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
+      if(row) row.classList.add('hover');
+    });
+    el.addEventListener('blur', clearHovers);
+  });
+  document.querySelectorAll('[data-legenda-idx]').forEach(el=>{
+    const idx = el.dataset.legendaIdx;
+    el.addEventListener('pointerenter', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const slice = document.querySelector(`[data-slice-idx="${idx}"]`);
+      if(slice) slice.classList.add('hover');
+    });
+    el.addEventListener('pointerleave', clearHovers);
+  });
 }
 
 initAuth();
