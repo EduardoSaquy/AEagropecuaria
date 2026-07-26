@@ -880,3 +880,35 @@ alter table custos_fixos add column if not exists descricao text;
 -- Pode rodar a qualquer momento.
 -- ===================================================================
 alter table precos_arroba add column if not exists sexo text not null default 'macho' check (sexo in ('macho','femea'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Corrige baixa de estoque não acontecendo pra colaboradores
+-- BUG: Saída de Ração (Confinamento) e Produção de Ração descontam o
+-- ingrediente cru gravando linhas em "movimentos" — mas a política de
+-- "movimentos" só liberava insert/update/delete pra quem tem permissão de
+-- Insumos. Um colaborador com acesso só a Confinamento (pra lançar o trato)
+-- ou só a Dietas (pra lançar produção de ração), sem acesso a Insumos,
+-- conseguia salvar o lançamento (saidas_racao/producoes_racao tem política
+-- própria, ligada a Confinamento/Dietas) mas o banco recusava silenciosamente
+-- a baixa em "movimentos" — o lançamento ficava salvo sem descontar
+-- ingrediente nenhum do estoque.
+-- Agora "movimentos" aceita insert/update/delete de quem tem Insumos
+-- (uso normal: Entrada/Saída manual em Insumos) OU Confinamento (Saída de
+-- Ração) OU Dietas (Produção de Ração) — as duas únicas outras telas que
+-- gravam nessa tabela como efeito colateral de um lançamento próprio.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+drop policy if exists "inserir movimentos" on movimentos;
+create policy "inserir movimentos" on movimentos for insert with check (
+  tem_permissao('insumos','editar') or tem_permissao('confinamento','editar') or tem_permissao('dietas','editar')
+);
+drop policy if exists "atualizar movimentos" on movimentos;
+create policy "atualizar movimentos" on movimentos for update using (
+  tem_permissao('insumos','editar') or tem_permissao('confinamento','editar') or tem_permissao('dietas','editar')
+) with check (
+  tem_permissao('insumos','editar') or tem_permissao('confinamento','editar') or tem_permissao('dietas','editar')
+);
+drop policy if exists "excluir movimentos" on movimentos;
+create policy "excluir movimentos" on movimentos for delete using (
+  tem_permissao('insumos','editar') or tem_permissao('confinamento','editar') or tem_permissao('dietas','editar')
+);

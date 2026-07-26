@@ -956,7 +956,13 @@ async function executarInsertLancamento(type, campos){
       });
       if(movs.length){
         const {error} = await db.from('movimentos').insert(movs);
-        if(error) return {error};
+        if(error){
+          // Não deixa a saída salva sem o desconto de estoque correspondente
+          // (ex: falha de permissão na gravação de movimentos) — desfaz o
+          // lançamento inteiro em vez de ficar "pela metade".
+          await db.from('saidas_racao').delete().eq('id', saidaId);
+          return {error};
+        }
       }
     }
     return {error:null};
@@ -992,7 +998,12 @@ async function executarInsertLancamento(type, campos){
       });
       if(movs.length){
         const {error} = await db.from('movimentos').insert(movs);
-        if(error) return {error};
+        if(error){
+          // Mesma lógica da Saída de Ração: sem o desconto de estoque, não
+          // faz sentido deixar a produção salva sozinha.
+          await db.from('producoes_racao').delete().eq('id', producaoId);
+          return {error};
+        }
       }
     }
     return {error:null};
