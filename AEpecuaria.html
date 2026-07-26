@@ -502,8 +502,8 @@ function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao
 // animais (abate por @, por animal ou por kg vivo), diferenciada por tipoVenda.
 function rowToVenda(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantidade:r.quantidade, tipoVenda:r.tipo_venda||'arroba', pesoMedioKg:r.peso_medio_kg, valorArroba:r.valor_arroba, valorPorAnimal:r.valor_por_animal, valorKg:r.valor_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function vendaToRow(v){ return {data:v.data, lote_id:v.loteId, quantidade:v.quantidade, tipo_venda:v.tipoVenda||'arroba', peso_medio_kg:v.pesoMedioKg||null, valor_arroba:v.valorArroba||null, valor_por_animal:v.valorPorAnimal||null, valor_kg:v.valorKg||null, observacao:v.observacao||''}; }
-function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor}; }
-function precoArrobaToRow(p){ return {data:p.data, valor:p.valor}; }
+function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor, sexo:r.sexo||'macho'}; }
+function precoArrobaToRow(p){ return {data:p.data, valor:p.valor, sexo:p.sexo||'macho'}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
 function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
@@ -1406,8 +1406,15 @@ function openNewModal(type){
     state.modal = {type:'receita'};
   } else if(type==='precoArroba'){
     const hoje = new Date().toISOString().slice(0,10);
-    const existente = state.precosArroba.find(p=>p.data===hoje);
-    editDraft = existente ? {...existente, _editId: existente.id} : {data: hoje, valor: ''};
+    const existenteMacho = state.precosArroba.find(p=>p.data===hoje && (p.sexo||'macho')==='macho');
+    const existenteFemea = state.precosArroba.find(p=>p.data===hoje && p.sexo==='femea');
+    editDraft = {
+      data: hoje,
+      valorMacho: existenteMacho ? existenteMacho.valor : '',
+      valorFemea: existenteFemea ? existenteFemea.valor : '',
+      _editIdMacho: existenteMacho ? existenteMacho.id : null,
+      _editIdFemea: existenteFemea ? existenteFemea.id : null,
+    };
     state.modal = {type:'precoArroba'};
   } else if(type==='metaMargem'){
     editDraft = {valor: state.metaMargemPct ?? ''};
@@ -2498,9 +2505,14 @@ function arrobasProduzidasFazendaNoMes(mesStr){
   }, 0);
 }
 
-function precoArrobaAtual(){
-  if(state.precosArroba.length===0) return null;
-  return [...state.precosArroba].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
+// Arroba macho e fêmea têm cotações diferentes no mercado — cada uma tem seu
+// próprio histórico (mesma tabela, diferenciada pela coluna "sexo"). Não usa
+// esse valor pra abate/venda (que usa o valor realmente pago naquela venda
+// específica, lançado junto com ela) — só serve de referência/indexador.
+function precoArrobaAtual(sexo){
+  const lista = state.precosArroba.filter(p=>(p.sexo||'macho')===sexo);
+  if(lista.length===0) return null;
+  return [...lista].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
 }
 
 const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -2721,15 +2733,23 @@ function dadosFinanceiro(){
 /* ---- Financeiro: Resumo ---- */
 function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
-  const arroba = precoArrobaAtual();
+  const arrobaMacho = precoArrobaAtual('macho');
+  const arrobaFemea = precoArrobaAtual('femea');
 
   return `
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-      <div>
-        <div class="stat-label">Arroba (Tocantins) — Datagro</div>
-        <div class="stat-value" style="font-size:24px;">${arroba ? 'R$ '+fmt(arroba.valor) : '—'}</div>
-        <div class="hint" style="margin-top:2px;">${arroba ? 'Atualizado em '+arroba.data.split('-').reverse().join('/') : 'Nenhum valor cadastrado ainda'}</div>
+      <div style="display:flex; gap:32px; flex-wrap:wrap;">
+        <div>
+          <div class="stat-label">Arroba macho (Tocantins)</div>
+          <div class="stat-value" style="font-size:24px;">${arrobaMacho ? 'R$ '+fmt(arrobaMacho.valor) : '—'}</div>
+          <div class="hint" style="margin-top:2px;">${arrobaMacho ? 'Atualizado em '+arrobaMacho.data.split('-').reverse().join('/') : 'Nenhum valor cadastrado ainda'}</div>
+        </div>
+        <div>
+          <div class="stat-label">Arroba fêmea (Tocantins)</div>
+          <div class="stat-value" style="font-size:24px;">${arrobaFemea ? 'R$ '+fmt(arrobaFemea.valor) : '—'}</div>
+          <div class="hint" style="margin-top:2px;">${arrobaFemea ? 'Atualizado em '+arrobaFemea.data.split('-').reverse().join('/') : 'Nenhum valor cadastrado ainda'}</div>
+        </div>
       </div>
       ${temPermissao('financeiro','editar') ? `<button class="btn btn-ghost btn-sm" data-fab-action="precoArroba">Atualizar preço</button>` : ''}
     </div>
@@ -3810,11 +3830,12 @@ function ModalPrecoArroba(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>Atualizar preço da arroba</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
+        <div class="field"><label>Data</label><input id="f-dataarroba" type="date" value="${d.data}"/></div>
         <div class="field-row">
-          <div class="field"><label>Data</label><input id="f-dataarroba" type="date" value="${d.data}"/></div>
-          <div class="field"><label>Valor da arroba (R$/@)</label><input id="f-valorarroba" type="number" step="0.01" value="${d.valor}"/></div>
+          <div class="field"><label>Arroba macho (R$/@)</label><input id="f-valorarrobamacho" type="number" step="0.01" value="${d.valorMacho}"/></div>
+          <div class="field"><label>Arroba fêmea (R$/@)</label><input id="f-valorarrobafemea" type="number" step="0.01" value="${d.valorFemea}"/></div>
         </div>
-        <p class="hint">Valor médio da arroba no Tocantins (Datagro) — atualize manualmente conforme a cotação do dia.</p>
+        <p class="hint">Valor médio da arroba no Tocantins — atualize manualmente conforme a cotação do dia. Pode preencher só um dos dois, se só tiver a cotação de um.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -4827,15 +4848,24 @@ function attachEvents(){
           ({error} = await db.from('receitas').insert(row));
         }
       } else if(type==='precoArroba'){
-        const campos = {
-          data: document.getElementById('f-dataarroba').value,
-          valor: Number(document.getElementById('f-valorarroba').value)||0,
-        };
-        const row = precoArrobaToRow(campos);
-        if(editDraft._editId){
-          ({error} = await db.from('precos_arroba').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('precos_arroba').insert(row));
+        const data = document.getElementById('f-dataarroba').value;
+        const valorMachoStr = document.getElementById('f-valorarrobamacho').value;
+        const valorFemeaStr = document.getElementById('f-valorarrobafemea').value;
+        if(valorMachoStr!==''){
+          const row = precoArrobaToRow({data, valor:Number(valorMachoStr)||0, sexo:'macho'});
+          if(editDraft._editIdMacho){
+            ({error} = await db.from('precos_arroba').update(row).eq('id', editDraft._editIdMacho));
+          } else {
+            ({error} = await db.from('precos_arroba').insert(row));
+          }
+        }
+        if(!error && valorFemeaStr!==''){
+          const row = precoArrobaToRow({data, valor:Number(valorFemeaStr)||0, sexo:'femea'});
+          if(editDraft._editIdFemea){
+            ({error} = await db.from('precos_arroba').update(row).eq('id', editDraft._editIdFemea));
+          } else {
+            ({error} = await db.from('precos_arroba').insert(row));
+          }
         }
       } else if(type==='metaMargem'){
         const pct = Number(document.getElementById('f-metamargem').value)||0;
