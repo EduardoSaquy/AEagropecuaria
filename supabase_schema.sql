@@ -863,3 +863,20 @@ alter table abates alter column valor_arroba drop not null;
 -- descrição em branco.
 -- ===================================================================
 alter table custos_fixos add column if not exists descricao text;
+
+-- ===================================================================
+-- MIGRAÇÃO: Arroba macho e fêmea separadas
+-- precos_arroba guardava um valor único (rótulo "Datagro", removido da UI).
+-- Arroba macho e fêmea têm cotação diferente no mercado, então agora cada
+-- registro tem um "sexo" ('macho'/'femea') — dois históricos independentes
+-- na mesma tabela, cada um com sua data/valor. Não é usado em nenhum
+-- cálculo hoje (só o banner de referência em Financeiro > Resumo); se um
+-- dia for usado em alguma média/estimativa por lote, o valor macho vale
+-- pra lote de macho e o valor fêmea pra lote de fêmea (nunca pra abate,
+-- que sempre usa o valor realmente pago naquela venda específica).
+-- Todo registro já cadastrado vira sexo = 'macho' (mantém o valor visível
+-- no card "Arroba macho"; cadastre a cotação de fêmea à parte quando for
+-- atualizar o preço da próxima vez).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table precos_arroba add column if not exists sexo text not null default 'macho' check (sexo in ('macho','femea'));
