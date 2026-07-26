@@ -2870,15 +2870,13 @@ function PageFinanceiroCurral(){
   <div class="card" style="margin-bottom:22px;">
     ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo médio diário de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração (méd./dia)</th><th>Pasto (méd./dia)</th><th>Cria (méd./dia)</th><th>Custo fixo (dia)</th><th>Total (méd./dia)</th><th>Custo/animal (méd./dia)</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Custo variável (méd./dia)</th><th>Custo fixo (dia)</th><th>Total (méd./dia)</th><th>Custo/animal (méd./dia)</th></tr></thead>
       <tbody>
         ${custosPorLote.map(r=>`
           <tr>
             <td><strong>${r.lote.nome}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
-            <td class="mono">R$ ${fmt(r.racao)}</td>
-            <td class="mono">R$ ${fmt(r.pasto)}</td>
-            <td class="mono">R$ ${fmt(r.reproducao)}</td>
+            <td class="mono">R$ ${fmt(r.racao+r.pasto+r.reproducao)}</td>
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
@@ -2887,7 +2885,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção do número de animais de cada um — mesmo critério do total do mês, abaixo.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção do número de animais de cada um — mesmo critério do total do mês, abaixo.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
