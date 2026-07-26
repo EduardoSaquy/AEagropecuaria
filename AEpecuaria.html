@@ -2655,14 +2655,6 @@ function dadosFinanceiro(){
   const hoje = hojeStr();
   const mes = mesAtualStr();
 
-  const racaoConfHoje = state.saidasRacao.filter(s=>s.data===hoje && racaoLoteTipo(s)==='confinamento').reduce((a,s)=>a+custoSaidaRacao(s),0);
-  const racaoCriaHoje = state.saidasRacao.filter(s=>s.data===hoje && racaoLoteTipo(s)==='reproducao').reduce((a,s)=>a+custoSaidaRacao(s),0);
-  const racaoHoje = racaoConfHoje + racaoCriaHoje;
-  const pastoHoje = state.pasto.filter(p=>p.data===hoje).reduce((a,p)=>a+custoPasto(p),0);
-  const reproducaoHoje = state.reproducao.filter(r=>r.data===hoje).reduce((a,r)=>a+custoReproducao(r),0);
-  const criaHoje = racaoCriaHoje + reproducaoHoje;
-  const custoHoje = racaoHoje + pastoHoje + reproducaoHoje;
-
   const racaoConfMes = state.saidasRacao.filter(s=>s.data.startsWith(mes) && racaoLoteTipo(s)==='confinamento').reduce((a,s)=>a+custoSaidaRacao(s),0);
   const racaoCriaMes = state.saidasRacao.filter(s=>s.data.startsWith(mes) && racaoLoteTipo(s)==='reproducao').reduce((a,s)=>a+custoSaidaRacao(s),0);
   const racaoMes = racaoConfMes + racaoCriaMes;
@@ -2675,10 +2667,17 @@ function dadosFinanceiro(){
 
   const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
   const totalAnimais = lotesAtivos.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
-  const custoPorAnimalHoje = totalAnimais>0 ? custoHoje/totalAnimais : 0;
 
+  // Média diária do mês (não "só hoje"): ração/pasto/cria não são lançados
+  // todo santo dia — mostrar só o valor de hoje deixava esses cartões
+  // zerados em qualquer dia sem lançamento exato, mesmo com gasto normal
+  // recente. Mesmo critério já usado em Por Curral: total do mês até agora
+  // ÷ dias já passados do mês.
   const fixoDiario = fixosMes/30;
-  const custoTotalPorAnimalDia = totalAnimais>0 ? (custoHoje+fixoDiario)/totalAnimais : 0;
+  const diasDecorridosMes = Number(hoje.split('-')[2]);
+  const custoVariavelMedioDia = variavelMes/diasDecorridosMes;
+  const custoPorAnimalMedioDia = totalAnimais>0 ? custoVariavelMedioDia/totalAnimais : 0;
+  const custoTotalPorAnimalMedioDia = totalAnimais>0 ? (custoVariavelMedioDia+fixoDiario)/totalAnimais : 0;
   const custoTotalPorAnimalMes = totalAnimais>0 ? totalMes/totalAnimais : 0;
 
   // Custo fixo (mão de obra, energia etc.) diluído por área, na proporção do
@@ -2712,11 +2711,11 @@ function dadosFinanceiro(){
   const arrobasMes = arrobasProduzidasFazendaNoMes(mes);
   const custoPorArrobaMes = arrobasMes>0 ? totalMes/arrobasMes : null;
 
-  return {hoje, mes, racaoConfHoje, racaoCriaHoje, racaoHoje, pastoHoje, reproducaoHoje, criaHoje, custoHoje,
+  return {hoje, mes,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
     fixoConfinamento, fixoPasto, fixoCria, detalhesPorArea,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
-    totalAnimais, custoPorAnimalHoje, custoTotalPorAnimalDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes};
+    totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes};
 }
 
 /* ---- Financeiro: Resumo ---- */
@@ -2736,12 +2735,13 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Hoje</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Média diária do mês</p>
   <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Custo variável hoje</div><div class="stat-value">R$ ${fmt(d.custoHoje)}</div></div>
-    <div class="stat-card"><div class="stat-label">Variável/animal/dia</div><div class="stat-value">R$ ${fmt(d.custoPorAnimalHoje,2)}</div></div>
-    <div class="stat-card"><div class="stat-label">Total/animal/dia (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalDia,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo variável (méd./dia)</div><div class="stat-value">R$ ${fmt(d.custoVariavelMedioDia)}</div></div>
+    <div class="stat-card"><div class="stat-label">Variável/animal (méd./dia)</div><div class="stat-value">R$ ${fmt(d.custoPorAnimalMedioDia,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total/animal (méd./dia, com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalMedioDia,2)}</div></div>
   </div>
+  <p class="hint" style="margin:10px 0 0;">Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real por cabeça em vez de zerar nos dias sem lançamento.</p>
 
   <p class="eyebrow" style="margin:22px 0 10px;">Este mês</p>
   <div class="stat-row">
@@ -2821,17 +2821,6 @@ function PageFinanceiroCurral(){
     return totalAnimaisArea>0 ? fixoDaAreaNoPeriodo*(Number(lote.numeroAnimais||0)/totalAnimaisArea) : 0;
   }
 
-  const custosPorLote = lotesAtivos.map(l=>{
-    const racao = state.saidasRacao.filter(s=>s.data===d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
-    const pasto = state.pasto.filter(p=>p.data===d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
-    const reproducao = state.reproducao.filter(r=>r.data===d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
-    const variavel = racao + pasto + reproducao;
-    const fixoAlocado = fixoLoteAlocado(l, fixoAreaMes[loteTipo(l)]/30);
-    const total = variavel + fixoAlocado;
-    const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
-  }).sort((a,b)=> b.total-a.total);
-
   const custosMesPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
@@ -2843,6 +2832,23 @@ function PageFinanceiroCurral(){
     const arrobas = arrobasProduzidasNoMes(l.id, d.mes, l.numeroAnimais);
     const custoPorArroba = arrobas>0 ? total/arrobas : null;
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
+  }).sort((a,b)=> b.total-a.total);
+
+  // Média diária do mês (não "só hoje"): ração/pasto/cria não são lançados
+  // todo santo dia (ex: ração feita a cada 3-4 dias) — mostrar só o valor de
+  // hoje deixava a maioria dos currais com R$ 0,00 mesmo tendo gasto normal
+  // recente. Em vez disso, pega o total já lançado no mês (custosMesPorLote,
+  // acima) e divide pelos dias já passados do mês (1 até hoje) — dá a média
+  // diária real até agora, sem os "buracos" dos dias sem lançamento.
+  const diasDecorridosMes = Number(d.hoje.split('-')[2]);
+  const custosPorLote = custosMesPorLote.map(r=>{
+    const racao = r.racao/diasDecorridosMes;
+    const pasto = r.pasto/diasDecorridosMes;
+    const reproducao = r.reproducao/diasDecorridosMes;
+    const fixoAlocado = fixoLoteAlocado(r.lote, fixoAreaMes[loteTipo(r.lote)]/30);
+    const total = racao + pasto + reproducao + fixoAlocado;
+    const porAnimal = r.lote.numeroAnimais>0 ? total/r.lote.numeroAnimais : 0;
+    return {lote:r.lote, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   // Mesmos dados de custosMesPorLote, só que somados por área (Confinamento/
@@ -2860,19 +2866,17 @@ function PageFinanceiroCurral(){
   }).filter(r=>r.numeroLotes>0);
 
   return `
-  <p class="eyebrow" style="margin-bottom:10px;">Custo diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral no mês (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
-    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo diário de cada um aqui.') : `
+    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo médio diário de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração hoje</th><th>Pasto hoje</th><th>Cria hoje</th><th>Custo fixo (dia)</th><th>Total hoje</th><th>Custo/animal hoje</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Custo variável (méd./dia)</th><th>Custo fixo (dia)</th><th>Total (méd./dia)</th><th>Custo/animal (méd./dia)</th></tr></thead>
       <tbody>
         ${custosPorLote.map(r=>`
           <tr>
             <td><strong>${r.lote.nome}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
-            <td class="mono">R$ ${fmt(r.racao)}</td>
-            <td class="mono">R$ ${fmt(r.pasto)}</td>
-            <td class="mono">R$ ${fmt(r.reproducao)}</td>
+            <td class="mono">R$ ${fmt(r.racao+r.pasto+r.reproducao)}</td>
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
@@ -2881,7 +2885,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção do número de animais de cada um — mesmo critério do total do mês, abaixo.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção do número de animais de cada um — mesmo critério do total do mês, abaixo.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
