@@ -212,6 +212,7 @@ const db = supabase.createClient(
 function toSnake(s){ return s.replace(/[A-Z]/g, m => '_'+m.toLowerCase()); }
 function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
+function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
 
 /* ===================== OPÇÕES (catálogos de enum) ===================== */
 const OPCOES = {
@@ -222,13 +223,16 @@ const OPCOES = {
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
  * Mesmo motor genérico do AECombustivel.html (uma entidade é descrita
  * uma vez — tabela, campos — e lista/modal/salvar/excluir são gerados
- * a partir disso). `modulo:'cadastros'` é obrigatório em fazendas e
- * talhoes: é o mesmo módulo de permissão (RLS) que o AE Combustível já
- * usa para essas tabelas, então o controle de acesso é sempre o mesmo
- * dos dois apps, sem precisar duplicar a checagem no banco.
- * `culturas` fica de fora do menu (ver GROUPS) — entra só como lista de
- * apoio para o campo "Cultura" do Talhão; continua sendo cadastrada
- * pela aba Cultivo do AE Combustível. */
+ * a partir disso). `modulo:'cadastros'` é obrigatório em fazendas,
+ * culturas, safras e talhoes: é o mesmo módulo de permissão (RLS) que
+ * o AE Combustível já usa para essas tabelas, então o controle de
+ * acesso é sempre o mesmo dos dois apps, sem precisar duplicar a
+ * checagem no banco. `plantios` (Fase 2 — Operações) usa o módulo
+ * `operacoes`, próprio do AE Cana (tabela plantios_cana, só existe
+ * neste app — ver cana_schema.sql).
+ * `culturas` e `safras` ficam de fora do menu (ver GROUPS) — entram só
+ * como lista de apoio (Cultura do Talhão, Safra do Plantio); continuam
+ * sendo cadastradas pelas abas Cultivo/Estrutura do AE Combustível. */
 const CADASTROS = {
   fazendas: {
     table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'cadastros',
@@ -263,6 +267,32 @@ const CADASTROS = {
       {key:'ativo', label:'Talhão ativo', type:'checkbox', default:true, list:false},
     ],
   },
+  safras: {
+    table:'safras', label:'Safras', singular:'Safra', modulo:'cadastros',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='cana'},
+      {key:'nome', label:'Safra', type:'text', required:true, placeholder:'Ex: 2024/2025'},
+      {key:'dataInicio', label:'Início', type:'date'},
+      {key:'dataFim', label:'Fim', type:'date'},
+      {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  plantios: {
+    table:'plantios_cana', label:'Plantio', singular:'Plantio', modulo:'operacoes',
+    desc:'Registro do plantio de cada talhão — variedade e data de plantio, com previsão de reforma. Uma linha por estande de cana (do plantio até a reforma); os cortes/colheitas de cada estande entram no módulo de Colheita.',
+    emptyHint:'Cadastre um talhão antes de registrar um plantio.',
+    orderBy:'data_plantio', orderDesc:true, semBusca:true,
+    fields:[
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
+      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
+      {key:'variedade', label:'Variedade', type:'text', required:true, placeholder:'Ex: RB92579'},
+      {key:'dataPlantio', label:'Data do plantio', type:'date', required:true},
+      {key:'dataReformaPrevista', label:'Previsão de reforma', type:'date'},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+      {key:'ativo', label:'Plantio ativo (talhão em produção)', type:'checkbox', default:true, list:false},
+    ],
+  },
 };
 const CADASTRO_KEYS = Object.keys(CADASTROS);
 
@@ -295,7 +325,7 @@ async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
       const cfg = CADASTROS[k];
-      return db.from(cfg.table).select('*').order('nome');
+      return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
     }),
     db.from('profiles').select('*').order('nome'),
   ]);
@@ -454,6 +484,9 @@ const GROUPS = {
     {key:'fazendas', label:'Fazendas'},
     {key:'talhoes', label:'Talhões'},
   ]},
+  operacoes: {label:'Operações', icon:iconPlantio(), pages:[
+    {key:'plantios', label:'Plantio'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -461,6 +494,7 @@ const GROUPS = {
 function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
+  if(key==='operacoes') return temPermissao('operacoes','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function paginaVisivel(){ return true; }
@@ -512,7 +546,8 @@ function Header(){
     return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso — as mesmas contas e permissões usadas no AE Combustível.');
   }
   const cfg = CADASTROS[state.page];
-  return headerHtml('Cadastro', cfg.label, cfg.desc);
+  const eyebrow = cfg.modulo==='operacoes' ? 'Operações' : 'Cadastro';
+  return headerHtml(eyebrow, cfg.label, cfg.desc);
 }
 function headerHtml(eyebrow,title,desc){
   return `<div class="page-header"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="page-desc">${desc}</p></div></div>`;
@@ -526,6 +561,7 @@ function brandMark(){
   </svg>`;
 }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconPlantio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 13C12 9 9 6 5 6c0 4 3 7 7 7Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
@@ -545,6 +581,7 @@ function celulaValor(f, item){
   const val = item[f.key];
   if(f.type==='fk') return fkNome(f.refEntity, val);
   if(f.type==='select') return (f.options.find(o=>o.value===val)||{}).label || val || '—';
+  if(f.type==='date') return fmtData(val);
   if(f.type==='number') return (val===null||val===undefined||val==='') ? '—' : `${fmt(val, f.dec ?? 2)}${f.suffix||''}`;
   return val || '—';
 }
@@ -553,11 +590,11 @@ function PageCadastro(key){
   const podeEditar = temPermissao(cfg.modulo||'cadastros','editar');
   const termo = state.search.toLowerCase();
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
-  const list = base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
+  const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
   const colunas = cfg.fields.filter(f=>f.list!==false);
   return `
   <div class="toolbar">
-    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>
+    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
   </div>
@@ -626,6 +663,9 @@ function campoHtml(f, d){
   if(f.type==='checkbox'){
     return `<div class="field"><label><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto; margin-right:6px;"/> ${f.label}</label></div>`;
   }
+  if(f.type==='textarea'){
+    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3">${val}</textarea></div>`;
+  }
   if(f.type==='select'){
     return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>`;
   }
@@ -638,6 +678,9 @@ function campoHtml(f, d){
       </select>
       ${lista.length===0?`<span class="hint">Cadastre ${CADASTROS[f.refEntity].singular.toLowerCase()} antes.</span>`:''}
     </div>`;
+  }
+  if(f.type==='date'){
+    return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${val}"/></div>`;
   }
   if(f.type==='number'){
     return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
@@ -679,6 +722,7 @@ async function salvarCadastro(key){
     let val = raw;
     if(f.type==='number') val = (raw===''||raw===undefined||raw===null) ? null : Number(raw);
     if(f.type==='fk') val = raw ? Number(raw) : null;
+    if(f.type==='date') val = raw || null;
     if(f.type==='checkbox') val = !!raw;
     row[toSnake(f.key)] = (val===''? null : val);
   });
@@ -703,6 +747,7 @@ async function salvarCadastro(key){
  * módulos do AE Combustível (Estoque, Abastecimento, etc.). */
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
+  ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
   ['estoque','Estoque (AE Combustível)'],
   ['abastecimento','Abastecimento (AE Combustível)'],
   ['rateio','Rateio & Indicadores (AE Combustível)'],
