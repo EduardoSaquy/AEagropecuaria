@@ -506,10 +506,12 @@ function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor, sexo:
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor, sexo:p.sexo||'macho'}; }
 function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
 function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
+function rowToFazenda(r){ return {id:r.id, nome:r.nome, hectares:r.hectares}; }
+function fazendaToRow(f){ return {nome:f.nome, hectares:f.hectares}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, cfgFaz, prt, pesag, prod, abt] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt] = await Promise.all([
     db.from('ingredientes').select('*').order('id'),
     db.from('movimentos').select('*').order('id'),
     db.from('dietas').select('*').order('id'),
@@ -524,7 +526,7 @@ async function loadAll(){
     db.from('precos_arroba').select('*').order('id'),
     db.from('config_financeiro').select('*').eq('id', 1),
     db.from('profiles').select('*').order('nome'),
-    db.from('config_fazenda').select('*').eq('id', 1),
+    db.from('fazendas').select('*').order('id'),
     db.from('partos').select('*').order('id'),
     db.from('pesagens').select('*').order('id'),
     db.from('producoes_racao').select('*').order('id'),
@@ -548,7 +550,7 @@ async function loadAll(){
   state.receitas = (rec.data||[]).map(rowToReceita);
   state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);
   state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
-  state.hectares = (cfgFaz.data||[])[0]?.hectares ?? null;
+  state.fazendas = (faz.data||[]).map(rowToFazenda);
   render();
 }
 
@@ -571,7 +573,7 @@ const state = {
   receitas: [],
   precosArroba: [],
   metaMargemPct: null,
-  hectares: null,
+  fazendas: [],
   custosFixos: [],
   investimentos: [],
   perfis: [],
@@ -1287,7 +1289,7 @@ function Header(){
     resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
     resultadosReceitas:{eyebrow:'Resultado', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
-    fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Área total da fazenda, usada para calcular o resultado financeiro por hectare.'},
+    fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Cadastro das fazendas da operação — a soma dos hectares de todas é usada para calcular o resultado financeiro por hectare.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
   };
   const t = titles[state.page];
@@ -1419,9 +1421,9 @@ function openNewModal(type){
   } else if(type==='metaMargem'){
     editDraft = {valor: state.metaMargemPct ?? ''};
     state.modal = {type:'metaMargem'};
-  } else if(type==='hectares'){
-    editDraft = {valor: state.hectares ?? ''};
-    state.modal = {type:'hectares'};
+  } else if(type==='fazenda'){
+    editDraft = {nome:'', hectares:''};
+    state.modal = {type:'fazenda'};
   }
   return true;
 }
@@ -2505,6 +2507,11 @@ function arrobasProduzidasFazendaNoMes(mesStr){
   }, 0);
 }
 
+// Soma dos hectares de todas as fazendas cadastradas — usado pra calcular o
+// resultado financeiro (receita/despesa/lucro) por hectare da operação
+// inteira, sem precisar que lotes/despesas apontem pra uma fazenda específica.
+function totalHectares(){ return state.fazendas.reduce((a,f)=>a+Number(f.hectares||0),0); }
+
 // Arroba macho e fêmea têm cotações diferentes no mercado — cada uma tem seu
 // próprio histórico (mesma tabela, diferenciada pela coluna "sexo"). Não usa
 // esse valor pra abate/venda (que usa o valor realmente pago naquela venda
@@ -2795,10 +2802,11 @@ function PageResultadosResumo(){
   const meses = comparativoMensal();
   const anual = comparativoAnual(meses);
 
-  const porHectare = state.hectares>0 ? {
-    receita: d.receitaMes/state.hectares,
-    despesa: d.totalMes/state.hectares,
-    resultado: d.resultadoMes/state.hectares,
+  const hectares = totalHectares();
+  const porHectare = hectares>0 ? {
+    receita: d.receitaMes/hectares,
+    despesa: d.totalMes/hectares,
+    resultado: d.resultadoMes/hectares,
   } : null;
 
   return `
@@ -2806,7 +2814,7 @@ function PageResultadosResumo(){
     <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(d.valorEstoque)}</div></div>
   </div>
   ${porHectare ? `
-  <p class="eyebrow" style="margin:22px 0 10px;">Por hectare (mês) — ${fmtInt(state.hectares)} ha</p>
+  <p class="eyebrow" style="margin:22px 0 10px;">Por hectare (mês) — ${fmtInt(hectares)} ha (${state.fazendas.length} fazenda${state.fazendas.length===1?'':'s'})</p>
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Receita/ha</div><div class="stat-value">R$ ${fmt(porHectare.receita)}</div></div>
     <div class="stat-card"><div class="stat-label">Despesa/ha</div><div class="stat-value">R$ ${fmt(porHectare.despesa)}</div></div>
@@ -3211,29 +3219,51 @@ function ModalPermissoes(){
 
 /* ===================== PÁGINA: FAZENDA ===================== */
 function PageFazenda(){
+  const hectares = totalHectares();
   return `
-  <div class="card" style="max-width:420px;">
-    <div class="card-pad">
-      <div class="stat-label">Área total da fazenda</div>
-      <div class="stat-value" style="font-size:28px;">${state.hectares!==null ? fmtInt(state.hectares)+' ha' : '—'}</div>
-      <p class="hint" style="margin-top:10px;">Usada para calcular o resultado financeiro (receita, despesa e lucro/prejuízo) por hectare, mostrado na aba Resultados.</p>
-      ${souAdmin() ? `<button class="btn btn-primary btn-sm" style="margin-top:14px;" data-fab-action="hectares">${state.hectares!==null ? 'Editar área' : 'Cadastrar área'}</button>` : ''}
-    </div>
+  <div class="toolbar">
+    <span class="hint">${state.fazendas.length} fazenda(s) cadastrada(s)</span>
+    ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-fab-action="fazenda">+ Nova fazenda</button>` : ''}
+  </div>
+  <div class="stat-row" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Área total</div><div class="stat-value">${fmtInt(hectares)} ha</div></div>
+  </div>
+  <p class="hint" style="margin:-4px 0 14px;">A soma dos hectares de todas as fazendas é usada pra calcular o resultado financeiro (receita, despesa e lucro/prejuízo) por hectare, mostrado na aba Resultados.</p>
+  <div class="card">
+    ${state.fazendas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação, com o nome e a área em hectares de cada uma.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Hectares</th><th></th></tr></thead>
+      <tbody>
+        ${state.fazendas.map(f=>`
+          <tr>
+            <td><strong>${f.nome}</strong></td>
+            <td class="mono">${fmtInt(f.hectares)} ha</td>
+            <td style="display:flex; gap:6px;">
+              ${souAdmin() ? `
+              <button class="btn-ghost btn-sm" data-edit-fazenda="${f.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-fazenda="${f.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
   </div>`;
 }
 
-function ModalHectares(){
+function ModalFazenda(){
   const d = editDraft;
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Área da fazenda</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar fazenda':'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Hectares</label><input id="f-hectares" type="number" step="1" value="${d.valor}"/></div>
+        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${d.nome}" placeholder="Ex: Fazenda Santa Alice"/></div>
+        <div class="field"><label>Hectares</label><input id="f-hectaresfazenda" type="number" step="1" value="${d.hectares}"/></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="hectares">Salvar</button>
+        <button class="btn btn-primary" data-save="fazenda">${d._editId?'Salvar alterações':'Salvar fazenda'}</button>
       </div>
     </div>
   </div>`;
@@ -3271,7 +3301,7 @@ function Modal(){
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
-  if(state.modal.type==='hectares') return ModalHectares();
+  if(state.modal.type==='fazenda') return ModalFazenda();
   if(state.modal.type==='pendencias') return ModalPendencias();
   if(state.modal.type==='detalheGrafico') return ModalDetalheGrafico();
   return '';
@@ -4351,6 +4381,21 @@ function attachEvents(){
       await loadAll();
     };
   });
+  document.querySelectorAll('[data-edit-fazenda]').forEach(el=>{
+    el.onclick = ()=>{
+      const f = state.fazendas.find(x=>x.id===Number(el.dataset.editFazenda));
+      editDraft = {...f, _editId: f.id};
+      state.modal = {type:'fazenda'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-fazenda]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.delFazenda);
+      await db.from('fazendas').delete().eq('id', id);
+      await loadAll();
+    };
+  });
   document.querySelectorAll('[data-edit-investimento]').forEach(el=>{
     el.onclick = ()=>{
       const i = state.investimentos.find(x=>x.id===Number(el.dataset.editInvestimento));
@@ -4888,9 +4933,17 @@ function attachEvents(){
       } else if(type==='metaMargem'){
         const pct = Number(document.getElementById('f-metamargem').value)||0;
         ({error} = await db.from('config_financeiro').upsert({id:1, meta_margem_pct:pct}));
-      } else if(type==='hectares'){
-        const hectares = Number(document.getElementById('f-hectares').value)||0;
-        ({error} = await db.from('config_fazenda').upsert({id:1, hectares}));
+      } else if(type==='fazenda'){
+        const campos = {
+          nome: document.getElementById('f-nomefazenda').value || 'Sem nome',
+          hectares: Number(document.getElementById('f-hectaresfazenda').value)||0,
+        };
+        const row = fazendaToRow(campos);
+        if(editDraft._editId){
+          ({error} = await db.from('fazendas').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('fazendas').insert(row));
+        }
       } else if(type==='permissoes'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
