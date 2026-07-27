@@ -912,3 +912,38 @@ drop policy if exists "excluir movimentos" on movimentos;
 create policy "excluir movimentos" on movimentos for delete using (
   tem_permissao('insumos','editar') or tem_permissao('confinamento','editar') or tem_permissao('dietas','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Múltiplas fazendas
+-- Até aqui "Fazenda" guardava um único valor de hectares (config_fazenda,
+-- linha única id=1) — a operação só podia ter uma propriedade. Agora dá pra
+-- cadastrar várias fazendas (nome + hectares) — a soma dos hectares de
+-- todas continua sendo usada pro cálculo de resultado por hectare, sem
+-- precisar que lote/despesa aponte pra uma fazenda específica (isso pode
+-- vir depois, se um dia for preciso separar resultado por propriedade).
+-- Mesmo padrão de permissão de antes: qualquer um com acesso a Resultados
+-- vê o total; só Administrador/Proprietário cadastra/edita/exclui.
+-- config_fazenda não é apagada (fica pra trás, sem uso) — o valor que já
+-- estava lá é migrado pra uma primeira fazenda automaticamente.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table if not exists fazendas (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  hectares numeric not null default 0
+);
+alter table fazendas enable row level security;
+drop policy if exists "select fazendas" on fazendas;
+create policy "select fazendas" on fazendas for select using (tem_permissao('resultados','visualizar'));
+drop policy if exists "inserir fazendas" on fazendas;
+create policy "inserir fazendas" on fazendas for insert with check (is_admin());
+drop policy if exists "atualizar fazendas" on fazendas;
+create policy "atualizar fazendas" on fazendas for update using (is_admin()) with check (is_admin());
+drop policy if exists "excluir fazendas" on fazendas;
+create policy "excluir fazendas" on fazendas for delete using (is_admin());
+
+insert into fazendas (nome, hectares)
+select 'Fazenda Santa Alice', cf.hectares
+from config_fazenda cf
+where cf.id = 1 and cf.hectares is not null and cf.hectares > 0
+  and not exists (select 1 from fazendas);
