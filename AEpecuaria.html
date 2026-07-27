@@ -2828,17 +2828,35 @@ function PageResultadosResumo(){
 function PageFinanceiroCurral(){
   const d = dadosFinanceiro();
 
+  const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
+  const diasDecorridosMes = Number(d.hoje.split('-')[2]);
+  const inicioMesStr = d.mes+'-01';
+  // Um lote que começou no meio do mês (animais chegaram há poucos dias) não
+  // pode ser tratado como se já existisse o mês inteiro — nem pra diluir seu
+  // próprio gasto (abaixo) nem pra ratear o custo fixo entre os lotes de uma
+  // área (logo a seguir). Dias que esse lote específico já existe dentro do
+  // mês (desde o início dele ou desde o dia 1, o que for depois, até hoje).
+  function diasAtivosNoMes(lote){
+    const inicioEfetivo = (lote.dataInicio && lote.dataInicio>inicioMesStr) ? lote.dataInicio : inicioMesStr;
+    const diaInicio = Number(inicioEfetivo.slice(8,10));
+    return Math.max(1, diasDecorridosMes-diaInicio+1);
+  }
+
   // O custo fixo de cada área (dadosFinanceiro já rateia despesa por
   // despesa entre Confinamento/Pasto/Cria) ainda precisa ser dividido entre
-  // os lotes daquela área — na proporção do número de animais de cada um.
-  const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
-  const animaisPorTipoCurral = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
-  const animaisPorAreaMes = {confinamento: animaisPorTipoCurral('confinamento'), pasto: animaisPorTipoCurral('pasto'), reproducao: animaisPorTipoCurral('reproducao')};
+  // os lotes daquela área — não só pelo número de animais de cada um, mas
+  // ponderado também pelos dias que cada lote já existe no mês (animal ×
+  // dia). Sem isso, um lote que chegou há poucos dias entraria na conta com
+  // o mesmo peso de um lote que está lá o mês inteiro, tomando uma fatia
+  // maior do que o tempo real que ele consumiu esse custo compartilhado.
+  const pesoAnimalDiasPorTipo = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0)*diasAtivosNoMes(l), 0);
+  const pesoAnimalDiasPorAreaMes = {confinamento: pesoAnimalDiasPorTipo('confinamento'), pasto: pesoAnimalDiasPorTipo('pasto'), reproducao: pesoAnimalDiasPorTipo('reproducao')};
   const fixoAreaMes = {confinamento: d.fixoConfinamento, pasto: d.fixoPasto, reproducao: d.fixoCria};
   function fixoLoteAlocado(lote, fixoDaAreaNoPeriodo){
     const tipo = loteTipo(lote);
-    const totalAnimaisArea = animaisPorAreaMes[tipo];
-    return totalAnimaisArea>0 ? fixoDaAreaNoPeriodo*(Number(lote.numeroAnimais||0)/totalAnimaisArea) : 0;
+    const totalPesoArea = pesoAnimalDiasPorAreaMes[tipo];
+    const pesoLote = Number(lote.numeroAnimais||0)*diasAtivosNoMes(lote);
+    return totalPesoArea>0 ? fixoDaAreaNoPeriodo*(pesoLote/totalPesoArea) : 0;
   }
 
   const custosMesPorLote = lotesAtivos.map(l=>{
@@ -2860,18 +2878,6 @@ function PageFinanceiroCurral(){
   // recente. Em vez disso, pega o total já lançado no mês (custosMesPorLote,
   // acima) e divide pelos dias já passados do mês (1 até hoje) — dá a média
   // diária real até agora, sem os "buracos" dos dias sem lançamento.
-  const diasDecorridosMes = Number(d.hoje.split('-')[2]);
-  const inicioMesStr = d.mes+'-01';
-  // Um lote que começou no meio do mês (animais chegaram há poucos dias) não
-  // pode ter seu gasto dividido pelos dias do MÊS inteiro decorridos — isso
-  // faria o custo/dia parecer artificialmente baixo. Divide pelos dias que
-  // esse lote específico já existe dentro do mês (desde o início dele ou
-  // desde o dia 1, o que for depois, até hoje).
-  function diasAtivosNoMes(lote){
-    const inicioEfetivo = (lote.dataInicio && lote.dataInicio>inicioMesStr) ? lote.dataInicio : inicioMesStr;
-    const diaInicio = Number(inicioEfetivo.slice(8,10));
-    return Math.max(1, diasDecorridosMes-diaInicio+1);
-  }
   const custosPorLote = custosMesPorLote.map(r=>{
     const dias = diasAtivosNoMes(r.lote);
     const racao = r.racao/dias;
@@ -2917,7 +2923,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. Um lote que começou no meio do mês divide só pelos dias que ele já existe, não pelos dias do mês inteiro. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção do número de animais de cada um — mesmo critério do total do mês, abaixo.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. Um lote que começou no meio do mês divide só pelos dias que ele já existe, não pelos dias do mês inteiro. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção de animais × dias que cada um já existe no mês — mesmo critério do total do mês, abaixo.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
@@ -2940,7 +2946,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">O custo fixo de cada curral é alocado na proporção do número de animais dele em relação ao total de animais em lotes ativos. "@ produzidas" vem do ganho de peso do lote no mês (Pesagem) ÷ 30 kg × nº de animais — sem pesagem cadastrada no mês, aparece "—".</p>
+  <p class="hint" style="margin:-14px 0 22px;">O custo fixo de cada curral é alocado na proporção de animais × dias que ele já existe no mês, em relação ao total dos lotes ativos da mesma atividade — assim um lote que chegou há poucos dias não carrega uma fatia do custo fixo do mês inteiro, só da parte proporcional ao tempo que ele já está na fazenda. "@ produzidas" vem do ganho de peso do lote no mês (Pesagem) ÷ 30 kg × nº de animais — sem pesagem cadastrada no mês, aparece "—".</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo por @ produzida — por área</p>
   <div class="card">
