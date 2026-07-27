@@ -2245,9 +2245,23 @@ function composicaoPorArea(confMes, pastoMes, criaMes, detalhesPorArea){
 // Painel de despesas por centro de custo — só o que está cadastrado em
 // Despesas, sem misturar com o lançamento diário de ração/pasto/cria (que
 // é custo operacional do dia a dia, já mostrado em Financeiro).
-// Nutrição Animal nunca some dentro de "Outros", mesmo fora do top 7 — é um
-// centro de custo que a operação quer acompanhar sempre.
-const CENTRO_CUSTO_SEMPRE_VISIVEL = ['Nutrição Animal'];
+// Só os centros de custo desta lista aparecem como fatia própria no
+// gráfico — qualquer outro nome, por maior ou menor que seja seu valor no
+// mês/ano, cai em "Outros". Lista fixa escolhida pelo usuário (revisou
+// todos os centros de custo cadastrados e escolheu os principais).
+const CENTRO_CUSTO_SEMPRE_VISIVEL = [
+  'Terceirização de Serviços',
+  'Mão de Obra',
+  'Combustíveis',
+  'Insumos Agrícolas',
+  'Nutrição Animal',
+  'Manutenção de Tratores e Máquinas',
+  'Insumos Pecuários',
+  'Manutenção de Infraestrutura',
+  'Refeitório e Alimentação',
+  'Consultorias de Campo',
+  'Energia Elétrica',
+];
 
 function composicaoCentrosCusto(custosFixos, extras){
   const grupos = {};
@@ -2262,19 +2276,17 @@ function composicaoCentrosCusto(custosFixos, extras){
     grupos[e.nome].valor += Number(e.valor||0);
   });
   let entries = Object.entries(grupos).map(([nome,g])=>({nome, valor:g.valor, itens:g.itens})).filter(e=>e.valor>0);
+  // Regra fixa (não por ranking de valor): só os nomes da lista aparecem
+  // como fatia própria; qualquer outro nome cai em "Outros", nunca ganha
+  // fatia própria mesmo que seja o maior valor do mês/ano — assim o
+  // conjunto de fatias do gráfico não muda sozinho de um mês pro outro.
+  const principais = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  const resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  const restoValor = resto.reduce((a,e)=>a+e.valor,0);
+  const restoItens = [].concat(...resto.map(e=>e.itens));
+  entries = [...principais];
+  if(restoValor>0) entries.push({nome:'Outros', valor:restoValor, itens:restoItens});
   entries.sort((a,b)=>b.valor-a.valor);
-  if(entries.length>8){
-    const fixas = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
-    const resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
-    const vagas = Math.max(0, 7-fixas.length);
-    const principais = resto.slice(0, vagas);
-    const dobra = resto.slice(vagas);
-    const restoValor = dobra.reduce((a,e)=>a+e.valor,0);
-    const restoItens = [].concat(...dobra.map(e=>e.itens));
-    entries = [...fixas, ...principais];
-    if(restoValor>0) entries.push({nome:'Outros', valor:restoValor, itens:restoItens});
-    entries.sort((a,b)=>b.valor-a.valor);
-  }
   const cores = coresPorCentroCusto(entries.map(e=>e.nome));
   const total = entries.reduce((a,e)=>a+e.valor,0);
   return entries.map(e=>({...e, pct: total>0 ? e.valor/total*100 : 0, cor: cores[e.nome]}));
