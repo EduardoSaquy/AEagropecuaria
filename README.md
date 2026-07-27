@@ -55,6 +55,15 @@ Os cadastros centrais (fazenda, cultura/safra, talhão/lote, centro de custo) na
 - Fora do escopo do sistema por enquanto (sem dado-fonte disponível): custo por tonelada colhida/produzida — depende do volume de colheita, que só existirá quando os apps de cana e grãos forem criados.
 - **Colocar no ar**: crie um projeto novo no [Supabase](https://supabase.com) e rode `combustivel_schema.sql` do começo ao fim (o arquivo tem as migrações das Fases 1 a 5 em sequência — as Fases 4 e 6 são só leitura, sem migração própria — com passo a passo comentado). Publique a Edge Function `criar-usuario-combustivel` e preencha a URL/chave do projeto no topo de `AECombustivel.html`.
 
+## AE Cana
+
+App novo e independente (`AECana.html`), para a frente de cana-de-açúcar. Mesma tecnologia dos outros dois apps (HTML/CSS/JS puro + Supabase + PWA instalável), mas **sem banco de dados próprio** — integra de propósito com o mesmo projeto Supabase do AE Combustível.
+
+- **Integração com a matriz de cadastros**: fazendas, culturas e talhões/áreas (tabelas `fazendas`, `culturas`, `talhoes_areas`, já criadas em `combustivel_schema.sql`) nasceram pensadas desde o início do AE Combustível para servir também cana e grãos. O AE Cana lança e edita Fazendas e Talhões direto nessas mesmas tabelas — sem duplicar cadastro nem precisar de sincronização entre bancos: o que é criado num app já aparece automaticamente no outro (ex: no rateio de combustível por talhão). Contas de usuário (login/senha, papéis e permissões) e a Edge Function de criação de usuário também são as mesmas do AE Combustível — não é preciso criar um novo projeto Supabase nem cadastrar a equipe de novo.
+- **Status**: Fase 1 — cadastro (CRUD) de **Fazendas** e **Talhões** (talhão aqui é sempre do tipo lavoura, com área em hectares e cultura vinculada, filtrado à frente Cana). Culturas continuam cadastradas pela aba Cultivo do AE Combustível.
+- Próxima fase (ainda não implementada): módulos de **Operações** de campo (plantio, tratos culturais, colheita/produção), nos moldes dos lançamentos do AEpecuária.
+- **Colocar no ar**: não cria projeto Supabase novo — use o mesmo projeto e as mesmas chaves (URL/anon key) já configuradas em `AECombustivel.html`, colando-as no topo de `AECana.html`.
+
 ## Autor
 
 EduardoSaquy
