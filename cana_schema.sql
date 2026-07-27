@@ -9,9 +9,9 @@
 -- a seção "AE Cana" do README para o racional dessa integração.
 --
 -- Esta migração cria só a tabela nova necessária para a Fase 2 do AE
--- Cana: o registro de Plantio por talhão. A Fase 3 (Tratos culturais)
--- está logo abaixo, neste mesmo arquivo; a Fase 4 (Colheita/Produção)
--- virá numa próxima atualização deste arquivo.
+-- Cana: o registro de Plantio por talhão. As Fases 3 (Tratos
+-- culturais) e 4 (Colheita/Produção) estão logo abaixo, neste mesmo
+-- arquivo — rode o arquivo inteiro de uma vez.
 --
 -- PASSO A PASSO:
 -- 1. SQL Editor do MESMO projeto Supabase do AE Combustível > cole e
@@ -138,3 +138,39 @@ begin
     execute format('create policy "excluir %1$s" on %1$s for delete using (tem_permissao(''operacoes'',''editar''));', t);
   end loop;
 end $$;
+
+-- ===================================================================
+-- AE Cana — schema Fase 4 (Operações: Colheita/Produção)
+-- ===================================================================
+-- Continuação deste mesmo arquivo — rode as migrações em sequência
+-- (Fases 2 e 3 acima, depois esta), no mesmo projeto Supabase do AE
+-- Combustível.
+--
+-- Cria o registro de Colheita por talhão: toneladas colhidas, com TCH
+-- (toneladas por hectare) calculado no app a partir da área do talhão
+-- — é o dado que faltava para o AE Combustível calcular custo por
+-- tonelada (ver README, seção "AE Combustível" > "Fora do escopo").
+-- ===================================================================
+
+create table colheitas_cana (
+  id bigint generated always as identity primary key,
+  talhao_id bigint not null references talhoes_areas(id),
+  safra_id bigint references safras(id),
+  data date not null,
+  corte integer check (corte >= 1), -- 1 = cana-planta, 2 = 1ª soca, 3 = 2ª soca...
+  toneladas numeric(12,2) not null check (toneladas > 0),
+  observacao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_colheitas_cana_talhao on colheitas_cana(talhao_id);
+create index idx_colheitas_cana_safra on colheitas_cana(safra_id);
+create trigger set_updated before update on colheitas_cana for each row execute function trg_set_updated();
+
+alter table colheitas_cana enable row level security;
+create policy "select colheitas_cana" on colheitas_cana for select using (tem_permissao('operacoes','visualizar'));
+create policy "inserir colheitas_cana" on colheitas_cana for insert with check (tem_permissao('operacoes','editar'));
+create policy "atualizar colheitas_cana" on colheitas_cana for update using (tem_permissao('operacoes','editar')) with check (tem_permissao('operacoes','editar'));
+create policy "excluir colheitas_cana" on colheitas_cana for delete using (tem_permissao('operacoes','editar'));

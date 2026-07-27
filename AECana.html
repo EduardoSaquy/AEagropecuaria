@@ -312,6 +312,24 @@ const CADASTROS = {
       {key:'ativo', label:'Plantio ativo (talhão em produção)', type:'checkbox', default:true, list:false},
     ],
   },
+  colheitas: {
+    table:'colheitas_cana', label:'Colheita', singular:'Colheita', modulo:'operacoes',
+    desc:'Registro da colheita de cada talhão — toneladas colhidas e TCH (toneladas por hectare), a base para o AE Combustível calcular custo por tonelada.',
+    emptyHint:'Cadastre um talhão antes de registrar uma colheita.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
+      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'corte', label:'Corte', type:'number', step:'1', dec:0, hint:'1 = cana-planta, 2 = 1ª soca, 3 = 2ª soca...'},
+      {key:'toneladas', label:'Toneladas', type:'number', step:'0.01', required:true},
+      {key:'tch', label:'TCH (t/ha)', type:'computed', compute:item=>{
+        const t = state.talhoes.find(x=>x.id===item.talhaoId);
+        return (t && t.areaHa) ? fmt(Number(item.toneladas||0)/Number(t.areaHa)) : '—';
+      }},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
   insumos: {
     table:'insumos_cana', label:'Insumos', singular:'Insumo', modulo:'operacoes',
     desc:'Defensivos e fertilizantes usados nos tratos culturais, com estoque mínimo para alerta.',
@@ -545,6 +563,7 @@ const GROUPS = {
   ]},
   operacoes: {label:'Operações', icon:iconPlantio(), pages:[
     {key:'plantios', label:'Plantio'},
+    {key:'colheitas', label:'Colheita'},
     {key:'insumos', label:'Insumos'},
     {key:'entradasInsumo', label:'Entradas'},
     {key:'estoqueInsumos', label:'Estoque'},
