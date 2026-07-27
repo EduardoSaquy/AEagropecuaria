@@ -94,7 +94,7 @@
   .stat-value.alerta{color:var(--alerta);}
   .stat-value.bom{color:var(--bom);}
 
-  .op-chip{display:inline-flex; align-items:center; gap:8px;}
+  .op-chip{display:inline-flex; align-items:center; gap:8px; white-space:nowrap;}
   .op-chip-ic{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 
   /* ---------- DONUTS (Resultados por operação) ---------- */
@@ -240,26 +240,42 @@
   .app-card-actions{display:flex; gap:8px; margin-top:auto; padding-top:6px;}
   .badge-em-breve{background:var(--cinza-claro); color:var(--cinza);}
 
+  /* ---------- BARRA SUPERIOR / MENU (celular) ---------- */
+  .sidebar-topbar{display:contents;}
+  .menu-toggle{display:none;}
+  .sidebar-collapsible{display:contents;}
+
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{flex-direction:column;}
-    .sidebar{width:100%; flex-direction:row; align-items:center; justify-content:space-between; padding:12px 16px; gap:12px; overflow-x:auto;}
+    .sidebar{width:100%; flex-direction:column; align-items:stretch; padding:0;}
+    .sidebar-topbar{display:flex; align-items:center; justify-content:space-between; padding:12px 16px;}
     .brand{border-bottom:none; padding:0; margin-bottom:0; flex-shrink:0;}
-    nav{margin-top:0; flex-direction:row; gap:4px;}
-    .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
-    .sidebar-footer{display:none;}
-    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
+    .menu-toggle{
+      display:flex; align-items:center; justify-content:center; width:38px; height:38px; flex-shrink:0;
+      border-radius:9px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:#fff; cursor:pointer;
+    }
+    .sidebar-collapsible{display:none; flex-direction:column; padding:0 16px 18px 16px;}
+    .sidebar-collapsible.open{display:flex;}
+    .sidebar-user{margin-bottom:14px; padding-bottom:14px;}
+    nav{margin-top:0; flex-direction:column; gap:3px;}
+    .nav-item{white-space:nowrap;}
+    .sidebar-footer{margin-top:14px; padding-top:14px;}
     .main{padding:20px 16px 48px 16px; max-width:100%;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
     .btn{width:100%; justify-content:center;}
-    .stat-row{grid-template-columns:repeat(2,1fr);}
+    .stat-row{grid-template-columns:1fr; gap:10px;}
+    .donuts-row{grid-template-columns:1fr;}
     .toolbar{flex-direction:column; align-items:stretch;}
     .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
     .field-row{grid-template-columns:1fr;}
     .overlay{padding:16px 10px;}
     .app-grid{grid-template-columns:1fr;}
     .composicao-row{grid-template-columns:1fr 68px 28px; gap:6px;}
+    .painel-resultados{flex-direction:column; align-items:stretch; gap:14px;}
+    .donut-wrap{align-self:center;}
+    .painel-legenda{min-width:0; width:100%;}
     .login-wrap{padding:0;}
     .login-shell{flex-direction:column; border-radius:0; min-height:100vh; box-shadow:none;}
     .login-hero{padding:40px 28px 32px 28px;}
@@ -444,6 +460,7 @@ const state = {
   apps: [],
   perfis: [],
   modal: null, // {type:'fazenda'|'app'|'usuario'|'papelUsuario'|'trocarSenha', data:{...}}
+  mobileMenuAberto: false,
   indicadores: { pecuaria: {loading:false, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null} },
   resultados: { pecuaria: {loading:false, erro:'', despesaMes:null, receitaMes:null, resultadoMes:null, despesaAno:null, receitaAno:null, resultadoAno:null, despesaDetalheMes:[], receitasDetalheMes:[]} },
   // ---- autenticação ----
@@ -620,6 +637,7 @@ async function fazerLogout(){
   await db.auth.signOut();
   state.session = null;
   state.perfil = null;
+  state.mobileMenuAberto = false;
   render();
 }
 
@@ -711,10 +729,16 @@ function iniciais(nome){
   if(partes.length===0) return '?';
   return (partes[0][0] + (partes.length>1 ? partes[partes.length-1][0] : '')).toUpperCase();
 }
+function iconMenu(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`; }
+function iconFechar(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`; }
 function Sidebar(){
   return `
   <div class="sidebar">
-    <div class="brand">${brandMark()}<div><div class="brand-name">AE Matriz</div><div class="brand-tag">Hub central</div></div></div>
+    <div class="sidebar-topbar">
+      <div class="brand">${brandMark()}<div><div class="brand-name">AE Matriz</div><div class="brand-tag">Hub central</div></div></div>
+      <button class="menu-toggle" data-toggle-menu="1" aria-label="Abrir menu">${state.mobileMenuAberto?iconFechar():iconMenu()}</button>
+    </div>
+    <div class="sidebar-collapsible ${state.mobileMenuAberto?'open':''}">
     <div class="sidebar-user">
       <div class="sidebar-user-top">
         <div class="sidebar-user-avatar">${iniciais(state.perfil?.nome)}</div>
@@ -736,6 +760,7 @@ function Sidebar(){
       `).join('')}
     </nav>
     <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase).</div>
+    </div>
   </div>`;
 }
 
@@ -1250,8 +1275,10 @@ function attachEvents(){
     el.onclick = async ()=>{ await loadPerfil(); render(); if(state.perfil?.ativo) loadAll(); };
   });
   document.querySelectorAll('[data-nav]').forEach(el=>{
-    el.onclick = ()=>{ state.page = el.dataset.nav; render(); };
+    el.onclick = ()=>{ state.page = el.dataset.nav; state.mobileMenuAberto = false; render(); };
   });
+  const menuToggleBtn = document.querySelector('[data-toggle-menu]');
+  if(menuToggleBtn) menuToggleBtn.onclick = ()=>{ state.mobileMenuAberto = !state.mobileMenuAberto; render(); };
   const voltarErroBtn = document.querySelector('[data-voltar-erro]');
   if(voltarErroBtn) voltarErroBtn.onclick = ()=>{ state.page = 'painel'; render(); };
 
