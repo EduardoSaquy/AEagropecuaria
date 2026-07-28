@@ -979,10 +979,15 @@ function pctEstoque(saldo, minimo){
 }
 
 /* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
- * Não é um cadastro novo — cruza o que já existe em Aplicações (custo
- * de insumo, pelo preço médio ponderado) e Colheita (toneladas) por
- * talhão. Sem despesas gerais nem receita ainda (fica pra uma próxima
- * fase) — só o custo de insumo por hectare e por tonelada colhida. */
+ * Cruza o que já existe em Aplicações (custo de insumo, pelo preço
+ * médio ponderado), Despesas (custo geral) e Colheita (toneladas) por
+ * talhão — sem guardar nada à parte.
+ * Despesa com talhão marcado entra 100% naquele talhão. Despesa sem
+ * talhão (geral — mão de obra, transporte, etc.) é RATEADA entre os
+ * talhões que têm um plantio ativo (hectares "de plantação", não
+ * qualquer talhão cadastrado), proporcional à área de cada um — pedido
+ * do usuário: sem custo por talhão vindo de fonte externa (planilha),
+ * ratear pela área é a aproximação mais justa disponível. */
 function producaoTotalTalhao(talhaoId){
   return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.toneladas||0),0);
 }
@@ -992,6 +997,25 @@ function custoInsumosTalhao(talhaoId){
     return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
   },0);
 }
+function talhaoEmProducao(t){
+  return state.plantios.some(p=>p.talhaoId===t.id && p.ativo);
+}
+function areaTotalEmProducao(){
+  return state.talhoes.filter(t=>t.ativo!==false && talhaoEmProducao(t)).reduce((a,t)=>a+Number(t.areaHa||0),0);
+}
+function despesasGeraisSemTalhao(){
+  return state.despesas.filter(d=>!d.talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
+}
+function custoDespesasTalhao(talhaoId){
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  const direta = state.despesas.filter(d=>d.talhaoId===talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
+  let rateio = 0;
+  if(t && t.areaHa && talhaoEmProducao(t)){
+    const areaTotal = areaTotalEmProducao();
+    if(areaTotal>0) rateio = despesasGeraisSemTalhao() * (Number(t.areaHa)/areaTotal);
+  }
+  return direta + rateio;
+}
 function PageCustoProducao(){
   const talhoes = state.talhoes.filter(t=>t.ativo!==false);
   if(talhoes.length===0){
@@ -999,23 +1023,28 @@ function PageCustoProducao(){
   }
   const linhas = talhoes.map(t=>{
     const custoInsumos = custoInsumosTalhao(t.id);
+    const custoDespesas = custoDespesasTalhao(t.id);
+    const custoTotalTalhao = custoInsumos + custoDespesas;
     const producao = producaoTotalTalhao(t.id);
-    const custoHa = t.areaHa ? custoInsumos/Number(t.areaHa) : null;
-    const custoTon = producao>0 ? custoInsumos/producao : null;
-    return {t, custoInsumos, producao, custoHa, custoTon};
+    const custoHa = t.areaHa ? custoTotalTalhao/Number(t.areaHa) : null;
+    const custoTon = producao>0 ? custoTotalTalhao/producao : null;
+    return {t, custoInsumos, custoDespesas, custoTotalTalhao, producao, custoHa, custoTon};
   });
-  const custoTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const custoInsumoGeral = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const custoDespesasGeral = linhas.reduce((a,l)=>a+l.custoDespesas,0);
+  const custoTotal = custoInsumoGeral + custoDespesasGeral;
   const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
   const custoTonMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
   return `
-  <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
-    <div class="stat-card"><div class="stat-label">Custo total de insumos</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo insumos</div><div class="stat-value">R$ ${fmt(custoInsumoGeral)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo despesas</div><div class="stat-value">R$ ${fmt(custoDespesasGeral)}</div></div>
     <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} t</div></div>
     <div class="stat-card"><div class="stat-label">Custo médio / tonelada</div><div class="stat-value">${custoTonMedio==null?'—':'R$ '+fmt(custoTonMedio)}</div></div>
   </div>
   <div class="card" style="overflow-x:auto;">
     <table>
-      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/tonelada</th></tr></thead>
+      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo despesas</th><th>Custo total</th><th>Custo/ha</th><th>Produção</th><th>Custo/tonelada</th></tr></thead>
       <tbody>
         ${linhas.map(l=>`
           <tr>
@@ -1023,6 +1052,8 @@ function PageCustoProducao(){
             <td>${fkNome('fazendas', l.t.fazendaId)}</td>
             <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
             <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
+            <td class="mono">R$ ${fmt(l.custoDespesas)}</td>
+            <td class="mono">R$ ${fmt(l.custoTotalTalhao)}</td>
             <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
             <td class="mono">${fmt(l.producao)} t</td>
             <td class="mono">${l.custoTon==null?'—':'R$ '+fmt(l.custoTon)}</td>
@@ -1031,7 +1062,7 @@ function PageCustoProducao(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero aqui. Despesas gerais (mão de obra, colheita terceirizada, transporte) ficam em Financeiro &gt; Despesas — não são por talhão, então não entram nesta tabela; o total delas aparece em Resultados &gt; Resultado.</p>`;
+  <p class="hint" style="margin-top:12px;">Custo de insumos pelo preço médio ponderado (Operações &gt; Estoque); aplicação sem nenhuma entrada com preço informado entra com custo zero. Despesa com talhão marcado (Financeiro &gt; Despesas) entra 100% nele; despesa geral (sem talhão) é rateada entre os talhões com plantio ativo, proporcional à área de cada um.</p>`;
 }
 
 /* ===================== RESULTADOS: RECEITA x DESPESA =====================
