@@ -381,6 +381,7 @@ async function loadAll(){
   carregarIndicadoresCana();
   carregarResultadoCana();
   carregarIndicadoresCereais();
+  carregarResultadoCereaisDespesa();
   carregarCombustivel();
 }
 
@@ -620,7 +621,64 @@ async function carregarResultadoCana(){
   }
   render();
 }
-const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', custoInsumo:'Insumo (Tratos culturais)', despesaGeral:'Despesas gerais (Cana)'};
+
+// Despesa do Cereais, lido direto do banco próprio dele (dbCereais) —
+// mesma lógica de carregarResultadoCana(), mas SEM receita: o AE Cereais
+// ainda não tem módulo de Receita/Resultado (só Despesas, ver #83), então
+// aqui a receita fica sempre 0 e o resultado marcado com `semReceita` —
+// diferente de soDespesaCombustivel (que significa "nenhum dado próprio",
+// caso do AE Cereais antes desta integração): aqui a despesa É real e
+// completa (insumo + despesas gerais), só falta a receita pra fechar a
+// conta. Quando o Cereais ganhar Receita própria, portar igual foi feito
+// pra Cana (ver carregarResultadoCana) e apagar essa função.
+async function carregarResultadoCereaisDespesa(){
+  state.resultados.cereaisDespesa = {...state.resultados.cereaisDespesa, loading:true, erro:''};
+  render();
+  try{
+    const [insRes, entRes, aplRes, desRes] = await Promise.all([
+      dbCereais.from('insumos_graos').select('id'),
+      dbCereais.from('entradas_insumo_graos').select('insumo_id, quantidade, preco_pago'),
+      dbCereais.from('aplicacoes_graos').select('data, insumo_id, quantidade'),
+      dbCereais.from('despesas_graos').select('data, valor'),
+    ]);
+    for(const r of [insRes, entRes, aplRes, desRes]) if(r.error) throw r.error;
+
+    const precoMedioPorInsumo = new Map();
+    (insRes.data||[]).forEach(i=>{
+      const entradas = (entRes.data||[]).filter(e=>e.insumo_id===i.id && e.preco_pago!=null && e.preco_pago!=='');
+      const qtd = entradas.reduce((a,e)=>a+Number(e.quantidade||0),0);
+      if(qtd>0){
+        const valor = entradas.reduce((a,e)=>a+Number(e.quantidade||0)*Number(e.preco_pago||0),0);
+        precoMedioPorInsumo.set(i.id, valor/qtd);
+      }
+    });
+    function custoInsumoNoPrefixo(prefixo){
+      return (aplRes.data||[]).filter(a=>a.data && a.data.startsWith(prefixo)).reduce((acc,a)=>{
+        const preco = precoMedioPorInsumo.get(a.insumo_id);
+        return acc + (preco!=null ? Number(a.quantidade||0)*preco : 0);
+      }, 0);
+    }
+    function despesaGeralNoPrefixo(prefixo){
+      return (desRes.data||[]).filter(d=>d.data && d.data.startsWith(prefixo)).reduce((a,d)=>a+Number(d.valor||0), 0);
+    }
+
+    const mensal = mesesJanela().map(mesStr=>{
+      const custoInsumo = custoInsumoNoPrefixo(mesStr);
+      const despesaGeral = despesaGeralNoPrefixo(mesStr);
+      return {
+        mes: mesStr, despesa: custoInsumo+despesaGeral, receita: 0, resultado: -(custoInsumo+despesaGeral),
+        despesaPorCategoria: {custoInsumo, despesaGeral},
+        receitas: [],
+      };
+    });
+
+    state.resultados.cereaisDespesa = {loading:false, erro:'', mensal, semReceita:true};
+  } catch(e){
+    state.resultados.cereaisDespesa = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
+  }
+  render();
+}
+const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', custoInsumo:'Insumo (Tratos culturais)', despesaGeral:'Despesas gerais (Cana/Cereais)'};
 // Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
 // fora da janela carregada (ex: período futuro) simplesmente não têm
 // correspondência e contam como zero — sem precisar recortar antes.
@@ -644,6 +702,7 @@ function agregarPeriodo(resultado, meses){
       .filter(x=>x.valor>0),
     receitasDetalhe: [].concat(...linhas.map(l=>l.receitas||[])).sort((a,b)=>b.data.localeCompare(a.data)),
     soDespesaCombustivel: resultado.soDespesaCombustivel,
+    semReceita: resultado.semReceita,
   };
 }
 
@@ -741,10 +800,14 @@ async function carregarCombustivel(){
 }
 // Junta o custo mensal de combustível (por operação) com o resultado
 // próprio da operação (receita/despesa lançadas no app dela, se já
-// existir) — pecuária e cana têm os dois; cereais, por ora, só tem o
-// custo de combustível rateado (ainda não tem app de receita/despesa
-// ligado), marcado com soDespesaCombustivel pra tela avisar que não é
-// um resultado completo.
+// existir) — pecuária e cana têm os dois. Cereais tem despesa própria
+// (custo de insumo + despesas gerais, ver carregarResultadoCereaisDespesa)
+// mas ainda não tem receita: nesse caso `baseResultado.semReceita` é
+// repassado pro resultado final, pra tela avisar que a despesa é
+// completa mas falta a receita (diferente de soDespesaCombustivel, que
+// significa "nenhum dado próprio, só o combustível rateado" — não é mais
+// o caso de nenhuma das quatro operações hoje, mas o fallback continua
+// aqui pra qualquer frente futura que ainda não tenha app nenhum).
 function resultadoComCombustivel(baseResultado, slug){
   const comb = state.resultados.combustivelPorFrente;
   if(comb.loading || (baseResultado && baseResultado.loading)) return {loading:true, erro:'', mensal:[]};
@@ -763,7 +826,7 @@ function resultadoComCombustivel(baseResultado, slug){
     const receita = base?.receita||0;
     return { mes, despesa, receita, resultado: receita-despesa, despesaPorCategoria, receitas: base?.receitas||[] };
   });
-  return {loading:false, erro:'', mensal, soDespesaCombustivel: !baseMensal};
+  return {loading:false, erro:'', mensal, soDespesaCombustivel: !baseMensal, semReceita: !!baseResultado?.semReceita};
 }
 
 /* ===================== ESTADO ===================== */
@@ -789,6 +852,7 @@ const state = {
   resultados: {
     pecuaria: {loading:true, erro:'', mensal:[]},
     cana: {loading:true, erro:'', mensal:[]},
+    cereaisDespesa: {loading:true, erro:'', mensal:[]},
     combustivelPorFrente: {loading:true, erro:'', mensal:[]},
   },
   // filtro de período da aba Resultados — começa no mês atual; "safra" é o
@@ -1243,17 +1307,15 @@ function safrasDisponiveis(){
 }
 
 /* ===================== RESULTADOS (geral, todas as operações) ===================== */
-// Pecuária e Cana têm receita e despesa próprias (banco ligado — o da Cana
-// é o mesmo projeto do Combustível, ver carregarResultadoCana). Cereais
-// ainda não tem app de receita/despesa — mas já recebe o custo de
-// combustível rateado pra ela (resultadoComCombustivel), então mostra
-// despesa parcial (só combustível) em vez de "sem dados", até ganhar seu
-// próprio cálculo — já entra no filtro de período e no layout, pronta pra
-// quando isso acontecer.
+// Pecuária e Cana têm receita e despesa próprias (banco próprio de cada
+// uma). Cereais tem despesa própria (custo de insumo + despesas gerais,
+// ver carregarResultadoCereaisDespesa) mas ainda não tem receita — o
+// resultado dele fica marcado com `semReceita` pra tela deixar claro que
+// não é lucratividade real ainda, só a despesa.
 function resultadoBrutoOperacao(slug){
   if(slug==='pecuaria') return resultadoComCombustivel(state.resultados.pecuaria, slug);
   if(slug==='cana') return resultadoComCombustivel(state.resultados.cana, slug);
-  if(slug==='cereais') return resultadoComCombustivel(null, slug);
+  if(slug==='cereais') return resultadoComCombustivel(state.resultados.cereaisDespesa, slug);
   return null;
 }
 function resultadoOperacaoNoPeriodo(slug){
@@ -1430,7 +1492,7 @@ function PagePorHectare(){
           if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
           const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
           return `<tr>
-            <td>${chip}${l.r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : ''}</td>
+            <td>${chip}${l.r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : l.r.semReceita ? `<div class="hint" style="margin-top:2px;">despesa própria, mas ainda sem módulo de receita</div>` : ''}</td>
             <td class="mono">${fmtInt(l.ha)}</td>
             <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
             <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
@@ -1473,7 +1535,7 @@ function PageResultados(){
           const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${esc(l.app.nome)}</strong></span>`;
           if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
-            <td>${chip}${r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : ''}</td>
+            <td>${chip}${r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : r.semReceita ? `<div class="hint" style="margin-top:2px;">despesa própria, mas ainda sem módulo de receita</div>` : ''}</td>
             <td class="mono">R$ ${fmt(r.receita)}</td>
             <td class="mono">R$ ${fmt(r.despesa)}</td>
             <td class="mono">R$ ${fmt(r.resultado)}</td>
@@ -1482,7 +1544,7 @@ function PageResultados(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:14px;">Números da Pecuária calculados a partir de receitas, despesas fixas, custo de ração/pasto/cria lançados no AE Pecuária e o combustível abastecido nela (rateado por talhão/centro de custo no AE Combustível). Cana e Cereais ainda não têm app próprio de receita/despesa — por enquanto só mostram o custo de combustível já rateado pra elas. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
+  <p class="hint" style="margin-top:14px;">Números da Pecuária e da Cana calculados a partir da receita e despesa própria lançada em cada app, mais o combustível abastecido neles (rateado por talhão/centro de custo no AE Combustível). Cereais ainda não tem receita própria — o "resultado" dele por enquanto é só a despesa (insumo + despesas gerais + combustível rateado) com o sinal invertido, não lucratividade de verdade. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
 }
 
 /* ===================== FAZENDAS ===================== */
