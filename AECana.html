@@ -450,7 +450,7 @@ function render(){
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
         ${Header()}
         ${SubTabs()}
-        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : PageCadastro(state.page)}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : PageCadastro(state.page)}
         `}
       </div>
     </div>
@@ -572,6 +572,9 @@ const GROUPS = {
     {key:'estoqueInsumos', label:'Estoque'},
     {key:'aplicacoes', label:'Aplicações'},
   ]},
+  financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
+    {key:'custoProducao', label:'Custo por Talhão'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -580,6 +583,7 @@ function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.s
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
+  if(key==='financeiro') return temPermissao('financeiro','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function paginaVisivel(){ return true; }
@@ -633,6 +637,9 @@ function Header(){
   if(state.page==='estoqueInsumos'){
     return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
+  if(state.page==='custoProducao'){
+    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por tonelada colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
+  }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='operacoes' ? 'Operações' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
@@ -651,6 +658,7 @@ function brandMark(){
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 function iconPlantio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 13C12 9 9 6 5 6c0 4 3 7 7 7Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
+function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.8c0-1.5-1.3-2.6-3-2.6s-3 1-3 2.3c0 3 6 1.4 6 4.4 0 1.4-1.3 2.6-3 2.6s-3-1.1-3-2.6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
   return `<div class="empty">
@@ -899,6 +907,62 @@ function pctEstoque(saldo, minimo){
   return Math.round(Math.max(0, Math.min(saldo/(minimo*2), 1)) * 100);
 }
 
+/* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
+ * Não é um cadastro novo — cruza o que já existe em Aplicações (custo
+ * de insumo, pelo preço médio ponderado) e Colheita (toneladas) por
+ * talhão. Sem despesas gerais nem receita ainda (fica pra uma próxima
+ * fase) — só o custo de insumo por hectare e por tonelada colhida. */
+function producaoTotalTalhao(talhaoId){
+  return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.toneladas||0),0);
+}
+function custoInsumosTalhao(talhaoId){
+  return state.aplicacoes.filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
+    const preco = precoMedioInsumo(ap.insumoId);
+    return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
+  },0);
+}
+function PageCustoProducao(){
+  const talhoes = state.talhoes.filter(t=>t.ativo!==false);
+  if(talhoes.length===0){
+    return `<div class="card">${Empty('Nenhum talhão ativo','Cadastre um talhão em Cadastros > Talhões para acompanhar o custo.')}</div>`;
+  }
+  const linhas = talhoes.map(t=>{
+    const custoInsumos = custoInsumosTalhao(t.id);
+    const producao = producaoTotalTalhao(t.id);
+    const custoHa = t.areaHa ? custoInsumos/Number(t.areaHa) : null;
+    const custoTon = producao>0 ? custoInsumos/producao : null;
+    return {t, custoInsumos, producao, custoHa, custoTon};
+  });
+  const custoTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
+  const custoTonMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
+  return `
+  <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
+    <div class="stat-card"><div class="stat-label">Custo total de insumos</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} t</div></div>
+    <div class="stat-card"><div class="stat-label">Custo médio / tonelada</div><div class="stat-value">${custoTonMedio==null?'—':'R$ '+fmt(custoTonMedio)}</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/tonelada</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>`
+          <tr>
+            <td><strong>${l.t.nome}</strong></td>
+            <td>${fkNome('fazendas', l.t.fazendaId)}</td>
+            <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
+            <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
+            <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
+            <td class="mono">${fmt(l.producao)} t</td>
+            <td class="mono">${l.custoTon==null?'—':'R$ '+fmt(l.custoTon)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero aqui. Ainda não inclui despesas gerais (mão de obra, colheita terceirizada, transporte) nem receita de venda.</p>`;
+}
+
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
  * Mesma lista de módulos do AE Combustível (mesmo profiles.permissoes
  * do banco compartilhado) — precisa ser a lista completa, não só
@@ -907,6 +971,7 @@ function pctEstoque(saldo, minimo){
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
+  ['financeiro','Financeiro de Cana (Custo por Talhão)'],
   ['estoque','Estoque (AE Combustível)'],
   ['abastecimento','Abastecimento (AE Combustível)'],
   ['rateio','Rateio & Indicadores (AE Combustível)'],
