@@ -239,6 +239,12 @@ const OPCOES = {
     {value:'inseticida',label:'Aplicação de inseticida'}, {value:'fungicida',label:'Aplicação de fungicida'},
     {value:'cultivo_mecanico',label:'Cultivo mecânico'}, {value:'outro',label:'Outro'},
   ],
+  CATEGORIAS_DESPESA: [
+    {value:'mao_obra',label:'Mão de obra'}, {value:'colheita_terceirizada',label:'Colheita terceirizada'},
+    {value:'transporte',label:'Transporte'}, {value:'arrendamento',label:'Arrendamento'},
+    {value:'manutencao',label:'Manutenção'}, {value:'outro',label:'Outro'},
+  ],
+  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
 };
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
@@ -298,6 +304,15 @@ const CADASTROS = {
       {key:'dataInicio', label:'Início', type:'date'},
       {key:'dataFim', label:'Fim', type:'date'},
       {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  centrosCusto: {
+    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', modulo:'cadastros',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
   plantios: {
@@ -370,6 +385,37 @@ const CADASTROS = {
       {key:'tipoOperacao', label:'Tipo de operação', type:'select', options:OPCOES.TIPOS_OPERACAO, required:true},
       {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
       {key:'custo', label:'Custo', type:'computed', compute:item=>{ const p=precoMedioInsumo(item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  despesas: {
+    table:'despesas_cana', label:'Despesas', singular:'Despesa', modulo:'financeiro',
+    desc:'Despesas gerais da lavoura que não são insumo lançado em Aplicações (mão de obra, colheita terceirizada, transporte, arrendamento, manutenção).',
+    emptyHint:'Cadastre uma fazenda antes de lançar uma despesa.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
+      {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='cana'||c.frente==='geral'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_DESPESA, required:true},
+      {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de trator terceirizado'},
+      {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  receitas: {
+    table:'receitas_cana', label:'Receita', singular:'Receita', modulo:'resultados', moduloEditarAlt:'financeiro',
+    desc:'Venda/entrega de cana para a usina — gera a receita usada no Resultado. Quem só tem acesso a Financeiro pode lançar receita aqui, mas não vê a lista nem o valor das já lançadas — só quem tem Resultados enxerga isso (o banco bloqueia a leitura pra quem não tem).',
+    emptyHint:'Nenhuma receita para mostrar — ou porque ainda não há nenhuma, ou porque seu acesso permite lançar mas não ver (fala com o administrador se achar que deveria ver).',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
+      {key:'safraId', label:'Safra (opcional)', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'toneladas', label:'Toneladas entregues (opcional)', type:'number', step:'0.01'},
+      {key:'valorTotal', label:'Valor total (R$)', type:'number', step:'0.01', required:true},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
@@ -450,7 +496,7 @@ function render(){
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
         ${Header()}
         ${SubTabs()}
-        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : PageCadastro(state.page)}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : state.page==='resultado' ? PageResultado() : PageCadastro(state.page)}
         `}
       </div>
     </div>
@@ -574,6 +620,11 @@ const GROUPS = {
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'custoProducao', label:'Custo por Talhão'},
+    {key:'despesas', label:'Despesas'},
+  ]},
+  resultados: {label:'Resultados', icon:iconResultado(), pages:[
+    {key:'receitas', label:'Receita'},
+    {key:'resultado', label:'Resultado'},
   ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
@@ -584,18 +635,34 @@ function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
   if(key==='financeiro') return temPermissao('financeiro','visualizar');
+  // Resultados (receita/lucratividade) é enxergado por quem tem
+  // 'resultados' — mas quem só tem 'financeiro' (editar) também
+  // precisa entrar aqui pra conseguir LANÇAR receita (ver paginaVisivel
+  // abaixo: enxerga só a sub-aba Receita, e mesmo essa fica em branco
+  // pra ele — o RLS não deixa esse perfil ler receitas_cana, só inserir).
+  if(key==='resultados') return temPermissao('resultados','visualizar') || temPermissao('financeiro','editar');
   return temPermissao('cadastros','visualizar');
 }
-function paginaVisivel(){ return true; }
+// Dentro de um grupo visível, algumas páginas ainda exigem checagem
+// própria — hoje só o caso de Resultado (lucratividade), que fica
+// escondido de quem só tem 'financeiro' (só pode lançar Receita, não
+// ver receita nem resultado). Administrador vê tudo por padrão; quem
+// mais deve ver o resultado completo, o admin libera 'resultados' pra
+// essa conta na Administração (ex: o(a) proprietário(a)).
+function paginaVisivel(key){
+  if(key==='resultado') return temPermissao('resultados','visualizar');
+  return true;
+}
 function paginaAcessivel(page){
   const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
   if(!grupo) return false;
-  return grupoVisivel(grupo[0]);
+  return grupoVisivel(grupo[0]) && paginaVisivel(page);
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
 function primeiraPaginaVisivel(){
   for(const [,g] of gruposVisiveis()){
-    if(g.pages[0]) return g.pages[0].key;
+    const pagina = g.pages.find(p=>paginaVisivel(p.key));
+    if(pagina) return pagina.key;
   }
   return null;
 }
@@ -623,7 +690,7 @@ function Sidebar(){
 }
 function SubTabs(){
   const group = GROUPS[currentGroupKey()];
-  const paginas = group ? group.pages : [];
+  const paginas = group ? group.pages.filter(p=>paginaVisivel(p.key)) : [];
   if(paginas.length<2) return '';
   return `
   <div class="subtabs">
@@ -639,6 +706,9 @@ function Header(){
   }
   if(state.page==='custoProducao'){
     return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por tonelada colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
+  }
+  if(state.page==='resultado'){
+    return headerHtml('Resultados','Resultado','Receita menos despesas (gerais + custo de insumo) da operação de cana, e o resultado por hectare.');
   }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='operacoes' ? 'Operações' : 'Cadastro';
@@ -659,6 +729,7 @@ function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" 
 function iconPlantio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 13C12 9 9 6 5 6c0 4 3 7 7 7Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.8c0-1.5-1.3-2.6-3-2.6s-3 1-3 2.3c0 3 6 1.4 6 4.4 0 1.4-1.3 2.6-3 2.6s-3-1.1-3-2.6"/></svg>`; }
+function iconResultado(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11 13 15 21 7"/><path d="M15 7h6v6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
   return `<div class="empty">
@@ -684,7 +755,7 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar');
+  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
   const termo = state.search.toLowerCase();
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
@@ -960,7 +1031,41 @@ function PageCustoProducao(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero aqui. Ainda não inclui despesas gerais (mão de obra, colheita terceirizada, transporte) nem receita de venda.</p>`;
+  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero aqui. Despesas gerais (mão de obra, colheita terceirizada, transporte) ficam em Financeiro &gt; Despesas — não são por talhão, então não entram nesta tabela; o total delas aparece em Resultados &gt; Resultado.</p>`;
+}
+
+/* ===================== RESULTADOS: RECEITA x DESPESA =====================
+ * Módulo de acesso separado do Financeiro (mesmo racional do
+ * AEpecuária: quem vê custo de insumo não necessariamente deve ver
+ * receita/margem da operação). Junta Receita (receitas_cana) com
+ * Despesas gerais (despesas_cana) + custo de insumo (Aplicações, já
+ * calculado em custoInsumosTalhao) — sem guardar nada à parte. */
+function PageResultado(){
+  const receitaTotal = state.receitas.reduce((a,r)=>a+Number(r.valorTotal||0),0);
+  const despesasGerais = state.despesas.reduce((a,d)=>a+Number(d.valor||0),0);
+  const custoInsumoTotal = state.talhoes.reduce((a,t)=>a+custoInsumosTalhao(t.id),0);
+  const despesaTotal = despesasGerais + custoInsumoTotal;
+  const resultado = receitaTotal - despesaTotal;
+  const areaTotal = state.fazendas.filter(f=>f.ativo!==false).reduce((a,f)=>a+Number(f.areaHa||0),0);
+  const resultadoHa = areaTotal>0 ? resultado/areaTotal : null;
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(receitaTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Despesa total</div><div class="stat-value">R$ ${fmt(despesaTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Resultado</div><div class="stat-value ${resultado<0?'alerta':''}">R$ ${fmt(resultado)}</div></div>
+    <div class="stat-card"><div class="stat-label">Resultado / hectare</div><div class="stat-value ${resultadoHa!=null&&resultadoHa<0?'alerta':''}">${resultadoHa==null?'—':'R$ '+fmt(resultadoHa)}</div></div>
+  </div>
+  <div class="card card-pad">
+    <table>
+      <tbody>
+        <tr><td>Receita (venda de cana)</td><td class="mono" style="text-align:right;">R$ ${fmt(receitaTotal)}</td></tr>
+        <tr><td>Despesas gerais (mão de obra, transporte, etc.)</td><td class="mono" style="text-align:right;">R$ ${fmt(despesasGerais)}</td></tr>
+        <tr><td>Custo de insumo (Tratos culturais)</td><td class="mono" style="text-align:right;">R$ ${fmt(custoInsumoTotal)}</td></tr>
+        <tr><td><strong>Resultado</strong></td><td class="mono" style="text-align:right;"><strong>R$ ${fmt(resultado)}</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:12px;">Resultado por hectare divide pela soma da área de todas as fazendas ativas (Cadastros &gt; Fazendas), igual ao AEpecuária. Ainda não separa por safra/período — mostra o acumulado de tudo que foi lançado.</p>`;
 }
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
@@ -972,7 +1077,8 @@ function PageCustoProducao(){
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
-  ['financeiro','Financeiro de Cana (Custo por Talhão)'],
+  ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
+  ['resultados','Resultados de Cana (Receita, Resultado)'],
   ['estoque','Estoque (AE Combustível)'],
   ['abastecimento','Abastecimento (AE Combustível)'],
   ['rateio','Rateio & Indicadores (AE Combustível)'],
@@ -1045,7 +1151,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cana quanto para o AE Combustível (é a mesma conta nos dois apps).</p>
+        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cana quanto para o AE Combustível (é a mesma conta nos dois apps). <strong>Financeiro x Resultados (cana):</strong> "Financeiro: Editar" deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado (lucratividade) — isso só quem tiver "Resultados" liberado enxerga (além do Administrador, que já vê tudo).</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
