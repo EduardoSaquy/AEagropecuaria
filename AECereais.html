@@ -415,9 +415,23 @@ async function loadAll(){
       return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
     }),
     db.from('profiles').select('*').order('nome'),
+    db.from('abastecimentos').select('tanque_id,talhao_area_id,data_hora,volume_litros').not('talhao_area_id','is',null),
+    db.from('entradas_estoque').select('tanque_id,data,volume_litros,valor_total'),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
+  // Leitura só (não é cadastro deste app): abastecimentos e entradas de
+  // combustível do AE Combustível, usados só para calcular o custo de
+  // combustível por talhão em Financeiro > Custo por Talhão. Se a conta
+  // não tiver acesso aos módulos 'abastecimento'/'estoque' do AE
+  // Combustível, a RLS simplesmente devolve nada — o custo de
+  // combustível some do painel, sem quebrar o resto do app.
+  state.abastecimentosCombustivel = (results[CADASTRO_KEYS.length+1].data||[]).map(r=>({
+    tanqueId:r.tanque_id, talhaoAreaId:r.talhao_area_id, dataHora:r.data_hora, volumeLitros:r.volume_litros,
+  }));
+  state.entradasEstoqueCombustivel = (results[CADASTRO_KEYS.length+2].data||[]).map(r=>({
+    tanqueId:r.tanque_id, data:r.data, volumeLitros:r.volume_litros, valorTotal:r.valor_total,
+  }));
   salvarCacheLocal();
   render();
 }
@@ -428,6 +442,8 @@ const state = {
   page: 'fazendas',
   ...Object.fromEntries(CADASTRO_KEYS.map(k=>[k, []])),
   perfis: [],
+  abastecimentosCombustivel: [],
+  entradasEstoqueCombustivel: [],
   modal: null, // {type:'cadastro', key} | {type:'usuario'|'permissoes'|'trocarSenha'}
   search: '',
   cadastroError: '',
@@ -646,7 +662,7 @@ function Header(){
     return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
   if(state.page==='custoProducao'){
-    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por saca colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
+    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo e de combustível por hectare e por saca colhida, cruzando Aplicações (Tratos culturais), Colheita e os abastecimentos do AE Combustível rateados a cada talhão.');
   }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='operacoes_graos' ? 'Operações' : 'Cadastro';
@@ -920,9 +936,15 @@ function pctEstoque(saldo, minimo){
 
 /* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
  * Não é um cadastro novo — cruza o que já existe em Aplicações (custo
- * de insumo, pelo preço médio ponderado) e Colheita (sacas) por
- * talhão. Sem despesas gerais nem receita ainda (fica pra uma próxima
- * fase) — só o custo de insumo por hectare e por saca colhida. */
+ * de insumo, pelo preço médio ponderado), Colheita (sacas) e
+ * Abastecimentos do AE Combustível (custo de combustível, pelo mesmo
+ * custo médio ponderado por tanque que o AE Combustível usa em
+ * Rateio > Por Talhão/Área) por talhão. Os lançamentos do AE
+ * Combustível não são "principais" por conta própria neste app — eles
+ * só aparecem aqui, já embutidos no custo total de cada talhão; quem
+ * quiser o detalhe abastecimento a abastecimento continua indo no
+ * próprio AE Combustível. Sem despesas gerais nem receita ainda (fica
+ * pra uma próxima fase). */
 function producaoTotalTalhao(talhaoId){
   return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.sacas||0),0);
 }
@@ -932,6 +954,24 @@ function custoInsumosTalhao(talhaoId){
     return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
   },0);
 }
+// Mesmo cálculo do custoMedioPonderado(tanqueId, dataLimite) do AE
+// Combustível: preço médio das entradas do tanque até a data do
+// abastecimento (não a média de hoje), pra refletir o preço vigente no
+// momento em que o diesel foi de fato consumido.
+function custoMedioPonderadoCombustivel(tanqueId, dataLimite){
+  const limite = dataLimite ? String(dataLimite).slice(0,10) : null;
+  const entradas = state.entradasEstoqueCombustivel.filter(e=>e.tanqueId===tanqueId && (!limite || e.data<=limite));
+  const volumeTotal = entradas.reduce((a,e)=>a+Number(e.volumeLitros||0),0);
+  if(volumeTotal<=0) return null;
+  const valorTotal = entradas.reduce((a,e)=>a+Number(e.valorTotal||0),0);
+  return valorTotal / volumeTotal;
+}
+function custoCombustivelTalhao(talhaoId){
+  return state.abastecimentosCombustivel.filter(a=>a.talhaoAreaId===talhaoId).reduce((a,ab)=>{
+    const custoUnit = custoMedioPonderadoCombustivel(ab.tanqueId, ab.dataHora);
+    return a + (custoUnit!=null ? custoUnit*Number(ab.volumeLitros||0) : 0);
+  },0);
+}
 function PageCustoProducao(){
   const talhoes = state.talhoes.filter(t=>t.ativo!==false);
   if(talhoes.length===0){
@@ -939,23 +979,28 @@ function PageCustoProducao(){
   }
   const linhas = talhoes.map(t=>{
     const custoInsumos = custoInsumosTalhao(t.id);
+    const custoCombustivel = custoCombustivelTalhao(t.id);
+    const custoOperacional = custoInsumos + custoCombustivel;
     const producao = producaoTotalTalhao(t.id);
-    const custoHa = t.areaHa ? custoInsumos/Number(t.areaHa) : null;
-    const custoSaca = producao>0 ? custoInsumos/producao : null;
-    return {t, custoInsumos, producao, custoHa, custoSaca};
+    const custoHa = t.areaHa ? custoOperacional/Number(t.areaHa) : null;
+    const custoSaca = producao>0 ? custoOperacional/producao : null;
+    return {t, custoInsumos, custoCombustivel, custoOperacional, producao, custoHa, custoSaca};
   });
-  const custoTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const custoInsumosTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const custoCombustivelTotal = linhas.reduce((a,l)=>a+l.custoCombustivel,0);
+  const custoTotal = linhas.reduce((a,l)=>a+l.custoOperacional,0);
   const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
   const custoSacaMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
   return `
-  <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
-    <div class="stat-card"><div class="stat-label">Custo total de insumos</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo insumos</div><div class="stat-value">R$ ${fmt(custoInsumosTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo combustível</div><div class="stat-value">R$ ${fmt(custoCombustivelTotal)}</div></div>
     <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} sc</div></div>
     <div class="stat-card"><div class="stat-label">Custo médio / saca</div><div class="stat-value">${custoSacaMedio==null?'—':'R$ '+fmt(custoSacaMedio)}</div></div>
   </div>
   <div class="card" style="overflow-x:auto;">
     <table>
-      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/saca</th></tr></thead>
+      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo combustível</th><th>Custo total</th><th>Custo/ha</th><th>Produção</th><th>Custo/saca</th></tr></thead>
       <tbody>
         ${linhas.map(l=>`
           <tr>
@@ -963,6 +1008,8 @@ function PageCustoProducao(){
             <td>${fkNome('fazendas', l.t.fazendaId)}</td>
             <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
             <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
+            <td class="mono">R$ ${fmt(l.custoCombustivel)}</td>
+            <td class="mono">R$ ${fmt(l.custoOperacional)}</td>
             <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
             <td class="mono">${fmt(l.producao)} sc</td>
             <td class="mono">${l.custoSaca==null?'—':'R$ '+fmt(l.custoSaca)}</td>
@@ -971,7 +1018,7 @@ function PageCustoProducao(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero aqui. Ainda não inclui despesas gerais (mão de obra, colheita terceirizada, transporte) nem receita de venda.</p>`;
+  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Custo de combustível calculado pelo preço médio ponderado de cada tanque, lido direto dos abastecimentos do AE Combustível rateados a este talhão (mesmo cálculo do Rateio &gt; Por Talhão/Área de lá) — precisa que esta conta tenha acesso aos módulos Abastecimento/Estoque do AE Combustível; sem isso, entra como zero aqui. Aplicação de insumo sem nenhuma entrada com preço informado também entra com custo zero. Ainda não inclui despesas gerais (mão de obra, colheita terceirizada, transporte) nem receita de venda.</p>`;
 }
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
