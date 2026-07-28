@@ -778,3 +778,23 @@ create policy "select producoes_racao" on producoes_racao for select using (tem_
 create policy "inserir producoes_racao" on producoes_racao for insert with check (tem_permissao('dietas','editar'));
 create policy "atualizar producoes_racao" on producoes_racao for update using (tem_permissao('dietas','editar')) with check (tem_permissao('dietas','editar'));
 create policy "excluir producoes_racao" on producoes_racao for delete using (tem_permissao('dietas','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Editar/excluir lote só com permissão do módulo daquele lote
+-- As políticas de update/delete de "lotes" aceitavam editar('confinamento')
+-- OU editar('pasto') OU editar('cria') pra QUALQUER lote, independente do
+-- destino dele — então alguém com editar só em Pasto conseguia excluir um
+-- lote de Confinamento. Agora a política olha o destino do próprio lote
+-- (a linha sendo alterada) e exige a permissão do módulo correspondente.
+-- Pode rodar a qualquer momento, sem impacto em dado existente.
+-- ===================================================================
+drop policy if exists "atualizar lotes" on lotes;
+create policy "atualizar lotes" on lotes for update using (
+  tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+) with check (
+  tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+);
+drop policy if exists "excluir lotes" on lotes;
+create policy "excluir lotes" on lotes for delete using (
+  tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+);
