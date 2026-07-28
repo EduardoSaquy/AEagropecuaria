@@ -947,3 +947,23 @@ select 'Fazenda Santa Alice', cf.hectares
 from config_fazenda cf
 where cf.id = 1 and cf.hectares is not null and cf.hectares > 0
   and not exists (select 1 from fazendas);
+
+-- ===================================================================
+-- MIGRAÇÃO: Editar/excluir lote só com permissão do módulo daquele lote
+-- As políticas de update/delete de "lotes" aceitavam editar('confinamento')
+-- OU editar('pasto') OU editar('cria') pra QUALQUER lote, independente do
+-- destino dele — então alguém com editar só em Pasto conseguia excluir um
+-- lote de Confinamento. Agora a política olha o destino do próprio lote
+-- (a linha sendo alterada) e exige a permissão do módulo correspondente.
+-- Pode rodar a qualquer momento, sem impacto em dado existente.
+-- ===================================================================
+drop policy if exists "atualizar lotes" on lotes;
+create policy "atualizar lotes" on lotes for update using (
+  tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+) with check (
+  tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+);
+drop policy if exists "excluir lotes" on lotes;
+create policy "excluir lotes" on lotes for delete using (
+  tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+);
