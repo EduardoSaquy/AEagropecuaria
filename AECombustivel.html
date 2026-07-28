@@ -225,6 +225,7 @@ function toSnake(s){ return s.replace(/[A-Z]/g, m => '_'+m.toLowerCase()); }
 function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
 function fmtDataHora(iso){
   if(!iso) return '—';
@@ -850,7 +851,7 @@ function Sidebar(){
   <div class="sidebar">
     <div class="brand">${brandMark()}<div><div class="brand-name">AE Combustível</div></div></div>
     <div class="sidebar-user">
-      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
+      <span class="sidebar-user-nome">${esc(state.perfil?.nome)}</span>
       <div class="sidebar-user-actions">
         <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
         <button class="btn-sair" data-logout="1">Sair</button>
@@ -934,16 +935,16 @@ function Empty(title, sub){
 function fkNome(entityKey, id){
   if(id===null || id===undefined || id==='') return '—';
   const item = (state[entityKey]||[]).find(x=>String(x.id)===String(id));
-  return item ? item.nome : '—';
+  return item ? esc(item.nome) : '—';
 }
 function celulaValor(f, item){
   const val = item[f.key];
   if(f.format) return f.format(val, item);
   if(f.type==='fk') return fkNome(f.refEntity, val);
-  if(f.type==='select') return (f.options.find(o=>o.value===val)||{}).label || val || '—';
+  if(f.type==='select') return esc((f.options.find(o=>o.value===val)||{}).label || val) || '—';
   if(f.type==='date') return fmtData(val);
   if(f.type==='number') return (val===null||val===undefined||val==='') ? '—' : `${fmt(val, f.dec ?? 2)}${f.suffix||''}`;
-  return val || '—';
+  return esc(val) || '—';
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
@@ -999,6 +1000,10 @@ function ultimaMedicao(tanqueId){
 // Com dataLimite (usado no custeio de abastecimentos, Fase 4), considera
 // só as entradas até aquela data — aproxima o preço médio vigente no
 // tanque no momento em que o combustível foi de fato consumido.
+// Limitação conhecida: "data" da entrada é só o dia (sem hora), então uma
+// NF lançada à tarde entra no custeio de um abastecimento da manhã do
+// mesmo dia mesmo que o combustível físico só tenha chegado depois. Não
+// dá pra resolver sem mudar o cadastro de entrada pra pedir hora também.
 function custoMedioPonderado(tanqueId, dataLimite){
   const limite = dataLimite ? String(dataLimite).slice(0,10) : null;
   const entradas = state.entradasEstoque.filter(e=>e.tanqueId===tanqueId && (!limite || e.data<=limite));
@@ -1040,7 +1045,7 @@ function PageEstoqueResumo(){
         ${linhas.map(l=>`
           <tr>
             <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${l.baixo?'alerta':''}" style="height:${Math.round(l.pct*100)}%"></div></div></div></td>
-            <td><strong>${l.t.nome}</strong></td>
+            <td><strong>${esc(l.t.nome)}</strong></td>
             <td>${fkNome('fazendas', l.t.fazendaId)}</td>
             <td>${fkNome('produtos', l.t.produtoId)}</td>
             <td class="mono">${fmtInt(l.saldo)} L ${l.t.capacidadeLitros?`<span class="hint">/ ${fmtInt(l.t.capacidadeLitros)} L</span>`:''}</td>
@@ -1066,19 +1071,24 @@ function construirLinhaAbastecimento(draft){
   CADASTROS.abastecimentos.fields.forEach(f=>{ linha[toSnake(f.key)] = draft[f.key] ?? null; });
   return linha;
 }
-function maiorLeituraConhecida(equipamentoId, ignorarEditId){
+function leiturasVizinhas(equipamentoId, dataHoraISO, ignorarEditId){
   const doServidor = state.abastecimentos
     .filter(a=>a.equipamentoId===equipamentoId && a.id!==ignorarEditId)
-    .map(a=>Number(a.leituraMedidor)).filter(n=>!isNaN(n));
+    .map(a=>({dataHora:a.dataHora, leitura:Number(a.leituraMedidor)}));
   const daFila = state.filaAbastecimentos
     .filter(a=>a.equipamentoId===equipamentoId)
-    .map(a=>Number(a.leituraMedidor)).filter(n=>!isNaN(n));
-  const todas = doServidor.concat(daFila);
-  return todas.length ? Math.max(...todas) : null;
+    .map(a=>({dataHora:a.dataHora, leitura:Number(a.leituraMedidor)}));
+  const todas = doServidor.concat(daFila).filter(a=>!isNaN(a.leitura) && a.dataHora);
+  const anteriores = todas.filter(a=>a.dataHora <= dataHoraISO).map(a=>a.leitura);
+  const posteriores = todas.filter(a=>a.dataHora > dataHoraISO).map(a=>a.leitura);
+  return {
+    maiorAnterior: anteriores.length ? Math.max(...anteriores) : null,
+    menorPosterior: posteriores.length ? Math.min(...posteriores) : null,
+  };
 }
 function statusAbastecimentoPill(a){
   if(a._origem==='servidor') return '<span class="pill pill-ok">Sincronizado</span>';
-  if(a.erroSincronizacao) return `<span class="pill pill-alerta" title="${a.erroSincronizacao}">Erro ao sincronizar</span>`;
+  if(a.erroSincronizacao) return `<span class="pill pill-alerta" title="${esc(a.erroSincronizacao)}">Erro ao sincronizar</span>`;
   return '<span class="pill pill-warn">Pendente</span>';
 }
 function PageAbastecimentos(){
@@ -1196,10 +1206,13 @@ async function salvarAbastecimento(){
   if(equipamento && equipamento.tipoMedidor!=='nenhum' && leituraMedidor===null){
     erro = erro || `Informe a leitura do ${equipamento.tipoMedidor==='horimetro'?'horímetro':'hodômetro'} deste equipamento.`;
   }
-  if(leituraMedidor!==null){
-    const maiorConhecida = maiorLeituraConhecida(equipamentoId, d._editId);
-    if(maiorConhecida!==null && leituraMedidor < maiorConhecida){
-      erro = erro || `A leitura informada (${fmt(leituraMedidor,1)}) é menor que a última leitura conhecida deste equipamento (${fmt(maiorConhecida,1)}). Confira o valor.`;
+  if(leituraMedidor!==null && dataHoraLocal){
+    const dataHoraISO = new Date(dataHoraLocal).toISOString();
+    const { maiorAnterior, menorPosterior } = leiturasVizinhas(equipamentoId, dataHoraISO, d._editId);
+    if(maiorAnterior!==null && leituraMedidor < maiorAnterior){
+      erro = erro || `A leitura informada (${fmt(leituraMedidor,1)}) é menor que a leitura de um abastecimento anterior deste equipamento (${fmt(maiorAnterior,1)}). Confira o valor.`;
+    } else if(menorPosterior!==null && leituraMedidor > menorPosterior){
+      erro = erro || `A leitura informada (${fmt(leituraMedidor,1)}) é maior que a leitura de um abastecimento posterior deste equipamento (${fmt(menorPosterior,1)}). Confira o valor ou a data/hora.`;
     }
   }
   if(erro){ state.abastecimentoError = erro; render(); return; }
@@ -1303,14 +1316,14 @@ function ModalAbastecimento(){
           <div class="field"><label>Tanque / Comboio de origem</label>
             <select id="f-ab-tanque" data-ab-tanque-change="1">
               ${tanques.length===0?'<option value="">—</option>':''}
-              ${tanques.map(t=>`<option value="${t.id}" ${String(d.tanqueId)===String(t.id)?'selected':''}>${t.nome}</option>`).join('')}
+              ${tanques.map(t=>`<option value="${t.id}" ${String(d.tanqueId)===String(t.id)?'selected':''}>${esc(t.nome)}</option>`).join('')}
             </select>
             ${tanqueAtual ? `<span class="hint">${tanqueAtual.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanqueAtual.produtoId)}</span>` : ''}
           </div>
           <div class="field"><label>Equipamento / Veículo</label>
             <select id="f-ab-equipamento" data-ab-equipamento-change="1">
               ${equipamentos.length===0?'<option value="">—</option>':''}
-              ${equipamentos.map(e=>`<option value="${e.id}" ${String(d.equipamentoId)===String(e.id)?'selected':''}>${e.nome}</option>`).join('')}
+              ${equipamentos.map(e=>`<option value="${e.id}" ${String(d.equipamentoId)===String(e.id)?'selected':''}>${esc(e.nome)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -1318,7 +1331,7 @@ function ModalAbastecimento(){
           <div class="field"><label>Operador</label>
             <select id="f-ab-operador">
               ${operadores.length===0?'<option value="">—</option>':''}
-              ${operadores.map(o=>`<option value="${o.id}" ${String(d.operadorId)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+              ${operadores.map(o=>`<option value="${o.id}" ${String(d.operadorId)===String(o.id)?'selected':''}>${esc(o.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data/Hora</label><input type="datetime-local" id="f-ab-data-hora" value="${d.dataHora}"/></div>
@@ -1336,23 +1349,23 @@ function ModalAbastecimento(){
           <div class="field"><label>Talhão / Área</label>
             <select id="f-ab-talhao">
               <option value="">—</option>
-              ${talhoes.map(t=>`<option value="${t.id}" ${String(d.talhaoAreaId)===String(t.id)?'selected':''}>${t.nome}</option>`).join('')}
+              ${talhoes.map(t=>`<option value="${t.id}" ${String(d.talhaoAreaId)===String(t.id)?'selected':''}>${esc(t.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Centro de Custo</label>
             <select id="f-ab-centro-custo">
               <option value="">—</option>
-              ${centros.map(c=>`<option value="${c.id}" ${String(d.centroCustoId)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}
+              ${centros.map(c=>`<option value="${c.id}" ${String(d.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
             </select>
           </div>
         </div>
         <div class="field"><label>Operação</label>
           <select id="f-ab-operacao">
             <option value="">—</option>
-            ${operacoes.map(o=>`<option value="${o.id}" ${String(d.operacaoId)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+            ${operacoes.map(o=>`<option value="${o.id}" ${String(d.operacaoId)===String(o.id)?'selected':''}>${esc(o.nome)}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Observação</label><textarea id="f-ab-observacao" rows="2">${d.observacao||''}</textarea></div>
+        <div class="field"><label>Observação</label><textarea id="f-ab-observacao" rows="2">${esc(d.observacao)}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -1525,7 +1538,7 @@ function PageRateioTalhao(){
       <tbody>
         ${grupos.map(g=>`
           <tr>
-            <td><strong>${g.nome}</strong></td>
+            <td><strong>${esc(g.nome)}</strong></td>
             <td class="mono">${g.areaHa ? fmt(g.areaHa,1)+' ha' : '—'}</td>
             <td class="mono">${fmtInt(g.volume)} L</td>
             <td class="mono">${g.volumePorHa!=null ? fmt(g.volumePorHa,2)+' L/ha' : '—'}</td>
@@ -1549,7 +1562,7 @@ function PageRateioCentroCusto(){
       <tbody>
         ${grupos.map(g=>`
           <tr>
-            <td><strong>${g.nome}</strong></td>
+            <td><strong>${esc(g.nome)}</strong></td>
             <td><span class="pill ${pillFrente(g.frente)}">${labelFrente(g.frente)}</span></td>
             <td class="mono">${fmtInt(g.volume)} L</td>
             <td class="mono">R$ ${fmt(g.custo)}</td>
@@ -1571,7 +1584,7 @@ function PageRateioEquipamento(){
       <tbody>
         ${grupos.map(g=>`
           <tr>
-            <td><strong>${g.nome}</strong></td>
+            <td><strong>${esc(g.nome)}</strong></td>
             <td>${(OPCOES.TIPOS_EQUIPAMENTO.find(t=>t.value===g.tipo)||{}).label || g.tipo || '—'}</td>
             <td class="mono">${g.qtd}</td>
             <td class="mono">${fmtInt(g.volume)} L</td>
@@ -1744,7 +1757,7 @@ function PageAlertas(){
           <tr>
             <td><span class="pill ${pillSeveridade(a.severidade)}">${a.severidade==='critico'?'Crítico':a.severidade==='atencao'?'Atenção':'Info'}</span></td>
             <td>${TIPO_ALERTA_LABELS[a.tipo]||a.tipo}</td>
-            <td><strong>${a.titulo}</strong><br/><span class="hint">${a.descricao}</span>${a.status==='resolvido' && a.observacaoResolucao ? `<br/><span class="hint">Resolução: ${a.observacaoResolucao}</span>` : ''}</td>
+            <td><strong>${esc(a.titulo)}</strong><br/><span class="hint">${esc(a.descricao)}</span>${a.status==='resolvido' && a.observacaoResolucao ? `<br/><span class="hint">Resolução: ${esc(a.observacaoResolucao)}</span>` : ''}</td>
             <td class="mono">${fmtDataHora(a.dataHora)}</td>
             <td>${a.status==='aberto' ? '<span class="pill pill-alerta">Aberto</span>' : '<span class="pill pill-ok">Resolvido</span>'}</td>
             <td>${a.status==='aberto' && podeResolver ? `<button class="btn-ghost btn-sm" data-resolver-alerta="${a.id}">Resolver</button>` : ''}</td>
@@ -1779,7 +1792,7 @@ const ACAO_LABELS = { insert:'Criado', update:'Editado', delete:'Excluído' };
 function nomeUsuarioAuditoria(usuarioId){
   if(!usuarioId) return 'Sistema';
   const perfil = state.perfis.find(p=>p.id===usuarioId);
-  return perfil ? perfil.nome : 'Usuário removido';
+  return perfil ? esc(perfil.nome) : 'Usuário removido';
 }
 const CAMPOS_AUDITORIA_IGNORADOS = ['created_at','updated_at','created_by','updated_by'];
 function camposAlterados(log){
@@ -1807,7 +1820,7 @@ function PageAuditoria(){
         ${lista.map(l=>{
           const alterados = camposAlterados(l);
           const detalhe = l.acao==='update'
-            ? (alterados.length ? alterados.map(c=>`${c.campo}: ${JSON.stringify(c.antigo)} → ${JSON.stringify(c.novo)}`).join('<br/>') : 'Sem alterações relevantes')
+            ? (alterados.length ? alterados.map(c=>`${esc(c.campo)}: ${esc(JSON.stringify(c.antigo))} → ${esc(JSON.stringify(c.novo))}`).join('<br/>') : 'Sem alterações relevantes')
             : `Registro #${l.registroId}`;
           return `<tr>
             <td class="mono">${fmtDataHora(l.criadoEm)}</td>
@@ -1832,14 +1845,16 @@ function PagePainel(){
   const volumeMes = abastecimentosMes.reduce((a,x)=>a+Number(x.volumeLitros||0),0);
   const custoMes = abastecimentosMes.reduce((a,x)=>{ const c = custoAbastecimento(x); return a+(c||0); }, 0);
   const estoqueTotal = state.tanques.filter(t=>t.ativo!==false).reduce((a,t)=>a+saldoTanque(t.id),0);
+  const podeVerEstoque = temPermissao('estoque','visualizar');
+  const podeVerConsumo = temPermissao('abastecimento','visualizar');
   const podeVerCusto = temPermissao('rateio','visualizar');
   const podeVerAlertas = temPermissao('alertas','visualizar');
   const alertasAbertos = state.alertas.filter(a=>a.status==='aberto');
   const porFrenteMes = agruparPorFrente(abastecimentosMes);
   return `
   <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Estoque atual (todos os tanques)</div><div class="stat-value">${fmtInt(estoqueTotal)} L</div></div>
-    <div class="stat-card"><div class="stat-label">Consumo no mês</div><div class="stat-value">${fmtInt(volumeMes)} L</div></div>
+    <div class="stat-card"><div class="stat-label">Estoque atual (todos os tanques)</div><div class="stat-value">${podeVerEstoque ? fmtInt(estoqueTotal)+' L' : '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">Consumo no mês</div><div class="stat-value">${podeVerConsumo ? fmtInt(volumeMes)+' L' : '—'}</div></div>
     <div class="stat-card"><div class="stat-label">Custo no mês</div><div class="stat-value">${podeVerCusto ? 'R$ '+fmt(custoMes) : '—'}</div></div>
     <div class="stat-card"><div class="stat-label">Alertas abertos</div><div class="stat-value ${podeVerAlertas && alertasAbertos.length>0?'alerta':''}">${podeVerAlertas ? alertasAbertos.length : '—'}</div></div>
   </div>
@@ -1856,7 +1871,7 @@ function PagePainel(){
     ${!podeVerAlertas ? Empty('Sem acesso a Alertas','Fale com o administrador para liberar esse módulo.') : alertasAbertos.length===0 ? Empty('Nenhum alerta aberto','Tudo certo por aqui.') : `
     <table>
       <thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th></tr></thead>
-      <tbody>${alertasAbertos.slice(0,10).map(a=>`<tr><td><span class="pill ${pillSeveridade(a.severidade)}">${a.severidade==='critico'?'Crítico':a.severidade==='atencao'?'Atenção':'Info'}</span></td><td>${TIPO_ALERTA_LABELS[a.tipo]||a.tipo}</td><td>${a.titulo}</td></tr>`).join('')}</tbody>
+      <tbody>${alertasAbertos.slice(0,10).map(a=>`<tr><td><span class="pill ${pillSeveridade(a.severidade)}">${a.severidade==='critico'?'Crítico':a.severidade==='atencao'?'Atenção':'Info'}</span></td><td>${TIPO_ALERTA_LABELS[a.tipo]||a.tipo}</td><td>${esc(a.titulo)}</td></tr>`).join('')}</tbody>
     </table>`}
   </div>`;
 }
@@ -1951,7 +1966,14 @@ const RELATORIO_TIPOS = {
 };
 function exportarCSV(nomeArquivo, colunas, linhas){
   const separador = ';'; // ; é mais compatível com Excel em pt-BR (a vírgula já é o separador decimal)
-  const escapar = (v)=>{ const s = v==null ? '' : String(v); return /[;"\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const escapar = (v)=>{
+    let s = v==null ? '' : String(v);
+    // evita injeção de fórmula: se abrir com =, +, -, @, tab ou CR, o Excel/
+    // Sheets pode interpretar como fórmula ao abrir o CSV — prefixa com um
+    // apóstrofo (vira texto literal, não muda o valor visível na maioria dos programas).
+    if(/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  };
   const linhasCsv = [
     colunas.map(c=>escapar(c.label)).join(separador),
     ...linhas.map(l => colunas.map(c=>escapar(c.get(l))).join(separador)),
@@ -1977,16 +1999,16 @@ function FiltroRelatorio(){
       <div class="field" style="margin:0;"><label>De</label><input type="date" id="f-relatorio-inicio" data-relatorio-campo="dataInicio" value="${f.dataInicio}"/></div>
       <div class="field" style="margin:0;"><label>Até</label><input type="date" id="f-relatorio-fim" data-relatorio-campo="dataFim" value="${f.dataFim}"/></div>
       <div class="field" style="margin:0;"><label>Fazenda</label>
-        <select data-relatorio-campo="fazendaId"><option value="">Todas</option>${state.fazendas.map(fz=>`<option value="${fz.id}" ${String(f.fazendaId)===String(fz.id)?'selected':''}>${fz.nome}</option>`).join('')}</select>
+        <select data-relatorio-campo="fazendaId"><option value="">Todas</option>${state.fazendas.map(fz=>`<option value="${fz.id}" ${String(f.fazendaId)===String(fz.id)?'selected':''}>${esc(fz.nome)}</option>`).join('')}</select>
       </div>
       <div class="field" style="margin:0;"><label>Equipamento</label>
-        <select data-relatorio-campo="equipamentoId"><option value="">Todos</option>${state.equipamentos.map(e=>`<option value="${e.id}" ${String(f.equipamentoId)===String(e.id)?'selected':''}>${e.nome}</option>`).join('')}</select>
+        <select data-relatorio-campo="equipamentoId"><option value="">Todos</option>${state.equipamentos.map(e=>`<option value="${e.id}" ${String(f.equipamentoId)===String(e.id)?'selected':''}>${esc(e.nome)}</option>`).join('')}</select>
       </div>
       <div class="field" style="margin:0;"><label>Centro de Custo</label>
-        <select data-relatorio-campo="centroCustoId"><option value="">Todos</option>${state.centrosCusto.map(c=>`<option value="${c.id}" ${String(f.centroCustoId)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}</select>
+        <select data-relatorio-campo="centroCustoId"><option value="">Todos</option>${state.centrosCusto.map(c=>`<option value="${c.id}" ${String(f.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
       </div>
       <div class="field" style="margin:0;"><label>Cultura</label>
-        <select data-relatorio-campo="culturaId"><option value="">Todas</option>${state.culturas.map(c=>`<option value="${c.id}" ${String(f.culturaId)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}</select>
+        <select data-relatorio-campo="culturaId"><option value="">Todas</option>${state.culturas.map(c=>`<option value="${c.id}" ${String(f.culturaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
       </div>
     </div>
   </div>`;
@@ -2044,8 +2066,14 @@ function abrirEditarCadastro(key, id){
   state.cadastroError = '';
   state.modal = {type:'cadastro', key};
 }
+const CAMPO_FILA_POR_CADASTRO = { tanques:'tanqueId', equipamentos:'equipamentoId', operadores:'operadorId', talhoesAreas:'talhaoAreaId' };
 async function excluirCadastro(key, id){
   const cfg = CADASTROS[key];
+  const campoFila = CAMPO_FILA_POR_CADASTRO[key];
+  if(campoFila && state.filaAbastecimentos.some(a=>a[campoFila]===id)){
+    alert(`Não é possível excluir: há abastecimento(s) ainda não sincronizado(s) neste aparelho usando este(a) ${cfg.singular.toLowerCase()}. Sincronize a fila antes de excluir.`);
+    return;
+  }
   if(!confirm(`Excluir este(a) ${cfg.singular.toLowerCase()}? Essa ação não pode ser desfeita.`)) return;
   const { error } = await db.from(cfg.table).delete().eq('id', id);
   if(error){ alert('Não foi possível excluir: ' + mensagemErroSupabase(error)); return; }
@@ -2064,28 +2092,28 @@ function campoHtml(f, d){
     return `<div class="field"><label><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto; margin-right:6px;"/> ${f.label}</label></div>`;
   }
   if(f.type==='textarea'){
-    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3">${val}</textarea></div>`;
+    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3">${esc(val)}</textarea></div>`;
   }
   if(f.type==='select'){
-    return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>`;
+    return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${esc(o.value)}" ${val===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select></div>`;
   }
   if(f.type==='fk'){
     const lista = (state[f.refEntity]||[]).filter(x=>x.ativo!==false);
     return `<div class="field"><label>${f.label}</label>
       <select id="${id}">
         ${f.required?'':'<option value="">—</option>'}
-        ${lista.map(o=>`<option value="${o.id}" ${String(val)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+        ${lista.map(o=>`<option value="${o.id}" ${String(val)===String(o.id)?'selected':''}>${esc(o.nome)}</option>`).join('')}
       </select>
       ${lista.length===0?`<span class="hint">Cadastre ${CADASTROS[f.refEntity].singular.toLowerCase()} antes.</span>`:''}
     </div>`;
   }
   if(f.type==='date'){
-    return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${val}"/></div>`;
+    return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${esc(val)}"/></div>`;
   }
   if(f.type==='number'){
-    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
+    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${esc(val)}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
-  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
+  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${esc(val)}" ${f.placeholder?`placeholder="${esc(f.placeholder)}"`:''}/></div>`;
 }
 function ModalCadastro(){
   const key = state.modal.key;
@@ -2167,8 +2195,8 @@ function PageAdminUsuarios(){
       <tbody>
         ${state.perfis.map(p=>`
           <tr>
-            <td><strong>${p.nome}</strong></td>
-            <td class="mono">${p.usuario}</td>
+            <td><strong>${esc(p.nome)}</strong></td>
+            <td class="mono">${esc(p.usuario)}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
             <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
@@ -2186,8 +2214,8 @@ function ModalUsuario(){
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
@@ -2202,9 +2230,9 @@ function ModalPermissoes(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar acesso — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
+        <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
             <option value="operador" ${d.papel==='operador'?'selected':''}>Operador</option>
@@ -2375,7 +2403,11 @@ function attachEvents(){
     saveAbastecimentoBtn.onclick = ()=> salvarAbastecimento();
   }
   document.querySelectorAll('[data-ab-equipamento-change]').forEach(el=>{
-    el.onchange = ()=> atualizarCamposDependentesAbastecimento();
+    el.onchange = ()=>{
+      const leituraEl = document.getElementById('f-ab-leitura');
+      if(leituraEl) leituraEl.value = '';
+      atualizarCamposDependentesAbastecimento();
+    };
   });
   document.querySelectorAll('[data-ab-volume-change]').forEach(el=>{
     el.oninput = ()=> atualizarAlertaCapacidadeTanque();

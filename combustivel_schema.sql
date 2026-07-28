@@ -597,4 +597,75 @@ $$;
 create trigger log_abastecimentos after insert or update or delete on abastecimentos for each row execute function trg_log_auditoria();
 create trigger log_entradas_estoque after insert or update or delete on entradas_estoque for each row execute function trg_log_auditoria();
 create trigger log_medicoes_fisicas after insert or update or delete on medicoes_fisicas for each row execute function trg_log_auditoria();
+
+-- ===================================================================
+-- MIGRAÇÃO: Correções de revisão de segurança
+--
+-- Rode este bloco depois que as Fases 1 a 5 já estiverem no ar.
+--
+-- 1) A validação de leitura do medidor comparava com o MAIOR valor já
+--    registrado para o equipamento, não com a leitura vizinha na
+--    linha do tempo. Isso rejeitava lançamentos retroativos válidos
+--    (um abastecimento de uma data anterior sempre teria leitura menor
+--    que a mais recente) e deixava passar, num lançamento fora de
+--    ordem, uma leitura maior que a de um abastecimento que já
+--    aconteceu depois dela. Agora compara com a leitura anterior e a
+--    posterior mais próximas no tempo, não com o extremo de tudo.
+--
+-- 2) "inserir alertas" exigia só 'visualizar' para permitir que a
+--    detecção (que roda no navegador de qualquer um que abre a tela)
+--    gravasse alertas novos sem precisar de permissão de edição. Só
+--    que isso também deixa qualquer usuário com acesso de visualização
+--    inserir, direto pela API, alertas arbitrários (não só os que a
+--    detecção geraria) — passa a exigir 'editar', como as demais
+--    tabelas do app. A chamada de insert em detectarAlertas() já
+--    ignora erro de permissão silenciosamente, então usuários só de
+--    visualização simplesmente deixam de gerar alertas novos ao abrir
+--    a tela (quem tem 'editar' continua atualizando normalmente).
+-- ===================================================================
+
+create or replace function trg_valida_leitura_medidor() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  maior_anterior numeric;
+  menor_posterior numeric;
+begin
+  if new.leitura_medidor is not null then
+    select max(leitura_medidor) into maior_anterior
+    from abastecimentos
+    where equipamento_id = new.equipamento_id
+      and id is distinct from new.id
+      and leitura_medidor is not null
+      and data_hora <= new.data_hora;
+    select min(leitura_medidor) into menor_posterior
+    from abastecimentos
+    where equipamento_id = new.equipamento_id
+      and id is distinct from new.id
+      and leitura_medidor is not null
+      and data_hora > new.data_hora;
+    if maior_anterior is not null and new.leitura_medidor < maior_anterior then
+      raise exception 'A leitura do medidor (%) não pode ser menor que a leitura de um abastecimento anterior deste equipamento (%).', new.leitura_medidor, maior_anterior;
+    end if;
+    if menor_posterior is not null and new.leitura_medidor > menor_posterior then
+      raise exception 'A leitura do medidor (%) não pode ser maior que a leitura de um abastecimento posterior deste equipamento (%).', new.leitura_medidor, menor_posterior;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop policy if exists "inserir alertas" on alertas;
+create policy "inserir alertas" on alertas for insert with check (tem_permissao('alertas','editar'));
+
+-- 3) detectarAlertas() no navegador faz um select pra ver se um alerta já
+--    está aberto antes de inserir um novo (dedupe por tipo+tanque+
+--    equipamento+abastecimento) — sem trava no banco, duas abas ou dois
+--    usuários abrindo a tela ao mesmo tempo podem passar os dois pelo
+--    "ainda não existe" e gerar alertas duplicados pra mesma condição.
+--    Esse índice único (só entre os "abertos") faz o segundo insert
+--    conflitante falhar — e a chamada de insert em detectarAlertas() já
+--    ignora erro, então o duplicado simplesmente não entra.
+create unique index if not exists idx_alertas_chave_aberto on alertas (
+  tipo, coalesce(tanque_id,-1), coalesce(equipamento_id,-1), coalesce(abastecimento_id,-1)
+) where status = 'aberto';
 create trigger log_ajustes_estoque after insert or update or delete on ajustes_estoque for each row execute function trg_log_auditoria();
