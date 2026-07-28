@@ -338,6 +338,16 @@ const dbCana = supabase.createClient(
   'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_CANA'
 );
 
+// Idem, só de leitura, pro projeto do Cereais — usado só pro card "AE
+// Cereais" no Painel por enquanto. Banco próprio e separado, mesmo padrão
+// do Cana. O AE Cereais ainda não tem receita/Resultado próprio (só
+// Despesas), então ele continua no fallback "custo de combustível
+// rateado, parcial" em Resultados — ver resultadoBrutoOperacao().
+const dbCereais = supabase.createClient(
+  'https://SUBSTITUA-CEREAIS.supabase.co',
+  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_CEREAIS'
+);
+
 function rowToFazenda(r){ return {id:r.id, nome:r.nome, areaHa:r.area_ha, localizacao:r.localizacao||'', observacao:r.observacao||''}; }
 function fazendaToRow(f){ return {nome:f.nome, area_ha:f.areaHa||null, localizacao:f.localizacao||'', observacao:f.observacao||''}; }
 function rowToOperacao(r){ return {id:r.id, fazendaId:r.fazenda_id, operacao:r.operacao, areaHa:r.area_ha}; }
@@ -370,6 +380,7 @@ async function loadAll(){
   carregarResultadoPecuaria();
   carregarIndicadoresCana();
   carregarResultadoCana();
+  carregarIndicadoresCereais();
   carregarCombustivel();
 }
 
@@ -420,6 +431,35 @@ async function carregarIndicadoresCana(){
     };
   } catch(e){
     state.indicadores.cana = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, toneladasMes:null};
+  }
+  render();
+}
+
+// Mesmo padrão de carregarIndicadoresCana(), lendo do banco próprio do
+// Cereais (dbCereais). Produtividade de grãos é em sacas, não toneladas
+// (colheitas_graos.sacas) — unidade diferente da Cana de propósito.
+async function carregarIndicadoresCereais(){
+  state.indicadores.cereais = {...state.indicadores.cereais, loading:true, erro:''};
+  render();
+  try{
+    const [talRes, planRes, colRes] = await Promise.all([
+      dbCereais.from('talhoes_areas').select('id, tipo').eq('tipo','talhao'),
+      dbCereais.from('plantios_graos').select('id, ativo'),
+      dbCereais.from('colheitas_graos').select('data, sacas'),
+    ]);
+    if(talRes.error) throw talRes.error;
+    if(planRes.error) throw planRes.error;
+    if(colRes.error) throw colRes.error;
+    const hoje = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    state.indicadores.cereais = {
+      loading:false, erro:'',
+      talhoes: (talRes.data||[]).length,
+      plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
+      sacasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.sacas||0),0),
+    };
+  } catch(e){
+    state.indicadores.cereais = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, sacasMes:null};
   }
   render();
 }
@@ -741,6 +781,7 @@ const state = {
     pecuaria: {loading:true, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null},
     combustivel: {loading:true, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null},
     cana: {loading:true, erro:'', talhoes:null, plantiosAtivos:null, toneladasMes:null},
+    cereais: {loading:true, erro:'', talhoes:null, plantiosAtivos:null, sacasMes:null},
   },
   // combustivelPorFrente: custo mensal de combustível já separado por
   // operação de terra (pecuária/cana/cereais) — combinado com o resultado
@@ -1098,7 +1139,7 @@ function Header(){
 
 /* ===================== PAINEL ===================== */
 function AppCard(a){
-  const ind = a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='combustivel' ? state.indicadores.combustivel : a.slug==='cana' ? state.indicadores.cana : null;
+  const ind = a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='combustivel' ? state.indicadores.combustivel : a.slug==='cana' ? state.indicadores.cana : a.slug==='cereais' ? state.indicadores.cereais : null;
   let stats = '';
   if(ind){
     if(ind.loading){
@@ -1122,6 +1163,12 @@ function AppCard(a){
         <div class="app-card-stat"><div class="v">${fmtInt(ind.talhoes)}</div><div class="l">Talhões</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.plantiosAtivos)}</div><div class="l">Plantios ativos</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.toneladasMes)} t</div><div class="l">Colhido no mês</div></div>
+      </div>`;
+    } else if(a.slug==='cereais'){
+      stats = `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.talhoes)}</div><div class="l">Talhões</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.plantiosAtivos)}</div><div class="l">Plantios ativos</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.sacasMes)} sc</div><div class="l">Colhido no mês</div></div>
       </div>`;
     }
   }

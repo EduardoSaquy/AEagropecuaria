@@ -59,18 +59,18 @@ create table apps (
 
 alter table apps enable row level security;
 
--- Semente inicial: os três apps que já existem, e o que ainda está
--- planejado (cereais) — sem URL ainda, mostrado como "em breve" até ser
--- publicado. Dá pra editar tudo isso depois pela tela de Apps, sem
--- precisar mexer em código. O AE Cana não tem projeto Supabase próprio —
--- ele integra de propósito com o mesmo banco do AE Combustível (ver
--- README, seção "AE Cana") — por isso os indicadores/Resultados dele na
--- Matriz são lidos do MESMO client dbCombustivel, não de um dbCana à parte.
+-- Semente inicial: os quatro apps já existentes. Todos com banco Supabase
+-- PRÓPRIO e SEPARADO (Pecuária, Combustível, Cana e Cereais) — a Matriz só
+-- lê indicadores de cada um (um client Supabase por app: dbPecuaria/
+-- dbCombustivel/dbCana/dbCereais), sem duplicar dado nem centralizar login/
+-- financeiro. Dá pra editar tudo isso depois pela tela de Apps, sem
+-- precisar mexer em código (inclusive marcar um app como "em breve" de
+-- novo, se um dia fizer sentido).
 insert into apps (nome, slug, descricao, url, cor, ordem, status) values
   ('AE Pecuária', 'pecuaria', 'Gestão nutricional, estoque e financeiro do confinamento, cria e pasto.', 'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', '#1D5DA8', 1, 'ativo'),
   ('AE Combustível', 'combustivel', 'Controle de estoque e abastecimento de diesel, Arla 32 e gasolina das frentes de cana, grãos e pecuária.', 'https://eduardosaquy.github.io/AEagropecuaria/AECombustivel.html', '#C98A2B', 2, 'ativo'),
   ('AE Cana', 'cana', 'Plantio, tratos culturais, colheita e financeiro da operação de cana-de-açúcar.', 'https://eduardosaquy.github.io/AEagropecuaria/AECana.html', '#0C7A43', 3, 'ativo'),
-  ('AE Cereais', 'cereais', 'Gestão da operação de grãos e cereais.', null, '#8A5A2B', 4, 'em_breve');
+  ('AE Cereais', 'cereais', 'Plantio, tratos culturais, colheita e despesas da operação de grãos e cereais.', 'https://eduardosaquy.github.io/AEagropecuaria/AECereais.html', '#8A5A2B', 4, 'ativo');
 
 -- ---------- PROFILES (login central da matriz) ----------
 create table profiles (
@@ -137,6 +137,17 @@ update apps set
   url = 'https://eduardosaquy.github.io/AEagropecuaria/AECana.html',
   descricao = 'Plantio, tratos culturais, colheita e financeiro da operação de cana-de-açúcar.'
 where slug = 'cana' and status = 'em_breve' and url is null;
+
+-- ===================================================================
+-- MIGRAÇÃO: AE Cereais ativo
+-- Mesmo caso do AE Cana acima, pro AE Cereais.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+update apps set
+  status = 'ativo',
+  url = 'https://eduardosaquy.github.io/AEagropecuaria/AECereais.html',
+  descricao = 'Plantio, tratos culturais, colheita e despesas da operação de grãos e cereais.'
+where slug = 'cereais' and status = 'em_breve' and url is null;
 
 -- ---------- PRIMEIRO ADMINISTRADOR ----------
 -- Troque o UUID (o mesmo criado em Authentication > Users) e o nome,
