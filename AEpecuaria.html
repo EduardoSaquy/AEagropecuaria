@@ -66,6 +66,18 @@
   }
   .brand-mark{
     width:32px;height:32px;flex-shrink:0;
+    border-radius:9px;
+    background:linear-gradient(135deg, var(--verde-escuro), var(--verde-medio));
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.18);
+  }
+  .brand-mark-text{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:13px;
+    color:#fff;
+    letter-spacing:-0.5px;
+    line-height:1;
   }
   .brand-name{
     font-family:'Fraunces',serif;
@@ -1301,20 +1313,11 @@ function SubTabs(){
     `).join('')}
   </div>`;
 }
-// Cabeça de boi estilizada (chifres + focinho) — assinatura visual do app,
-// no mesmo traço fino usado nos ícones do menu (iconLeaf, iconSilo etc.).
-// Cores fixas (não currentColor) porque esse ícone aparece tanto no fundo
-// escuro do sidebar quanto no card branco de login — verde-médio e couro
-// têm contraste suficiente nos dois fundos, ao contrário do verde-escuro
-// (que sumia contra o próprio sidebar).
+// Monograma "AE" em badge com o mesmo gradiente do sidebar — funciona igual
+// no fundo escuro do sidebar e no card branco de login, pois o badge carrega
+// seu próprio fundo (ao contrário de um ícone com cor fixa sobre fundo variável).
 function brandMark(){
-  return `<svg class="brand-mark" viewBox="0 0 32 32" fill="none">
-    <path d="M9 13 C6 9, 4 7, 3 4" stroke="#A85C2E" stroke-width="2.3" stroke-linecap="round"/>
-    <path d="M23 13 C26 9, 28 7, 29 4" stroke="#A85C2E" stroke-width="2.3" stroke-linecap="round"/>
-    <path d="M9 17a7 6 0 1 0 14 0a7 6 0 1 0 -14 0" stroke="#2E9E58" stroke-width="2.1" stroke-linecap="round"/>
-    <circle cx="12.8" cy="16" r="1.1" fill="#2E9E58"/>
-    <circle cx="19.2" cy="16" r="1.1" fill="#2E9E58"/>
-  </svg>`;
+  return `<div class="brand-mark"><span class="brand-mark-text">AE</span></div>`;
 }
 function iconLeaf(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21c0-9 6-16 15-16-1 9-8 15-15 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
 function iconSilo(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3h8l2 5v13H6V8Z"/><path d="M6 8h12"/><path d="M10 21v-6h4v6"/></svg>`; }
