@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AE Matriz</title>
+<link rel="manifest" href="manifest_matriz.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0F2A4A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --verde-escuro:#0F2A4A;
+    --verde-medio:#1D5DA8;
+    --verde-claro:#9DC0E8;
+    --grafite:#1E2A38;
+    --cinza:#65758A;
+    --cinza-claro:#DEE6F0;
+    --cinza-bg:#F2F5FA;
+    --branco:#FFFFFF;
+    --trigo:#C98A2B;
+    --alerta:#B3462F;
+    --alerta-bg:#F6E7E2;
+    --ok-bg:#E5EEF9;
+    --bom:#0C7A43;
+    --bom-bg:#E3F1E8;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(15,42,74,0.06), 0 4px 12px rgba(15,42,74,0.06);
+    --shadow-lift:0 10px 24px rgba(15,42,74,0.12), 0 2px 6px rgba(15,42,74,0.08);
+    --grad-escuro:linear-gradient(165deg, #0F2A4A 0%, #0A1F38 60%, #081A30 100%);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:var(--cinza-bg);
+    color:var(--grafite);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{display:flex; min-height:100vh;}
+  /* ---------- SIDEBAR ---------- */
+  .sidebar{
+    width:240px; flex-shrink:0; background:var(--grad-escuro); color:var(--branco);
+    display:flex; flex-direction:column; padding:26px 16px;
+    box-shadow: 1px 0 0 rgba(255,255,255,0.04) inset;
+  }
+  .brand{display:flex; align-items:center; gap:11px; padding:0 8px 24px 8px; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1);}
+  .brand-mark{width:34px;height:34px;flex-shrink:0; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.25));}
+  .brand-name{font-family:'Fraunces',serif; font-weight:600; font-size:19px; letter-spacing:0.2px;}
+  .brand-tag{font-size:10px; text-transform:uppercase; letter-spacing:1.2px; color:rgba(255,255,255,0.4); margin-top:1px;}
+  nav{margin-top:14px; display:flex; flex-direction:column; gap:3px;}
+  .nav-item{
+    display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:9px; cursor:pointer;
+    font-size:13.5px; font-weight:500; color:rgba(255,255,255,0.62); transition:background 0.15s, color 0.15s;
+    border:none; background:none; width:100%; text-align:left;
+  }
+  .nav-item:hover{background:rgba(255,255,255,0.06); color:var(--branco);}
+  .nav-item.active{background:linear-gradient(90deg, var(--verde-medio), #2569BC); color:var(--branco); box-shadow:0 4px 12px rgba(29,93,168,0.35);}
+  .nav-item svg{flex-shrink:0; opacity:0.9;}
+  .nav-item-ic{
+    width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,0.08); flex-shrink:0;
+  }
+  .nav-item.active .nav-item-ic{background:rgba(255,255,255,0.16);}
+  .sidebar-footer{margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.1); font-size:10.5px; color:rgba(255,255,255,0.38); line-height:1.5;}
+  /* ---------- MAIN ---------- */
+  .main{flex:1; padding:32px 40px 60px 40px; max-width:1180px;}
+  .page-header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px; gap:16px; flex-wrap:wrap;}
+  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--verde-medio); font-weight:600; margin:0 0 4px 0;}
+  h1{font-family:'Fraunces',serif; font-size:28px; font-weight:600; margin:0; color:var(--verde-escuro);}
+  .page-desc{color:var(--cinza); font-size:13.5px; margin-top:6px; max-width:560px;}
+  .btn{
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; padding:10px 18px; border-radius:8px;
+    border:none; cursor:pointer; transition:filter 0.15s, transform 0.1s; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--verde-escuro); color:var(--branco);}
+  .btn-primary:hover{filter:brightness(1.15);}
+  .btn-ghost{background:transparent; color:var(--verde-escuro); border:1px solid var(--cinza-claro);}
+  .btn-ghost:hover{background:var(--branco);}
+  .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
+  .btn-danger-ghost:hover{background:var(--alerta-bg);}
+  .btn-sm{padding:6px 12px; font-size:12.5px;}
+
+  .card{background:var(--branco); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--cinza-claro);}
+  .card-pad{padding:22px 24px;}
+  .stat-row{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px;}
+  .stat-card{background:var(--branco); border:1px solid var(--cinza-claro); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow);}
+  .stat-card-ic{width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; margin-bottom:12px;}
+  .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
+  .stat-value{font-family:'IBM Plex Mono',monospace; font-size:23px; font-weight:600; color:var(--verde-escuro); margin-top:6px;}
+  .stat-value.alerta{color:var(--alerta);}
+  .stat-value.bom{color:var(--bom);}
+
+  .op-chip{display:inline-flex; align-items:center; gap:8px; white-space:nowrap;}
+  .op-chip-ic{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+
+  /* ---------- FILTRO DE PERÍODO (Resultados) ---------- */
+  .periodo-tabs{display:inline-flex; background:var(--cinza-bg); border-radius:8px; padding:3px; gap:2px;}
+  .periodo-tab{font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; padding:7px 16px; border-radius:6px; border:none; background:none; color:var(--cinza); cursor:pointer;}
+  .periodo-tab:hover{color:var(--verde-escuro);}
+  .periodo-tab.active{background:var(--branco); color:var(--verde-escuro); box-shadow:var(--shadow);}
+  .valor-clicavel{
+    background:none; border:none; padding:2px 6px; border-radius:5px; font-family:'IBM Plex Mono',monospace;
+    font-size:13.5px; color:var(--verde-medio); cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;
+  }
+  .valor-clicavel:hover{background:var(--ok-bg);}
+  .valor-clicavel.neg{color:var(--alerta);}
+  .grafico-barras-svg{display:block; width:100%; height:auto;}
+  .gbar{cursor:pointer;}
+  .gbar:hover{opacity:0.82;}
+
+  /* ---------- DONUTS (Resultados por operação) ---------- */
+  .donuts-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px; margin-bottom:22px;}
+  .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
+  .donut-wrap{flex-shrink:0;}
+  .donut-svg{display:block;}
+  .donut-slice{cursor:pointer; transition:opacity 0.15s;}
+  .donut-slice:hover, .donut-slice.hover{opacity:0.82;}
+  .donut-slice:focus{outline:2px solid var(--verde-medio); outline-offset:2px;}
+  .donut-label{font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; fill:#fff; pointer-events:none;}
+  .donut-center-value{font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; fill:var(--verde-escuro);}
+  .donut-center-label{font-family:'Inter',sans-serif; font-size:9.5px; fill:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
+  .painel-legenda{flex:1; min-width:180px; display:flex; flex-direction:column; gap:2px;}
+  .legenda-row{display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px; padding:7px 8px; border-radius:6px;}
+  .legenda-row:hover, .legenda-row.hover{background:var(--cinza-bg);}
+  .legenda-swatch{width:12px; height:12px; border-radius:3px; flex-shrink:0;}
+  .legenda-nome{font-size:13px; color:var(--grafite);}
+  .legenda-valor{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--grafite); font-variant-numeric:tabular-nums;}
+  .legenda-pct{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--cinza); min-width:48px; text-align:right; font-variant-numeric:tabular-nums;}
+  .painel-tooltip{
+    position:fixed; pointer-events:none; z-index:80; display:none; max-width:220px;
+    background:var(--verde-escuro); color:#fff; padding:8px 12px; border-radius:8px;
+    font-size:12.5px; box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  }
+  .painel-tooltip .v{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px;}
+  .painel-tooltip .l{font-size:11px; color:rgba(255,255,255,0.75); margin-top:2px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza); font-weight:600; padding:10px 14px; border-bottom:1px solid var(--cinza-claro); white-space:nowrap;}
+  td{padding:12px 14px; border-bottom:1px solid var(--cinza-claro); color:var(--grafite); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .pill{display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;}
+  .pill-ok{background:var(--ok-bg); color:var(--verde-medio);}
+  .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
+  .pill-cat{background:var(--cinza-claro); color:var(--grafite);}
+  .pill-warn{background:#F5E9D7; color:var(--trigo);}
+
+  /* form modal */
+  .overlay{position:fixed; inset:0; background:rgba(31,61,46,0.35); display:flex; align-items:flex-start; justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;}
+  .modal{background:var(--branco); border-radius:14px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,0.25);}
+  .modal-head{padding:20px 24px; border-bottom:1px solid var(--cinza-claro); display:flex; justify-content:space-between; align-items:center;}
+  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--verde-escuro);}
+  .modal-close{background:none;border:none;cursor:pointer;color:var(--cinza);font-size:20px; line-height:1;}
+  .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
+  .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  label{font-size:12px; font-weight:600; color:var(--grafite);}
+  input, select, textarea{
+    font-family:'Inter',sans-serif; font-size:13.5px; padding:9px 11px; border:1px solid var(--cinza-claro);
+    border-radius:7px; background:var(--branco); color:var(--grafite); outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--verde-medio); box-shadow:0 0 0 3px rgba(61,107,79,0.12);}
+  input[type=color]{padding:3px; height:38px; width:100%;}
+  .hint{font-size:11px; color:var(--cinza);}
+  .composicao-row{display:grid; grid-template-columns: 1fr 90px 32px; gap:8px; align-items:center;}
+  .total-bar{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:8px; background:var(--cinza-bg); font-size:13px;}
+  .total-bar.ok{color:var(--verde-medio); font-weight:600;}
+
+  .empty{text-align:center; padding:50px 20px; color:var(--cinza);}
+  .empty h4{font-family:'Fraunces',serif; color:var(--verde-escuro); margin:10px 0 6px 0; font-size:16px;}
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px;}
+
+  /* ---------- LOGIN ---------- */
+  .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--cinza-bg);}
+  .login-shell{
+    display:flex; width:100%; max-width:940px; min-height:560px; border-radius:20px; overflow:hidden;
+    box-shadow:0 30px 80px rgba(15,42,74,0.22), 0 8px 24px rgba(15,42,74,0.1); background:var(--branco);
+  }
+  .login-hero{
+    flex:1 1 46%; background:var(--grad-escuro); color:#fff; padding:52px 44px;
+    display:flex; flex-direction:column; justify-content:space-between; position:relative; overflow:hidden;
+  }
+  .login-hero::before, .login-hero::after{
+    content:''; position:absolute; border-radius:50%; background:radial-gradient(circle, rgba(157,192,232,0.16), transparent 70%);
+  }
+  .login-hero::before{width:340px; height:340px; top:-120px; right:-100px;}
+  .login-hero::after{width:260px; height:260px; bottom:-100px; left:-60px; background:radial-gradient(circle, rgba(201,138,43,0.14), transparent 70%);}
+  .login-hero-top{position:relative; z-index:1;}
+  .login-hero .login-brand .brand-name{font-size:20px; color:#fff;}
+  .login-hero-title{font-family:'Fraunces',serif; font-weight:600; font-size:30px; line-height:1.22; margin:34px 0 14px 0; position:relative; z-index:1;}
+  .login-hero-sub{font-size:13.5px; color:rgba(255,255,255,0.68); line-height:1.6; max-width:300px; position:relative; z-index:1;}
+  .login-hero-features{display:flex; flex-direction:column; gap:16px; margin-top:auto; position:relative; z-index:1;}
+  .login-hero-feature{display:flex; align-items:center; gap:12px; font-size:13px; color:rgba(255,255,255,0.85);}
+  .login-hero-feature-ic{
+    width:32px; height:32px; border-radius:9px; background:rgba(255,255,255,0.1); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .login-card-wrap{flex:1 1 54%; padding:56px 48px; display:flex; flex-direction:column; justify-content:center;}
+  .login-card-eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--verde-medio); font-weight:600; margin:0 0 6px 0;}
+  .login-card-title{font-family:'Fraunces',serif; font-size:24px; font-weight:600; color:var(--verde-escuro); margin:0 0 28px 0;}
+  .login-field{margin-bottom:16px; display:flex; flex-direction:column; gap:5px;}
+  .login-field input{width:100%; padding:11px 13px;}
+  .login-error{background:var(--alerta-bg); color:var(--alerta); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px;}
+  .login-btn{width:100%; margin-top:6px; justify-content:center; padding:12px 18px;}
+  .login-btn:disabled{opacity:0.6; cursor:default;}
+  .login-loading{min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--cinza); font-size:14px;}
+  /* cartão simples e centralizado — usado só na tela de "aguardando liberação" */
+  .login-card{background:var(--branco); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.12); border:1px solid var(--cinza-claro); padding:40px 36px; width:100%; max-width:360px;}
+  .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:28px;}
+  .login-brand .brand-name{color:var(--verde-escuro); font-family:'Fraunces',serif; font-weight:600; font-size:19px;}
+
+  /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
+  .sidebar-user{margin-bottom:16px; padding-bottom:18px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; gap:10px; font-size:12.5px; color:rgba(255,255,255,0.85);}
+  .sidebar-user-top{display:flex; align-items:center; gap:10px;}
+  .sidebar-user-avatar{
+    width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, var(--verde-medio), #4A8FD6); color:#fff; font-family:'Fraunces',serif; font-weight:600; font-size:14px;
+  }
+  .sidebar-user-info{overflow:hidden;}
+  .sidebar-user-nome{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:#fff;}
+  .sidebar-user-papel{font-size:10.5px; color:rgba(255,255,255,0.45); text-transform:uppercase; letter-spacing:0.6px;}
+  .sidebar-user-actions{display:flex; gap:8px;}
+  .btn-sair{background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:6px 10px; border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap; flex:1;}
+  .btn-sair:hover{background:rgba(255,255,255,0.18);}
+  .status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
+  .status-dot.ativo{background:var(--bom);}
+  .status-dot.inativo{background:var(--cinza);}
+
+  /* ---------- PAINEL: cards de app ---------- */
+  .app-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:18px;}
+  .app-card{
+    background:var(--branco); border:1px solid var(--cinza-claro); border-radius:14px; padding:22px 24px; box-shadow:var(--shadow);
+    position:relative; overflow:hidden; display:flex; flex-direction:column; gap:12px;
+    transition:transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .app-card::before{
+    content:''; position:absolute; top:0; left:0; right:0; height:4px; background:var(--app-cor, var(--verde-medio));
+  }
+  .app-card:hover{transform:translateY(-3px); box-shadow:var(--shadow-lift);}
+  .app-card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .app-card-icon{
+    width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .app-card-titles{flex:1; min-width:0;}
+  .app-card-nome{font-family:'Fraunces',serif; font-weight:600; font-size:17px; color:var(--verde-escuro); line-height:1.25;}
+  .app-card-desc{font-size:12.5px; color:var(--cinza); line-height:1.55;}
+  .app-card-stats{display:flex; gap:20px; flex-wrap:wrap; margin-top:4px; padding-top:12px; border-top:1px dashed var(--cinza-claro);}
+  .app-card-stat .v{font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--verde-escuro); font-size:17px;}
+  .app-card-stat .l{font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);}
+  .app-card-actions{display:flex; gap:8px; margin-top:auto; padding-top:6px;}
+  .badge-em-breve{background:var(--cinza-claro); color:var(--cinza);}
+
+  /* ---------- BARRA SUPERIOR / MENU (celular) ---------- */
+  .sidebar-topbar{display:contents;}
+  .menu-toggle{display:none;}
+  .sidebar-collapsible{display:contents;}
+
+  /* ---------- RESPONSIVO (celular) ---------- */
+  @media (max-width:760px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%; flex-direction:column; align-items:stretch; padding:0;}
+    .sidebar-topbar{display:flex; align-items:center; justify-content:space-between; padding:12px 16px;}
+    .brand{border-bottom:none; padding:0; margin-bottom:0; flex-shrink:0;}
+    .menu-toggle{
+      display:flex; align-items:center; justify-content:center; width:38px; height:38px; flex-shrink:0;
+      border-radius:9px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:#fff; cursor:pointer;
+    }
+    .sidebar-collapsible{display:none; flex-direction:column; padding:0 16px 18px 16px;}
+    .sidebar-collapsible.open{display:flex;}
+    .sidebar-user{margin-bottom:14px; padding-bottom:14px;}
+    nav{margin-top:0; flex-direction:column; gap:3px;}
+    .nav-item{white-space:nowrap;}
+    .sidebar-footer{margin-top:14px; padding-top:14px;}
+    .main{padding:20px 16px 48px 16px; max-width:100%;}
+    .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
+    h1{font-size:23px;}
+    .btn{width:100%; justify-content:center;}
+    .stat-row{grid-template-columns:1fr; gap:10px;}
+    .donuts-row{grid-template-columns:1fr;}
+    .toolbar{flex-direction:column; align-items:stretch;}
+    .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+    .field-row{grid-template-columns:1fr;}
+    .overlay{padding:16px 10px;}
+    .app-grid{grid-template-columns:1fr;}
+    .composicao-row{grid-template-columns:1fr 68px 28px; gap:6px;}
+    .painel-resultados{flex-direction:column; align-items:stretch; gap:14px;}
+    .donut-wrap{align-self:center;}
+    .painel-legenda{min-width:0; width:100%;}
+    .login-wrap{padding:0;}
+    .login-shell{flex-direction:column; border-radius:0; min-height:100vh; box-shadow:none;}
+    .login-hero{padding:40px 28px 32px 28px;}
+    .login-hero-title{font-size:24px; margin:22px 0 10px 0;}
+    .login-hero-features{display:none;}
+    .login-card-wrap{padding:36px 28px;}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===================== SUPABASE ===================== */
+// Projeto da própria matriz (cadastro central de fazendas, apps e
+// usuários). Crie um projeto Supabase novo, rode matriz_schema.sql
+// nele e substitua a URL/chave abaixo — mesmo processo do AECombustível.
+const db = supabase.createClient(
+  'https://SUBSTITUA.supabase.co',
+  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE'
+);
+
+// Cliente extra, só de leitura, apontando pro projeto da Pecuária —
+// usado para os indicadores ao vivo do card "AE Pecuária" no Painel.
+// Não duplica dado nenhum: cada consulta lê direto do banco da Pecuária.
+const dbPecuaria = supabase.createClient(
+  'https://leojfqlbdtlriemdgnyw.supabase.co',
+  'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
+);
+
+// Idem, só de leitura, pro projeto do Combustível — usado pros indicadores
+// do card "AE Combustível" e pra ratear o custo de combustível dentro da
+// despesa de cada operação de terra (pecuária/cana/cereais) em Resultados.
+const dbCombustivel = supabase.createClient(
+  'https://SUBSTITUA-COMBUSTIVEL.supabase.co',
+  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_COMBUSTIVEL'
+);
+
+// Idem, só de leitura, pro projeto do Cana — usado pro card "AE Cana" no
+// Painel e pelo Resultado dele. Banco próprio e separado (mesmo padrão da
+// Pecuária/Combustível acima) — ver README, seção "AE Cana".
+const dbCana = supabase.createClient(
+  'https://SUBSTITUA-CANA.supabase.co',
+  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_CANA'
+);
+
+// Idem, só de leitura, pro projeto do Cereais — usado só pro card "AE
+// Cereais" no Painel por enquanto. Banco próprio e separado, mesmo padrão
+// do Cana. O AE Cereais ainda não tem receita/Resultado próprio (só
+// Despesas), então ele continua no fallback "custo de combustível
+// rateado, parcial" em Resultados — ver resultadoBrutoOperacao().
+const dbCereais = supabase.createClient(
+  'https://SUBSTITUA-CEREAIS.supabase.co',
+  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_CEREAIS'
+);
+
+function rowToFazenda(r){ return {id:r.id, nome:r.nome, areaHa:r.area_ha, localizacao:r.localizacao||'', observacao:r.observacao||''}; }
+function fazendaToRow(f){ return {nome:f.nome, area_ha:f.areaHa||null, localizacao:f.localizacao||'', observacao:f.observacao||''}; }
+function rowToOperacao(r){ return {id:r.id, fazendaId:r.fazenda_id, operacao:r.operacao, areaHa:r.area_ha}; }
+function rowToApp(r){ return {id:r.id, nome:r.nome, slug:r.slug, descricao:r.descricao||'', url:r.url||'', cor:r.cor||'#1D5DA8', ordem:r.ordem||0, status:r.status||'em_breve'}; }
+function appToRow(a){ return {nome:a.nome, slug:a.slug, descricao:a.descricao||'', url:a.url||null, cor:a.cor||'#1D5DA8', ordem:a.ordem||0, status:a.status||'em_breve'}; }
+function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo}; }
+
+async function loadAll(){
+  const [faz, op, ap, perfis] = await Promise.all([
+    db.from('fazendas').select('*').order('nome'),
+    db.from('fazenda_operacoes').select('*'),
+    db.from('apps').select('*').order('ordem'),
+    souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
+  ]);
+  const erroCarregamento = [faz, op, ap, perfis].find(r=>r.error)?.error;
+  if(erroCarregamento){
+    console.error('Erro ao carregar dados da matriz:', erroCarregamento);
+    alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
+  }
+  state.fazendas = (faz.data||[]).map(rowToFazenda);
+  state.fazendaOperacoes = {};
+  (op.data||[]).map(rowToOperacao).forEach(o=>{
+    if(!state.fazendaOperacoes[o.fazendaId]) state.fazendaOperacoes[o.fazendaId] = [];
+    state.fazendaOperacoes[o.fazendaId].push(o);
+  });
+  state.apps = (ap.data||[]).map(rowToApp);
+  state.perfis = (perfis.data||[]).map(rowToPerfil);
+  render();
+  carregarIndicadoresPecuaria();
+  carregarResultadoPecuaria();
+  carregarIndicadoresCana();
+  carregarResultadoCana();
+  carregarIndicadoresCereais();
+  carregarCombustivel();
+}
+
+async function carregarIndicadoresPecuaria(){
+  state.indicadores.pecuaria = {...state.indicadores.pecuaria, loading:true, erro:''};
+  render();
+  try{
+    const [lotesRes, dietasRes] = await Promise.all([
+      dbPecuaria.from('lotes').select('numero_animais, data_fim'),
+      dbPecuaria.from('dietas').select('id', {count:'exact', head:true}),
+    ]);
+    if(lotesRes.error) throw lotesRes.error;
+    if(dietasRes.error) throw dietasRes.error;
+    const ativos = (lotesRes.data||[]).filter(l=>!l.data_fim);
+    state.indicadores.pecuaria = {
+      loading:false, erro:'',
+      lotesAtivos: ativos.length,
+      totalAnimais: ativos.reduce((s,l)=>s+(Number(l.numero_animais)||0),0),
+      dietas: dietasRes.count ?? 0,
+    };
+  } catch(e){
+    state.indicadores.pecuaria = {loading:false, erro:'Não foi possível carregar agora.', lotesAtivos:null, totalAnimais:null, dietas:null};
+  }
+  render();
+}
+
+// Mesmo padrão de carregarIndicadoresPecuaria(), lendo do banco próprio
+// do Cana (dbCana).
+async function carregarIndicadoresCana(){
+  state.indicadores.cana = {...state.indicadores.cana, loading:true, erro:''};
+  render();
+  try{
+    const [talRes, planRes, colRes] = await Promise.all([
+      dbCana.from('talhoes_areas').select('id, tipo').eq('tipo','talhao'),
+      dbCana.from('plantios_cana').select('id, ativo'),
+      dbCana.from('colheitas_cana').select('data, toneladas'),
+    ]);
+    if(talRes.error) throw talRes.error;
+    if(planRes.error) throw planRes.error;
+    if(colRes.error) throw colRes.error;
+    const hoje = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    state.indicadores.cana = {
+      loading:false, erro:'',
+      talhoes: (talRes.data||[]).length,
+      plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
+      toneladasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.toneladas||0),0),
+    };
+  } catch(e){
+    state.indicadores.cana = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, toneladasMes:null};
+  }
+  render();
+}
+
+// Mesmo padrão de carregarIndicadoresCana(), lendo do banco próprio do
+// Cereais (dbCereais). Produtividade de grãos é em sacas, não toneladas
+// (colheitas_graos.sacas) — unidade diferente da Cana de propósito.
+async function carregarIndicadoresCereais(){
+  state.indicadores.cereais = {...state.indicadores.cereais, loading:true, erro:''};
+  render();
+  try{
+    const [talRes, planRes, colRes] = await Promise.all([
+      dbCereais.from('talhoes_areas').select('id, tipo').eq('tipo','talhao'),
+      dbCereais.from('plantios_graos').select('id, ativo'),
+      dbCereais.from('colheitas_graos').select('data, sacas'),
+    ]);
+    if(talRes.error) throw talRes.error;
+    if(planRes.error) throw planRes.error;
+    if(colRes.error) throw colRes.error;
+    const hoje = new Date();
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    state.indicadores.cereais = {
+      loading:false, erro:'',
+      talhoes: (talRes.data||[]).length,
+      plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
+      sacasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.sacas||0),0),
+    };
+  } catch(e){
+    state.indicadores.cereais = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, sacasMes:null};
+  }
+  render();
+}
+
+// Resultado (receita x despesa) da pecuária, lido direto do banco dela —
+// mesma lógica de "custo variável do mês" (ração/pasto/cria) e "custo fixo
+// do mês" (com fallback pro recorrente) que o próprio AE Pecuária usa em
+// Financeiro/Resultados, só que sem o detalhamento por área (aqui o que
+// interessa é o total da fazenda inteira, pra comparar com as outras
+// operações). Se essa lógica mudar lá, precisa atualizar aqui também.
+// Janela de meses cobertos pelo cache mensal: de janeiro de (ano atual - 2)
+// até o mês atual — cobre qualquer Mês/Ano/Safra que os seletores do filtro
+// de período oferecem, sem precisar buscar de novo a cada troca de filtro
+// (as consultas ao banco já trazem TODAS as linhas, sem filtro de data).
+function mesesJanela(){
+  const hoje = new Date();
+  // precisa cobrir a safra mais antiga que safrasDisponiveis() oferece: de
+  // jan a abr o ano-safra atual já é (ano-1), então a 3ª opção do seletor
+  // (safraAtual-2) pode cair 3 anos pra trás — daí o -3 (com folga).
+  const anoIni = hoje.getFullYear()-3;
+  const meses = [];
+  for(let ano=anoIni; ano<=hoje.getFullYear(); ano++){
+    const mFim = ano===hoje.getFullYear() ? hoje.getMonth()+1 : 12;
+    for(let m=1; m<=mFim; m++) meses.push(`${ano}-${String(m).padStart(2,'0')}`);
+  }
+  return meses;
+}
+async function carregarResultadoPecuaria(){
+  state.resultados.pecuaria = {...state.resultados.pecuaria, loading:true, erro:''};
+  render();
+  try{
+    const [ingRes, dietRes, srRes, ptRes, rcRes, cfRes, recRes] = await Promise.all([
+      dbPecuaria.from('ingredientes').select('id, preco_kg'),
+      dbPecuaria.from('dietas').select('id, itens'),
+      dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg'),
+      dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
+      dbPecuaria.from('reproducao_custos').select('data, custo'),
+      dbPecuaria.from('custos_fixos').select('nome, categoria, valor_mensal, mes, areas'),
+      dbPecuaria.from('receitas').select('data, descricao, valor'),
+    ]);
+    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, cfRes, recRes]) if(r.error) throw r.error;
+
+    const ingredientes = ingRes.data||[];
+    const custoKgPorDieta = new Map();
+    (dietRes.data||[]).forEach(d=>{
+      let custoKg = 0;
+      (d.itens||[]).forEach(it=>{
+        const ing = ingredientes.find(i=>i.id===it.ingredienteId);
+        if(ing) custoKg += Number(ing.preco_kg||0) * (Number(it.pct||0)/100);
+      });
+      custoKgPorDieta.set(d.id, custoKg);
+    });
+
+    function custoVariavelDoMes(prefixo){
+      // "s.data &&" — uma linha antiga com data nula (banco mantido por
+      // outro app) não pode derrubar o carregamento inteiro do período.
+      const racao = (srRes.data||[]).filter(s=>s.data && s.data.startsWith(prefixo)).reduce((a,s)=>a+(custoKgPorDieta.get(s.dieta_id)||0)*Number(s.quantidade_kg||0), 0);
+      const pasto = (ptRes.data||[]).filter(p=>p.data && p.data.startsWith(prefixo)).reduce((a,p)=>a+(custoKgPorDieta.get(p.dieta_id)||0)*Number(p.quantidade||0), 0);
+      const reproducao = (rcRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.custo||0), 0);
+      return {racao, pasto, reproducao, total: racao+pasto+reproducao};
+    }
+    function fixosDoMes(mesFiltro){
+      const grupos = new Map();
+      (cfRes.data||[]).forEach(c=>{
+        const chaveAreas = (c.areas||[]).slice().sort().join(',');
+        const chave = `${c.nome}||${c.categoria||''}||${chaveAreas}`;
+        if(!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(c);
+      });
+      let total = 0;
+      grupos.forEach(rows=>{
+        const doMes = rows.filter(c=>c.mes===mesFiltro);
+        const usar = doMes.length>0 ? doMes : rows.filter(c=>!c.mes);
+        total += usar.reduce((a,c)=>a+Number(c.valor_mensal||0),0);
+      });
+      return total;
+    }
+    function receitasNoPrefixo(prefixo){
+      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+    }
+
+    // Um item por mês da janela, já com tudo que os filtros (Mês/Ano/Safra)
+    // e o gráfico (últimos 12 meses) precisam — agregar um período depois é
+    // só somar os meses que caem nele, sem buscar nada de novo no banco.
+    const mensal = mesesJanela().map(mesStr=>{
+      const variavel = custoVariavelDoMes(mesStr);
+      const fixa = fixosDoMes(mesStr);
+      const receitasDoMes = receitasNoPrefixo(mesStr);
+      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0),0);
+      return {
+        mes: mesStr, despesa: variavel.total+fixa, receita, resultado: receita-(variavel.total+fixa),
+        despesaPorCategoria: {racao: variavel.racao, pasto: variavel.pasto, reproducao: variavel.reproducao, fixa},
+        receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Receita', valor:Number(r.valor||0)})),
+      };
+    });
+
+    state.resultados.pecuaria = {loading:false, erro:'', mensal};
+  } catch(e){
+    state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
+  }
+  render();
+}
+
+// Resultado da Cana, lido direto do banco próprio dela (dbCana) — mesma
+// lógica de preço médio ponderado e custo por talhão que o próprio
+// AECana.html usa em Operações > Estoque e Financeiro > Custo por Talhão —
+// se aquela lógica mudar lá, precisa atualizar aqui também.
+async function carregarResultadoCana(){
+  state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
+  render();
+  try{
+    const [insRes, entRes, aplRes, desRes, recRes] = await Promise.all([
+      dbCana.from('insumos_cana').select('id'),
+      dbCana.from('entradas_insumo_cana').select('insumo_id, quantidade, preco_pago'),
+      dbCana.from('aplicacoes_cana').select('data, insumo_id, quantidade'),
+      dbCana.from('despesas_cana').select('data, valor'),
+      dbCana.from('receitas_cana').select('data, valor_total'),
+    ]);
+    for(const r of [insRes, entRes, aplRes, desRes, recRes]) if(r.error) throw r.error;
+
+    const precoMedioPorInsumo = new Map();
+    (insRes.data||[]).forEach(i=>{
+      const entradas = (entRes.data||[]).filter(e=>e.insumo_id===i.id && e.preco_pago!=null && e.preco_pago!=='');
+      const qtd = entradas.reduce((a,e)=>a+Number(e.quantidade||0),0);
+      if(qtd>0){
+        const valor = entradas.reduce((a,e)=>a+Number(e.quantidade||0)*Number(e.preco_pago||0),0);
+        precoMedioPorInsumo.set(i.id, valor/qtd);
+      }
+    });
+    function custoInsumoNoPrefixo(prefixo){
+      return (aplRes.data||[]).filter(a=>a.data && a.data.startsWith(prefixo)).reduce((acc,a)=>{
+        const preco = precoMedioPorInsumo.get(a.insumo_id);
+        return acc + (preco!=null ? Number(a.quantidade||0)*preco : 0);
+      }, 0);
+    }
+    function despesaGeralNoPrefixo(prefixo){
+      return (desRes.data||[]).filter(d=>d.data && d.data.startsWith(prefixo)).reduce((a,d)=>a+Number(d.valor||0), 0);
+    }
+    function receitasNoPrefixoCana(prefixo){
+      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+    }
+
+    const mensal = mesesJanela().map(mesStr=>{
+      const custoInsumo = custoInsumoNoPrefixo(mesStr);
+      const despesaGeral = despesaGeralNoPrefixo(mesStr);
+      const receitasDoMes = receitasNoPrefixoCana(mesStr);
+      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor_total||0), 0);
+      return {
+        mes: mesStr, despesa: custoInsumo+despesaGeral, receita, resultado: receita-(custoInsumo+despesaGeral),
+        despesaPorCategoria: {custoInsumo, despesaGeral},
+        receitas: receitasDoMes.map(r=>({data:r.data, descricao:'Venda de cana', valor:Number(r.valor_total||0)})),
+      };
+    });
+
+    state.resultados.cana = {loading:false, erro:'', mensal};
+  } catch(e){
+    state.resultados.cana = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
+  }
+  render();
+}
+const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', custoInsumo:'Insumo (Tratos culturais)', despesaGeral:'Despesas gerais (Cana)'};
+// Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
+// fora da janela carregada (ex: período futuro) simplesmente não têm
+// correspondência e contam como zero — sem precisar recortar antes.
+// despesaPorCategoria é livre (cada operação tem as categorias que fazem
+// sentido pra ela — pecuária tem ração/pasto/..., cana/cereais por ora só
+// combustível), a soma abaixo não presume quais chaves existem.
+function agregarPeriodo(resultado, meses){
+  if(!resultado) return null;
+  if(resultado.erro) return {erro: resultado.erro};
+  const linhas = meses.map(m=>resultado.mensal.find(x=>x.mes===m)).filter(Boolean);
+  const despesa = linhas.reduce((a,l)=>a+l.despesa,0);
+  const receita = linhas.reduce((a,l)=>a+l.receita,0);
+  const totalPorCategoria = {};
+  linhas.forEach(l=>{
+    Object.entries(l.despesaPorCategoria||{}).forEach(([k,v])=>{ totalPorCategoria[k] = (totalPorCategoria[k]||0) + Number(v||0); });
+  });
+  return {
+    despesa, receita, resultado: receita-despesa,
+    despesaDetalhe: Object.entries(totalPorCategoria)
+      .map(([k,valor])=>({label: CATEGORIA_DESPESA_LABEL[k]||k, valor}))
+      .filter(x=>x.valor>0),
+    receitasDetalhe: [].concat(...linhas.map(l=>l.receitas||[])).sort((a,b)=>b.data.localeCompare(a.data)),
+    soDespesaCombustivel: resultado.soDespesaCombustivel,
+  };
+}
+
+// Combustível não é uma operação de terra (não tem receita nem hectares
+// próprios) — o que ele contribui pra Resultados é custo, rateado por
+// frente (pecuária/cana-de-açúcar/grãos) igual o próprio AE Combustível já
+// faz pra cada abastecimento (por talhão/área ou centro de custo). Essa
+// função lê o banco do Combustível direto (sem duplicar dado) e devolve,
+// junto dos indicadores do card, o custo mensal já separado por operação —
+// resultadoBrutoOperacao() soma isso na despesa de cada operação depois.
+// "graos" é como o AE Combustível chama a frente que aqui é "cereais".
+const FRENTE_COMBUSTIVEL_PARA_OPERACAO = {pecuaria:'pecuaria', cana:'cana', graos:'cereais'};
+async function carregarCombustivel(){
+  state.indicadores.combustivel = {...state.indicadores.combustivel, loading:true, erro:''};
+  state.resultados.combustivelPorFrente = {...state.resultados.combustivelPorFrente, loading:true, erro:''};
+  render();
+  try{
+    const [tqRes, entRes, abRes, ajRes, alRes, talRes, culRes, ccRes] = await Promise.all([
+      dbCombustivel.from('tanques').select('id, ativo'),
+      dbCombustivel.from('entradas_estoque').select('tanque_id, data, volume_litros, valor_total'),
+      dbCombustivel.from('abastecimentos').select('data_hora, volume_litros, tanque_id, talhao_area_id, centro_custo_id'),
+      dbCombustivel.from('ajustes_estoque').select('tanque_id, volume_ajuste_litros'),
+      dbCombustivel.from('alertas').select('id', {count:'exact', head:true}).eq('status','aberto'),
+      dbCombustivel.from('talhoes_areas').select('id, cultura_id'),
+      dbCombustivel.from('culturas').select('id, frente'),
+      dbCombustivel.from('centros_custo').select('id, frente'),
+    ]);
+    for(const r of [tqRes, entRes, abRes, ajRes, alRes, talRes, culRes, ccRes]) if(r.error) throw r.error;
+
+    const entradas = entRes.data||[];
+    const abastecimentos = abRes.data||[];
+    const tanquesAtivos = new Set((tqRes.data||[]).filter(t=>t.ativo!==false).map(t=>t.id));
+
+    const entradasPorTanque = {}, saidasPorTanque = {}, ajustesPorTanque = {};
+    entradas.forEach(e=>{ entradasPorTanque[e.tanque_id] = (entradasPorTanque[e.tanque_id]||0) + Number(e.volume_litros||0); });
+    abastecimentos.forEach(a=>{ saidasPorTanque[a.tanque_id] = (saidasPorTanque[a.tanque_id]||0) + Number(a.volume_litros||0); });
+    (ajRes.data||[]).forEach(a=>{ ajustesPorTanque[a.tanque_id] = (ajustesPorTanque[a.tanque_id]||0) + Number(a.volume_ajuste_litros||0); });
+    let estoqueAtual = 0;
+    tanquesAtivos.forEach(id=>{ estoqueAtual += (entradasPorTanque[id]||0) - (saidasPorTanque[id]||0) + (ajustesPorTanque[id]||0); });
+
+    // Custo médio ponderado do tanque até uma data — mesma lógica do
+    // custoMedioPonderado() do AECombustivel.html, reproduzida aqui porque
+    // é mais barato do que buscar um valor calculado por linha.
+    function custoMedioPonderado(tanqueId, dataLimite){
+      const limite = dataLimite ? String(dataLimite).slice(0,10) : null;
+      const doTanque = entradas.filter(e=>e.tanque_id===tanqueId && (!limite || e.data<=limite));
+      const volumeTotal = doTanque.reduce((a,e)=>a+Number(e.volume_litros||0),0);
+      if(volumeTotal<=0) return null;
+      const valorTotal = doTanque.reduce((a,e)=>a+Number(e.valor_total||0),0);
+      return valorTotal/volumeTotal;
+    }
+    const culturaFrente = new Map((culRes.data||[]).map(c=>[c.id, c.frente]));
+    const talhaoCultura = new Map((talRes.data||[]).map(t=>[t.id, t.cultura_id]));
+    const centroCustoFrente = new Map((ccRes.data||[]).map(c=>[c.id, c.frente]));
+    function operacaoDoAbastecimento(a){
+      let frente = null;
+      if(a.talhao_area_id){
+        const culturaId = talhaoCultura.get(a.talhao_area_id);
+        frente = culturaId ? culturaFrente.get(culturaId) : null;
+      } else if(a.centro_custo_id){
+        frente = centroCustoFrente.get(a.centro_custo_id);
+      }
+      return FRENTE_COMBUSTIVEL_PARA_OPERACAO[frente] || null; // null: "geral" ou sem rateio — não entra em nenhuma operação
+    }
+
+    const hoje = new Date();
+    const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    let consumoMes = 0;
+    const custoPorMes = {}; // "YYYY-MM" -> {pecuaria, cana, cereais}
+    abastecimentos.forEach(a=>{
+      const mes = String(a.data_hora||'').slice(0,7);
+      if(!mes) return;
+      const custoUnit = custoMedioPonderado(a.tanque_id, a.data_hora);
+      const custo = custoUnit!=null ? custoUnit * Number(a.volume_litros||0) : 0;
+      if(!custoPorMes[mes]) custoPorMes[mes] = {pecuaria:0, cana:0, cereais:0};
+      const op = operacaoDoAbastecimento(a);
+      if(op) custoPorMes[mes][op] += custo;
+      if(mes===mesAtualStr) consumoMes += Number(a.volume_litros||0);
+    });
+
+    state.indicadores.combustivel = {
+      loading:false, erro:'',
+      estoqueAtual, consumoMes,
+      alertasAbertos: alRes.count ?? 0,
+    };
+    state.resultados.combustivelPorFrente = {
+      loading:false, erro:'',
+      mensal: mesesJanela().map(mesStr=>({mes:mesStr, porFrente: custoPorMes[mesStr] || {pecuaria:0, cana:0, cereais:0}})),
+    };
+  } catch(e){
+    state.indicadores.combustivel = {loading:false, erro:'Não foi possível carregar agora.', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
+    state.resultados.combustivelPorFrente = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
+  }
+  render();
+}
+// Junta o custo mensal de combustível (por operação) com o resultado
+// próprio da operação (receita/despesa lançadas no app dela, se já
+// existir) — pecuária e cana têm os dois; cereais, por ora, só tem o
+// custo de combustível rateado (ainda não tem app de receita/despesa
+// ligado), marcado com soDespesaCombustivel pra tela avisar que não é
+// um resultado completo.
+function resultadoComCombustivel(baseResultado, slug){
+  const comb = state.resultados.combustivelPorFrente;
+  if(comb.loading || (baseResultado && baseResultado.loading)) return {loading:true, erro:'', mensal:[]};
+  if(baseResultado && baseResultado.erro) return {erro: baseResultado.erro};
+  if(!baseResultado && comb.erro) return {erro: comb.erro};
+  const baseMensal = baseResultado ? baseResultado.mensal : null;
+  if(!baseMensal && (!comb.mensal || comb.mensal.every(m=>!m.porFrente[slug]))) return null;
+  const meses = new Set([...(baseMensal||[]).map(m=>m.mes), ...(comb.mensal||[]).map(m=>m.mes)]);
+  const mensal = [...meses].sort().map(mes=>{
+    const base = baseMensal ? baseMensal.find(m=>m.mes===mes) : null;
+    const combMes = comb.mensal ? comb.mensal.find(m=>m.mes===mes) : null;
+    const custoComb = combMes ? Number(combMes.porFrente[slug]||0) : 0;
+    const despesaPorCategoria = {...(base?.despesaPorCategoria||{})};
+    if(custoComb>0) despesaPorCategoria.combustivel = (despesaPorCategoria.combustivel||0) + custoComb;
+    const despesa = (base?.despesa||0) + custoComb;
+    const receita = base?.receita||0;
+    return { mes, despesa, receita, resultado: receita-despesa, despesaPorCategoria, receitas: base?.receitas||[] };
+  });
+  return {loading:false, erro:'', mensal, soDespesaCombustivel: !baseMensal};
+}
+
+/* ===================== ESTADO ===================== */
+const state = {
+  page: 'painel',
+  fazendas: [],
+  fazendaOperacoes: {}, // fazendaId -> [{id, fazendaId, operacao, areaHa}]
+  apps: [],
+  perfis: [],
+  modal: null, // {type:'fazenda'|'app'|'usuario'|'papelUsuario'|'trocarSenha', data:{...}}
+  mobileMenuAberto: false,
+  // loading começa true (não false) — enquanto o primeiro carregamento não
+  // chega, a tela precisa mostrar "carregando", não "sem dados".
+  indicadores: {
+    pecuaria: {loading:true, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null},
+    combustivel: {loading:true, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null},
+    cana: {loading:true, erro:'', talhoes:null, plantiosAtivos:null, toneladasMes:null},
+    cereais: {loading:true, erro:'', talhoes:null, plantiosAtivos:null, sacasMes:null},
+  },
+  // combustivelPorFrente: custo mensal de combustível já separado por
+  // operação de terra (pecuária/cana/cereais) — combinado com o resultado
+  // de cada operação em resultadoBrutoOperacao(), não é uma operação em si.
+  resultados: {
+    pecuaria: {loading:true, erro:'', mensal:[]},
+    cana: {loading:true, erro:'', mensal:[]},
+    combustivelPorFrente: {loading:true, erro:'', mensal:[]},
+  },
+  // filtro de período da aba Resultados — começa no mês atual; "safra" é o
+  // ano em que ela COMEÇA (safra Y = maio/Y a abril/Y+1)
+  periodo: (function(){
+    const hoje = new Date();
+    return {
+      tipo: 'mes',
+      mes: `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`,
+      ano: hoje.getFullYear(),
+      safra: hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1,
+    };
+  })(),
+  // ---- autenticação ----
+  authChecked: false,
+  session: null,
+  perfil: null,
+  perfilErroRede: false,
+  loginDraft: {usuario:'', senha:''},
+  loginError: '',
+  loginLoading: false,
+  usuarioError: '',
+  usuarioLoading: false,
+};
+
+let editDraft = null;
+
+function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
+function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+// Toda tela é montada com innerHTML a partir de texto livre do usuário
+// (nome de fazenda, descrição, observação — e até dado vindo do banco do
+// AE Pecuária, outro limite de confiança) — sem escapar, um <script> ou
+// onerror= digitado num campo executaria na sessão de quem visualizar.
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function hexToRgba(hex, alpha){
+  let h = String(hex||'').replace('#','');
+  if(/^[0-9a-fA-F]{3}$/.test(h)) h = h.split('').map(c=>c+c).join('');
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) h = '1D5DA8';
+  const n = parseInt(h, 16);
+  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function render(){
+  const root = document.getElementById('root');
+
+  if(!state.authChecked){
+    root.innerHTML = `<div class="login-loading">Carregando...</div>`;
+    return;
+  }
+  if(!state.session){
+    root.innerHTML = LoginPage();
+    attachEvents();
+    return;
+  }
+  if(!state.perfil || !state.perfil.ativo){
+    root.innerHTML = AguardandoLiberacao();
+    attachEvents();
+    return;
+  }
+
+  let conteudo;
+  try{
+    conteudo = `
+      ${Header()}
+      ${state.page==='painel' ? PagePainel() : ''}
+      ${state.page==='resultados' ? PageResultados() : ''}
+      ${state.page==='fazendas' ? PageFazendas() : ''}
+      ${state.page==='usuarios' ? PageUsuarios() : ''}
+    `;
+  } catch(e){
+    console.error('Erro ao montar a tela:', e);
+    conteudo = `<div class="card" style="margin:20px;">
+      <h3 style="color:var(--alerta);">Ocorreu um erro ao carregar esta tela</h3>
+      <p class="hint">Mande um print desta mensagem: <strong>${String(e && e.message || e)}</strong></p>
+      <button class="btn btn-ghost btn-sm" data-voltar-erro="1" style="margin-top:10px;">Voltar pro Painel</button>
+    </div>`;
+  }
+  let modalHtml = '';
+  if(state.modal){
+    try{ modalHtml = Modal(); }
+    catch(e){
+      console.error('Erro ao abrir modal:', e);
+      state.modal = null;
+      alert('Ocorreu um erro ao abrir esta janela: ' + String(e && e.message || e));
+    }
+  }
+  root.innerHTML = `
+    <div class="app">
+      ${Sidebar()}
+      <div class="main">${conteudo}</div>
+    </div>
+    ${modalHtml}
+  `;
+  attachEvents();
+}
+
+/* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
+const DOMINIO_LOGIN = 'aeagropecuaria.local';
+const PAGES = [
+  {key:'painel', label:'Painel', adminOnly:false},
+  {key:'resultados', label:'Resultados', adminOnly:false},
+  {key:'fazendas', label:'Fazendas', adminOnly:false},
+  {key:'usuarios', label:'Usuários', adminOnly:true},
+];
+
+function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
+function souAdmin(){ return state.perfil?.papel === 'admin'; }
+function paginasVisiveis(){ return PAGES.filter(p=>!p.adminOnly || souAdmin()); }
+function pareceErroDeRede(error){
+  const msg = String(error?.message||'').toLowerCase();
+  return msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
+}
+
+const PERFIL_CACHE_KEY = 'aematriz_perfil_cache_v1';
+function lerPerfilCache(uid){
+  try{
+    const cache = JSON.parse(localStorage.getItem(PERFIL_CACHE_KEY)||'null');
+    return (cache && cache.uid===uid) ? cache.perfil : null;
+  }catch(e){ return null; }
+}
+function salvarPerfilCache(uid, perfil){
+  try{ localStorage.setItem(PERFIL_CACHE_KEY, JSON.stringify({uid, perfil})); }
+  catch(e){ /* localStorage indisponível (modo privado etc.) */ }
+}
+async function loadPerfil(){
+  const uid = state.session?.user?.id;
+  if(!uid){ state.perfil = null; state.perfilErroRede = false; return; }
+  const { data, error } = await db.from('profiles').select('*').eq('id', uid).single();
+  state.perfilErroRede = false;
+  if(data){
+    state.perfil = rowToPerfil(data);
+    salvarPerfilCache(uid, state.perfil);
+  } else if(error && pareceErroDeRede(error)){
+    const cache = lerPerfilCache(uid);
+    if(cache){ state.perfil = cache; }
+    else { state.perfil = null; state.perfilErroRede = true; }
+  } else {
+    state.perfil = null;
+  }
+  if(state.perfil && state.perfil.ativo && !paginasVisiveis().some(p=>p.key===state.page)){
+    state.page = 'painel';
+  }
+}
+
+async function initAuth(){
+  const { data } = await db.auth.getSession();
+  state.session = data.session;
+  if(state.session) await loadPerfil();
+  state.authChecked = true;
+  render();
+  if(state.session && state.perfil?.ativo) loadAll();
+
+  let primeiroEvento = true;
+  db.auth.onAuthStateChange(async (event, newSession)=>{
+    if(primeiroEvento){ primeiroEvento = false; return; }
+    // token renovado automaticamente (a cada ~1h) não é troca de sessão de
+    // verdade — o cliente supabase-js já usa o token novo sozinho; só
+    // guardamos a referência, sem re-renderizar (senão um modal aberto com
+    // campo digitado e ainda não salvo perderia o texto no meio da digitação).
+    if(event==='TOKEN_REFRESHED'){ state.session = newSession; return; }
+    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
+    state.session = newSession;
+    if(newSession){
+      await loadPerfil();
+      render();
+      if(state.perfil?.ativo) loadAll();
+    } else {
+      state.perfil = null;
+      render();
+    }
+  });
+}
+
+async function fazerLogin(){
+  const usuario = normalizeUsuario(state.loginDraft.usuario);
+  const senha = state.loginDraft.senha;
+  if(!usuario || !senha){ state.loginError = 'Informe usuário e senha.'; render(); return; }
+  state.loginLoading = true; state.loginError = ''; render();
+  const email = `${usuario}@${DOMINIO_LOGIN}`;
+  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+  state.loginLoading = false;
+  if(error){
+    state.loginError = 'Usuário ou senha inválidos.';
+    render();
+    return;
+  }
+  state.session = data.session;
+  await loadPerfil();
+  state.loginDraft = {usuario:'', senha:''};
+  render();
+  if(state.perfil?.ativo) loadAll();
+}
+
+async function fazerLogout(){
+  await db.auth.signOut();
+  state.session = null;
+  state.perfil = null;
+  state.mobileMenuAberto = false;
+  render();
+}
+
+function LoginPage(){
+  return `
+  <div class="login-wrap">
+    <div class="login-shell">
+      <div class="login-hero">
+        <div class="login-hero-top">
+          <div class="login-brand">${brandMark()}<div class="brand-name">AE Matriz</div></div>
+          <div class="login-hero-title">A gestão de toda a operação, num só lugar.</div>
+          <div class="login-hero-sub">O ponto de entrada da AE Agropecuária — abra a Pecuária, o Combustível e os próximos apps, e acompanhe o resultado geral da fazenda sem trocar de sistema.</div>
+        </div>
+        <div class="login-hero-features">
+          <div class="login-hero-feature"><span class="login-hero-feature-ic">${iconPainel()}</span> Painel único para todas as operações</div>
+          <div class="login-hero-feature"><span class="login-hero-feature-ic">${iconFazenda()}</span> Fazendas e hectares por operação</div>
+          <div class="login-hero-feature"><span class="login-hero-feature-ic">${iconResultados()}</span> Resultado consolidado do mês e do ano</div>
+        </div>
+      </div>
+      <div class="login-card-wrap">
+        <p class="login-card-eyebrow">Acesso restrito</p>
+        <h1 class="login-card-title">Entrar</h1>
+        ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
+        <form data-login-form="1">
+          <div class="login-field">
+            <label>Usuário</label>
+            <input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus />
+          </div>
+          <div class="login-field">
+            <label>Senha</label>
+            <input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" />
+          </div>
+          <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
+        </form>
+      </div>
+    </div>
+  </div>`;
+}
+
+function AguardandoLiberacao(){
+  const semRede = state.perfilErroRede;
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Matriz</div></div>
+      <p class="hint" style="font-size:13px; margin-bottom:16px;">${semRede
+        ? 'Sem conexão para verificar seu acesso agora. Tente novamente.'
+        : 'Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta. Fale com o administrador da matriz.'}</p>
+      ${semRede ? `<button class="btn btn-primary login-btn" data-retry-perfil="1" style="margin-bottom:10px;">Tentar novamente</button>` : ''}
+      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
+    </div>
+  </div>`;
+}
+
+/* ===================== SIDEBAR / HEADER ===================== */
+function brandMark(){
+  return `<svg class="brand-mark" viewBox="0 0 32 32" fill="none">
+    <rect x="4" y="12" width="8" height="16" rx="1.5" fill="#9DC0E8"/>
+    <rect x="14" y="6" width="8" height="22" rx="1.5" fill="#C98A2B"/>
+    <rect x="24" y="16" width="4" height="12" rx="1.5" fill="#9DC0E8"/>
+  </svg>`;
+}
+function iconPainel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`; }
+function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
+function iconAbrir(){ return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>`; }
+function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
+function iconEstabulo(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>`; }
+function iconGota(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c4.2 5 7 8.6 7 12a7 7 0 0 1-14 0c0-3.4 2.8-7 7-12Z"/></svg>`; }
+function iconCana(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c2-6 4-6 4-11"/><path d="M10 20c2-8 4-8 4-14"/><path d="M16 20c2-5 4-5 4-9"/></svg>`; }
+function iconTrigo(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M12 6.5c-2-1.3-4.3-.2-4.3 1.7S10 10.7 12 9.4"/><path d="M12 6.5c2-1.3 4.3-.2 4.3 1.7S14 10.7 12 9.4"/><path d="M12 11.5c-2-1.3-4.3-.2-4.3 1.7S10 15.7 12 14.4"/><path d="M12 11.5c2-1.3 4.3-.2 4.3 1.7S14 15.7 12 14.4"/></svg>`; }
+function iconSetaAlta(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16 10 10l4 4 6-8"/><path d="M15 5h5v5"/></svg>`; }
+function iconCarteira(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"/></svg>`; }
+function iconCheckCircle(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>`; }
+function iconAlertTriangle(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>`; }
+function iconOperacao(slug){
+  if(slug==='pecuaria') return iconEstabulo();
+  if(slug==='combustivel') return iconGota();
+  if(slug==='cana') return iconCana();
+  if(slug==='cereais') return iconTrigo();
+  return iconPainel();
+}
+
+const PAGE_LABEL = {painel:'Painel', fazendas:'Fazendas', usuarios:'Usuários', resultados:'Resultados'};
+const OPERACOES = {pecuaria:'Pecuária', cana:'Cana-de-açúcar', cereais:'Grãos/Cereais'};
+
+function iniciais(nome){
+  const partes = String(nome||'').trim().split(/\s+/).filter(Boolean);
+  if(partes.length===0) return '?';
+  return (partes[0][0] + (partes.length>1 ? partes[partes.length-1][0] : '')).toUpperCase();
+}
+function iconMenu(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`; }
+function iconFechar(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`; }
+function Sidebar(){
+  return `
+  <div class="sidebar">
+    <div class="sidebar-topbar">
+      <div class="brand">${brandMark()}<div><div class="brand-name">AE Matriz</div><div class="brand-tag">Hub central</div></div></div>
+      <button class="menu-toggle" data-toggle-menu="1" aria-label="Abrir menu">${state.mobileMenuAberto?iconFechar():iconMenu()}</button>
+    </div>
+    <div class="sidebar-collapsible ${state.mobileMenuAberto?'open':''}">
+    <div class="sidebar-user">
+      <div class="sidebar-user-top">
+        <div class="sidebar-user-avatar">${iniciais(state.perfil?.nome)}</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-nome">${esc(state.perfil?.nome)}</div>
+          <div class="sidebar-user-papel">${state.perfil?.papel==='admin'?'Administrador':'Gestor'}</div>
+        </div>
+      </div>
+      <div class="sidebar-user-actions">
+        <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
+        <button class="btn-sair" data-logout="1">Sair</button>
+      </div>
+    </div>
+    <nav>
+      ${paginasVisiveis().map(p=>`
+        <button class="nav-item ${state.page===p.key?'active':''}" data-nav="${p.key}">
+          <span class="nav-item-ic">${p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():iconAdmin()}</span> ${p.label}
+        </button>
+      `).join('')}
+    </nav>
+    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase).</div>
+    </div>
+  </div>`;
+}
+
+function Header(){
+  const titles = {
+    painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},
+    resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado por operação — compare mês a mês, por ano ou por safra (maio a abril).'},
+    fazendas:{eyebrow:'Cadastro central', title:'Fazendas', desc:'Cadastro único de fazendas, com as operações (pecuária, cana, cereais) e hectares de cada uma.'},
+    usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso à matriz. Cada app (Pecuária, Combustível...) continua com seu próprio login.'},
+  };
+  const t = titles[state.page] || titles.painel;
+  let acao = '';
+  if(state.page==='fazendas' && souAdmin()){
+    acao = `<button class="btn btn-primary" data-nova-fazenda="1">+ Nova fazenda</button>`;
+  } else if(state.page==='usuarios' && souAdmin()){
+    acao = `<button class="btn btn-primary" data-novo-usuario="1">+ Novo usuário</button>`;
+  }
+  return `
+  <div class="page-header">
+    <div><p class="eyebrow">${t.eyebrow}</p><h1>${t.title}</h1><p class="page-desc">${t.desc}</p></div>
+    ${acao}
+  </div>`;
+}
+
+/* ===================== PAINEL ===================== */
+function AppCard(a){
+  const ind = a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='combustivel' ? state.indicadores.combustivel : a.slug==='cana' ? state.indicadores.cana : a.slug==='cereais' ? state.indicadores.cereais : null;
+  let stats = '';
+  if(ind){
+    if(ind.loading){
+      stats = `<p class="hint">Carregando indicadores...</p>`;
+    } else if(ind.erro){
+      stats = `<p class="hint" style="color:var(--alerta);">${ind.erro}</p>`;
+    } else if(a.slug==='pecuaria'){
+      stats = `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.lotesAtivos)}</div><div class="l">Lotes ativos</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.totalAnimais)}</div><div class="l">Animais</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.dietas)}</div><div class="l">Dietas</div></div>
+      </div>`;
+    } else if(a.slug==='combustivel'){
+      stats = `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.estoqueAtual)} L</div><div class="l">Estoque atual</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.consumoMes)} L</div><div class="l">Consumo no mês</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.alertasAbertos)}</div><div class="l">Alertas abertos</div></div>
+      </div>`;
+    } else if(a.slug==='cana'){
+      stats = `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.talhoes)}</div><div class="l">Talhões</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.plantiosAtivos)}</div><div class="l">Plantios ativos</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.toneladasMes)} t</div><div class="l">Colhido no mês</div></div>
+      </div>`;
+    } else if(a.slug==='cereais'){
+      stats = `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.talhoes)}</div><div class="l">Talhões</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.plantiosAtivos)}</div><div class="l">Plantios ativos</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.sacasMes)} sc</div><div class="l">Colhido no mês</div></div>
+      </div>`;
+    }
+  }
+  return `
+  <div class="app-card" style="--app-cor:${a.cor}">
+    <div class="app-card-top">
+      <div class="app-card-icon" style="background:${hexToRgba(a.cor,0.14)}; color:${a.cor};">${iconOperacao(a.slug)}</div>
+      <div class="app-card-titles">
+        <div class="app-card-nome">${esc(a.nome)}</div>
+      </div>
+      <span class="pill ${a.status==='ativo'?'pill-ok':'badge-em-breve'}">${a.status==='ativo'?'Ativo':'Em breve'}</span>
+    </div>
+    ${a.descricao ? `<div class="app-card-desc">${esc(a.descricao)}</div>` : ''}
+    ${stats}
+    <div class="app-card-actions">
+      ${a.status==='ativo' && a.url ? `<a class="btn btn-ghost btn-sm" href="${a.url}" target="_blank" rel="noopener">${iconAbrir()} Abrir app</a>` : ''}
+      ${souAdmin() ? `<button class="btn btn-ghost btn-sm" data-editar-app="${a.id}">Editar</button>` : ''}
+      ${souAdmin() ? `<button class="btn-danger-ghost" data-del-app="${a.id}">Excluir</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function PagePainel(){
+  if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz (Pecuária, Combustível, Cana, Cereais...).');
+  return `<div class="app-grid">${state.apps.map(AppCard).join('')}</div>`;
+}
+
+/* ===================== FILTRO DE PERÍODO (Mês / Ano / Safra) ===================== */
+const NOMES_MES_LONGO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const NOMES_MES_ABREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+// Lista de "YYYY-MM" cobertos pelo período selecionado.
+function periodoMeses(periodo){
+  if(periodo.tipo==='mes') return [periodo.mes];
+  if(periodo.tipo==='ano'){
+    const meses = []; for(let m=1;m<=12;m++) meses.push(`${periodo.ano}-${String(m).padStart(2,'0')}`); return meses;
+  }
+  // safra: maio do ano-safra até abril do ano seguinte
+  const meses = [];
+  for(let m=5;m<=12;m++) meses.push(`${periodo.safra}-${String(m).padStart(2,'0')}`);
+  for(let m=1;m<=4;m++) meses.push(`${periodo.safra+1}-${String(m).padStart(2,'0')}`);
+  return meses;
+}
+function labelPeriodo(periodo){
+  if(periodo.tipo==='mes'){ const [a,m] = periodo.mes.split('-'); return `${NOMES_MES_LONGO[Number(m)-1]}/${a}`; }
+  if(periodo.tipo==='ano') return `Ano ${periodo.ano}`;
+  return `Safra ${periodo.safra}/${periodo.safra+1}`;
+}
+// Últimos 12 meses terminando no último mês do período selecionado — é a
+// janela usada pelo gráfico de comparação mês a mês, sempre disponível
+// independente de o filtro estar em Mês, Ano ou Safra.
+function ultimos12Meses(periodo){
+  const meses = periodoMeses(periodo);
+  const [anoStr, mesStr] = meses[meses.length-1].split('-');
+  let ano = Number(anoStr), mes = Number(mesStr);
+  const janela = [];
+  for(let i=11;i>=0;i--){
+    let a=ano, m=mes-i;
+    while(m<=0){ m+=12; a-=1; }
+    janela.push(`${a}-${String(m).padStart(2,'0')}`);
+  }
+  return janela;
+}
+function anosDisponiveis(){
+  const hoje = new Date().getFullYear();
+  return [hoje, hoje-1, hoje-2];
+}
+function safrasDisponiveis(){
+  const hoje = new Date();
+  const safraAtual = hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1;
+  return [safraAtual, safraAtual-1, safraAtual-2];
+}
+
+/* ===================== RESULTADOS (geral, todas as operações) ===================== */
+// Pecuária e Cana têm receita e despesa próprias (banco ligado — o da Cana
+// é o mesmo projeto do Combustível, ver carregarResultadoCana). Cereais
+// ainda não tem app de receita/despesa — mas já recebe o custo de
+// combustível rateado pra ela (resultadoComCombustivel), então mostra
+// despesa parcial (só combustível) em vez de "sem dados", até ganhar seu
+// próprio cálculo — já entra no filtro de período e no layout, pronta pra
+// quando isso acontecer.
+function resultadoBrutoOperacao(slug){
+  if(slug==='pecuaria') return resultadoComCombustivel(state.resultados.pecuaria, slug);
+  if(slug==='cana') return resultadoComCombustivel(state.resultados.cana, slug);
+  if(slug==='cereais') return resultadoComCombustivel(null, slug);
+  return null;
+}
+function resultadoOperacaoNoPeriodo(slug){
+  return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
+}
+function hectaresPorOperacao(slug){
+  let total = 0;
+  Object.values(state.fazendaOperacoes).forEach(lista=>{
+    lista.forEach(o=>{ if(o.operacao===slug) total += Number(o.areaHa||0); });
+  });
+  return total;
+}
+// Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
+// não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
+// consumido pelas outras operações, não uma operação com receita própria.
+function linhasResultado(){
+  return OPERACOES_ORDEM.map(slug=>({
+    app: state.apps.find(a=>a.slug===slug) || {slug, nome: OPERACOES[slug]||slug, cor: OPERACAO_COR[slug]},
+    resultado: resultadoOperacaoNoPeriodo(slug),
+  }));
+}
+function resultadoTotal(campo){
+  return OPERACOES_ORDEM.reduce((soma,slug)=>{
+    const r = resultadoOperacaoNoPeriodo(slug);
+    return soma + (r && !r.erro && r[campo]!=null ? r[campo] : 0);
+  }, 0);
+}
+function algumResultadoCarregando(){
+  return state.resultados.pecuaria.loading || state.resultados.combustivelPorFrente.loading;
+}
+// Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
+// insumo consumido pelas outras, não uma operação com receita/despesa
+// própria, então não entra nesse recorte.
+const OPERACOES_ORDEM = ['pecuaria','cana','cereais'];
+function fatiasOperacoes(campo){
+  return OPERACOES_ORDEM.map(slug=>{
+    const app = state.apps.find(a=>a.slug===slug);
+    const r = resultadoOperacaoNoPeriodo(slug);
+    const valor = (r && !r.erro && r[campo]!=null) ? r[campo] : 0;
+    return {nome: app ? app.nome : (OPERACOES[slug]||slug), valor, cor: OPERACAO_COR[slug]};
+  });
+}
+function StatCard(label, valor, tipo){
+  // tipo: 'receita' | 'despesa' | 'resultado'
+  const positivo = valor>=0;
+  const ic = tipo==='receita' ? iconSetaAlta() : tipo==='despesa' ? iconCarteira() : (positivo ? iconCheckCircle() : iconAlertTriangle());
+  const bg = tipo==='receita' ? 'var(--bom-bg)' : tipo==='despesa' ? '#F5E9D7' : (positivo ? 'var(--bom-bg)' : 'var(--alerta-bg)');
+  const cor = tipo==='receita' ? 'var(--bom)' : tipo==='despesa' ? 'var(--trigo)' : (positivo ? 'var(--bom)' : 'var(--alerta)');
+  return `
+  <div class="stat-card">
+    <div class="stat-card-ic" style="background:${bg}; color:${cor};">${ic}</div>
+    <div class="stat-label">${label}</div>
+    <div class="stat-value ${tipo==='resultado' ? (positivo?'bom':'alerta') : ''}">R$ ${fmt(valor)}</div>
+  </div>`;
+}
+// Paleta categórica validada (contraste + daltonismo) pras 3 operações —
+// ver skill de dataviz: as cores de marca (azul/verde/marrom) usadas nos
+// chips de Fazendas não passavam no piso de croma nem na separação de
+// daltonismo, então as 3 operações usam esta paleta em todo canto onde
+// aparecem lado a lado (chips e os donuts abaixo).
+const OPERACAO_COR = {pecuaria:'#2a78d6', cana:'#eb6834', cereais:'#1baf7a'};
+
+function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
+function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
+  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
+  const [x0,y0] = polarXY(cx,cy,rOut,a0);
+  const [x1,y1] = polarXY(cx,cy,rOut,a1);
+  const [x2,y2] = polarXY(cx,cy,rIn,a1);
+  const [x3,y3] = polarXY(cx,cy,rIn,a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+}
+// fatias: [{nome, valor, cor}]. panelId identifica o gráfico (usado só pra
+// não colidir os data-attributes de hover entre os dois donuts da tela).
+// fatias podem ter valor negativo (ex: operação no prejuízo) — um donut não
+// representa "fatia negativa" geometricamente, então a área do anel usa só a
+// parte positiva de cada fatia (valorArco); o valor real (podendo ser
+// negativo) continua exibido — e destacado em vermelho — na legenda, e o
+// centro mostra a soma real (não só a soma dos arcos desenhados).
+function Donut(fatias, panelId, titulo, vazioMsg){
+  const totalReal = fatias.reduce((a,f)=>a+Number(f.valor||0),0);
+  const totalPositivo = fatias.reduce((a,f)=>a+Math.max(0,Number(f.valor||0)),0);
+  if(totalPositivo<=0){
+    const msg = totalReal<0
+      ? 'Todas as operações com dado lançado fecharam no prejuízo neste período — não dá pra desenhar um gráfico de proporção. Veja os valores na tabela abaixo.'
+      : (vazioMsg || 'Nenhuma operação com valor lançado neste período.');
+    return `<div class="card card-pad" style="flex:1;"><p class="stat-label" style="margin-bottom:10px;">${titulo}</p>${Empty('Sem dados ainda', msg)}</div>`;
+  }
+  const cx=90, cy=90, rOut=80, rIn=50;
+  // gap sempre > 0, mesmo com 1 fatia só a 100% — sem isso, o início e o
+  // fim do arco caem no mesmíssimo ponto (frac=1 vira uma volta inteira) e
+  // dependendo do navegador o círculo renderiza como invisível.
+  const gap = fatias.length>1 ? 0.03 : 0.004;
+  let angle = 0;
+  const slices = fatias.map((f,idx)=>{
+    const valor = Number(f.valor||0);
+    const valorArco = Math.max(0, valor);
+    const pct = valorArco/totalPositivo*100;
+    const frac = valorArco/totalPositivo;
+    const sweep = frac*Math.PI*2;
+    const a0 = angle + (sweep>0?gap/2:0);
+    const a1 = angle + sweep - (sweep>0?gap/2:0);
+    angle += sweep;
+    if(sweep<=0) return '';
+    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
+    const midAngle = (a0+a1)/2;
+    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
+    const showLabel = pct>=8;
+    return `
+      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${esc(f.nome)}" data-tip-valor="${fmt(valor)}" data-tip-pct="${fmt(pct,1)}"
+        d="${path}" fill="${f.cor}" tabindex="0" role="img" aria-label="${esc(f.nome)}: R$ ${fmt(valor)}, ${fmt(pct,1)}%"></path>
+      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
+    `;
+  }).join('');
+  const legenda = fatias.map((f,idx)=>{
+    const valor = Number(f.valor||0);
+    const negativo = valor<0;
+    return `
+    <div class="legenda-row" data-legenda-idx="${panelId}-${idx}">
+      <span class="legenda-swatch" style="background:${f.cor}"></span>
+      <span class="legenda-nome">${esc(f.nome)}</span>
+      <span class="legenda-valor" style="${negativo?'color:var(--alerta); font-weight:600;':''}">R$ ${fmt(valor,0)}</span>
+      <span class="legenda-pct">${negativo ? 'prejuízo' : fmt(valor/totalPositivo*100,1)+'%'}</span>
+    </div>
+  `;}).join('');
+  return `
+  <div class="card card-pad" style="flex:1;">
+    <p class="stat-label" style="margin-bottom:14px;">${titulo}</p>
+    <div class="painel-resultados">
+      <div class="donut-wrap">
+        <svg class="donut-svg" viewBox="0 0 180 180" width="180" height="180">
+          ${slices}
+          <text class="donut-center-value" x="90" y="86" text-anchor="middle">R$ ${fmt(totalReal,0)}</text>
+          <text class="donut-center-label" x="90" y="102" text-anchor="middle">total</text>
+        </svg>
+      </div>
+      <div class="painel-legenda">${legenda}</div>
+    </div>
+  </div>`;
+}
+function FiltroPeriodo(){
+  const p = state.periodo;
+  return `
+  <div class="card card-pad" style="margin-bottom:18px;">
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <div class="periodo-tabs">
+        <button class="periodo-tab ${p.tipo==='mes'?'active':''}" data-periodo-tipo="mes">Mês</button>
+        <button class="periodo-tab ${p.tipo==='ano'?'active':''}" data-periodo-tipo="ano">Ano</button>
+        <button class="periodo-tab ${p.tipo==='safra'?'active':''}" data-periodo-tipo="safra">Safra</button>
+      </div>
+      ${p.tipo==='mes' ? `<input type="month" id="f-periodo-mes" value="${p.mes}"/>` : ''}
+      ${p.tipo==='ano' ? `<select id="f-periodo-ano">${anosDisponiveis().map(a=>`<option value="${a}" ${p.ano===a?'selected':''}>${a}</option>`).join('')}</select>` : ''}
+      ${p.tipo==='safra' ? `<select id="f-periodo-safra">${safrasDisponiveis().map(s=>`<option value="${s}" ${p.safra===s?'selected':''}>Safra ${s}/${s+1} (mai/${String(s).slice(2)} a abr/${String(s+1).slice(2)})</option>`).join('')}</select>` : ''}
+    </div>
+  </div>`;
+}
+
+function PagePorHectare(){
+  const linhas = OPERACOES_ORDEM.map(slug=>{
+    const app = state.apps.find(a=>a.slug===slug);
+    return {slug, nome: app ? app.nome : (OPERACOES[slug]||slug), ha: hectaresPorOperacao(slug), r: resultadoOperacaoNoPeriodo(slug)};
+  });
+  return `
+  <div class="card" style="margin-top:18px; overflow-x:auto;">
+    <div class="card-pad" style="padding-bottom:0;">
+      <p class="stat-label" style="margin-bottom:2px;">Por hectare — ${labelPeriodo(state.periodo)}</p>
+      <p class="hint" style="margin-bottom:14px;">Clique num valor pra ver a evolução mês a mês dos últimos 12 meses.</p>
+    </div>
+    <table>
+      <thead><tr><th>Operação</th><th>Área (ha)</th><th>Despesa/ha</th><th>Receita/ha</th><th>Lucro/ha</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>{
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug)}</span><strong>${esc(l.nome)}</strong></span>`;
+          if(l.ha<=0) return `<tr><td>${chip}</td><td colspan="4" class="hint">Sem hectares cadastrados pra essa operação — cadastre em Fazendas.</td></tr>`;
+          if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
+          const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
+          return `<tr>
+            <td>${chip}${l.r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : ''}</td>
+            <td class="mono">${fmtInt(l.ha)}</td>
+            <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
+            <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
+            <td class="mono"><button class="valor-clicavel ${resultadoHa<0?'neg':''}" data-grafico-op="${l.slug}" data-grafico-metrica="resultadoHa">R$ ${fmt(resultadoHa)}</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function PageResultados(){
+  if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz para ver os resultados aqui.');
+  if(algumResultadoCarregando()){
+    return `${FiltroPeriodo()}<div class="card card-pad"><p class="hint">Carregando resultados...</p></div>`;
+  }
+  const despesa = resultadoTotal('despesa'), receita = resultadoTotal('receita'), resultado = receita-despesa;
+  return `
+  ${FiltroPeriodo()}
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — todas as operações</p>
+  <div class="stat-row">
+    ${StatCard('Receita', receita, 'receita')}
+    ${StatCard('Despesa', despesa, 'despesa')}
+    ${StatCard('Resultado', resultado, 'resultado')}
+  </div>
+  <p class="eyebrow" style="margin-bottom:10px;">Impacto de cada operação</p>
+  <div class="donuts-row">
+    ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
+    ${Donut(fatiasOperacoes('receita'), 'donut-receita', 'Receita por operação')}
+    ${Donut(fatiasOperacoes('resultado'), 'donut-lucro', 'Lucro por operação')}
+  </div>
+  <div id="painel-tooltip" class="painel-tooltip"></div>
+  ${PagePorHectare()}
+  <div class="card" style="overflow-x:auto; margin-top:18px;">
+    <table>
+      <thead><tr><th>Operação</th><th>Receita</th><th>Despesa</th><th>Resultado</th></tr></thead>
+      <tbody>
+        ${linhasResultado().map(l=>{
+          const r = l.resultado;
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${esc(l.app.nome)}</strong></span>`;
+          if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
+          return `<tr>
+            <td>${chip}${r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : ''}</td>
+            <td class="mono">R$ ${fmt(r.receita)}</td>
+            <td class="mono">R$ ${fmt(r.despesa)}</td>
+            <td class="mono">R$ ${fmt(r.resultado)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:14px;">Números da Pecuária calculados a partir de receitas, despesas fixas, custo de ração/pasto/cria lançados no AE Pecuária e o combustível abastecido nela (rateado por talhão/centro de custo no AE Combustível). Cana e Cereais ainda não têm app próprio de receita/despesa — por enquanto só mostram o custo de combustível já rateado pra elas. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
+}
+
+/* ===================== FAZENDAS ===================== */
+function operacoesLabel(fazendaId){
+  const ops = state.fazendaOperacoes[fazendaId]||[];
+  if(ops.length===0) return '<span class="hint">Nenhuma operação cadastrada</span>';
+  return `<div style="display:flex; flex-wrap:wrap; gap:8px;">${ops.map(o=>{
+    const cor = OPERACAO_COR[o.operacao] || 'var(--verde-medio)';
+    return `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(cor,0.14)}; color:${cor}; width:22px; height:22px;">${iconOperacao(o.operacao)}</span>${OPERACOES[o.operacao]||o.operacao}${o.areaHa!=null ? ' · '+fmtInt(o.areaHa)+' ha' : ''}</span>`;
+  }).join('')}</div>`;
+}
+function PageFazendas(){
+  return `
+  <div class="card" style="overflow-x:auto;">
+    ${state.fazendas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — esse cadastro é a referência central usada pelos demais apps.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Área total (ha)</th><th>Operações</th><th>Localização</th>${souAdmin()?'<th></th>':''}</tr></thead>
+      <tbody>
+        ${state.fazendas.map(f=>`
+          <tr>
+            <td><strong>${esc(f.nome)}</strong></td>
+            <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
+            <td>${operacoesLabel(f.id)}</td>
+            <td>${esc(f.localizacao) || '—'}</td>
+            ${souAdmin() ? `<td style="display:flex; gap:8px;">
+              <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-fazenda="${f.id}">Excluir</button>
+            </td>` : ''}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+function ModalFazenda(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId ? 'Editar fazenda' : 'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${esc(d.nome)}" placeholder="Ex: Fazenda Santo Antônio"/></div>
+        <div class="field-row">
+          <div class="field"><label>Área total (ha)</label><input id="f-areafazenda" type="number" step="1" min="0" value="${d.areaHa??''}"/></div>
+          <div class="field"><label>Localização</label><input id="f-localfazenda" value="${esc(d.localizacao)}" placeholder="Cidade/UF"/></div>
+        </div>
+        <div class="field"><label>Observação</label><textarea id="f-obsfazenda" rows="2">${esc(d.observacao)}</textarea></div>
+        <label>Operações rodando nesta fazenda</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          ${d.operacoes.map((op,idx)=>`
+            <div class="composicao-row">
+              <select data-op-tipo="${idx}">
+                ${Object.entries(OPERACOES).map(([k,l])=>`<option value="${k}" ${op.operacao===k?'selected':''}>${l}</option>`).join('')}
+              </select>
+              <input data-op-area="${idx}" type="number" step="1" min="0" value="${op.areaHa??''}" placeholder="ha"/>
+              <button class="btn-danger-ghost" data-op-del="${idx}" style="padding:6px;">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        <button class="btn btn-ghost btn-sm" data-op-add="1" style="align-self:flex-start;">+ Adicionar operação</button>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="fazenda">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== APPS (registro da matriz) ===================== */
+function ModalApp(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Editar app — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome</label><input id="f-nomeapp" value="${esc(d.nome)}"/></div>
+        <div class="field"><label>Identificador (slug)</label><input value="${d.slug}" disabled/></div>
+        <div class="field"><label>Descrição</label><textarea id="f-descapp" rows="2">${esc(d.descricao)}</textarea></div>
+        <div class="field"><label>Link do app</label><input id="f-urlapp" value="${d.url}" placeholder="https://..."/></div>
+        <div class="field-row">
+          <div class="field"><label>Cor</label><input id="f-corapp" type="color" value="${d.cor}"/></div>
+          <div class="field"><label>Ordem</label><input id="f-ordemapp" type="number" step="1" value="${d.ordem}"/></div>
+        </div>
+        <div class="field"><label>Status</label>
+          <select id="f-statusapp">
+            <option value="ativo" ${d.status==='ativo'?'selected':''}>Ativo</option>
+            <option value="em_breve" ${d.status==='em_breve'?'selected':''}>Em breve</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="app">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== USUÁRIOS ===================== */
+function papelPill(papel){
+  return papel==='admin' ? `<span class="pill pill-ok">Administrador</span>` : `<span class="pill pill-cat">Gestor</span>`;
+}
+
+function PageUsuarios(){
+  return `
+  <div class="card" style="overflow-x:auto;">
+    ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para quem vai usar a matriz.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${state.perfis.map(p=>`
+          <tr>
+            <td><span class="op-chip"><span class="sidebar-user-avatar" style="width:28px; height:28px; font-size:11px; background:linear-gradient(135deg, var(--verde-medio), #4A8FD6);">${esc(iniciais(p.nome))}</span><strong>${esc(p.nome)}</strong></span></td>
+            <td class="mono">${esc(p.usuario)}</td>
+            <td>${papelPill(p.papel)}</td>
+            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
+            <td>${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>` : ''}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+function ModalUsuario(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-criar-usuario="1" ${state.usuarioLoading?'disabled':''}>${state.usuarioLoading?'Criando...':'Criar usuário'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalPapelUsuario(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
+        <div class="field"><label>Perfil</label>
+          <select id="f-papelusuario">
+            <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
+            <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
+          </select>
+        </div>
+        <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
+        <p class="hint">Administrador pode gerenciar fazendas, apps e usuários. Gestor só visualiza o painel e as fazendas.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="papelUsuario">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalTrocarSenha(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Trocar senha</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Senha atual</label><input id="f-senhaatual" type="password" autocomplete="current-password" value="${d.senhaAtual}"/></div>
+        <div class="field"><label>Nova senha</label><input id="f-novasenha" type="password" autocomplete="new-password" value="${d.novaSenha}"/></div>
+        <div class="field"><label>Confirmar nova senha</label><input id="f-confirmarsenha" type="password" autocomplete="new-password" value="${d.confirmarSenha}"/></div>
+        <p class="hint">A nova senha precisa ter pelo menos 6 caracteres.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="trocarSenha">Salvar nova senha</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function Empty(title, sub){
+  return `<div class="empty">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
+    <h4>${title}</h4>
+    <div class="page-desc" style="margin:0 auto;">${sub}</div>
+  </div>`;
+}
+
+/* ===================== MODAL / FORMS ===================== */
+function Modal(){
+  if(state.modal.type==='fazenda') return ModalFazenda();
+  if(state.modal.type==='app') return ModalApp();
+  if(state.modal.type==='usuario') return ModalUsuario();
+  if(state.modal.type==='papelUsuario') return ModalPapelUsuario();
+  if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
+  if(state.modal.type==='detalheOperacao') return ModalDetalheOperacao();
+  if(state.modal.type==='graficoOperacao') return ModalGraficoOperacao();
+  return '';
+}
+
+function ModalDetalheOperacao(){
+  const {panelId, slug} = state.modal;
+  const app = state.apps.find(a=>a.slug===slug);
+  const nome = esc(app ? app.nome : (OPERACOES[slug]||slug));
+  const r = resultadoOperacaoNoPeriodo(slug);
+  const rotuloPeriodo = labelPeriodo(state.periodo);
+  const semDadosBase = !r || r.erro;
+  const vazioMsg = r?.erro || (slug==='pecuaria' ? 'Nenhum lançamento nesse período.' : `O app ${nome} ainda não está com o banco de dados ligado à matriz.`);
+
+  let titulo, corpo;
+  if(panelId==='donut-lucro'){
+    titulo = `Lucro — ${nome} (${rotuloPeriodo})`;
+    corpo = semDadosBase ? Empty('Sem dados ainda', vazioMsg) : `
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div class="total-bar"><span>Receita</span><span class="mono" style="color:var(--bom); font-weight:600;">R$ ${fmt(r.receita)}</span></div>
+        <div class="total-bar"><span>Despesa</span><span class="mono" style="color:var(--trigo); font-weight:600;">R$ ${fmt(r.despesa)}</span></div>
+        <div class="total-bar ${r.resultado>=0?'ok':''}" style="${r.resultado<0?'color:var(--alerta);':''}">
+          <span>Resultado</span><span class="mono" style="font-weight:700;">R$ ${fmt(r.resultado)}</span>
+        </div>
+      </div>`;
+  } else {
+    const ehDespesa = panelId==='donut-despesa';
+    titulo = `${ehDespesa?'Despesa':'Receita'} — ${nome} (${rotuloPeriodo})`;
+    const linhas = semDadosBase ? [] : ehDespesa ? r.despesaDetalhe : r.receitasDetalhe;
+    const semDados = semDadosBase || !linhas || linhas.length===0;
+    corpo = semDados ? Empty('Sem dados ainda', vazioMsg) : `
+        <table>
+          <thead><tr>${ehDespesa ? '<th>Origem</th>' : '<th>Data</th><th>Descrição</th>'}<th>Valor</th></tr></thead>
+          <tbody>
+            ${linhas.map(l=> ehDespesa
+              ? `<tr><td>${l.label}</td><td class="mono">R$ ${fmt(l.valor)}</td></tr>`
+              : `<tr><td class="mono">${l.data.split('-').reverse().join('/')}</td><td>${esc(l.descricao)}</td><td class="mono">R$ ${fmt(l.valor)}</td></tr>`
+            ).join('')}
+          </tbody>
+        </table>
+        <div class="total-bar ok" style="margin-top:12px;">
+          <span>Total</span><span>R$ ${fmt(linhas.reduce((a,l)=>a+l.valor,0))}</span>
+        </div>`;
+  }
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${titulo}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">${corpo}</div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Barras com linha de zero — despesa/receita por hectare são sempre >=0
+// (barra cresce de baixo), lucro/ha pode ser negativo (barra cresce dos
+// dois lados da linha de zero, verde acima e vermelho abaixo).
+function GraficoBarras(pontos){
+  const vals = pontos.map(p=>p.valor);
+  const maxV = Math.max(0, ...vals), minV = Math.min(0, ...vals);
+  const range = (maxV-minV) || 1;
+  const largura=560, altura=200, margemBaixo=28, margemTopo=10;
+  const areaAltura = altura-margemBaixo-margemTopo;
+  const zeroY = margemTopo + areaAltura*(maxV/range);
+  const n = pontos.length;
+  const passo = largura/n;
+  const larguraBarra = Math.min(24, passo-8);
+  const barras = pontos.map((p,i)=>{
+    const x = i*passo + (passo-larguraBarra)/2;
+    const [ano,mesNum] = p.mes.split('-');
+    const rotuloMes = mesNum==='01' ? `${NOMES_MES_ABREV[0]}/${ano.slice(2)}` : NOMES_MES_ABREV[Number(mesNum)-1];
+    const rotuloTexto = `<text x="${(x+larguraBarra/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="9" fill="var(--cinza)" font-family="Inter,sans-serif">${rotuloMes}</text>`;
+    // mês que ainda não aconteceu (dentro de uma safra em andamento, por
+    // exemplo) não tem como ter valor — mostrar uma barra verde/vermelha
+    // de R$ 0 ali pareceria "esse mês fechou em zero", que é mentira.
+    if(p.futuro){
+      return `<rect x="${x.toFixed(1)}" y="${(zeroY-1).toFixed(1)}" width="${larguraBarra}" height="2" rx="1" fill="var(--cinza-claro)"></rect>${rotuloTexto}`;
+    }
+    const yVal = margemTopo + areaAltura*((maxV-p.valor)/range);
+    const y = Math.min(zeroY,yVal), h = Math.max(1.5,Math.abs(yVal-zeroY));
+    const cor = p.valor>=0 ? 'var(--bom)' : 'var(--alerta)';
+    return `<rect class="gbar" data-gbar-valor="R$ ${fmt(p.valor)}" data-gbar-label="${NOMES_MES_LONGO[Number(mesNum)-1]}/${ano}"
+        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra}" height="${h.toFixed(1)}" rx="3" fill="${cor}"></rect>${rotuloTexto}`;
+  }).join('');
+  return `<svg class="grafico-barras-svg" viewBox="0 0 ${largura} ${altura}">
+    <line x1="0" y1="${zeroY.toFixed(1)}" x2="${largura}" y2="${zeroY.toFixed(1)}" stroke="var(--cinza-claro)" stroke-width="1"/>
+    ${barras}
+  </svg>`;
+}
+
+const METRICA_LABEL = {despesaHa:'Despesa por hectare', receitaHa:'Receita por hectare', resultadoHa:'Lucro por hectare'};
+const METRICA_CAMPO = {despesaHa:'despesa', receitaHa:'receita', resultadoHa:'resultado'};
+function ModalGraficoOperacao(){
+  const {slug, metrica} = state.modal;
+  const app = state.apps.find(a=>a.slug===slug);
+  const nome = esc(app ? app.nome : (OPERACOES[slug]||slug));
+  const ha = hectaresPorOperacao(slug);
+  const bruto = resultadoBrutoOperacao(slug);
+  const semDados = !bruto || bruto.erro || !bruto.mensal || ha<=0;
+  let corpo;
+  if(semDados){
+    const msg = ha<=0
+      ? 'Cadastre os hectares dessa operação em Fazendas pra ver esse gráfico.'
+      : (bruto?.erro || `O app ${nome} ainda não está com o banco de dados ligado à matriz.`);
+    corpo = Empty('Sem dados ainda', msg);
+  } else {
+    const campo = METRICA_CAMPO[metrica];
+    const meses = ultimos12Meses(state.periodo);
+    const hoje = new Date();
+    const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const pontos = meses.map(mesStr=>{
+      const linha = bruto.mensal.find(x=>x.mes===mesStr);
+      return {mes: mesStr, valor: linha ? linha[campo]/ha : 0, futuro: mesStr>mesAtualStr};
+    });
+    corpo = `<p class="hint" style="margin-bottom:8px;">Últimos 12 meses, em R$/ha.</p>${GraficoBarras(pontos)}`;
+  }
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1" style="max-width:640px;">
+      <div class="modal-head"><h3>${METRICA_LABEL[metrica]} — ${nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">${corpo}</div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================== EVENTOS ===================== */
+function attachEvents(){
+  const loginForm = document.querySelector('[data-login-form]');
+  if(loginForm){
+    loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };
+    const uEl = document.querySelector('[data-login-usuario]');
+    const sEl = document.querySelector('[data-login-senha]');
+    if(uEl) uEl.oninput = (e)=>{ state.loginDraft.usuario = e.target.value; };
+    if(sEl) sEl.oninput = (e)=>{ state.loginDraft.senha = e.target.value; };
+  }
+  document.querySelectorAll('[data-logout]').forEach(el=>{ el.onclick = ()=> fazerLogout(); });
+  document.querySelectorAll('[data-retry-perfil]').forEach(el=>{
+    el.onclick = async ()=>{ await loadPerfil(); render(); if(state.perfil?.ativo) loadAll(); };
+  });
+  document.querySelectorAll('[data-nav]').forEach(el=>{
+    el.onclick = ()=>{ state.page = el.dataset.nav; state.mobileMenuAberto = false; render(); };
+  });
+  const menuToggleBtn = document.querySelector('[data-toggle-menu]');
+  if(menuToggleBtn) menuToggleBtn.onclick = ()=>{ state.mobileMenuAberto = !state.mobileMenuAberto; render(); };
+  const voltarErroBtn = document.querySelector('[data-voltar-erro]');
+  if(voltarErroBtn) voltarErroBtn.onclick = ()=>{ state.page = 'painel'; render(); };
+
+  document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
+    el.onclick = ()=>{ editDraft = {senhaAtual:'', novaSenha:'', confirmarSenha:''}; state.modal = {type:'trocarSenha'}; render(); };
+  });
+
+  // ---- fazendas ----
+  const novaFazendaBtn = document.querySelector('[data-nova-fazenda]');
+  if(novaFazendaBtn) novaFazendaBtn.onclick = ()=>{
+    editDraft = {nome:'', areaHa:null, localizacao:'', observacao:'', operacoes:[]};
+    state.modal = {type:'fazenda'}; render();
+  };
+  document.querySelectorAll('[data-editar-fazenda]').forEach(el=>{
+    el.onclick = ()=>{
+      const f = state.fazendas.find(x=>x.id===Number(el.dataset.editarFazenda));
+      const operacoes = (state.fazendaOperacoes[f.id]||[]).map(o=>({operacao:o.operacao, areaHa:o.areaHa}));
+      editDraft = {...f, _editId:f.id, operacoes};
+      state.modal = {type:'fazenda'}; render();
+    };
+  });
+  document.querySelectorAll('[data-del-fazenda]').forEach(el=>{
+    el.onclick = async ()=>{
+      if(!confirm('Excluir esta fazenda?')) return;
+      await db.from('fazendas').delete().eq('id', Number(el.dataset.delFazenda));
+      await loadAll();
+    };
+  });
+
+  // fazenda: operações (linhas dinâmicas) — sincroniza os outros campos
+  // antes de re-renderizar, senão o que já foi digitado se perde.
+  function sincronizarCamposFazenda(){
+    const nomeEl = document.getElementById('f-nomefazenda');
+    const areaEl = document.getElementById('f-areafazenda');
+    const localEl = document.getElementById('f-localfazenda');
+    const obsEl = document.getElementById('f-obsfazenda');
+    if(nomeEl) editDraft.nome = nomeEl.value;
+    if(areaEl) editDraft.areaHa = areaEl.value;
+    if(localEl) editDraft.localizacao = localEl.value;
+    if(obsEl) editDraft.observacao = obsEl.value;
+  }
+  document.querySelectorAll('[data-op-add]').forEach(el=>{
+    el.onclick = ()=>{ sincronizarCamposFazenda(); editDraft.operacoes.push({operacao:'pecuaria', areaHa:''}); render(); };
+  });
+  document.querySelectorAll('[data-op-del]').forEach(el=>{
+    el.onclick = ()=>{ sincronizarCamposFazenda(); editDraft.operacoes.splice(Number(el.dataset.opDel),1); render(); };
+  });
+  document.querySelectorAll('[data-op-tipo]').forEach(el=>{
+    el.onchange = (e)=>{ editDraft.operacoes[Number(el.dataset.opTipo)].operacao = e.target.value; };
+  });
+  document.querySelectorAll('[data-op-area]').forEach(el=>{
+    el.oninput = (e)=>{ editDraft.operacoes[Number(el.dataset.opArea)].areaHa = e.target.value; };
+  });
+
+  // ---- apps ----
+  document.querySelectorAll('[data-editar-app]').forEach(el=>{
+    el.onclick = ()=>{
+      const a = state.apps.find(x=>x.id===Number(el.dataset.editarApp));
+      editDraft = {...a, _editId:a.id};
+      state.modal = {type:'app'}; render();
+    };
+  });
+  document.querySelectorAll('[data-del-app]').forEach(el=>{
+    el.onclick = async ()=>{
+      if(!confirm('Excluir este app do painel?')) return;
+      await db.from('apps').delete().eq('id', Number(el.dataset.delApp));
+      await loadAll();
+    };
+  });
+
+  // ---- usuários ----
+  const novoUsuarioBtn = document.querySelector('[data-novo-usuario]');
+  if(novoUsuarioBtn) novoUsuarioBtn.onclick = ()=>{
+    editDraft = {nome:'', usuario:'', senha:''};
+    state.usuarioError = '';
+    state.modal = {type:'usuario'}; render();
+  };
+  document.querySelectorAll('[data-editar-usuario]').forEach(el=>{
+    el.onclick = ()=>{
+      const perfil = state.perfis.find(p=>p.id===el.dataset.editarUsuario);
+      editDraft = {_perfilId: perfil.id, nome: perfil.nome, usuario: perfil.usuario, papel: perfil.papel, ativo: perfil.ativo};
+      state.modal = {type:'papelUsuario'}; render();
+    };
+  });
+  const criarUsuarioBtn = document.querySelector('[data-criar-usuario]');
+  if(criarUsuarioBtn){
+    criarUsuarioBtn.onclick = async ()=>{
+      const nome = document.getElementById('f-nomeusuario').value.trim();
+      const usuario = document.getElementById('f-usuario').value.trim();
+      const senha = document.getElementById('f-senhausuario').value;
+      if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
+      state.usuarioLoading = true; state.usuarioError = ''; render();
+      const { data, error } = await db.functions.invoke('criar-usuario-matriz', { body: { nome, usuario, senha } });
+      state.usuarioLoading = false;
+      if(error || data?.error){
+        let msg = data?.error || error?.message || 'Falha ao criar usuário.';
+        if(error?.context && typeof error.context.json === 'function'){
+          try { const corpo = await error.context.json(); if(corpo?.error) msg = corpo.error; } catch(e){}
+        }
+        state.usuarioError = msg;
+        render();
+        return;
+      }
+      state.modal = null; editDraft = null;
+      await loadAll();
+    };
+  }
+
+  // ---- fechar overlay ----
+  document.querySelectorAll('[data-close], [data-close-overlay]').forEach(el=>{
+    el.onclick = (e)=>{
+      if(el.dataset.closeOverlay!==undefined && e.target!==el) return;
+      state.modal = null; editDraft = null; state.usuarioError = '';
+      render();
+    };
+  });
+  document.querySelectorAll('[data-stop]').forEach(el=>{ el.onclick = (e)=> e.stopPropagation(); });
+
+  // ---- salvar (fazenda / app / papelUsuario / trocarSenha) ----
+  const saveBtn = document.querySelector('[data-save]');
+  if(saveBtn){
+    saveBtn.onclick = async ()=>{
+      const type = saveBtn.dataset.save;
+      let error;
+      if(type==='fazenda'){
+        const f = {
+          nome: document.getElementById('f-nomefazenda').value.trim(),
+          areaHa: document.getElementById('f-areafazenda').value ? Math.max(0, Number(document.getElementById('f-areafazenda').value)||0) : null,
+          localizacao: document.getElementById('f-localfazenda').value.trim(),
+          observacao: document.getElementById('f-obsfazenda').value.trim(),
+        };
+        if(!f.nome){ alert('Informe o nome da fazenda.'); return; }
+        let fazendaId = editDraft._editId;
+        if(fazendaId){
+          ({error} = await db.from('fazendas').update(fazendaToRow(f)).eq('id', fazendaId));
+        } else {
+          const inserted = await db.from('fazendas').insert(fazendaToRow(f)).select().single();
+          error = inserted.error;
+          fazendaId = inserted.data?.id;
+        }
+        // Insere as operações novas ANTES de apagar as antigas — se o insert
+        // falhar (rede caiu no meio), as operações que já existiam continuam
+        // lá; a alternativa (apagar primeiro) perderia esse cadastro de vez
+        // numa falha no meio do caminho.
+        if(!error && fazendaId){
+          const linhas = (editDraft.operacoes||[])
+            .filter(op=>op.operacao)
+            .map(op=>({fazenda_id: fazendaId, operacao: op.operacao, area_ha: op.areaHa!=null && op.areaHa!=='' ? Math.max(0, Number(op.areaHa)||0) : null}));
+          let idsNovos = [];
+          if(linhas.length>0){
+            const inseridas = await db.from('fazenda_operacoes').insert(linhas).select('id');
+            error = inseridas.error;
+            idsNovos = (inseridas.data||[]).map(r=>r.id);
+          }
+          if(!error){
+            let del = db.from('fazenda_operacoes').delete().eq('fazenda_id', fazendaId);
+            if(idsNovos.length>0) del = del.not('id', 'in', `(${idsNovos.join(',')})`);
+            ({error} = await del);
+          }
+        }
+      } else if(type==='app'){
+        const a = {
+          nome: document.getElementById('f-nomeapp').value.trim(),
+          descricao: document.getElementById('f-descapp').value.trim(),
+          url: document.getElementById('f-urlapp').value.trim(),
+          cor: document.getElementById('f-corapp').value,
+          ordem: Number(document.getElementById('f-ordemapp').value)||0,
+          status: document.getElementById('f-statusapp').value,
+        };
+        if(!a.nome){ alert('Informe o nome do app.'); return; }
+        const row = appToRow(a); delete row.slug;
+        ({error} = await db.from('apps').update(row).eq('id', editDraft._editId));
+      } else if(type==='papelUsuario'){
+        const papel = document.getElementById('f-papelusuario').value;
+        const ativo = document.getElementById('f-ativousuario').checked;
+        ({error} = await db.from('profiles').update({papel, ativo}).eq('id', editDraft._perfilId));
+      } else if(type==='trocarSenha'){
+        const senhaAtual = document.getElementById('f-senhaatual').value;
+        const novaSenha = document.getElementById('f-novasenha').value;
+        const confirmarSenha = document.getElementById('f-confirmarsenha').value;
+        if(!senhaAtual || !novaSenha || !confirmarSenha){ alert('Preencha todos os campos.'); return; }
+        if(novaSenha.length<6){ alert('A nova senha precisa ter pelo menos 6 caracteres.'); return; }
+        if(novaSenha!==confirmarSenha){ alert('A confirmação não bate com a nova senha.'); return; }
+        const email = `${state.perfil.usuario}@${DOMINIO_LOGIN}`;
+        const { error: erroSenhaAtual } = await db.auth.signInWithPassword({ email, password: senhaAtual });
+        if(erroSenhaAtual){ alert('Senha atual incorreta.'); return; }
+        ({error} = await db.auth.updateUser({ password: novaSenha }));
+        if(error){ alert('Não foi possível trocar a senha: ' + error.message); return; }
+        state.modal = null; editDraft = null;
+        alert('Senha alterada com sucesso.');
+        render();
+        return;
+      }
+      if(error){ alert('Não foi possível salvar: ' + error.message); return; }
+      state.modal = null; editDraft = null;
+      await loadAll();
+    };
+  }
+
+  // donuts de Resultados: hover sincronizado entre gráfico e legenda + tooltip
+  const tooltip = document.getElementById('painel-tooltip');
+  const clearHovers = ()=>{
+    document.querySelectorAll('.donut-slice.hover, .legenda-row.hover').forEach(el=>el.classList.remove('hover'));
+  };
+  document.querySelectorAll('[data-slice-idx]').forEach(el=>{
+    const idx = el.dataset.sliceIdx;
+    el.addEventListener('pointerenter', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
+      if(row) row.classList.add('hover');
+      if(tooltip){
+        tooltip.innerHTML = `<div class="v">R$ ${el.dataset.tipValor}</div><div class="l">${el.dataset.tipNome} · ${el.dataset.tipPct}%</div>`;
+        tooltip.style.display = 'block';
+      }
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(tooltip){ tooltip.style.left = (e.clientX+14)+'px'; tooltip.style.top = (e.clientY+14)+'px'; }
+    });
+    el.addEventListener('pointerleave', ()=>{ clearHovers(); if(tooltip) tooltip.style.display = 'none'; });
+    el.addEventListener('focus', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
+      if(row) row.classList.add('hover');
+    });
+    el.addEventListener('blur', clearHovers);
+  });
+  document.querySelectorAll('[data-legenda-idx]').forEach(el=>{
+    const idx = el.dataset.legendaIdx;
+    el.addEventListener('pointerenter', ()=>{
+      clearHovers();
+      el.classList.add('hover');
+      const slice = document.querySelector(`[data-slice-idx="${idx}"]`);
+      if(slice) slice.classList.add('hover');
+    });
+    el.addEventListener('pointerleave', clearHovers);
+  });
+  // Clique numa fatia do donut (ou linha da legenda) abre o detalhe do que
+  // compõe aquele valor. A chave é "panelId-idx" — panelId (ex:
+  // "donut-despesa") também tem hífen, então separamos só no último hífen.
+  const abrirDetalheOperacao = (chave)=>{
+    const idx = Number(chave.slice(chave.lastIndexOf('-')+1));
+    const panelId = chave.slice(0, chave.lastIndexOf('-'));
+    const slug = OPERACOES_ORDEM[idx];
+    if(!slug) return;
+    state.modal = {type:'detalheOperacao', panelId, slug};
+    render();
+  };
+  document.querySelectorAll('[data-slice-idx]').forEach(el=>{
+    el.addEventListener('click', ()=>abrirDetalheOperacao(el.dataset.sliceIdx));
+    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrirDetalheOperacao(el.dataset.sliceIdx); } });
+  });
+  document.querySelectorAll('[data-legenda-idx]').forEach(el=>{
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', ()=>abrirDetalheOperacao(el.dataset.legendaIdx));
+  });
+
+  // filtro de período (Mês / Ano / Safra)
+  document.querySelectorAll('[data-periodo-tipo]').forEach(el=>{
+    el.onclick = ()=>{ state.periodo.tipo = el.dataset.periodoTipo; render(); };
+  });
+  const periodoMesEl = document.getElementById('f-periodo-mes');
+  if(periodoMesEl) periodoMesEl.onchange = (e)=>{ if(e.target.value){ state.periodo.mes = e.target.value; render(); } };
+  const periodoAnoEl = document.getElementById('f-periodo-ano');
+  if(periodoAnoEl) periodoAnoEl.onchange = (e)=>{ state.periodo.ano = Number(e.target.value); render(); };
+  const periodoSafraEl = document.getElementById('f-periodo-safra');
+  if(periodoSafraEl) periodoSafraEl.onchange = (e)=>{ state.periodo.safra = Number(e.target.value); render(); };
+
+  // "por hectare": clicar num valor abre o gráfico dos últimos 12 meses
+  document.querySelectorAll('[data-grafico-op]').forEach(el=>{
+    el.onclick = ()=>{
+      state.modal = {type:'graficoOperacao', slug: el.dataset.graficoOp, metrica: el.dataset.graficoMetrica};
+      render();
+    };
+  });
+  // tooltip das barras do gráfico (reaproveita o mesmo tooltip dos donuts)
+  document.querySelectorAll('[data-gbar-valor]').forEach(el=>{
+    el.addEventListener('pointerenter', ()=>{
+      if(tooltip){ tooltip.innerHTML = `<div class="v">${el.dataset.gbarValor}</div><div class="l">${el.dataset.gbarLabel}</div>`; tooltip.style.display = 'block'; }
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(tooltip){ tooltip.style.left = (e.clientX+14)+'px'; tooltip.style.top = (e.clientY+14)+'px'; }
+    });
+    el.addEventListener('pointerleave', ()=>{ if(tooltip) tooltip.style.display = 'none'; });
+  });
+}
+
+initAuth();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_matriz.js'));
+}
+</script>
+</body>
+</html>
