@@ -937,6 +937,12 @@ function AguardandoLiberacao(){
 /* ===================== HELPERS ===================== */
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+// Toda tela é montada com innerHTML a partir de texto livre do usuário
+// (observação, nome, item etc.) — sem escapar, um <script> ou onerror=
+// digitado num campo executaria na sessão de quem visualizar a tela.
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 // Valida campos obrigatórios de um lançamento antes de salvar — campos:
 // [[valorBruto, rótulo], ...]. Barra o salvamento com um alerta claro se
 // algum estiver em branco (observação nunca entra aqui, é sempre opcional).
@@ -967,9 +973,12 @@ function lerFilaOffline(){
   try{ return JSON.parse(localStorage.getItem(FILA_OFFLINE_KEY)||'[]'); }
   catch(e){ return []; }
 }
+// Retorna se conseguiu gravar de verdade — quem chama precisa saber, senão
+// mostraria "salvo neste aparelho" pra um lançamento que na verdade se
+// perdeu (localStorage indisponível em modo privado, ou cheio).
 function salvarFilaOffline(fila){
-  try{ localStorage.setItem(FILA_OFFLINE_KEY, JSON.stringify(fila)); }
-  catch(e){ /* localStorage indisponível (modo privado etc.) — sem o que fazer aqui */ }
+  try{ localStorage.setItem(FILA_OFFLINE_KEY, JSON.stringify(fila)); return true; }
+  catch(e){ return false; }
 }
 function enfileirarLancamento(type, campos){
   const lote = campos.loteId ? state.lotes.find(l=>l.id===campos.loteId) : null;
@@ -980,7 +989,7 @@ function enfileirarLancamento(type, campos){
     label: `${LANCAMENTO_LABEL[type]||type}${lote?' · '+lote.nome:''}`,
     criadoEm: new Date().toISOString(),
   });
-  salvarFilaOffline(fila);
+  return salvarFilaOffline(fila);
 }
 // Distingue "sem conexão" (vale a pena guardar e tentar de novo depois) de
 // um erro real do servidor (dado inválido, RLS etc. — tentar de novo não
@@ -1004,7 +1013,7 @@ async function executarInsertLancamento(type, campos){
     // guardado) — desconta o ingrediente cru direto, igual antes de existir
     // o estoque de ração pronta (que só faz sentido pra dieta produzida em
     // lote e guardada, como a da Cria).
-    const dieta = state.dietas.find(x=>x.id===campos.dietaId);
+    const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
     const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual(), criado_em:new Date().toISOString()};
     const res = await db.from('saidas_racao').insert(row).select().single();
     if(res.error) return {error:res.error};
@@ -1019,8 +1028,10 @@ async function executarInsertLancamento(type, campos){
         const {error} = await db.from('movimentos').insert(movs);
         if(error){
           // Não deixa a saída salva sem o desconto de estoque correspondente
-          // (ex: falha de permissão na gravação de movimentos) — desfaz o
-          // lançamento inteiro em vez de ficar "pela metade".
+          // (ex: falha de permissão na gravação de movimentos) — desfaz a
+          // linha já criada em vez de ficar "pela metade". Sem isso, se este
+          // erro virar reenfileiramento (falha de rede), o retry recriaria a
+          // saída de ração inteira de novo, duplicando o lançamento e o custo.
           await db.from('saidas_racao').delete().eq('id', saidaId);
           return {error};
         }
@@ -1046,7 +1057,7 @@ async function executarInsertLancamento(type, campos){
     return {error};
   }
   if(type==='producaoRacao'){
-    const dieta = state.dietas.find(x=>x.id===campos.dietaId);
+    const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
     const row = {data:campos.data, dieta_id:campos.dietaId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual()};
     const res = await db.from('producoes_racao').insert(row).select().single();
     if(res.error) return {error:res.error};
@@ -1060,8 +1071,9 @@ async function executarInsertLancamento(type, campos){
       if(movs.length){
         const {error} = await db.from('movimentos').insert(movs);
         if(error){
-          // Mesma lógica da Saída de Ração: sem o desconto de estoque, não
-          // faz sentido deixar a produção salva sozinha.
+          // Mesma lógica da Saída de Ração acima: sem o desconto de estoque,
+          // não faz sentido deixar a produção salva sozinha, e desfazer evita
+          // que um reenfileiramento duplique a produção no retry.
           await db.from('producoes_racao').delete().eq('id', producaoId);
           return {error};
         }
@@ -1107,18 +1119,29 @@ async function executarInsertLancamento(type, campos){
 // Tenta salvar de verdade; se falhar por rede, guarda na fila offline em vez
 // de mostrar erro — do ponto de vista de quem está usando, "salvou" mesmo
 // assim (só que localmente, até a internet voltar).
+const ERRO_FILA_INDISPONIVEL = {message:'Sem conexão, e não foi possível guardar o lançamento neste aparelho (armazenamento local indisponível ou cheio). Nada foi salvo — anote os dados e tente lançar de novo.'};
 async function salvarOuEnfileirar(type, campos){
+  // Saída de Ração e Produção descontam estoque na proporção da composição
+  // da dieta NA HORA do lançamento. Se isso acabar indo pra fila offline e
+  // só sincronizar depois, precisa usar essa composição de agora — não a
+  // que a dieta tiver quando a sincronização rodar (pode ter sido editada
+  // nesse meio tempo) — por isso o snapshot é tirado aqui, antes de
+  // qualquer tentativa, e viaja junto com o lançamento se ele for enfileirado.
+  if((type==='saidaRacao' || type==='producaoRacao') && !campos._dietaSnapshot){
+    const dietaAgora = state.dietas.find(x=>x.id===campos.dietaId);
+    if(dietaAgora) campos = {...campos, _dietaSnapshot:{itens: dietaAgora.itens}};
+  }
   try{
     const resultado = await executarInsertLancamento(type, campos);
     if(!resultado.error) return {ok:true};
     if(pareceErroDeRede(resultado.error)){
-      enfileirarLancamento(type, campos);
+      if(!enfileirarLancamento(type, campos)) return {ok:false, error:ERRO_FILA_INDISPONIVEL};
       return {ok:true, enfileirado:true};
     }
     return {ok:false, error:resultado.error};
   } catch(err){
     if(pareceErroDeRede(err)){
-      enfileirarLancamento(type, campos);
+      if(!enfileirarLancamento(type, campos)) return {ok:false, error:ERRO_FILA_INDISPONIVEL};
       return {ok:true, enfileirado:true};
     }
     return {ok:false, error:err};
@@ -1177,6 +1200,27 @@ function saldoIngrediente(id){
     saldo += m.tipo==='entrada' ? m.quantidade : -m.quantidade;
   });
   return saldo;
+}
+// Repete a média ponderada do zero sobre a lista de movimentações (em
+// ordem cronológica) de UM ingrediente — usado quando uma entrada existente
+// é corrigida, pra não deixar o valor errado de antes contaminando o preço
+// atual. Retorna null se nenhuma entrada da lista tinha preço informado
+// (nesse caso o preço do ingrediente não deve ser mexido).
+function recomputarPrecoIngrediente(movs, unidade){
+  const ordenados = movs.slice().sort((a,b)=> String(a.data).localeCompare(String(b.data)) || (a.id||0)-(b.id||0));
+  let estoqueKg = 0, preco = null;
+  ordenados.forEach(m=>{
+    const qtdKg = qtdEmKg(m.quantidade, unidade);
+    if(m.tipo==='entrada'){
+      if(m.precoKg){
+        preco = (estoqueKg>0 && preco!=null) ? (estoqueKg*preco + qtdKg*m.precoKg)/(estoqueKg+qtdKg) : m.precoKg;
+      }
+      estoqueKg += qtdKg;
+    } else {
+      estoqueKg -= qtdKg;
+    }
+  });
+  return preco;
 }
 
 // Dietas que fazem sentido controlar por estoque de ração pronta (produzida
@@ -1278,7 +1322,7 @@ function Sidebar(){
       </div>
     </div>
     <div class="sidebar-user">
-      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
+      <span class="sidebar-user-nome">${esc(state.perfil?.nome||'')}</span>
       <div class="sidebar-user-actions">
         <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
         <button class="btn-sair" data-logout="1">Sair</button>
@@ -1556,9 +1600,9 @@ function PageIngredientes(){
       <tbody>
         ${list.map(i=>`
           <tr>
-            <td><strong>${i.nome}</strong></td>
+            <td><strong>${esc(i.nome)}</strong></td>
             <td><span class="pill pill-cat">${i.categoria}</span></td>
-            <td>${i.fornecedor||'—'}</td>
+            <td>${esc(i.fornecedor)||'—'}</td>
             <td class="mono">${fmt(i.ms,1)}%</td>
             <td class="mono">${fmt(i.pb,1)}%</td>
             <td class="mono">${fmt(i.ndt,1)}%</td>
@@ -1608,7 +1652,7 @@ function PageEstoque(){
         ${rows.map(r=>`
           <tr>
             <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${r.baixo?'alerta':''}" style="height:${Math.round(r.pctMin*100)}%"></div></div></div></td>
-            <td><strong>${r.i.nome}</strong></td>
+            <td><strong>${esc(r.i.nome)}</strong></td>
             <td class="mono">${fmtInt(r.saldo)} ${r.i.unidade}</td>
             <td class="mono">${fmtInt(r.i.estoqueMin)} ${r.i.unidade}</td>
             ${verValor?`<td class="mono">R$ ${fmt(r.valor)}</td>`:''}
@@ -1629,7 +1673,7 @@ function PageEstoque(){
           const ing = getIng(m.ingredienteId);
           return `<tr>
             <td class="mono">${m.data.split('-').reverse().join('/')}</td>
-            <td>${ing?ing.nome:'—'}</td>
+            <td>${ing?esc(ing.nome):'—'}</td>
             <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}</td>
             <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
             <td style="display:flex; gap:6px;">
@@ -1678,6 +1722,7 @@ function composicaoIncompleta(dietaId){
 }
 
 function PageDietas(){
+  const verValor = souAdmin();
   if(state.dietas.length===0){
     return `<div class="card">${Empty('Nenhuma dieta formulada','Crie uma dieta combinando ingredientes cadastrados.')}</div>`;
   }
@@ -1688,32 +1733,32 @@ function PageDietas(){
     <div class="diet-card">
       <div class="diet-head" data-toggle-diet="${d.id}">
         <div>
-          <div class="diet-title">${d.nome} <span class="pill ${d.tipo==='pasto'?'pill-warn':d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[d.tipo]||'Confinamento'}</span></div>
-          <div class="diet-sub">${d.categoriaAnimal} · ${fmt(d.kgAnimalDia,1)} kg MN/animal/dia</div>
+          <div class="diet-title">${esc(d.nome)} <span class="pill ${d.tipo==='pasto'?'pill-warn':d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[d.tipo]||'Confinamento'}</span></div>
+          <div class="diet-sub">${esc(d.categoriaAnimal)} · ${fmt(d.kgAnimalDia,1)} kg MN/animal/dia</div>
         </div>
         <div class="diet-metrics">
           <div class="diet-metric"><div class="v">${fmt(c.ms,1)}%</div><div class="l">MS</div></div>
           <div class="diet-metric"><div class="v">${fmt(c.pb,1)}%</div><div class="l">PB</div></div>
           <div class="diet-metric"><div class="v">${fmt(c.ndt,1)}%</div><div class="l">NDT</div></div>
-          <div class="diet-metric"><div class="v">R$ ${fmt(c.custoKg,3)}</div><div class="l">Custo/kg</div></div>
-          <div class="diet-metric"><div class="v">R$ ${fmt(c.custoAnimalDia)}</div><div class="l">Custo/animal/dia</div></div>
+          ${verValor?`<div class="diet-metric"><div class="v">R$ ${fmt(c.custoKg,3)}</div><div class="l">Custo/kg</div></div>
+          <div class="diet-metric"><div class="v">R$ ${fmt(c.custoAnimalDia)}</div><div class="l">Custo/animal/dia</div></div>`:''}
           <svg class="chev ${open?'open':''}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
         </div>
       </div>
       ${open ? `
       <div class="diet-body">
         <table>
-          <thead><tr><th>Ingrediente</th><th>% na dieta</th><th>Kg/animal/dia</th><th>Custo/animal/dia</th></tr></thead>
+          <thead><tr><th>Ingrediente</th><th>% na dieta</th><th>Kg/animal/dia</th>${verValor?'<th>Custo/animal/dia</th>':''}</tr></thead>
           <tbody>
             ${d.itens.map(it=>{
               const ing = getIng(it.ingredienteId);
               if(!ing) return '';
               const kgAnimal = d.kgAnimalDia*it.pct/100;
               return `<tr>
-                <td>${ing.nome}</td>
+                <td>${esc(ing.nome)}</td>
                 <td class="mono">${fmt(it.pct,1)}%</td>
                 <td class="mono">${fmt(kgAnimal,2)} kg</td>
-                <td class="mono">R$ ${fmt(kgAnimal*ing.precoKg)}</td>
+                ${verValor?`<td class="mono">R$ ${fmt(kgAnimal*ing.precoKg)}</td>`:''}
               </tr>`;
             }).join('')}
           </tbody>
@@ -1761,7 +1806,7 @@ function PageEstoqueRacao(){
         ${rows.map(r=>`
           <tr>
             <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${r.baixo?'alerta':''}" style="height:${Math.round(r.pctMin*100)}%"></div></div></div></td>
-            <td><strong>${r.d.nome}</strong> <span class="pill ${r.d.tipo==='pasto'?'pill-warn':r.d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[r.d.tipo]||'Confinamento'}</span></td>
+            <td><strong>${esc(r.d.nome)}</strong> <span class="pill ${r.d.tipo==='pasto'?'pill-warn':r.d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[r.d.tipo]||'Confinamento'}</span></td>
             <td class="mono">${fmtInt(r.saldo)} kg</td>
             <td class="mono">${r.min>0 ? fmtInt(r.min)+' kg' : '—'}</td>
             <td>${r.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
@@ -1782,7 +1827,7 @@ function PageEstoqueRacao(){
           const dieta = state.dietas.find(x=>x.id===p.dietaId);
           return `<tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
-            <td>${dieta?dieta.nome:'—'}</td>
+            <td>${dieta?esc(dieta.nome):'—'}</td>
             <td class="mono">${fmtInt(p.quantidadeKg)} kg</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('dietas','editar') ? `
@@ -1821,7 +1866,7 @@ function PageLotes(tipo){
           const ultimaPesagem = historicoPeso[historicoPeso.length-1];
           return `
           <tr>
-            <td><strong>${l.nome}</strong></td>
+            <td><strong>${esc(l.nome)}</strong></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
@@ -1861,15 +1906,17 @@ function PageLotesGeral(){
       <tbody>
         ${list.map(l=>`
           <tr>
-            <td><strong>${l.nome}</strong></td>
+            <td><strong>${esc(l.nome)}</strong></td>
             <td><span class="pill pill-cat">${DESTINO_LOTE_LABEL[l.destino]||l.destino||'—'}</span></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
             <td>${l.dataFim ? '<span class="pill pill-cat">Encerrado</span>' : '<span class="pill pill-ok">Ativo</span>'}</td>
             <td style="display:flex; gap:6px;">
+              ${temPermissao(TIPO_MODULO[loteTipo(l)],'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
+              ` : ''}
             </td>
           </tr>
         `).join('')}
@@ -1980,7 +2027,7 @@ function PageSaidaRacao(tipo){
     ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th><th>Custo estimado</th><th>Lançado por</th><th>Lançado em</th><th></th>
+        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th>Lançado em</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(s=>{
@@ -1989,11 +2036,11 @@ function PageSaidaRacao(tipo){
           const custo = dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0;
           return `<tr>
             <td class="mono">${s.data.split('-').reverse().join('/')}</td>
-            <td>${dieta?dieta.nome:'—'}</td>
-            <td>${lote?lote.nome:'—'}</td>
+            <td>${dieta?esc(dieta.nome):'—'}</td>
+            <td>${lote?esc(lote.nome):'—'}</td>
             <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
-            <td class="mono">R$ ${fmt(custo)}</td>
-            <td>${s.criadoPor || '—'}</td>
+            ${verValor?`<td class="mono">R$ ${fmt(custo)}</td>`:''}
+            <td>${esc(s.criadoPor) || '—'}</td>
             <td class="mono">${s.criadoEm ? new Date(s.criadoEm).toLocaleString('pt-BR') : '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
@@ -2035,10 +2082,10 @@ function PageCocho(){
           const n = NOTAS_COCHO[c.nota] || {label:c.nota, pill:'pill-cat'};
           return `<tr>
             <td class="mono">${c.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
+            <td>${lote?esc(lote.nome):'—'}</td>
             <td><span class="pill ${n.pill}">${n.label}</span></td>
-            <td>${c.observacao || '—'}</td>
-            <td>${c.criadoPor || '—'}</td>
+            <td>${esc(c.observacao) || '—'}</td>
+            <td>${esc(c.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('confinamento','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-cocho="${c.id}">Editar</button>
@@ -2058,6 +2105,7 @@ function custoPasto(p){
   return dieta ? calcDieta(dieta).custoKg * p.quantidade : 0;
 }
 function PagePasto(){
+  const verValor = souAdmin();
   const list = state.pasto
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; })
     .sort((a,b)=> b.data.localeCompare(a.data));
@@ -2069,7 +2117,7 @@ function PagePasto(){
     ${list.length===0 ? Empty('Nenhuma reposição de pasto registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.') : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th><th>Custo estimado</th><th>Lançado por</th><th></th>
+        <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(p=>{
@@ -2077,11 +2125,11 @@ function PagePasto(){
           const dieta = state.dietas.find(d=>d.id===p.dietaId);
           return `<tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
-            <td>${dieta?dieta.nome:'—'}</td>
+            <td>${lote?esc(lote.nome):'—'}</td>
+            <td>${dieta?esc(dieta.nome):'—'}</td>
             <td class="mono">${fmtInt(p.quantidade)} kg</td>
-            <td class="mono">R$ ${fmt(custoPasto(p))}</td>
-            <td>${p.criadoPor || '—'}</td>
+            ${verValor?`<td class="mono">R$ ${fmt(custoPasto(p))}</td>`:''}
+            <td>${esc(p.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('pasto','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
@@ -2116,10 +2164,10 @@ function PageReproducao(){
           const lote = state.lotes.find(l=>l.id===r.loteId);
           return `<tr>
             <td class="mono">${r.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
-            <td>${r.item}</td>
+            <td>${lote?esc(lote.nome):'—'}</td>
+            <td>${esc(r.item)}</td>
             <td class="mono">R$ ${fmt(custoReproducao(r))}</td>
-            <td>${r.criadoPor || '—'}</td>
+            <td>${esc(r.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-reproducao="${r.id}">Editar</button>
@@ -2154,10 +2202,10 @@ function PagePartos(){
           const lote = state.lotes.find(l=>l.id===p.loteId);
           return `<tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
-            <td class="mono">${p.numeroMae||'—'}</td>
+            <td>${lote?esc(lote.nome):'—'}</td>
+            <td class="mono">${esc(p.numeroMae)||'—'}</td>
             <td>${SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—'}</td>
-            <td>${p.criadoPor || '—'}</td>
+            <td>${esc(p.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-parto="${p.id}">Editar</button>
@@ -2195,7 +2243,7 @@ function PainelResultadoLotes(lotesTipo){
       <tbody>
         ${linhas.map(r=>`
           <tr>
-            <td><strong>${r.lote.nome}</strong></td>
+            <td><strong>${esc(r.lote.nome)}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
             ${r.semDados ? `<td class="mono" colspan="5">Nenhuma pesagem registrada ainda</td>` : `
             <td class="mono">${fmt(Number(r.primeira.pesoMedioKg),1)} kg <span class="hint">(${r.primeira.data.split('-').reverse().join('/')})</span></td>
@@ -2239,12 +2287,12 @@ function PagePesagem(tipo){
           const idx = historico.findIndex(h=>h.id===p.id);
           const gmd = idx>0 ? gmdEntre(Number(historico[idx-1].pesoMedioKg), Number(p.pesoMedioKg), historico[idx-1].data, p.data) : null;
           return `<tr>
-            <td><strong>${lote?lote.nome:'—'}</strong></td>
+            <td><strong>${lote?esc(lote.nome):'—'}</strong></td>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td class="mono">${fmt(Number(p.pesoMedioKg),1)} kg</td>
             <td class="mono">${gmd!==null ? (gmd>=0?'+':'')+fmt(gmd,2)+' kg/dia' : '—'}</td>
-            <td>${p.observacao||'—'}</td>
-            <td>${p.criadoPor || '—'}</td>
+            <td>${esc(p.observacao)||'—'}</td>
+            <td>${esc(p.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(TIPO_MODULO[tipo],'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pesagem="${p.id}">Editar</button>
@@ -2404,8 +2452,8 @@ function PainelResultados(entries, panelId, eyebrow, titulo, vazioMsg, labelPeri
     const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
     const showLabel = e.pct>=6;
     return `
-      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${e.nome}" data-tip-valor="${fmt(e.valor)}" data-tip-pct="${fmt(e.pct,1)}"
-        d="${path}" fill="${e.cor}" tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.valor)}, ${fmt(e.pct,1)}% ${labelPeriodo}"></path>
+      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${esc(e.nome)}" data-tip-valor="${fmt(e.valor)}" data-tip-pct="${fmt(e.pct,1)}"
+        d="${path}" fill="${e.cor}" tabindex="0" role="img" aria-label="${esc(e.nome)}: R$ ${fmt(e.valor)}, ${fmt(e.pct,1)}% ${labelPeriodo}"></path>
       ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(e.pct,0)}%</text>` : ''}
     `;
   }).join('');
@@ -2413,7 +2461,7 @@ function PainelResultados(entries, panelId, eyebrow, titulo, vazioMsg, labelPeri
   const legenda = entries.map((e,idx)=>`
     <div class="legenda-row" data-legenda-idx="${panelId}-${idx}">
       <span class="legenda-swatch" style="background:${e.cor}"></span>
-      <span class="legenda-nome">${e.nome}</span>
+      <span class="legenda-nome">${esc(e.nome)}</span>
       <span class="legenda-valor">R$ ${fmt(e.valor)}</span>
       <span class="legenda-pct">${fmt(e.pct,1)}%</span>
     </div>
@@ -2665,7 +2713,15 @@ function alocarDespesaPorArea(c, ctx){
   }
   const animaisPorArea = {confinamento:ctx.animaisConfinamento, pasto:ctx.animaisPasto, cria:ctx.animaisCria};
   const totalAnimaisAreas = areas.reduce((a,ar)=>a+animaisPorArea[ar],0);
-  if(totalAnimaisAreas>0) areas.forEach(ar=>{ resultado[ar] = v*(animaisPorArea[ar]/totalAnimaisAreas); });
+  if(totalAnimaisAreas>0){
+    areas.forEach(ar=>{ resultado[ar] = v*(animaisPorArea[ar]/totalAnimaisAreas); });
+  } else {
+    // nenhuma das áreas marcadas tem animal ativo agora (ex: entre ciclos)
+    // — sem cabeça pra ratear por cabeça, divide igual entre as áreas
+    // marcadas, em vez de simplesmente sumir com o valor da despesa.
+    const parteIgual = v/areas.length;
+    areas.forEach(ar=>{ resultado[ar] = parteIgual; });
+  }
   return resultado;
 }
 // Soma (e detalha, despesa por despesa) o custo fixo de cada área para um
@@ -3009,7 +3065,7 @@ function PageFinanceiroCurral(){
       <tbody>
         ${custosPorLote.map(r=>`
           <tr>
-            <td><strong>${r.lote.nome}</strong></td>
+            <td><strong>${esc(r.lote.nome)}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
             <td class="mono">R$ ${fmt(r.racao+r.pasto+r.reproducao)}</td>
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
@@ -3030,7 +3086,7 @@ function PageFinanceiroCurral(){
       <tbody>
         ${custosMesPorLote.map(r=>`
           <tr>
-            <td><strong>${r.lote.nome}</strong></td>
+            <td><strong>${esc(r.lote.nome)}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
             <td class="mono">R$ ${fmt(r.racao+r.pasto+r.reproducao)}</td>
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
@@ -3088,11 +3144,11 @@ function PageResultadosReceitas(){
           const lote = state.lotes.find(l=>l.id===r.loteId);
           return `<tr>
             <td class="mono">${r.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
-            <td>${r.descricao}</td>
+            <td>${lote?esc(lote.nome):'—'}</td>
+            <td>${esc(r.descricao)}</td>
             <td class="mono">${r.arrobas ? fmt(r.arrobas,2) : '—'}</td>
             <td class="mono">R$ ${fmt(r.valor)}</td>
-            <td>${r.observacao || '—'}</td>
+            <td>${esc(r.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('resultados','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
@@ -3149,13 +3205,13 @@ function PageFinanceiroCustosFixos(){
       <tbody>
         ${list.map(c=>`
           <tr>
-            <td><strong>${c.nome}</strong>${c.descricao ? `<div class="hint" style="margin-top:2px;">${c.descricao}</div>` : ''}</td>
-            <td>${c.categoria || '—'}</td>
+            <td><strong>${esc(c.nome)}</strong>${c.descricao ? `<div class="hint" style="margin-top:2px;">${esc(c.descricao)}</div>` : ''}</td>
+            <td>${esc(c.categoria) || '—'}</td>
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
             <td class="mono">${c.data ? c.data.split('-').reverse().join('/') : '—'}</td>
             <td>${areasLabel(c.areas)}</td>
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
-            <td>${c.observacao || '—'}</td>
+            <td>${esc(c.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
@@ -3184,8 +3240,8 @@ function PageResultadosInvestimentos(){
       <tbody>
         ${state.investimentos.map(i=>`
           <tr>
-            <td><strong>${i.nome}</strong></td>
-            <td>${i.categoria || '—'}</td>
+            <td><strong>${esc(i.nome)}</strong></td>
+            <td>${esc(i.categoria) || '—'}</td>
             <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">R$ ${fmt(i.valor)}</td>
             <td style="display:flex; gap:6px;">
@@ -3230,7 +3286,7 @@ function PageAdminUsuarios(){
       <tbody>
         ${state.perfis.map(p=>`
           <tr>
-            <td><strong>${p.nome}</strong></td>
+            <td><strong>${esc(p.nome)}</strong></td>
             <td class="mono">${p.usuario}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
@@ -3250,7 +3306,7 @@ function ModalUsuario(){
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
         <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
@@ -3267,7 +3323,7 @@ function ModalPermissoes(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar acesso — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
         <div class="field"><label>Perfil</label>
@@ -3404,7 +3460,7 @@ function ModalIngrediente(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar ingrediente':'Novo ingrediente'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome do ingrediente</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Milho moído"/></div>
+        <div class="field"><label>Nome do ingrediente</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Milho moído"/></div>
         <div class="field-row">
           <div class="field"><label>Categoria</label>
             <select id="f-categoria">
@@ -3417,7 +3473,7 @@ function ModalIngrediente(){
             </select>
           </div>
         </div>
-        <div class="field"><label>Fornecedor</label><input id="f-fornecedor" value="${d.fornecedor}" placeholder="Ex: Cooperativa Vale Verde"/></div>
+        <div class="field"><label>Fornecedor</label><input id="f-fornecedor" value="${esc(d.fornecedor)}" placeholder="Ex: Cooperativa Vale Verde"/></div>
         <div class="field-row">
           <div class="field"><label>Matéria seca (%)</label><input id="f-ms" type="number" step="0.1" value="${d.ms}"/></div>
           <div class="field"><label>Proteína bruta (%)</label><input id="f-pb" type="number" step="0.1" value="${d.pb}"/></div>
@@ -3451,7 +3507,7 @@ function ModalMovimento(){
       <div class="modal-body">
         <div class="field"><label>Ingrediente</label>
           <select id="f-ing">
-            ${state.ingredientes.map(i=>`<option value="${i.id}" ${d.ingredienteId==i.id?'selected':''}>${i.nome}</option>`).join('')}
+            ${state.ingredientes.map(i=>`<option value="${i.id}" ${d.ingredienteId==i.id?'selected':''}>${esc(i.nome)}</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
@@ -3485,16 +3541,17 @@ function ModalDieta(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar dieta':'Nova dieta'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome da dieta</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Dieta Terminação Alto Grão"/></div>
+        <div class="field"><label>Nome da dieta</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Dieta Terminação Alto Grão"/></div>
         <div class="field-row">
           <div class="field"><label>Tipo</label>
-            <select id="f-tipodieta">
+            <select id="f-tipodieta" ${d._editId?'disabled':''}>
               <option value="confinamento" ${d.tipo==='confinamento'?'selected':''}>Confinamento</option>
               <option value="cria" ${d.tipo==='cria'?'selected':''}>Cria</option>
               <option value="pasto" ${d.tipo==='pasto'?'selected':''}>Pasto</option>
             </select>
+            ${d._editId?'<span class="hint">Não dá pra trocar o tipo de uma dieta já em uso — o jeito de descontar estoque é diferente pra cada tipo. Crie uma dieta nova se precisar de outro tipo.</span>':''}
           </div>
-          <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${d.categoriaAnimal}" placeholder="Ex: Boi terminação"/></div>
+          <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${esc(d.categoriaAnimal)}" placeholder="Ex: Boi terminação"/></div>
         </div>
         <div class="field-row">
           <div class="field"><label>Kg de dieta / animal / dia</label><input id="f-kganimal" type="number" step="0.1" value="${d.kgAnimalDia}"/></div>
@@ -3506,7 +3563,7 @@ function ModalDieta(){
           ${d.itens.map((it,idx)=>`
             <div class="composicao-row">
               <select data-item-ing="${idx}">
-                ${state.ingredientes.map(i=>`<option value="${i.id}" ${it.ingredienteId==i.id?'selected':''}>${i.nome}</option>`).join('')}
+                ${state.ingredientes.map(i=>`<option value="${i.id}" ${it.ingredienteId==i.id?'selected':''}>${esc(i.nome)}</option>`).join('')}
               </select>
               <input data-item-pct="${idx}" type="number" step="0.1" value="${it.pct}" placeholder="%"/>
               <button class="btn-danger-ghost" data-item-del="${idx}" style="padding:6px;">✕</button>
@@ -3536,7 +3593,7 @@ function ModalProducaoRacao(){
         <div class="field-row">
           <div class="field"><label>Dieta</label>
             <select id="f-dietaproducao">
-              ${dietasComEstoquePronto().map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
+              ${dietasComEstoquePronto().map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
@@ -3559,7 +3616,7 @@ function ModalLote(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar lote':'Novo lote'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Identificação do lote</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Lote 12 / Curral 3"/></div>
+        <div class="field"><label>Identificação do lote</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Lote 12 / Curral 3"/></div>
         <div class="field"><label>Destino</label>
           <select id="f-destino">
             <option value="confinamento" ${d.destino==='confinamento'?'selected':''}>Confinamento</option>
@@ -3592,12 +3649,12 @@ function ModalSaidaRacao(){
         <div class="field-row">
           <div class="field"><label>Dieta (Confinamento)</label>
             <select id="f-dieta">
-              ${state.dietas.filter(x=>x.tipo==='confinamento').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+              ${state.dietas.filter(x=>x.tipo==='confinamento').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Lote de destino (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -3627,12 +3684,12 @@ function ModalSaidaRacaoCria(){
         <div class="field-row">
           <div class="field"><label>Dieta (Cria)</label>
             <select id="f-dieta">
-              ${state.dietas.filter(x=>x.tipo==='cria').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+              ${state.dietas.filter(x=>x.tipo==='cria').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Lote de destino (Cria)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -3662,7 +3719,7 @@ function ModalCocho(){
         <div class="field-row">
           <div class="field"><label>Curral (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
@@ -3677,7 +3734,7 @@ function ModalCocho(){
             `).join('')}
           </div>
         </div>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obs" rows="2" placeholder="Ex: cocho vazio pela manhã">${d.observacao||''}</textarea></div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obs" rows="2" placeholder="Ex: cocho vazio pela manhã">${esc(d.observacao)}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -3697,12 +3754,12 @@ function ModalPasto(){
         <div class="field-row">
           <div class="field"><label>Lote (Pasto)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='pasto').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='pasto').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Dieta de pasto</label>
             <select id="f-dietapasto">
-              ${state.dietas.filter(x=>x.tipo==='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${x.nome}</option>`).join('')}
+              ${state.dietas.filter(x=>x.tipo==='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -3730,13 +3787,13 @@ function ModalReproducaoCusto(){
         <div class="field-row">
           <div class="field"><label>Lote (Cria)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Item</label><input id="f-item" value="${d.item}" placeholder="Ex: Sêmen touro Angus, Hormônio IATF"/></div>
+          <div class="field"><label>Item</label><input id="f-item" value="${esc(d.item)}" placeholder="Ex: Sêmen touro Angus, Hormônio IATF"/></div>
           <div class="field"><label>Custo (R$)</label><input id="f-custoreproducao" type="number" step="0.01" value="${d.custo}"/></div>
         </div>
         <p class="hint">O custo entra no Financeiro como custo variável do lote de reprodução escolhido.</p>
@@ -3759,13 +3816,13 @@ function ModalParto(){
         <div class="field-row">
           <div class="field"><label>Lote (Cria)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Número da mãe</label><input id="f-numeromae" value="${d.numeroMae}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número da mãe</label><input id="f-numeromae" value="${esc(d.numeroMae)}" placeholder="Ex: 128"/></div>
           <div class="field"><label>Sexo do bezerro</label>
             <select id="f-sexobezerro">
               <option value="macho" ${d.sexoBezerro==='macho'?'selected':''}>Macho</option>
@@ -3792,14 +3849,14 @@ function ModalPesagem(){
       <div class="modal-body">
         <div class="field"><label>Lote (${TIPO_PESAGEM_LABEL[d.tipo]})</label>
           <select id="f-lotepesagem">
-            ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+            ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
           <div class="field"><label>Data</label><input id="f-datapesagem" type="date" value="${d.data}"/></div>
           <div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesomedio" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
         </div>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obspesagem" rows="2" placeholder="Ex: lote pronto pra abate">${d.observacao||''}</textarea></div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obspesagem" rows="2" placeholder="Ex: lote pronto pra abate">${esc(d.observacao)}</textarea></div>
         <p class="hint">O peso é a média por animal do lote (não o total). O ganho desde a última pesagem (GMD) e a arroba produzida são calculados automaticamente.</p>
       </div>
       <div class="modal-foot">
@@ -3878,10 +3935,10 @@ function ModalCustoFixo(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar despesa':'Nova despesa'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome (categoria)</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
-        <div class="field"><label>Descrição detalhada (opcional)</label><input id="f-descricaocustofixo" value="${d.descricao||''}" placeholder="Ex: 20 sacos de ureia, NF 4521"/></div>
+        <div class="field"><label>Nome (categoria)</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
+        <div class="field"><label>Descrição detalhada (opcional)</label><input id="f-descricaocustofixo" value="${esc(d.descricao||'')}" placeholder="Ex: 20 sacos de ureia, NF 4521"/></div>
         <div class="field-row">
-          <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Mão-de-obra Operacional"/></div>
+          <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" value="${esc(d.categoria)}" placeholder="Ex: Mão-de-obra Operacional"/></div>
           <div class="field"><label>Valor (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
         </div>
         <div class="field">
@@ -3896,7 +3953,7 @@ function ModalCustoFixo(){
           </div>
           <p class="hint">Deixe a data em branco para um valor recorrente (vale como padrão pra qualquer mês sem lançamento próprio). Preenchendo a data, o valor conta só no mês dela. Marque 1 atividade pra jogar o valor inteiro nela. Marque 2 ou 3 pra ratear por nº de animais só entre as marcadas. Sem nenhuma marcada (Geral), o valor é rateado por nº de animais entre as três atividades.</p>
         </div>
-        <div class="field" style="margin-top:6px;"><label>Observação (opcional)</label><textarea id="f-obscustofixo" rows="2" placeholder="Ex: referente à nota fiscal 1234">${d.observacao||''}</textarea></div>
+        <div class="field" style="margin-top:6px;"><label>Observação (opcional)</label><textarea id="f-obscustofixo" rows="2" placeholder="Ex: referente à nota fiscal 1234">${esc(d.observacao)}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -3913,9 +3970,9 @@ function ModalInvestimento(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar investimento':'Novo investimento'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome do investimento</label><input id="f-nome" value="${d.nome}" placeholder="Ex: Compra de animais, Trator novo"/></div>
+        <div class="field"><label>Nome do investimento</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Compra de animais, Trator novo"/></div>
         <div class="field-row">
-          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${d.categoria||''}" placeholder="Ex: Animais, Ativos"/></div>
+          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${esc(d.categoria)}" placeholder="Ex: Animais, Ativos"/></div>
           <div class="field"><label>Valor (R$)</label><input id="f-valorinvest" type="number" step="0.01" value="${d.valor}"/></div>
         </div>
         <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
@@ -3940,17 +3997,17 @@ function ModalReceita(){
           <div class="field"><label>Lote (opcional)</label>
             <select id="f-lotereceita">
               <option value="">— Geral / não vinculada a um lote —</option>
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome}</option>`).join('')}
+              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
         </div>
-        <div class="field"><label>Descrição</label><input id="f-descricaoreceita" value="${d.descricao}" placeholder="Ex: Venda de animais, Venda de esterco"/></div>
+        <div class="field"><label>Descrição</label><input id="f-descricaoreceita" value="${esc(d.descricao)}" placeholder="Ex: Venda de animais, Venda de esterco"/></div>
         <div class="field-row">
           <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobas" type="number" step="0.01" value="${d.arrobas||''}"/></div>
           <div class="field"><label>Valor recebido (R$)</label><input id="f-valorreceita" type="number" step="0.01" value="${d.valor}"/></div>
         </div>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsreceita" rows="2" placeholder="Ex: comprador, nº da nota fiscal">${d.observacao||''}</textarea></div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsreceita" rows="2" placeholder="Ex: comprador, nº da nota fiscal">${esc(d.observacao)}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -4070,7 +4127,7 @@ function ModalDetalheGrafico(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${entry.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${esc(entry.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-bottom:14px;">R$ ${fmt(entry.valor)} (${fmt(entry.pct,1)}% do total)${ehPorArea ? ' — valor já rateado pra essa área; uma despesa "Geral" aparece aqui só com a fatia que cabe a essa área, não o valor cheio.' : ''}</p>
         ${itens.length===0 ? `<p class="hint">Sem despesas cadastradas detalhadas pra essa fatia.</p>` : `
@@ -4079,7 +4136,7 @@ function ModalDetalheGrafico(){
           <tbody>
             ${itens.map(it=>`
               <tr>
-                <td><strong>${it.nome}</strong></td>
+                <td><strong>${esc(it.nome)}</strong></td>
                 <td>${it.mes ? `<span class="pill pill-cat">${mesLabel(it.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
                 <td class="mono">R$ ${fmt(it.valor)}</td>
                 <td>${temPermissao('financeiro','editar') && it.id ? `<button class="btn-ghost btn-sm" data-edit-custofixo="${it.id}">Editar</button>` : ''}</td>
@@ -4629,6 +4686,23 @@ function attachEvents(){
         const row = movimentoToRow(campos);
         if(editDraft._editId){
           ({error} = await db.from('movimentos').update(row).eq('id', editDraft._editId));
+          // Corrigir uma entrada (quantidade ou preço errados) precisa
+          // refletir no preço médio do ingrediente — recalcula do zero,
+          // repetindo a média ponderada sobre TODAS as movimentações dele em
+          // ordem cronológica (não só "empurra" o preço de novo, senão o
+          // valor de antes da correção continua contaminando o preço atual).
+          if(!error){
+            const ing = getIng(campos.ingredienteId);
+            if(ing){
+              const movsIngrediente = state.movimentos
+                .filter(m=>m.ingredienteId===campos.ingredienteId)
+                .map(m=> m.id===editDraft._editId ? {...m, tipo:campos.tipo, quantidade:campos.quantidade, precoKg:campos.precoKg, data:campos.data} : m);
+              const precoRecalc = recomputarPrecoIngrediente(movsIngrediente, ing.unidade);
+              if(precoRecalc!=null && precoRecalc!==Number(ing.precoKg)){
+                await db.from('ingredientes').update({preco_kg: precoRecalc}).eq('id', campos.ingredienteId);
+              }
+            }
+          }
         } else {
           ({error} = await db.from('movimentos').insert(row));
           // Uma entrada com preço informado recalcula o preço/kg do ingrediente
