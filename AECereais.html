@@ -236,6 +236,12 @@ const OPCOES = {
     {value:'inseticida',label:'Aplicação de inseticida'}, {value:'fungicida',label:'Aplicação de fungicida'},
     {value:'cultivo_mecanico',label:'Cultivo mecânico'}, {value:'outro',label:'Outro'},
   ],
+  CATEGORIAS_DESPESA: [
+    {value:'mao_obra',label:'Mão de obra'}, {value:'colheita_terceirizada',label:'Colheita terceirizada'},
+    {value:'transporte',label:'Transporte'}, {value:'arrendamento',label:'Arrendamento'},
+    {value:'manutencao',label:'Manutenção'}, {value:'outro',label:'Outro'},
+  ],
+  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
 };
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
@@ -295,6 +301,15 @@ const CADASTROS = {
       {key:'dataInicio', label:'Início', type:'date'},
       {key:'dataFim', label:'Fim', type:'date'},
       {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  centrosCusto: {
+    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', modulo:'cadastros',
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'nome', label:'Nome', type:'text', required:true},
+      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
   plantios: {
@@ -368,6 +383,22 @@ const CADASTROS = {
       {key:'tipoOperacao', label:'Tipo de operação', type:'select', options:OPCOES.TIPOS_OPERACAO, required:true},
       {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
       {key:'custo', label:'Custo', type:'computed', compute:item=>{ const p=precoMedioInsumo(item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  despesas: {
+    table:'despesas_graos', label:'Despesas', singular:'Despesa', modulo:'financeiro_graos',
+    desc:'Despesas gerais da lavoura que não são insumo lançado em Aplicações (mão de obra, colheita terceirizada, transporte, arrendamento, manutenção).',
+    emptyHint:'Cadastre uma fazenda antes de lançar uma despesa.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
+      {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='graos'||c.frente==='geral'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_DESPESA, required:true},
+      {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de colheitadeira terceirizada'},
+      {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
@@ -574,6 +605,7 @@ const GROUPS = {
   ]},
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
     {key:'custoProducao', label:'Custo por Talhão'},
+    {key:'despesas', label:'Despesas'},
   ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
@@ -638,7 +670,7 @@ function Header(){
     return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
   if(state.page==='custoProducao'){
-    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por saca colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
+    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo e de despesas gerais por hectare e por saca colhida, cruzando Aplicações (Tratos culturais), Despesas e Colheita de cada talhão.');
   }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='operacoes_graos' ? 'Operações' : 'Cadastro';
@@ -911,14 +943,19 @@ function pctEstoque(saldo, minimo){
 }
 
 /* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
- * Não é um cadastro novo — cruza o que já existe em Aplicações (custo
- * de insumo, pelo preço médio ponderado) e Colheita (sacas) por
- * talhão. O custo de combustível rateado por talhão não entra aqui:
- * como o AE Combustível tem banco próprio e separado, cruzar esse
- * custo por talhão precisaria passar pelo AE Matriz (que lê indicadores
- * de cada app sem duplicar dado) — ainda não implementado. Sem despesas
- * gerais nem receita ainda (fica pra uma próxima fase) — só o custo de
- * insumo por hectare e por saca colhida. */
+ * Cruza o que já existe em Aplicações (custo de insumo, pelo preço
+ * médio ponderado), Despesas (custo geral) e Colheita (sacas) por
+ * talhão — sem guardar nada à parte.
+ * Despesa com talhão marcado entra 100% naquele talhão. Despesa sem
+ * talhão (geral — mão de obra, transporte, etc.) é RATEADA entre os
+ * talhões que têm um plantio ativo (hectares "de plantação", não
+ * qualquer talhão cadastrado), proporcional à área de cada um — mesmo
+ * critério usado no AE Cana.
+ * O custo de combustível rateado por talhão não entra aqui: como o AE
+ * Combustível tem banco próprio e separado, cruzar esse custo por
+ * talhão precisaria passar pelo AE Matriz (que lê indicadores de cada
+ * app sem duplicar dado) — ainda não implementado. Sem receita ainda
+ * (fica pra uma próxima fase). */
 function producaoTotalTalhao(talhaoId){
   return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.sacas||0),0);
 }
@@ -928,6 +965,25 @@ function custoInsumosTalhao(talhaoId){
     return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
   },0);
 }
+function talhaoEmProducao(t){
+  return state.plantios.some(p=>p.talhaoId===t.id && p.ativo);
+}
+function areaTotalEmProducao(){
+  return state.talhoes.filter(t=>t.ativo!==false && talhaoEmProducao(t)).reduce((a,t)=>a+Number(t.areaHa||0),0);
+}
+function despesasGeraisSemTalhao(){
+  return state.despesas.filter(d=>!d.talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
+}
+function custoDespesasTalhao(talhaoId){
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  const direta = state.despesas.filter(d=>d.talhaoId===talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
+  let rateio = 0;
+  if(t && t.areaHa && talhaoEmProducao(t)){
+    const areaTotal = areaTotalEmProducao();
+    if(areaTotal>0) rateio = despesasGeraisSemTalhao() * (Number(t.areaHa)/areaTotal);
+  }
+  return direta + rateio;
+}
 function PageCustoProducao(){
   const talhoes = state.talhoes.filter(t=>t.ativo!==false);
   if(talhoes.length===0){
@@ -935,23 +991,28 @@ function PageCustoProducao(){
   }
   const linhas = talhoes.map(t=>{
     const custoInsumos = custoInsumosTalhao(t.id);
+    const custoDespesas = custoDespesasTalhao(t.id);
+    const custoTotalTalhao = custoInsumos + custoDespesas;
     const producao = producaoTotalTalhao(t.id);
-    const custoHa = t.areaHa ? custoInsumos/Number(t.areaHa) : null;
-    const custoSaca = producao>0 ? custoInsumos/producao : null;
-    return {t, custoInsumos, producao, custoHa, custoSaca};
+    const custoHa = t.areaHa ? custoTotalTalhao/Number(t.areaHa) : null;
+    const custoSaca = producao>0 ? custoTotalTalhao/producao : null;
+    return {t, custoInsumos, custoDespesas, custoTotalTalhao, producao, custoHa, custoSaca};
   });
-  const custoTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const custoInsumoGeral = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const custoDespesasGeral = linhas.reduce((a,l)=>a+l.custoDespesas,0);
+  const custoTotal = custoInsumoGeral + custoDespesasGeral;
   const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
   const custoSacaMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
   return `
-  <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
-    <div class="stat-card"><div class="stat-label">Custo total de insumos</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo insumos</div><div class="stat-value">R$ ${fmt(custoInsumoGeral)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo despesas</div><div class="stat-value">R$ ${fmt(custoDespesasGeral)}</div></div>
     <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} sc</div></div>
     <div class="stat-card"><div class="stat-label">Custo médio / saca</div><div class="stat-value">${custoSacaMedio==null?'—':'R$ '+fmt(custoSacaMedio)}</div></div>
   </div>
   <div class="card" style="overflow-x:auto;">
     <table>
-      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/saca</th></tr></thead>
+      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo despesas</th><th>Custo total</th><th>Custo/ha</th><th>Produção</th><th>Custo/saca</th></tr></thead>
       <tbody>
         ${linhas.map(l=>`
           <tr>
@@ -959,6 +1020,8 @@ function PageCustoProducao(){
             <td>${fkNome('fazendas', l.t.fazendaId)}</td>
             <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
             <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
+            <td class="mono">R$ ${fmt(l.custoDespesas)}</td>
+            <td class="mono">R$ ${fmt(l.custoTotalTalhao)}</td>
             <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
             <td class="mono">${fmt(l.producao)} sc</td>
             <td class="mono">${l.custoSaca==null?'—':'R$ '+fmt(l.custoSaca)}</td>
@@ -967,14 +1030,14 @@ function PageCustoProducao(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero. Ainda não inclui despesas gerais (mão de obra, colheita terceirizada, transporte), custo de combustível nem receita de venda.</p>`;
+  <p class="hint" style="margin-top:12px;">Custo de insumos pelo preço médio ponderado (Operações &gt; Estoque); aplicação sem nenhuma entrada com preço informado entra com custo zero. Despesa com talhão marcado (Financeiro &gt; Despesas) entra 100% nele; despesa geral (sem talhão) é rateada entre os talhões com plantio ativo, proporcional à área de cada um. Ainda não inclui custo de combustível nem receita de venda.</p>`;
 }
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes_graos','Operações de Cereais (Plantio, Tratos, Colheita)'],
-  ['financeiro_graos','Financeiro de Cereais (Custo por Talhão)'],
+  ['financeiro_graos','Financeiro de Cereais (Custo por Talhão, Despesas)'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){

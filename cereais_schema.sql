@@ -150,13 +150,31 @@ create index idx_talhoes_fazenda on talhoes_areas(fazenda_id);
 create index idx_talhoes_cultura on talhoes_areas(cultura_id);
 create trigger set_updated before update on talhoes_areas for each row execute function trg_set_updated();
 
--- fazendas/culturas/safras/talhoes_areas: qualquer um com 'cadastros'
--- vê; só quem tem 'cadastros':'editar' cria/edita/exclui.
+-- ---------- CENTROS DE CUSTO ----------
+-- Usado pra despesa geral que não é de um talhão específico (ex: escritório,
+-- estrutura fixa da lavoura).
+create table centros_custo (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  frente text not null check (frente in ('cana','graos','pecuaria','geral')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_centros_custo_fazenda on centros_custo(fazenda_id);
+create trigger set_updated before update on centros_custo for each row execute function trg_set_updated();
+
+-- fazendas/culturas/safras/talhoes_areas/centros_custo: qualquer um com
+-- 'cadastros' vê; só quem tem 'cadastros':'editar' cria/edita/exclui.
 do $$
 declare
   t text;
 begin
-  foreach t in array array['fazendas','culturas','safras','talhoes_areas']
+  foreach t in array array['fazendas','culturas','safras','talhoes_areas','centros_custo']
   loop
     execute format('alter table %1$s enable row level security;', t);
     execute format('create policy "select %1$s" on %1$s for select using (tem_permissao(''cadastros'',''visualizar''));', t);
@@ -313,3 +331,42 @@ create policy "select colheitas_graos" on colheitas_graos for select using (tem_
 create policy "inserir colheitas_graos" on colheitas_graos for insert with check (tem_permissao('operacoes_graos','editar'));
 create policy "atualizar colheitas_graos" on colheitas_graos for update using (tem_permissao('operacoes_graos','editar')) with check (tem_permissao('operacoes_graos','editar'));
 create policy "excluir colheitas_graos" on colheitas_graos for delete using (tem_permissao('operacoes_graos','editar'));
+
+-- ===================================================================
+-- AE Cereais — schema Fase 3 (Financeiro: Despesas)
+-- ===================================================================
+-- Continuação deste mesmo arquivo — rode as migrações em sequência
+-- (Fases 1 e 2 acima, depois esta).
+--
+-- Despesas gerais da lavoura (mão de obra, colheita terceirizada,
+-- transporte...) que não são insumo lançado em Aplicações. Uma despesa
+-- pode marcar um talhão específico, um centro de custo, os dois ou
+-- nenhum — Financeiro > Custo por Talhão (AECereais.html) usa isso pra
+-- ratear despesa sem talhão marcado entre os talhões com plantio
+-- ativo, proporcional à área de cada um.
+-- ===================================================================
+
+create table despesas_graos (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  talhao_id bigint references talhoes_areas(id),
+  centro_custo_id bigint references centros_custo(id),
+  data date not null,
+  categoria text not null check (categoria in ('mao_obra','colheita_terceirizada','transporte','arrendamento','manutencao','outro')),
+  descricao text not null,
+  valor numeric(12,2) not null check (valor > 0),
+  observacao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_despesas_graos_fazenda on despesas_graos(fazenda_id);
+create index idx_despesas_graos_talhao on despesas_graos(talhao_id);
+create trigger set_updated before update on despesas_graos for each row execute function trg_set_updated();
+
+alter table despesas_graos enable row level security;
+create policy "select despesas_graos" on despesas_graos for select using (tem_permissao('financeiro_graos','visualizar'));
+create policy "inserir despesas_graos" on despesas_graos for insert with check (tem_permissao('financeiro_graos','editar'));
+create policy "atualizar despesas_graos" on despesas_graos for update using (tem_permissao('financeiro_graos','editar')) with check (tem_permissao('financeiro_graos','editar'));
+create policy "excluir despesas_graos" on despesas_graos for delete using (tem_permissao('financeiro_graos','editar'));
