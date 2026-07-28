@@ -964,17 +964,15 @@ function PageCustoProducao(){
 }
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
- * Mesma lista de módulos do AE Combustível e do AE Cereais (mesmo
- * profiles.permissoes do banco compartilhado) — precisa ser a lista
- * completa, não só "cadastros", senão salvar por aqui apagaria o
- * acesso da pessoa aos módulos do AE Combustível (Estoque,
- * Abastecimento, etc.) e do AE Cereais. */
+ * Mesma lista de módulos do AE Combustível (mesmo profiles.permissoes
+ * do banco compartilhado) — precisa ser a lista completa, não só
+ * "cadastros", senão salvar por aqui apagaria o acesso da pessoa aos
+ * módulos do AE Combustível (Estoque, Abastecimento, etc.). O AE
+ * Cereais tem banco/login próprios e separados — não entra aqui. */
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
   ['financeiro','Financeiro de Cana (Custo por Talhão)'],
-  ['operacoes_graos','Operações de Cereais (AE Cereais)'],
-  ['financeiro_graos','Financeiro de Cereais (AE Cereais)'],
   ['estoque','Estoque (AE Combustível)'],
   ['abastecimento','Abastecimento (AE Combustível)'],
   ['rateio','Rateio & Indicadores (AE Combustível)'],
