@@ -322,6 +322,14 @@ const dbPecuaria = supabase.createClient(
   'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
 );
 
+// Idem, só de leitura, pro projeto do Combustível — usado pros indicadores
+// do card "AE Combustível" e pra ratear o custo de combustível dentro da
+// despesa de cada operação de terra (pecuária/cana/cereais) em Resultados.
+const dbCombustivel = supabase.createClient(
+  'https://SUBSTITUA-COMBUSTIVEL.supabase.co',
+  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_COMBUSTIVEL'
+);
+
 function rowToFazenda(r){ return {id:r.id, nome:r.nome, areaHa:r.area_ha, localizacao:r.localizacao||'', observacao:r.observacao||''}; }
 function fazendaToRow(f){ return {nome:f.nome, area_ha:f.areaHa||null, localizacao:f.localizacao||'', observacao:f.observacao||''}; }
 function rowToOperacao(r){ return {id:r.id, fazendaId:r.fazenda_id, operacao:r.operacao, areaHa:r.area_ha}; }
@@ -352,6 +360,7 @@ async function loadAll(){
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
+  carregarCombustivel();
 }
 
 async function carregarIndicadoresPecuaria(){
@@ -387,7 +396,7 @@ async function carregarIndicadoresPecuaria(){
 // até o mês atual — cobre qualquer Mês/Ano/Safra que os seletores do filtro
 // de período oferecem, sem precisar buscar de novo a cada troca de filtro
 // (as consultas ao banco já trazem TODAS as linhas, sem filtro de data).
-function mesesJanelaPecuaria(){
+function mesesJanela(){
   const hoje = new Date();
   // precisa cobrir a safra mais antiga que safrasDisponiveis() oferece: de
   // jan a abr o ano-safra atual já é (ano-1), então a 3ª opção do seletor
@@ -457,14 +466,14 @@ async function carregarResultadoPecuaria(){
     // Um item por mês da janela, já com tudo que os filtros (Mês/Ano/Safra)
     // e o gráfico (últimos 12 meses) precisam — agregar um período depois é
     // só somar os meses que caem nele, sem buscar nada de novo no banco.
-    const mensal = mesesJanelaPecuaria().map(mesStr=>{
+    const mensal = mesesJanela().map(mesStr=>{
       const variavel = custoVariavelDoMes(mesStr);
       const fixa = fixosDoMes(mesStr);
       const receitasDoMes = receitasNoPrefixo(mesStr);
       const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0),0);
       return {
         mes: mesStr, despesa: variavel.total+fixa, receita, resultado: receita-(variavel.total+fixa),
-        racao: variavel.racao, pasto: variavel.pasto, reproducao: variavel.reproducao, fixa,
+        despesaPorCategoria: {racao: variavel.racao, pasto: variavel.pasto, reproducao: variavel.reproducao, fixa},
         receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Receita', valor:Number(r.valor||0)})),
       };
     });
@@ -475,25 +484,150 @@ async function carregarResultadoPecuaria(){
   }
   render();
 }
+const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível'};
 // Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
 // fora da janela carregada (ex: período futuro) simplesmente não têm
 // correspondência e contam como zero — sem precisar recortar antes.
+// despesaPorCategoria é livre (cada operação tem as categorias que fazem
+// sentido pra ela — pecuária tem ração/pasto/..., cana/cereais por ora só
+// combustível), a soma abaixo não presume quais chaves existem.
 function agregarPeriodo(resultado, meses){
   if(!resultado) return null;
   if(resultado.erro) return {erro: resultado.erro};
   const linhas = meses.map(m=>resultado.mensal.find(x=>x.mes===m)).filter(Boolean);
   const despesa = linhas.reduce((a,l)=>a+l.despesa,0);
   const receita = linhas.reduce((a,l)=>a+l.receita,0);
+  const totalPorCategoria = {};
+  linhas.forEach(l=>{
+    Object.entries(l.despesaPorCategoria||{}).forEach(([k,v])=>{ totalPorCategoria[k] = (totalPorCategoria[k]||0) + Number(v||0); });
+  });
   return {
     despesa, receita, resultado: receita-despesa,
-    despesaDetalhe: [
-      {label:'Ração (Confinamento)', valor: linhas.reduce((a,l)=>a+l.racao,0)},
-      {label:'Pasto', valor: linhas.reduce((a,l)=>a+l.pasto,0)},
-      {label:'Reprodução (Cria)', valor: linhas.reduce((a,l)=>a+l.reproducao,0)},
-      {label:'Despesas fixas', valor: linhas.reduce((a,l)=>a+l.fixa,0)},
-    ].filter(x=>x.valor>0),
-    receitasDetalhe: [].concat(...linhas.map(l=>l.receitas)).sort((a,b)=>b.data.localeCompare(a.data)),
+    despesaDetalhe: Object.entries(totalPorCategoria)
+      .map(([k,valor])=>({label: CATEGORIA_DESPESA_LABEL[k]||k, valor}))
+      .filter(x=>x.valor>0),
+    receitasDetalhe: [].concat(...linhas.map(l=>l.receitas||[])).sort((a,b)=>b.data.localeCompare(a.data)),
+    soDespesaCombustivel: resultado.soDespesaCombustivel,
   };
+}
+
+// Combustível não é uma operação de terra (não tem receita nem hectares
+// próprios) — o que ele contribui pra Resultados é custo, rateado por
+// frente (pecuária/cana-de-açúcar/grãos) igual o próprio AE Combustível já
+// faz pra cada abastecimento (por talhão/área ou centro de custo). Essa
+// função lê o banco do Combustível direto (sem duplicar dado) e devolve,
+// junto dos indicadores do card, o custo mensal já separado por operação —
+// resultadoBrutoOperacao() soma isso na despesa de cada operação depois.
+// "graos" é como o AE Combustível chama a frente que aqui é "cereais".
+const FRENTE_COMBUSTIVEL_PARA_OPERACAO = {pecuaria:'pecuaria', cana:'cana', graos:'cereais'};
+async function carregarCombustivel(){
+  state.indicadores.combustivel = {...state.indicadores.combustivel, loading:true, erro:''};
+  state.resultados.combustivelPorFrente = {...state.resultados.combustivelPorFrente, loading:true, erro:''};
+  render();
+  try{
+    const [tqRes, entRes, abRes, ajRes, alRes, talRes, culRes, ccRes] = await Promise.all([
+      dbCombustivel.from('tanques').select('id, ativo'),
+      dbCombustivel.from('entradas_estoque').select('tanque_id, data, volume_litros, valor_total'),
+      dbCombustivel.from('abastecimentos').select('data_hora, volume_litros, tanque_id, talhao_area_id, centro_custo_id'),
+      dbCombustivel.from('ajustes_estoque').select('tanque_id, volume_ajuste_litros'),
+      dbCombustivel.from('alertas').select('id', {count:'exact', head:true}).eq('status','aberto'),
+      dbCombustivel.from('talhoes_areas').select('id, cultura_id'),
+      dbCombustivel.from('culturas').select('id, frente'),
+      dbCombustivel.from('centros_custo').select('id, frente'),
+    ]);
+    for(const r of [tqRes, entRes, abRes, ajRes, alRes, talRes, culRes, ccRes]) if(r.error) throw r.error;
+
+    const entradas = entRes.data||[];
+    const abastecimentos = abRes.data||[];
+    const tanquesAtivos = new Set((tqRes.data||[]).filter(t=>t.ativo!==false).map(t=>t.id));
+
+    const entradasPorTanque = {}, saidasPorTanque = {}, ajustesPorTanque = {};
+    entradas.forEach(e=>{ entradasPorTanque[e.tanque_id] = (entradasPorTanque[e.tanque_id]||0) + Number(e.volume_litros||0); });
+    abastecimentos.forEach(a=>{ saidasPorTanque[a.tanque_id] = (saidasPorTanque[a.tanque_id]||0) + Number(a.volume_litros||0); });
+    (ajRes.data||[]).forEach(a=>{ ajustesPorTanque[a.tanque_id] = (ajustesPorTanque[a.tanque_id]||0) + Number(a.volume_ajuste_litros||0); });
+    let estoqueAtual = 0;
+    tanquesAtivos.forEach(id=>{ estoqueAtual += (entradasPorTanque[id]||0) - (saidasPorTanque[id]||0) + (ajustesPorTanque[id]||0); });
+
+    // Custo médio ponderado do tanque até uma data — mesma lógica do
+    // custoMedioPonderado() do AECombustivel.html, reproduzida aqui porque
+    // é mais barato do que buscar um valor calculado por linha.
+    function custoMedioPonderado(tanqueId, dataLimite){
+      const limite = dataLimite ? String(dataLimite).slice(0,10) : null;
+      const doTanque = entradas.filter(e=>e.tanque_id===tanqueId && (!limite || e.data<=limite));
+      const volumeTotal = doTanque.reduce((a,e)=>a+Number(e.volume_litros||0),0);
+      if(volumeTotal<=0) return null;
+      const valorTotal = doTanque.reduce((a,e)=>a+Number(e.valor_total||0),0);
+      return valorTotal/volumeTotal;
+    }
+    const culturaFrente = new Map((culRes.data||[]).map(c=>[c.id, c.frente]));
+    const talhaoCultura = new Map((talRes.data||[]).map(t=>[t.id, t.cultura_id]));
+    const centroCustoFrente = new Map((ccRes.data||[]).map(c=>[c.id, c.frente]));
+    function operacaoDoAbastecimento(a){
+      let frente = null;
+      if(a.talhao_area_id){
+        const culturaId = talhaoCultura.get(a.talhao_area_id);
+        frente = culturaId ? culturaFrente.get(culturaId) : null;
+      } else if(a.centro_custo_id){
+        frente = centroCustoFrente.get(a.centro_custo_id);
+      }
+      return FRENTE_COMBUSTIVEL_PARA_OPERACAO[frente] || null; // null: "geral" ou sem rateio — não entra em nenhuma operação
+    }
+
+    const hoje = new Date();
+    const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    let consumoMes = 0;
+    const custoPorMes = {}; // "YYYY-MM" -> {pecuaria, cana, cereais}
+    abastecimentos.forEach(a=>{
+      const mes = String(a.data_hora||'').slice(0,7);
+      if(!mes) return;
+      const custoUnit = custoMedioPonderado(a.tanque_id, a.data_hora);
+      const custo = custoUnit!=null ? custoUnit * Number(a.volume_litros||0) : 0;
+      if(!custoPorMes[mes]) custoPorMes[mes] = {pecuaria:0, cana:0, cereais:0};
+      const op = operacaoDoAbastecimento(a);
+      if(op) custoPorMes[mes][op] += custo;
+      if(mes===mesAtualStr) consumoMes += Number(a.volume_litros||0);
+    });
+
+    state.indicadores.combustivel = {
+      loading:false, erro:'',
+      estoqueAtual, consumoMes,
+      alertasAbertos: alRes.count ?? 0,
+    };
+    state.resultados.combustivelPorFrente = {
+      loading:false, erro:'',
+      mensal: mesesJanela().map(mesStr=>({mes:mesStr, porFrente: custoPorMes[mesStr] || {pecuaria:0, cana:0, cereais:0}})),
+    };
+  } catch(e){
+    state.indicadores.combustivel = {loading:false, erro:'Não foi possível carregar agora.', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
+    state.resultados.combustivelPorFrente = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
+  }
+  render();
+}
+// Junta o custo mensal de combustível (por operação) com o resultado
+// próprio da operação (receita/despesa lançadas no app dela, se já
+// existir) — pecuária tem os dois; cana e cereais, por ora, só têm o
+// custo de combustível rateado (nenhum dos dois tem app de receita/
+// despesa ligado ainda), marcado com soDespesaCombustivel pra tela
+// avisar que não é um resultado completo.
+function resultadoComCombustivel(baseResultado, slug){
+  const comb = state.resultados.combustivelPorFrente;
+  if(comb.loading || (baseResultado && baseResultado.loading)) return {loading:true, erro:'', mensal:[]};
+  if(baseResultado && baseResultado.erro) return {erro: baseResultado.erro};
+  if(!baseResultado && comb.erro) return {erro: comb.erro};
+  const baseMensal = baseResultado ? baseResultado.mensal : null;
+  if(!baseMensal && (!comb.mensal || comb.mensal.every(m=>!m.porFrente[slug]))) return null;
+  const meses = new Set([...(baseMensal||[]).map(m=>m.mes), ...(comb.mensal||[]).map(m=>m.mes)]);
+  const mensal = [...meses].sort().map(mes=>{
+    const base = baseMensal ? baseMensal.find(m=>m.mes===mes) : null;
+    const combMes = comb.mensal ? comb.mensal.find(m=>m.mes===mes) : null;
+    const custoComb = combMes ? Number(combMes.porFrente[slug]||0) : 0;
+    const despesaPorCategoria = {...(base?.despesaPorCategoria||{})};
+    if(custoComb>0) despesaPorCategoria.combustivel = (despesaPorCategoria.combustivel||0) + custoComb;
+    const despesa = (base?.despesa||0) + custoComb;
+    const receita = base?.receita||0;
+    return { mes, despesa, receita, resultado: receita-despesa, despesaPorCategoria, receitas: base?.receitas||[] };
+  });
+  return {loading:false, erro:'', mensal, soDespesaCombustivel: !baseMensal};
 }
 
 /* ===================== ESTADO ===================== */
@@ -507,8 +641,14 @@ const state = {
   mobileMenuAberto: false,
   // loading começa true (não false) — enquanto o primeiro carregamento não
   // chega, a tela precisa mostrar "carregando", não "sem dados".
-  indicadores: { pecuaria: {loading:true, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null} },
-  resultados: { pecuaria: {loading:true, erro:'', mensal:[]} },
+  indicadores: {
+    pecuaria: {loading:true, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null},
+    combustivel: {loading:true, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null},
+  },
+  // combustivelPorFrente: custo mensal de combustível já separado por
+  // operação de terra (pecuária/cana/cereais) — combinado com o resultado
+  // de cada operação em resultadoBrutoOperacao(), não é uma operação em si.
+  resultados: { pecuaria: {loading:true, erro:'', mensal:[]}, combustivelPorFrente: {loading:true, erro:'', mensal:[]} },
   // filtro de período da aba Resultados — começa no mês atual; "safra" é o
   // ano em que ela COMEÇA (safra Y = maio/Y a abril/Y+1)
   periodo: (function(){
@@ -857,18 +997,24 @@ function Header(){
 
 /* ===================== PAINEL ===================== */
 function AppCard(a){
-  const ind = a.slug==='pecuaria' ? state.indicadores.pecuaria : null;
+  const ind = a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='combustivel' ? state.indicadores.combustivel : null;
   let stats = '';
   if(ind){
     if(ind.loading){
       stats = `<p class="hint">Carregando indicadores...</p>`;
     } else if(ind.erro){
       stats = `<p class="hint" style="color:var(--alerta);">${ind.erro}</p>`;
-    } else {
+    } else if(a.slug==='pecuaria'){
       stats = `<div class="app-card-stats">
         <div class="app-card-stat"><div class="v">${fmtInt(ind.lotesAtivos)}</div><div class="l">Lotes ativos</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.totalAnimais)}</div><div class="l">Animais</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.dietas)}</div><div class="l">Dietas</div></div>
+      </div>`;
+    } else if(a.slug==='combustivel'){
+      stats = `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.estoqueAtual)} L</div><div class="l">Estoque atual</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.consumoMes)} L</div><div class="l">Consumo no mês</div></div>
+        <div class="app-card-stat"><div class="v">${fmtInt(ind.alertasAbertos)}</div><div class="l">Alertas abertos</div></div>
       </div>`;
     }
   }
@@ -943,12 +1089,16 @@ function safrasDisponiveis(){
 }
 
 /* ===================== RESULTADOS (geral, todas as operações) ===================== */
-// Só a Pecuária está com o banco real ligado; Combustível, Cana e Cereais
-// aparecem como "sem dados" até serem implantados e ganharem seu próprio
-// cálculo — mas já entram no filtro de período e no layout, prontos pra
-// quando isso acontecer.
+// Pecuária tem receita e despesa próprias (banco ligado). Cana e Cereais
+// ainda não têm app de receita/despesa — mas já recebem o custo de
+// combustível rateado pra elas (resultadoComCombustivel), então mostram
+// despesa parcial (só combustível) em vez de "sem dados", até ganharem
+// seu próprio cálculo — já entram no filtro de período e no layout,
+// prontos pra quando isso acontecer.
 function resultadoBrutoOperacao(slug){
-  return slug==='pecuaria' ? state.resultados.pecuaria : null;
+  if(slug==='pecuaria') return resultadoComCombustivel(state.resultados.pecuaria, slug);
+  if(slug==='cana' || slug==='cereais') return resultadoComCombustivel(null, slug);
+  return null;
 }
 function resultadoOperacaoNoPeriodo(slug){
   return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
@@ -960,8 +1110,14 @@ function hectaresPorOperacao(slug){
   });
   return total;
 }
+// Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
+// não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
+// consumido pelas outras operações, não uma operação com receita própria.
 function linhasResultado(){
-  return state.apps.map(a=>({ app: a, resultado: resultadoOperacaoNoPeriodo(a.slug) }));
+  return OPERACOES_ORDEM.map(slug=>({
+    app: state.apps.find(a=>a.slug===slug) || {slug, nome: OPERACOES[slug]||slug, cor: OPERACAO_COR[slug]},
+    resultado: resultadoOperacaoNoPeriodo(slug),
+  }));
 }
 function resultadoTotal(campo){
   return OPERACOES_ORDEM.reduce((soma,slug)=>{
@@ -970,7 +1126,7 @@ function resultadoTotal(campo){
   }, 0);
 }
 function algumResultadoCarregando(){
-  return state.resultados.pecuaria.loading;
+  return state.resultados.pecuaria.loading || state.resultados.combustivelPorFrente.loading;
 }
 // Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
 // insumo consumido pelas outras, não uma operação com receita/despesa
@@ -1118,7 +1274,7 @@ function PagePorHectare(){
           if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
           const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
           return `<tr>
-            <td>${chip}</td>
+            <td>${chip}${l.r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : ''}</td>
             <td class="mono">${fmtInt(l.ha)}</td>
             <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
             <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
@@ -1161,7 +1317,7 @@ function PageResultados(){
           const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${esc(l.app.nome)}</strong></span>`;
           if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
-            <td>${chip}</td>
+            <td>${chip}${r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : ''}</td>
             <td class="mono">R$ ${fmt(r.receita)}</td>
             <td class="mono">R$ ${fmt(r.despesa)}</td>
             <td class="mono">R$ ${fmt(r.resultado)}</td>
@@ -1170,7 +1326,7 @@ function PageResultados(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:14px;">Números da Pecuária calculados a partir de receitas, despesas fixas e custo de ração/pasto/cria lançados no AE Pecuária. Não inclui investimentos (compra de animais, máquinas etc.) nem rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
+  <p class="hint" style="margin-top:14px;">Números da Pecuária calculados a partir de receitas, despesas fixas, custo de ração/pasto/cria lançados no AE Pecuária e o combustível abastecido nela (rateado por talhão/centro de custo no AE Combustível). Cana e Cereais ainda não têm app próprio de receita/despesa — por enquanto só mostram o custo de combustível já rateado pra elas. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
 }
 
 /* ===================== FAZENDAS ===================== */

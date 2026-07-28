@@ -65,7 +65,7 @@ alter table apps enable row level security;
 -- pela tela de Apps, sem precisar mexer em código.
 insert into apps (nome, slug, descricao, url, cor, ordem, status) values
   ('AE Pecuária', 'pecuaria', 'Gestão nutricional, estoque e financeiro do confinamento, cria e pasto.', 'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', '#1D5DA8', 1, 'ativo'),
-  ('AE Combustível', 'combustivel', 'Controle de estoque e abastecimento de diesel, Arla 32 e gasolina das frentes de cana, grãos e pecuária.', 'https://eduardosaquy.github.io/AEagropecuaria/AECombustivel.html', '#C98A2B', 2, 'em_breve'),
+  ('AE Combustível', 'combustivel', 'Controle de estoque e abastecimento de diesel, Arla 32 e gasolina das frentes de cana, grãos e pecuária.', 'https://eduardosaquy.github.io/AEagropecuaria/AECombustivel.html', '#C98A2B', 2, 'ativo'),
   ('AE Cana', 'cana', 'Gestão da operação de cana-de-açúcar.', null, '#0C7A43', 3, 'em_breve'),
   ('AE Cereais', 'cereais', 'Gestão da operação de grãos e cereais.', null, '#8A5A2B', 4, 'em_breve');
 
