@@ -59,14 +59,17 @@ create table apps (
 
 alter table apps enable row level security;
 
--- Semente inicial: os dois apps que já existem, e os dois que estão
--- planejados (cana e cereais) — sem URL ainda, mostrados como
--- "em breve" até serem publicados. Dá pra editar tudo isso depois
--- pela tela de Apps, sem precisar mexer em código.
+-- Semente inicial: os três apps que já existem, e o que ainda está
+-- planejado (cereais) — sem URL ainda, mostrado como "em breve" até ser
+-- publicado. Dá pra editar tudo isso depois pela tela de Apps, sem
+-- precisar mexer em código. O AE Cana não tem projeto Supabase próprio —
+-- ele integra de propósito com o mesmo banco do AE Combustível (ver
+-- README, seção "AE Cana") — por isso os indicadores/Resultados dele na
+-- Matriz são lidos do MESMO client dbCombustivel, não de um dbCana à parte.
 insert into apps (nome, slug, descricao, url, cor, ordem, status) values
   ('AE Pecuária', 'pecuaria', 'Gestão nutricional, estoque e financeiro do confinamento, cria e pasto.', 'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', '#1D5DA8', 1, 'ativo'),
   ('AE Combustível', 'combustivel', 'Controle de estoque e abastecimento de diesel, Arla 32 e gasolina das frentes de cana, grãos e pecuária.', 'https://eduardosaquy.github.io/AEagropecuaria/AECombustivel.html', '#C98A2B', 2, 'ativo'),
-  ('AE Cana', 'cana', 'Gestão da operação de cana-de-açúcar.', null, '#0C7A43', 3, 'em_breve'),
+  ('AE Cana', 'cana', 'Plantio, tratos culturais, colheita e financeiro da operação de cana-de-açúcar.', 'https://eduardosaquy.github.io/AEagropecuaria/AECana.html', '#0C7A43', 3, 'ativo'),
   ('AE Cereais', 'cereais', 'Gestão da operação de grãos e cereais.', null, '#8A5A2B', 4, 'em_breve');
 
 -- ---------- PROFILES (login central da matriz) ----------
@@ -118,6 +121,22 @@ create policy "logados veem apps" on apps for select using (esta_logado());
 create policy "admin cria apps" on apps for insert with check (is_admin());
 create policy "admin edita apps" on apps for update using (is_admin()) with check (is_admin());
 create policy "admin exclui apps" on apps for delete using (is_admin());
+
+-- ===================================================================
+-- MIGRAÇÃO: AE Cana ativo
+-- Se você já rodou este arquivo antes desta atualização, a linha do AE
+-- Cana em "apps" ainda está com status 'em_breve' e sem URL (é assim que
+-- a semente inicial acima cadastrava, antes do AE Cana existir). Este
+-- update corrige isso sem duplicar a linha nem mexer numa edição manual
+-- que você já tenha feito pela tela de Apps (só toca a linha se ela
+-- ainda estiver exatamente como a semente original deixou).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+update apps set
+  status = 'ativo',
+  url = 'https://eduardosaquy.github.io/AEagropecuaria/AECana.html',
+  descricao = 'Plantio, tratos culturais, colheita e financeiro da operação de cana-de-açúcar.'
+where slug = 'cana' and status = 'em_breve' and url is null;
 
 -- ---------- PRIMEIRO ADMINISTRADOR ----------
 -- Troque o UUID (o mesmo criado em Authentication > Users) e o nome,
