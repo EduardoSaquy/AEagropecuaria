@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AE Cana</title>
-<link rel="manifest" href="manifest_cana.json">
+<title>AE Cereais</title>
+<link rel="manifest" href="manifest_cereais.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#1B4332">
+<meta name="theme-color" content="#6B4413">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --verde-escuro:#1B4332;
-    --verde-medio:#2D6A4F;
-    --verde-claro:#95D5B2;
+    --dourado-escuro:#6B4413;
+    --dourado-medio:#A6741F;
+    --dourado-claro:#E3C371;
     --grafite:#1E2A38;
     --cinza:#65758A;
     --cinza-claro:#DEE6F0;
@@ -24,7 +24,7 @@
     --ambar-bg:#F5E9D7;
     --alerta:#B3462F;
     --alerta-bg:#F6E7E2;
-    --ok-bg:#E3F1EA;
+    --ok-bg:#F1E9D8;
     --bom:#0C7A43;
     --bom-bg:#E3F1E8;
     --radius:10px;
@@ -41,7 +41,7 @@
   .app{display:flex; min-height:100vh;}
   /* ---------- SIDEBAR ---------- */
   .sidebar{
-    width:230px; flex-shrink:0; background:var(--verde-escuro); color:var(--branco);
+    width:230px; flex-shrink:0; background:var(--dourado-escuro); color:var(--branco);
     display:flex; flex-direction:column; padding:24px 16px;
   }
   .brand{
@@ -57,7 +57,7 @@
     transition:background 0.15s, color 0.15s; border:none; background:none; width:100%; text-align:left;
   }
   .nav-item:hover{background:rgba(255,255,255,0.06); color:var(--branco);}
-  .nav-item.active{background:var(--verde-medio); color:var(--branco);}
+  .nav-item.active{background:var(--dourado-medio); color:var(--branco);}
   .nav-item svg{flex-shrink:0;}
   .sidebar-footer{
     margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);
@@ -66,17 +66,17 @@
   /* ---------- MAIN ---------- */
   .main{flex:1; padding:32px 40px 60px 40px; max-width:1180px;}
   .page-header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px;}
-  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--verde-medio); font-weight:600; margin:0 0 4px 0;}
-  h1{font-family:'Fraunces',serif; font-size:28px; font-weight:600; margin:0; color:var(--verde-escuro);}
+  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--dourado-medio); font-weight:600; margin:0 0 4px 0;}
+  h1{font-family:'Fraunces',serif; font-size:28px; font-weight:600; margin:0; color:var(--dourado-escuro);}
   .page-desc{color:var(--cinza); font-size:13.5px; margin-top:6px; max-width:560px;}
   .btn{
     font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; padding:10px 18px; border-radius:8px;
     border:none; cursor:pointer; transition:filter 0.15s, transform 0.1s; display:inline-flex; align-items:center; gap:6px;
   }
   .btn:active{transform:translateY(1px);}
-  .btn-primary{background:var(--verde-escuro); color:var(--branco);}
+  .btn-primary{background:var(--dourado-escuro); color:var(--branco);}
   .btn-primary:hover{filter:brightness(1.15);}
-  .btn-ghost{background:transparent; color:var(--verde-escuro); border:1px solid var(--cinza-claro);}
+  .btn-ghost{background:transparent; color:var(--dourado-escuro); border:1px solid var(--cinza-claro);}
   .btn-ghost:hover{background:var(--branco);}
   .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
   .btn-danger-ghost:hover{background:var(--alerta-bg);}
@@ -86,11 +86,11 @@
   .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
   .stat-card{background:var(--branco); border:1px solid var(--cinza-claro); border-radius:var(--radius); padding:16px 18px;}
   .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
-  .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--verde-escuro); margin-top:6px;}
+  .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--dourado-escuro); margin-top:6px;}
   .stat-value.alerta{color:var(--alerta);}
   .silo-wrap{display:flex; align-items:center; gap:8px;}
-  .silo{width:14px; height:30px; border:1.5px solid var(--verde-escuro); border-radius:3px; position:relative; overflow:hidden; background:var(--cinza-claro); flex-shrink:0;}
-  .silo-fill{position:absolute; bottom:0; left:0; right:0; background:var(--verde-medio);}
+  .silo{width:14px; height:30px; border:1.5px solid var(--dourado-escuro); border-radius:3px; position:relative; overflow:hidden; background:var(--cinza-claro); flex-shrink:0;}
+  .silo-fill{position:absolute; bottom:0; left:0; right:0; background:var(--dourado-medio);}
   .silo-fill.alerta{background:var(--alerta);}
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
   th{
@@ -101,19 +101,19 @@
   tr:last-child td{border-bottom:none;}
   .mono{font-family:'IBM Plex Mono',monospace;}
   .pill{display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;}
-  .pill-ok{background:var(--ok-bg); color:var(--verde-medio);}
+  .pill-ok{background:var(--ok-bg); color:var(--dourado-medio);}
   .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
   .pill-cat{background:var(--cinza-claro); color:var(--grafite);}
   .pill-warn{background:var(--ambar-bg); color:var(--ambar);}
   /* form modal */
   .overlay{
-    position:fixed; inset:0; background:rgba(27,67,50,0.35); display:flex; align-items:flex-start;
+    position:fixed; inset:0; background:rgba(107,68,19,0.35); display:flex; align-items:flex-start;
     justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;
   }
   .modal{background:var(--branco); border-radius:14px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,0.25);}
   .modal.modal-lg{max-width:720px;}
   .modal-head{padding:20px 24px; border-bottom:1px solid var(--cinza-claro); display:flex; justify-content:space-between; align-items:center;}
-  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--verde-escuro);}
+  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--dourado-escuro);}
   .modal-close{background:none; border:none; cursor:pointer; color:var(--cinza); font-size:20px; line-height:1;}
   .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
   .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
@@ -123,10 +123,10 @@
     font-family:'Inter',sans-serif; font-size:13.5px; padding:9px 11px; border:1px solid var(--cinza-claro);
     border-radius:7px; background:var(--branco); color:var(--grafite); outline:none; width:100%;
   }
-  input:focus, select:focus, textarea:focus{border-color:var(--verde-medio); box-shadow:0 0 0 3px rgba(45,106,79,0.12);}
+  input:focus, select:focus, textarea:focus{border-color:var(--dourado-medio); box-shadow:0 0 0 3px rgba(166,116,31,0.14);}
   .hint{font-size:11px; color:var(--cinza);}
   .empty{text-align:center; padding:50px 20px; color:var(--cinza);}
-  .empty h4{font-family:'Fraunces',serif; color:var(--verde-escuro); margin:10px 0 6px 0; font-size:16px;}
+  .empty h4{font-family:'Fraunces',serif; color:var(--dourado-escuro); margin:10px 0 6px 0; font-size:16px;}
   .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;}
   .search{
     display:flex; align-items:center; gap:8px; background:var(--branco);
@@ -139,13 +139,13 @@
     font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; color:var(--cinza); background:none;
     border:none; padding:10px 2px; cursor:pointer; white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px;
   }
-  .subtab:hover{color:var(--verde-escuro);}
-  .subtab.active{color:var(--verde-escuro); border-bottom-color:var(--verde-medio);}
+  .subtab:hover{color:var(--dourado-escuro);}
+  .subtab.active{color:var(--dourado-escuro); border-bottom-color:var(--dourado-medio);}
   /* ---------- LOGIN ---------- */
   .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
   .login-card{background:var(--branco); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.12); border:1px solid var(--cinza-claro); padding:40px 36px; width:100%; max-width:360px;}
   .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:28px;}
-  .login-brand .brand-name{color:var(--verde-escuro); font-family:'Fraunces',serif; font-weight:600; font-size:19px;}
+  .login-brand .brand-name{color:var(--dourado-escuro); font-family:'Fraunces',serif; font-weight:600; font-size:19px;}
   .login-field{margin-bottom:16px; display:flex; flex-direction:column; gap:5px;}
   .login-field input{width:100%;}
   .login-error{background:var(--alerta-bg); color:var(--alerta); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px;}
@@ -199,19 +199,21 @@
 <script>
 /* ===================== SUPABASE =====================
  * ATENÇÃO: este app usa DE PROPÓSITO o MESMO projeto Supabase já usado
- * pelo AECombustivel.html — não é um banco novo/separado.
+ * pelo AECombustivel.html e pelo AECana.html — não é um banco novo/separado.
  *
  * Fazendas, Culturas e Talhões/Áreas (tabelas fazendas / culturas /
  * talhoes_areas, criadas em combustivel_schema.sql) são a "matriz" de
  * cadastros centrais da empresa, pensada desde o início do AE
  * Combustível para ser compartilhada entre cana, grãos e pecuária (ver
- * README, seção "AE Combustível"). O AE Cana lança e edita esses
- * registros direto nessas mesmas tabelas — sem duplicar cadastro e sem
- * precisar de nenhuma sincronização — então uma fazenda ou talhão
- * criado aqui já aparece automaticamente no rateio de combustível do
- * AE Combustível, e vice-versa. As mesmas contas de usuário (tabela
- * profiles) e a mesma Edge Function `criar-usuario-combustivel`
- * também são reaproveitadas — não crie um projeto novo.
+ * README, seção "AE Combustível"). O AE Cereais lança e edita esses
+ * registros direto nessas mesmas tabelas, filtrando pela frente 'graos'
+ * (mesmo código usado em Soja/Milho/Sorgo/Feijão) — sem duplicar
+ * cadastro e sem precisar de nenhuma sincronização — então uma fazenda
+ * ou talhão criado aqui já aparece automaticamente no rateio de
+ * combustível do AE Combustível, e vice-versa. As mesmas contas de
+ * usuário (tabela profiles) e a mesma Edge Function
+ * `criar-usuario-combustivel` também são reaproveitadas — não crie um
+ * projeto novo.
  * Preencha aqui as MESMAS constantes já usadas em AECombustivel.html
  * (Project Settings > API do projeto do AE Combustível). */
 const db = supabase.createClient(
@@ -230,11 +232,12 @@ const OPCOES = {
   ESTADOS: [{value:'TO',label:'Tocantins'},{value:'SP',label:'São Paulo'}],
   FRENTES: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'}],
   CATEGORIAS_INSUMO: [
-    {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
+    {value:'semente',label:'Semente'}, {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
     {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'},
     {value:'corretivo',label:'Corretivo de solo (Calcário/Gesso)'}, {value:'outro',label:'Outro'},
   ],
   TIPOS_OPERACAO: [
+    {value:'dessecacao',label:'Dessecação'}, {value:'semeadura',label:'Semeadura'},
     {value:'adubacao',label:'Adubação'}, {value:'herbicida',label:'Aplicação de herbicida'},
     {value:'inseticida',label:'Aplicação de inseticida'}, {value:'fungicida',label:'Aplicação de fungicida'},
     {value:'cultivo_mecanico',label:'Cultivo mecânico'}, {value:'outro',label:'Outro'},
@@ -242,18 +245,21 @@ const OPCOES = {
 };
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
- * Mesmo motor genérico do AECombustivel.html (uma entidade é descrita
- * uma vez — tabela, campos — e lista/modal/salvar/excluir são gerados
- * a partir disso). `modulo:'cadastros'` é obrigatório em fazendas,
- * culturas, safras e talhoes: é o mesmo módulo de permissão (RLS) que
- * o AE Combustível já usa para essas tabelas, então o controle de
- * acesso é sempre o mesmo dos dois apps, sem precisar duplicar a
- * checagem no banco. `plantios` (Fase 2 — Operações) usa o módulo
- * `operacoes`, próprio do AE Cana (tabela plantios_cana, só existe
- * neste app — ver cana_schema.sql).
+ * Mesmo motor genérico do AECombustivel.html/AECana.html (uma entidade
+ * é descrita uma vez — tabela, campos — e lista/modal/salvar/excluir
+ * são gerados a partir disso). `modulo:'cadastros'` é obrigatório em
+ * fazendas, culturas, safras e talhoes: é o mesmo módulo de permissão
+ * (RLS) que o AE Combustível e o AE Cana já usam para essas tabelas,
+ * então o controle de acesso é sempre o mesmo dos três apps, sem
+ * precisar duplicar a checagem no banco. `plantios`/`colheitas`/
+ * `insumos`/`entradasInsumo`/`aplicacoes` usam o módulo `operacoes_graos`,
+ * próprio do AE Cereais (tabelas *_graos, só existem neste app — ver
+ * cereais_schema.sql). Diferente da cana em `talhoes` são filtrados
+ * pela cultura da frente 'graos'.
  * `culturas` e `safras` ficam de fora do menu (ver GROUPS) — entram só
- * como lista de apoio (Cultura do Talhão, Safra do Plantio); continuam
- * sendo cadastradas pelas abas Cultivo/Estrutura do AE Combustível. */
+ * como lista de apoio (Cultura do Talhão, Cultura/Safra do Plantio);
+ * continuam sendo cadastradas pelas abas Cultivo/Estrutura do AE
+ * Combustível. */
 const CADASTROS = {
   fazendas: {
     table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'cadastros',
@@ -276,7 +282,7 @@ const CADASTROS = {
   },
   talhoes: {
     table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cadastros',
-    desc:'Talhões de lavoura de cana desta fazenda — mesmo cadastro (talhões/áreas) que o AE Combustível usa para ratear o diesel por área.',
+    desc:'Talhões de lavoura de grãos desta fazenda — mesmo cadastro (talhões/áreas) que o AE Combustível usa para ratear o diesel por área.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
     historico: true,
@@ -285,7 +291,7 @@ const CADASTROS = {
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Talhão 12'},
       {key:'tipo', type:'fixed', value:'talhao', list:false},
       {key:'areaHa', label:'Área (ha)', type:'number', step:'0.01', suffix:' ha'},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', filter:c=>c.frente==='cana'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', filter:c=>c.frente==='graos'},
       {key:'ativo', label:'Talhão ativo', type:'checkbox', default:true, list:false},
     ],
   },
@@ -293,7 +299,7 @@ const CADASTROS = {
     table:'safras', label:'Safras', singular:'Safra', modulo:'cadastros',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='cana'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
       {key:'nome', label:'Safra', type:'text', required:true, placeholder:'Ex: 2024/2025'},
       {key:'dataInicio', label:'Início', type:'date'},
       {key:'dataFim', label:'Fim', type:'date'},
@@ -301,41 +307,42 @@ const CADASTROS = {
     ],
   },
   plantios: {
-    table:'plantios_cana', label:'Plantio', singular:'Plantio', modulo:'operacoes',
-    desc:'Registro do plantio de cada talhão — variedade e data de plantio, com previsão de reforma. Uma linha por estande de cana (do plantio até a reforma); os cortes/colheitas de cada estande entram no módulo de Colheita.',
+    table:'plantios_graos', label:'Plantio', singular:'Plantio', modulo:'operacoes_graos',
+    desc:'Registro do plantio de cada talhão — cultura, cultivar e data de plantio, com previsão de colheita. Uma linha por safra plantada (grão é cultura anual, diferente do estande de cana); a colheita daquela safra entra no módulo de Colheita.',
     emptyHint:'Cadastre um talhão antes de registrar um plantio.',
     orderBy:'data_plantio', orderDesc:true, semBusca:true,
     fields:[
       {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
-      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
-      {key:'variedade', label:'Variedade', type:'text', required:true, placeholder:'Ex: RB92579'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
+      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='graos'; }},
+      {key:'cultivar', label:'Cultivar', type:'text', required:true, placeholder:'Ex: TMG 7062'},
       {key:'dataPlantio', label:'Data do plantio', type:'date', required:true},
-      {key:'dataReformaPrevista', label:'Previsão de reforma', type:'date'},
+      {key:'dataPrevisaoColheita', label:'Previsão de colheita', type:'date'},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
-      {key:'ativo', label:'Plantio ativo (talhão em produção)', type:'checkbox', default:true, list:false},
+      {key:'ativo', label:'Plantio ativo (safra em pé no talhão)', type:'checkbox', default:true, list:false},
     ],
   },
   colheitas: {
-    table:'colheitas_cana', label:'Colheita', singular:'Colheita', modulo:'operacoes',
-    desc:'Registro da colheita de cada talhão — toneladas colhidas e TCH (toneladas por hectare), a base para o AE Combustível calcular custo por tonelada.',
+    table:'colheitas_graos', label:'Colheita', singular:'Colheita', modulo:'operacoes_graos',
+    desc:'Registro da colheita de cada talhão — sacas colhidas (60kg) e produtividade (sc/ha), a base para o AE Combustível calcular custo por saca.',
     emptyHint:'Cadastre um talhão antes de registrar uma colheita.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
     fields:[
       {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
-      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
+      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='graos'; }},
       {key:'data', label:'Data', type:'date', required:true},
-      {key:'corte', label:'Corte', type:'number', step:'1', dec:0, hint:'1 = cana-planta, 2 = 1ª soca, 3 = 2ª soca...'},
-      {key:'toneladas', label:'Toneladas', type:'number', step:'0.01', required:true},
-      {key:'tch', label:'TCH (t/ha)', type:'computed', compute:item=>{
+      {key:'sacas', label:'Sacas (60kg)', type:'number', step:'0.01', required:true},
+      {key:'produtividade', label:'Produtividade (sc/ha)', type:'computed', compute:item=>{
         const t = state.talhoes.find(x=>x.id===item.talhaoId);
-        return (t && t.areaHa) ? fmt(Number(item.toneladas||0)/Number(t.areaHa)) : '—';
+        return (t && t.areaHa) ? fmt(Number(item.sacas||0)/Number(t.areaHa)) : '—';
       }},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
   insumos: {
-    table:'insumos_cana', label:'Insumos', singular:'Insumo', modulo:'operacoes',
-    desc:'Defensivos e fertilizantes usados nos tratos culturais, com estoque mínimo para alerta.',
+    table:'insumos_graos', label:'Insumos', singular:'Insumo', modulo:'operacoes_graos',
+    desc:'Sementes, defensivos e fertilizantes usados nos tratos culturais, com estoque mínimo para alerta.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Glifosato'},
       {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_INSUMO, required:true},
@@ -345,7 +352,7 @@ const CADASTROS = {
     ],
   },
   entradasInsumo: {
-    table:'entradas_insumo_cana', label:'Entradas de Insumo', singular:'Entrada', modulo:'operacoes',
+    table:'entradas_insumo_graos', label:'Entradas de Insumo', singular:'Entrada', modulo:'operacoes_graos',
     desc:'Compra/recebimento de insumo — soma no estoque; informar o preço pago recalcula o preço médio do insumo.',
     emptyHint:'Cadastre um insumo antes de lançar uma entrada.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
@@ -359,7 +366,7 @@ const CADASTROS = {
     ],
   },
   aplicacoes: {
-    table:'aplicacoes_cana', label:'Aplicações', singular:'Aplicação', modulo:'operacoes',
+    table:'aplicacoes_graos', label:'Aplicações', singular:'Aplicação', modulo:'operacoes_graos',
     desc:'Lançamento de trato cultural em campo — desconta o insumo do estoque na quantidade aplicada.',
     emptyHint:'Cadastre um talhão e um insumo antes de lançar uma aplicação.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
@@ -384,7 +391,7 @@ function rowToCadastro(row, cfg){
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 /* ===================== CACHE LOCAL (abrir offline com os últimos dados) ===================== */
-const CACHE_LOCAL_KEY = 'cana_cache_cadastros_v1';
+const CACHE_LOCAL_KEY = 'cereais_cache_cadastros_v1';
 function salvarCacheLocal(){
   try{
     const snapshot = {};
@@ -460,8 +467,9 @@ function render(){
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES =====================
- * Mesmo domínio de login e mesma tabela profiles do AE Combustível —
- * uma conta criada em qualquer um dos dois apps funciona nos dois. */
+ * Mesmo domínio de login e mesma tabela profiles do AE Combustível e
+ * do AE Cana — uma conta criada em qualquer um dos três apps funciona
+ * nos três. */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
@@ -534,7 +542,7 @@ function LoginPage(){
   return `
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cana</div></div>
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cereais</div></div>
       ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
       <form data-login-form="1">
         <div class="login-field"><label>Usuário</label><input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus /></div>
@@ -548,7 +556,7 @@ function AguardandoLiberacao(){
   return `
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cana</div></div>
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cereais</div></div>
       <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
         Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
         Fale com o administrador do sistema.
@@ -582,8 +590,8 @@ const GROUPS = {
 function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  if(key==='operacoes') return temPermissao('operacoes','visualizar');
-  if(key==='financeiro') return temPermissao('financeiro','visualizar');
+  if(key==='operacoes') return temPermissao('operacoes_graos','visualizar');
+  if(key==='financeiro') return temPermissao('financeiro_graos','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function paginaVisivel(){ return true; }
@@ -605,7 +613,7 @@ function Sidebar(){
   const activeGroup = currentGroupKey();
   return `
   <div class="sidebar">
-    <div class="brand">${brandMark()}<div><div class="brand-name">AE Cana</div></div></div>
+    <div class="brand">${brandMark()}<div><div class="brand-name">AE Cereais</div></div></div>
     <div class="sidebar-user">
       <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
       <div class="sidebar-user-actions">
@@ -618,7 +626,7 @@ function Sidebar(){
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
       `).join('')}
     </nav>
-    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase), no<br/>mesmo banco do AE Combustível.</div>
+    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase), no<br/>mesmo banco do AE Combustível<br/>e do AE Cana.</div>
   </div>`;
 }
 function SubTabs(){
@@ -632,16 +640,16 @@ function SubTabs(){
 }
 function Header(){
   if(state.page==='adminUsuarios'){
-    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso — as mesmas contas e permissões usadas no AE Combustível.');
+    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso — as mesmas contas e permissões usadas no AE Combustível e no AE Cana.');
   }
   if(state.page==='estoqueInsumos'){
     return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
   if(state.page==='custoProducao'){
-    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por tonelada colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
+    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por saca colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
   }
   const cfg = CADASTROS[state.page];
-  const eyebrow = cfg.modulo==='operacoes' ? 'Operações' : 'Cadastro';
+  const eyebrow = cfg.modulo==='operacoes_graos' ? 'Operações' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
 }
 function headerHtml(eyebrow,title,desc){
@@ -649,10 +657,14 @@ function headerHtml(eyebrow,title,desc){
 }
 function brandMark(){
   return `<svg class="brand-mark" viewBox="0 0 32 32" fill="none">
-    <path d="M16 3v26" stroke="#1B4332" stroke-width="2.4" stroke-linecap="round"/>
-    <path d="M13 4c-2 3-2 6-2 9s0 6 2 9" stroke="#95D5B2" stroke-width="2" stroke-linecap="round"/>
-    <path d="M19 4c2 3 2 6 2 9s0 6-2 9" stroke="#40916C" stroke-width="2" stroke-linecap="round"/>
-    <path d="M16 8c3-2 6-2 8 0M16 22c-3-2-6-2-8 0" stroke="#2D6A4F" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M16 29V9" stroke="#6B4413" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M16 9c0-3 1.6-5 1.6-5s1.6 2 1.6 5-1.6 4-1.6 4-1.6-1-1.6-4Z" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
+    <ellipse cx="12.6" cy="12" rx="2.2" ry="1.3" transform="rotate(-32 12.6 12)" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
+    <ellipse cx="19.4" cy="12" rx="2.2" ry="1.3" transform="rotate(32 19.4 12)" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
+    <ellipse cx="12.6" cy="16" rx="2.2" ry="1.3" transform="rotate(-32 12.6 16)" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
+    <ellipse cx="19.4" cy="16" rx="2.2" ry="1.3" transform="rotate(32 19.4 16)" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
+    <ellipse cx="12.6" cy="20" rx="2.2" ry="1.3" transform="rotate(-32 12.6 20)" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
+    <ellipse cx="19.4" cy="20" rx="2.2" ry="1.3" transform="rotate(32 19.4 20)" fill="#E3C371" stroke="#A6741F" stroke-width="1"/>
   </svg>`;
 }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
@@ -843,10 +855,9 @@ async function salvarCadastro(key){
 /* ===================== ESTOQUE DE INSUMOS (Tratos culturais) =====================
  * Saldo e preço médio ponderado do insumo não ficam guardados numa
  * coluna — são calculados aqui a partir de Entradas e Aplicações,
- * mesmo padrão já usado pelo AE Combustível para o saldo de tanque
- * (saldoTanque/custoMedioPonderado). Assim, editar ou excluir uma
- * entrada/aplicação já reflete automaticamente no saldo, sem precisar
- * reconciliar nada à parte. */
+ * mesmo padrão já usado pelo AE Combustível (tanque) e pelo AE Cana
+ * (insumo). Assim, editar ou excluir um lançamento já reflete
+ * automaticamente no estoque (e no Histórico do Talhão). */
 function totalEntradasInsumo(insumoId){
   return state.entradasInsumo.filter(e=>e.insumoId===insumoId).reduce((a,e)=>a+Number(e.quantidade||0),0);
 }
@@ -909,11 +920,11 @@ function pctEstoque(saldo, minimo){
 
 /* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
  * Não é um cadastro novo — cruza o que já existe em Aplicações (custo
- * de insumo, pelo preço médio ponderado) e Colheita (toneladas) por
+ * de insumo, pelo preço médio ponderado) e Colheita (sacas) por
  * talhão. Sem despesas gerais nem receita ainda (fica pra uma próxima
- * fase) — só o custo de insumo por hectare e por tonelada colhida. */
+ * fase) — só o custo de insumo por hectare e por saca colhida. */
 function producaoTotalTalhao(talhaoId){
-  return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.toneladas||0),0);
+  return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.sacas||0),0);
 }
 function custoInsumosTalhao(talhaoId){
   return state.aplicacoes.filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
@@ -930,21 +941,21 @@ function PageCustoProducao(){
     const custoInsumos = custoInsumosTalhao(t.id);
     const producao = producaoTotalTalhao(t.id);
     const custoHa = t.areaHa ? custoInsumos/Number(t.areaHa) : null;
-    const custoTon = producao>0 ? custoInsumos/producao : null;
-    return {t, custoInsumos, producao, custoHa, custoTon};
+    const custoSaca = producao>0 ? custoInsumos/producao : null;
+    return {t, custoInsumos, producao, custoHa, custoSaca};
   });
   const custoTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
   const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
-  const custoTonMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
+  const custoSacaMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
   return `
   <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
     <div class="stat-card"><div class="stat-label">Custo total de insumos</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
-    <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} t</div></div>
-    <div class="stat-card"><div class="stat-label">Custo médio / tonelada</div><div class="stat-value">${custoTonMedio==null?'—':'R$ '+fmt(custoTonMedio)}</div></div>
+    <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} sc</div></div>
+    <div class="stat-card"><div class="stat-label">Custo médio / saca</div><div class="stat-value">${custoSacaMedio==null?'—':'R$ '+fmt(custoSacaMedio)}</div></div>
   </div>
   <div class="card" style="overflow-x:auto;">
     <table>
-      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/tonelada</th></tr></thead>
+      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/saca</th></tr></thead>
       <tbody>
         ${linhas.map(l=>`
           <tr>
@@ -953,8 +964,8 @@ function PageCustoProducao(){
             <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
             <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
             <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
-            <td class="mono">${fmt(l.producao)} t</td>
-            <td class="mono">${l.custoTon==null?'—':'R$ '+fmt(l.custoTon)}</td>
+            <td class="mono">${fmt(l.producao)} sc</td>
+            <td class="mono">${l.custoSaca==null?'—':'R$ '+fmt(l.custoSaca)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -964,17 +975,16 @@ function PageCustoProducao(){
 }
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
- * Mesma lista de módulos do AE Combustível e do AE Cereais (mesmo
+ * Mesma lista de módulos do AE Combustível e do AE Cana (mesmo
  * profiles.permissoes do banco compartilhado) — precisa ser a lista
- * completa, não só "cadastros", senão salvar por aqui apagaria o
- * acesso da pessoa aos módulos do AE Combustível (Estoque,
- * Abastecimento, etc.) e do AE Cereais. */
+ * completa, não só "operacoes_graos", senão salvar por aqui apagaria o
+ * acesso da pessoa aos módulos do AE Combustível e do AE Cana. */
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
   ['financeiro','Financeiro de Cana (Custo por Talhão)'],
-  ['operacoes_graos','Operações de Cereais (AE Cereais)'],
-  ['financeiro_graos','Financeiro de Cereais (AE Cereais)'],
+  ['operacoes_graos','Operações de Cereais (Plantio, Tratos, Colheita)'],
+  ['financeiro_graos','Financeiro de Cereais (Custo por Talhão)'],
   ['estoque','Estoque (AE Combustível)'],
   ['abastecimento','Abastecimento (AE Combustível)'],
   ['rateio','Rateio & Indicadores (AE Combustível)'],
@@ -1047,7 +1057,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cana quanto para o AE Combustível (é a mesma conta nos dois apps).</p>
+        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cereais quanto para o AE Cana e o AE Combustível (é a mesma conta nos três apps).</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
@@ -1094,18 +1104,18 @@ function ModalTrocarSenha(){
 }
 /* ===================== HISTÓRICO DO TALHÃO =====================
  * Não é um cadastro novo — junta numa tela só o que já existe em
- * Colheita (número de cortes, produção) e Aplicações (insumo por
- * insumo, incluindo calcário/gesso/adubo), filtrado por talhão. Como
- * lê direto de colheitas_cana/aplicacoes_cana, fica sempre conciliado
- * com os lançamentos de Colheita e Tratos culturais — não há nada
- * guardado à parte para desatualizar. */
+ * Colheita (número de colheitas, produção) e Aplicações (insumo por
+ * insumo, incluindo sementes/adubo/defensivos), filtrado por talhão.
+ * Como lê direto de colheitas_graos/aplicacoes_graos, fica sempre
+ * conciliado com os lançamentos de Colheita e Tratos culturais — não
+ * há nada guardado à parte para desatualizar. */
 function ModalHistoricoTalhao(){
   const talhaoId = state.modal.talhaoId;
   const t = state.talhoes.find(x=>x.id===talhaoId);
   if(!t) return '';
   const colheitasDoTalhao = state.colheitas.filter(c=>c.talhaoId===talhaoId).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
-  const producaoTotal = colheitasDoTalhao.reduce((a,c)=>a+Number(c.toneladas||0),0);
-  const tchMedio = t.areaHa ? producaoTotal/Number(t.areaHa)/(colheitasDoTalhao.length||1) : null;
+  const producaoTotal = colheitasDoTalhao.reduce((a,c)=>a+Number(c.sacas||0),0);
+  const produtividadeMedia = t.areaHa ? producaoTotal/Number(t.areaHa)/(colheitasDoTalhao.length||1) : null;
 
   const aplicacoesDoTalhao = state.aplicacoes.filter(a=>a.talhaoId===talhaoId);
   const porInsumo = {};
@@ -1130,28 +1140,28 @@ function ModalHistoricoTalhao(){
         <p class="hint">${fkNome('fazendas', t.fazendaId)} · ${t.areaHa ? fmt(t.areaHa)+' ha' : 'área não informada'}</p>
 
         <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
-          <div class="stat-card"><div class="stat-label">Número de cortes</div><div class="stat-value">${colheitasDoTalhao.length}</div></div>
-          <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotal)} t</div></div>
-          <div class="stat-card"><div class="stat-label">TCH médio</div><div class="stat-value">${tchMedio==null?'—':fmt(tchMedio)+' t/ha'}</div></div>
+          <div class="stat-card"><div class="stat-label">Número de colheitas</div><div class="stat-value">${colheitasDoTalhao.length}</div></div>
+          <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotal)} sc</div></div>
+          <div class="stat-card"><div class="stat-label">Produtividade média</div><div class="stat-value">${produtividadeMedia==null?'—':fmt(produtividadeMedia)+' sc/ha'}</div></div>
         </div>
 
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:4px 0;">Colheitas (cortes)</h4>
+        <h4 style="font-family:'Fraunces',serif; color:var(--dourado-escuro); margin:4px 0;">Colheitas</h4>
         ${colheitasDoTalhao.length===0 ? `<p class="hint">Nenhuma colheita registrada para este talhão.</p>` : `
         <table>
-          <thead><tr><th>Data</th><th>Corte</th><th>Toneladas</th><th>TCH</th></tr></thead>
+          <thead><tr><th>Data</th><th>Cultura</th><th>Sacas</th><th>Produtividade</th></tr></thead>
           <tbody>
             ${colheitasDoTalhao.map(c=>`
               <tr>
                 <td>${fmtData(c.data)}</td>
-                <td>${c.corte ?? '—'}</td>
-                <td class="mono">${fmt(c.toneladas)} t</td>
-                <td class="mono">${t.areaHa ? fmt(Number(c.toneladas||0)/Number(t.areaHa)) + ' t/ha' : '—'}</td>
+                <td>${fkNome('culturas', c.culturaId)}</td>
+                <td class="mono">${fmt(c.sacas)} sc</td>
+                <td class="mono">${t.areaHa ? fmt(Number(c.sacas||0)/Number(t.areaHa)) + ' sc/ha' : '—'}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>`}
 
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:16px 0 4px 0;">Insumos aplicados (calcário, gesso, adubo, defensivos...)</h4>
+        <h4 style="font-family:'Fraunces',serif; color:var(--dourado-escuro); margin:16px 0 4px 0;">Insumos aplicados (sementes, adubo, defensivos...)</h4>
         ${linhasInsumo.length===0 ? `<p class="hint">Nenhuma aplicação registrada para este talhão.</p>` : `
         <table>
           <thead><tr><th>Insumo</th><th>Categoria</th><th>Total aplicado</th></tr></thead>
@@ -1318,7 +1328,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_cana.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_cereais.js'));
 }
 </script>
 </body>
