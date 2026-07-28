@@ -2887,10 +2887,14 @@ function PageResultadosResumo(){
   const anual = comparativoAnual(meses);
 
   const hectares = totalHectares();
+  // Acumulado do ano (Jan até o mês atual), não só o mês corrente -- assim o
+  // valor por hectare vai se consolidando conforme o ano avança, em vez de
+  // oscilar mês a mês (um mês fraco não faz o indicador "piorar" sozinho,
+  // ele é diluído no acumulado, como uma média que só cresce em base).
   const porHectare = hectares>0 ? {
-    receita: d.receitaMes/hectares,
-    despesa: d.totalMes/hectares,
-    resultado: d.resultadoMes/hectares,
+    receita: anual.receita/hectares,
+    despesa: anual.despesa/hectares,
+    resultado: anual.resultado/hectares,
   } : null;
 
   return `
@@ -2898,12 +2902,13 @@ function PageResultadosResumo(){
     <div class="stat-card"><div class="stat-label">Valor em estoque (insumos)</div><div class="stat-value">R$ ${fmt(d.valorEstoque)}</div></div>
   </div>
   ${porHectare ? `
-  <p class="eyebrow" style="margin:22px 0 10px;">Por hectare (mês) — ${fmtInt(hectares)} ha (${state.fazendas.length} fazenda${state.fazendas.length===1?'':'s'})</p>
+  <p class="eyebrow" style="margin:22px 0 10px;">Por hectare (ano) — ${fmtInt(hectares)} ha (${state.fazendas.length} fazenda${state.fazendas.length===1?'':'s'})</p>
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Receita/ha</div><div class="stat-value">R$ ${fmt(porHectare.receita)}</div></div>
     <div class="stat-card"><div class="stat-label">Despesa/ha</div><div class="stat-value">R$ ${fmt(porHectare.despesa)}</div></div>
     <div class="stat-card"><div class="stat-label">Resultado/ha</div><div class="stat-value ${porHectare.resultado<0?'alerta':''}">R$ ${fmt(porHectare.resultado)}</div></div>
   </div>
+  <p class="hint" style="margin:10px 0 20px;">Acumulado de janeiro até o mês atual (${meses.length} mês${meses.length===1?'':'es'}), não só o mês corrente — o valor vai se consolidando conforme o ano avança.</p>
   ` : `<p class="hint" style="margin:10px 0 20px;">Cadastre a área da fazenda (aba Fazenda, só para Administrador/Proprietário) para ver o resultado por hectare aqui.</p>`}
   ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
