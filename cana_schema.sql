@@ -76,7 +76,7 @@ create policy "excluir plantios_cana" on plantios_cana for delete using (tem_per
 create table insumos_cana (
   id bigint generated always as identity primary key,
   nome text not null unique,
-  categoria text not null check (categoria in ('herbicida','inseticida','fungicida','adubo','outro')),
+  categoria text not null check (categoria in ('herbicida','inseticida','fungicida','adubo','corretivo','outro')),
   unidade text not null default 'L',
   estoque_minimo numeric(12,2),
   ativo boolean not null default true,
