@@ -235,7 +235,13 @@ create index idx_receitas_cana_talhao on receitas_cana(talhao_id);
 create trigger set_updated before update on receitas_cana for each row execute function trg_set_updated();
 
 alter table receitas_cana enable row level security;
+-- Leitura só para quem tem 'resultados' (receita/lucratividade fica
+-- restrita — só Administrador por padrão, mais quem o admin liberar
+-- explicitamente, ex: o(a) proprietário(a)). Quem só tem 'financeiro'
+-- consegue INSERIR uma receita (lançamento "cego": lança, mas não
+-- lê a lista nem os valores já lançados) — não consegue editar nem
+-- excluir um lançamento já existente, porque nem consegue vê-lo.
 create policy "select receitas_cana" on receitas_cana for select using (tem_permissao('resultados','visualizar'));
-create policy "inserir receitas_cana" on receitas_cana for insert with check (tem_permissao('resultados','editar'));
+create policy "inserir receitas_cana" on receitas_cana for insert with check (tem_permissao('resultados','editar') or tem_permissao('financeiro','editar'));
 create policy "atualizar receitas_cana" on receitas_cana for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
 create policy "excluir receitas_cana" on receitas_cana for delete using (tem_permissao('resultados','editar'));

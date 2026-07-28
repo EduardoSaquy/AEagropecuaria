@@ -405,9 +405,9 @@ const CADASTROS = {
     ],
   },
   receitas: {
-    table:'receitas_cana', label:'Receita', singular:'Receita', modulo:'resultados',
-    desc:'Venda/entrega de cana para a usina — gera a receita usada no Resultado. Acesso separado do Financeiro, para controlar quem vê receita da operação.',
-    emptyHint:'Cadastre uma fazenda antes de lançar uma receita.',
+    table:'receitas_cana', label:'Receita', singular:'Receita', modulo:'resultados', moduloEditarAlt:'financeiro',
+    desc:'Venda/entrega de cana para a usina — gera a receita usada no Resultado. Quem só tem acesso a Financeiro pode lançar receita aqui, mas não vê a lista nem o valor das já lançadas — só quem tem Resultados enxerga isso (o banco bloqueia a leitura pra quem não tem).',
+    emptyHint:'Nenhuma receita para mostrar — ou porque ainda não há nenhuma, ou porque seu acesso permite lançar mas não ver (fala com o administrador se achar que deveria ver).',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
@@ -635,19 +635,34 @@ function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
   if(key==='financeiro') return temPermissao('financeiro','visualizar');
-  if(key==='resultados') return temPermissao('resultados','visualizar');
+  // Resultados (receita/lucratividade) é enxergado por quem tem
+  // 'resultados' — mas quem só tem 'financeiro' (editar) também
+  // precisa entrar aqui pra conseguir LANÇAR receita (ver paginaVisivel
+  // abaixo: enxerga só a sub-aba Receita, e mesmo essa fica em branco
+  // pra ele — o RLS não deixa esse perfil ler receitas_cana, só inserir).
+  if(key==='resultados') return temPermissao('resultados','visualizar') || temPermissao('financeiro','editar');
   return temPermissao('cadastros','visualizar');
 }
-function paginaVisivel(){ return true; }
+// Dentro de um grupo visível, algumas páginas ainda exigem checagem
+// própria — hoje só o caso de Resultado (lucratividade), que fica
+// escondido de quem só tem 'financeiro' (só pode lançar Receita, não
+// ver receita nem resultado). Administrador vê tudo por padrão; quem
+// mais deve ver o resultado completo, o admin libera 'resultados' pra
+// essa conta na Administração (ex: o(a) proprietário(a)).
+function paginaVisivel(key){
+  if(key==='resultado') return temPermissao('resultados','visualizar');
+  return true;
+}
 function paginaAcessivel(page){
   const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
   if(!grupo) return false;
-  return grupoVisivel(grupo[0]);
+  return grupoVisivel(grupo[0]) && paginaVisivel(page);
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
 function primeiraPaginaVisivel(){
   for(const [,g] of gruposVisiveis()){
-    if(g.pages[0]) return g.pages[0].key;
+    const pagina = g.pages.find(p=>paginaVisivel(p.key));
+    if(pagina) return pagina.key;
   }
   return null;
 }
@@ -675,7 +690,7 @@ function Sidebar(){
 }
 function SubTabs(){
   const group = GROUPS[currentGroupKey()];
-  const paginas = group ? group.pages : [];
+  const paginas = group ? group.pages.filter(p=>paginaVisivel(p.key)) : [];
   if(paginas.length<2) return '';
   return `
   <div class="subtabs">
@@ -740,7 +755,7 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar');
+  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
   const termo = state.search.toLowerCase();
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
@@ -1135,7 +1150,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cana quanto para o AE Combustível (é a mesma conta nos dois apps).</p>
+        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cana quanto para o AE Combustível (é a mesma conta nos dois apps). <strong>Financeiro x Resultados (cana):</strong> "Financeiro: Editar" deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado (lucratividade) — isso só quem tiver "Resultados" liberado enxerga (além do Administrador, que já vê tudo).</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
