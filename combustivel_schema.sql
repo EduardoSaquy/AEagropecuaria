@@ -598,3 +598,61 @@ create trigger log_abastecimentos after insert or update or delete on abastecime
 create trigger log_entradas_estoque after insert or update or delete on entradas_estoque for each row execute function trg_log_auditoria();
 create trigger log_medicoes_fisicas after insert or update or delete on medicoes_fisicas for each row execute function trg_log_auditoria();
 create trigger log_ajustes_estoque after insert or update or delete on ajustes_estoque for each row execute function trg_log_auditoria();
+
+-- ===================================================================
+-- MIGRAÇÃO — Restrição de abastecimento por frente de negócio
+--
+-- Cada colaborador pode ser vinculado a uma ou mais frentes (cana,
+-- grãos, pecuária) nas quais atua. A partir do momento em que isso é
+-- feito, a pessoa só consegue VER e LANÇAR abastecimentos cujo rateio
+-- (talhão/área ou centro de custo) pertence a uma dessas frentes — ou
+-- a um talhão/centro de custo "geral" (sem frente específica, ex:
+-- administrativo, gerador da sede), que continua liberado pra todo
+-- mundo, já que não é exclusivo de nenhuma atividade.
+--
+-- Perfil sem frente definida (array vazio, o padrão) e administradores
+-- continuam sem essa restrição — nada muda pra ninguém até um admin
+-- atribuir frentes a alguém pela tela de Administração > Editar acesso.
+--
+-- A checagem vale tanto pro app (esconde as opções fora da frente nos
+-- selects do formulário) quanto pro banco (RLS) — quem tentar burlar
+-- pela API direto esbarra na mesma regra.
+-- ===================================================================
+
+alter table profiles add column frentes text[] not null default '{}';
+
+create or replace function frente_do_rateio(p_talhao_area_id bigint, p_centro_custo_id bigint) returns text
+language sql security definer set search_path = public stable as $$
+  select coalesce(
+    (select c.frente from talhoes_areas t join culturas c on c.id = t.cultura_id where t.id = p_talhao_area_id),
+    (select cc.frente from centros_custo cc where cc.id = p_centro_custo_id),
+    'geral'
+  );
+$$;
+
+create or replace function pode_acessar_frente(p_talhao_area_id bigint, p_centro_custo_id bigint) returns boolean
+language sql security definer set search_path = public stable as $$
+  select case
+    when is_admin() then true
+    when (select coalesce(cardinality(frentes), 0) from profiles where id = auth.uid()) = 0 then true
+    else frente_do_rateio(p_talhao_area_id, p_centro_custo_id) = 'geral'
+      or frente_do_rateio(p_talhao_area_id, p_centro_custo_id) = any(
+        select frentes from profiles where id = auth.uid()
+      )
+  end;
+$$;
+
+drop policy if exists "select abastecimentos" on abastecimentos;
+drop policy if exists "inserir abastecimentos" on abastecimentos;
+drop policy if exists "atualizar abastecimentos" on abastecimentos;
+drop policy if exists "excluir abastecimentos" on abastecimentos;
+
+create policy "select abastecimentos" on abastecimentos for select
+  using (tem_permissao('abastecimento','visualizar') and pode_acessar_frente(talhao_area_id, centro_custo_id));
+create policy "inserir abastecimentos" on abastecimentos for insert
+  with check (tem_permissao('abastecimento','editar') and pode_acessar_frente(talhao_area_id, centro_custo_id));
+create policy "atualizar abastecimentos" on abastecimentos for update
+  using (tem_permissao('abastecimento','editar') and pode_acessar_frente(talhao_area_id, centro_custo_id))
+  with check (tem_permissao('abastecimento','editar') and pode_acessar_frente(talhao_area_id, centro_custo_id));
+create policy "excluir abastecimentos" on abastecimentos for delete
+  using (tem_permissao('abastecimento','editar') and pode_acessar_frente(talhao_area_id, centro_custo_id));
