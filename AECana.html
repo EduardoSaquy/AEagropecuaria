@@ -111,6 +111,7 @@
     justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;
   }
   .modal{background:var(--branco); border-radius:14px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,0.25);}
+  .modal.modal-lg{max-width:720px;}
   .modal-head{padding:20px 24px; border-bottom:1px solid var(--cinza-claro); display:flex; justify-content:space-between; align-items:center;}
   .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--verde-escuro);}
   .modal-close{background:none; border:none; cursor:pointer; color:var(--cinza); font-size:20px; line-height:1;}
@@ -230,7 +231,8 @@ const OPCOES = {
   FRENTES: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'}],
   CATEGORIAS_INSUMO: [
     {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
-    {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'}, {value:'outro',label:'Outro'},
+    {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'},
+    {value:'corretivo',label:'Corretivo de solo (Calcário/Gesso)'}, {value:'outro',label:'Outro'},
   ],
   TIPOS_OPERACAO: [
     {value:'adubacao',label:'Adubação'}, {value:'herbicida',label:'Aplicação de herbicida'},
@@ -277,6 +279,7 @@ const CADASTROS = {
     desc:'Talhões de lavoura de cana desta fazenda — mesmo cadastro (talhões/áreas) que o AE Combustível usa para ratear o diesel por área.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
+    historico: true,
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Talhão 12'},
@@ -447,7 +450,7 @@ function render(){
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
         ${Header()}
         ${SubTabs()}
-        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : PageCadastro(state.page)}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : PageCadastro(state.page)}
         `}
       </div>
     </div>
@@ -569,6 +572,9 @@ const GROUPS = {
     {key:'estoqueInsumos', label:'Estoque'},
     {key:'aplicacoes', label:'Aplicações'},
   ]},
+  financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
+    {key:'custoProducao', label:'Custo por Talhão'},
+  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -577,6 +583,7 @@ function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.s
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
+  if(key==='financeiro') return temPermissao('financeiro','visualizar');
   return temPermissao('cadastros','visualizar');
 }
 function paginaVisivel(){ return true; }
@@ -630,6 +637,9 @@ function Header(){
   if(state.page==='estoqueInsumos'){
     return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
+  if(state.page==='custoProducao'){
+    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por tonelada colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
+  }
   const cfg = CADASTROS[state.page];
   const eyebrow = cfg.modulo==='operacoes' ? 'Operações' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
@@ -648,6 +658,7 @@ function brandMark(){
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 function iconPlantio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 13C12 9 9 6 5 6c0 4 3 7 7 7Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
+function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.8c0-1.5-1.3-2.6-3-2.6s-3 1-3 2.3c0 3 6 1.4 6 4.4 0 1.4-1.3 2.6-3 2.6s-3-1.1-3-2.6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
   return `<div class="empty">
@@ -694,6 +705,7 @@ function PageCadastro(key){
             ${colunas.map(f=>`<td>${celulaValor(f,item)}</td>`).join('')}
             ${cfg.semStatus?'':`<td><span class="status-dot ${item.ativo?'ativo':'inativo'}"></span>${item.ativo?'Ativo':'Inativo'}</td>`}
             <td style="display:flex; gap:6px;">
+              ${cfg.historico ? `<button class="btn-ghost btn-sm" data-historico-talhao="${item.id}">Histórico</button>` : ''}
               ${podeEditar ? `
               <button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>
@@ -895,6 +907,62 @@ function pctEstoque(saldo, minimo){
   return Math.round(Math.max(0, Math.min(saldo/(minimo*2), 1)) * 100);
 }
 
+/* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
+ * Não é um cadastro novo — cruza o que já existe em Aplicações (custo
+ * de insumo, pelo preço médio ponderado) e Colheita (toneladas) por
+ * talhão. Sem despesas gerais nem receita ainda (fica pra uma próxima
+ * fase) — só o custo de insumo por hectare e por tonelada colhida. */
+function producaoTotalTalhao(talhaoId){
+  return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.toneladas||0),0);
+}
+function custoInsumosTalhao(talhaoId){
+  return state.aplicacoes.filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
+    const preco = precoMedioInsumo(ap.insumoId);
+    return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
+  },0);
+}
+function PageCustoProducao(){
+  const talhoes = state.talhoes.filter(t=>t.ativo!==false);
+  if(talhoes.length===0){
+    return `<div class="card">${Empty('Nenhum talhão ativo','Cadastre um talhão em Cadastros > Talhões para acompanhar o custo.')}</div>`;
+  }
+  const linhas = talhoes.map(t=>{
+    const custoInsumos = custoInsumosTalhao(t.id);
+    const producao = producaoTotalTalhao(t.id);
+    const custoHa = t.areaHa ? custoInsumos/Number(t.areaHa) : null;
+    const custoTon = producao>0 ? custoInsumos/producao : null;
+    return {t, custoInsumos, producao, custoHa, custoTon};
+  });
+  const custoTotal = linhas.reduce((a,l)=>a+l.custoInsumos,0);
+  const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
+  const custoTonMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
+  return `
+  <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
+    <div class="stat-card"><div class="stat-label">Custo total de insumos</div><div class="stat-value">R$ ${fmt(custoTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} t</div></div>
+    <div class="stat-card"><div class="stat-label">Custo médio / tonelada</div><div class="stat-value">${custoTonMedio==null?'—':'R$ '+fmt(custoTonMedio)}</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo/ha</th><th>Produção</th><th>Custo/tonelada</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>`
+          <tr>
+            <td><strong>${l.t.nome}</strong></td>
+            <td>${fkNome('fazendas', l.t.fazendaId)}</td>
+            <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
+            <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
+            <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
+            <td class="mono">${fmt(l.producao)} t</td>
+            <td class="mono">${l.custoTon==null?'—':'R$ '+fmt(l.custoTon)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:12px;">Custo de insumos calculado pelo preço médio ponderado de cada insumo (Operações &gt; Estoque). Aplicação de insumo sem nenhuma entrada com preço informado entra com custo zero aqui. Ainda não inclui despesas gerais (mão de obra, colheita terceirizada, transporte) nem receita de venda.</p>`;
+}
+
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
  * Mesma lista de módulos do AE Combustível (mesmo profiles.permissoes
  * do banco compartilhado) — precisa ser a lista completa, não só
@@ -903,6 +971,7 @@ function pctEstoque(saldo, minimo){
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
+  ['financeiro','Financeiro de Cana (Custo por Talhão)'],
   ['estoque','Estoque (AE Combustível)'],
   ['abastecimento','Abastecimento (AE Combustível)'],
   ['rateio','Rateio & Indicadores (AE Combustível)'],
@@ -1020,11 +1089,93 @@ function ModalTrocarSenha(){
     </div>
   </div>`;
 }
+/* ===================== HISTÓRICO DO TALHÃO =====================
+ * Não é um cadastro novo — junta numa tela só o que já existe em
+ * Colheita (número de cortes, produção) e Aplicações (insumo por
+ * insumo, incluindo calcário/gesso/adubo), filtrado por talhão. Como
+ * lê direto de colheitas_cana/aplicacoes_cana, fica sempre conciliado
+ * com os lançamentos de Colheita e Tratos culturais — não há nada
+ * guardado à parte para desatualizar. */
+function ModalHistoricoTalhao(){
+  const talhaoId = state.modal.talhaoId;
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  if(!t) return '';
+  const colheitasDoTalhao = state.colheitas.filter(c=>c.talhaoId===talhaoId).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+  const producaoTotal = colheitasDoTalhao.reduce((a,c)=>a+Number(c.toneladas||0),0);
+  const tchMedio = t.areaHa ? producaoTotal/Number(t.areaHa)/(colheitasDoTalhao.length||1) : null;
+
+  const aplicacoesDoTalhao = state.aplicacoes.filter(a=>a.talhaoId===talhaoId);
+  const porInsumo = {};
+  aplicacoesDoTalhao.forEach(a=>{
+    if(!porInsumo[a.insumoId]) porInsumo[a.insumoId] = 0;
+    porInsumo[a.insumoId] += Number(a.quantidade||0);
+  });
+  const linhasInsumo = Object.entries(porInsumo).map(([insumoId,total])=>{
+    const insumo = state.insumos.find(x=>x.id===Number(insumoId));
+    return {
+      nome: insumo?.nome || '—',
+      categoria: (OPCOES.CATEGORIAS_INSUMO.find(o=>o.value===insumo?.categoria)||{}).label || '—',
+      total, unidade: insumo?.unidade || '',
+    };
+  }).sort((a,b)=> a.nome.localeCompare(b.nome));
+
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal modal-lg" data-stop="1">
+      <div class="modal-head"><h3>Histórico — ${t.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint">${fkNome('fazendas', t.fazendaId)} · ${t.areaHa ? fmt(t.areaHa)+' ha' : 'área não informada'}</p>
+
+        <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
+          <div class="stat-card"><div class="stat-label">Número de cortes</div><div class="stat-value">${colheitasDoTalhao.length}</div></div>
+          <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotal)} t</div></div>
+          <div class="stat-card"><div class="stat-label">TCH médio</div><div class="stat-value">${tchMedio==null?'—':fmt(tchMedio)+' t/ha'}</div></div>
+        </div>
+
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:4px 0;">Colheitas (cortes)</h4>
+        ${colheitasDoTalhao.length===0 ? `<p class="hint">Nenhuma colheita registrada para este talhão.</p>` : `
+        <table>
+          <thead><tr><th>Data</th><th>Corte</th><th>Toneladas</th><th>TCH</th></tr></thead>
+          <tbody>
+            ${colheitasDoTalhao.map(c=>`
+              <tr>
+                <td>${fmtData(c.data)}</td>
+                <td>${c.corte ?? '—'}</td>
+                <td class="mono">${fmt(c.toneladas)} t</td>
+                <td class="mono">${t.areaHa ? fmt(Number(c.toneladas||0)/Number(t.areaHa)) + ' t/ha' : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`}
+
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:16px 0 4px 0;">Insumos aplicados (calcário, gesso, adubo, defensivos...)</h4>
+        ${linhasInsumo.length===0 ? `<p class="hint">Nenhuma aplicação registrada para este talhão.</p>` : `
+        <table>
+          <thead><tr><th>Insumo</th><th>Categoria</th><th>Total aplicado</th></tr></thead>
+          <tbody>
+            ${linhasInsumo.map(l=>`
+              <tr>
+                <td><strong>${l.nome}</strong></td>
+                <td>${l.categoria}</td>
+                <td class="mono">${fmt(l.total)} ${l.unidade}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function Modal(){
   if(state.modal.type==='cadastro') return ModalCadastro();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
+  if(state.modal.type==='historicoTalhao') return ModalHistoricoTalhao();
   return '';
 }
 
@@ -1100,6 +1251,12 @@ function attachEvents(){
     el.onclick = ()=>{
       const [key, idStr] = el.dataset.editCadastro.split(':');
       abrirEditarCadastro(key, Number(idStr));
+      render();
+    };
+  });
+  document.querySelectorAll('[data-historico-talhao]').forEach(el=>{
+    el.onclick = ()=>{
+      state.modal = {type:'historicoTalhao', talhaoId:Number(el.dataset.historicoTalhao)};
       render();
     };
   });
