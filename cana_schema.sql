@@ -174,3 +174,74 @@ create policy "select colheitas_cana" on colheitas_cana for select using (tem_pe
 create policy "inserir colheitas_cana" on colheitas_cana for insert with check (tem_permissao('operacoes','editar'));
 create policy "atualizar colheitas_cana" on colheitas_cana for update using (tem_permissao('operacoes','editar')) with check (tem_permissao('operacoes','editar'));
 create policy "excluir colheitas_cana" on colheitas_cana for delete using (tem_permissao('operacoes','editar'));
+
+-- ===================================================================
+-- AE Cana — schema Fase 5 (Financeiro/Resultados: Despesas e Receita)
+-- ===================================================================
+-- Continuação deste mesmo arquivo — rode as migrações em sequência
+-- (Fases 2 a 4 acima, depois esta), no mesmo projeto Supabase do AE
+-- Combustível.
+--
+-- Cria Despesas gerais da lavoura (mão de obra, colheita terceirizada,
+-- transporte...) e Receita (venda/entrega de cana à usina). O custo de
+-- insumo (Aplicações, Fase 3) já existia; Despesas cobre o que não é
+-- insumo lançado lá. Receita usa um módulo de permissão PRÓPRIO
+-- ('resultados'), separado de 'financeiro' — mesmo racional do
+-- AEpecuária: nem todo mundo que vê custo de insumo deve ver receita
+-- ou resultado (margem) da operação.
+-- ===================================================================
+
+create table despesas_cana (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  talhao_id bigint references talhoes_areas(id),
+  centro_custo_id bigint references centros_custo(id),
+  data date not null,
+  categoria text not null check (categoria in ('mao_obra','colheita_terceirizada','transporte','arrendamento','manutencao','outro')),
+  descricao text not null,
+  valor numeric(12,2) not null check (valor > 0),
+  observacao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_despesas_cana_fazenda on despesas_cana(fazenda_id);
+create index idx_despesas_cana_talhao on despesas_cana(talhao_id);
+create trigger set_updated before update on despesas_cana for each row execute function trg_set_updated();
+
+alter table despesas_cana enable row level security;
+create policy "select despesas_cana" on despesas_cana for select using (tem_permissao('financeiro','visualizar'));
+create policy "inserir despesas_cana" on despesas_cana for insert with check (tem_permissao('financeiro','editar'));
+create policy "atualizar despesas_cana" on despesas_cana for update using (tem_permissao('financeiro','editar')) with check (tem_permissao('financeiro','editar'));
+create policy "excluir despesas_cana" on despesas_cana for delete using (tem_permissao('financeiro','editar'));
+
+create table receitas_cana (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  talhao_id bigint references talhoes_areas(id),
+  safra_id bigint references safras(id),
+  data date not null,
+  toneladas numeric(12,2),
+  valor_total numeric(12,2) not null check (valor_total > 0),
+  observacao text,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create index idx_receitas_cana_fazenda on receitas_cana(fazenda_id);
+create index idx_receitas_cana_talhao on receitas_cana(talhao_id);
+create trigger set_updated before update on receitas_cana for each row execute function trg_set_updated();
+
+alter table receitas_cana enable row level security;
+-- Leitura só para quem tem 'resultados' (receita/lucratividade fica
+-- restrita — só Administrador por padrão, mais quem o admin liberar
+-- explicitamente, ex: o(a) proprietário(a)). Quem só tem 'financeiro'
+-- consegue INSERIR uma receita (lançamento "cego": lança, mas não
+-- lê a lista nem os valores já lançados) — não consegue editar nem
+-- excluir um lançamento já existente, porque nem consegue vê-lo.
+create policy "select receitas_cana" on receitas_cana for select using (tem_permissao('resultados','visualizar'));
+create policy "inserir receitas_cana" on receitas_cana for insert with check (tem_permissao('resultados','editar') or tem_permissao('financeiro','editar'));
+create policy "atualizar receitas_cana" on receitas_cana for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
+create policy "excluir receitas_cana" on receitas_cana for delete using (tem_permissao('resultados','editar'));
