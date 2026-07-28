@@ -459,7 +459,7 @@ function rowToCadastro(row, cfg){
   cfg.fields.forEach(f=>{ obj[f.key] = row[toSnake(f.key)]; });
   return obj;
 }
-function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
+function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, frentes:r.frentes||[], ativo:r.ativo}; }
 function rowToAlerta(r){
   return {
     id:r.id, fazendaId:r.fazenda_id, tipo:r.tipo, severidade:r.severidade, titulo:r.titulo, descricao:r.descricao,
@@ -1285,8 +1285,9 @@ function ModalAbastecimento(){
   const tanques = state.tanques.filter(t=>t.ativo!==false);
   const equipamentos = state.equipamentos.filter(e=>e.ativo!==false);
   const operadores = state.operadores.filter(o=>o.ativo!==false);
-  const talhoes = state.talhoesAreas.filter(t=>t.ativo!==false);
-  const centros = state.centrosCusto.filter(c=>c.ativo!==false);
+  const frentesPermitidas = frentesPermitidasUsuario();
+  const talhoes = state.talhoesAreas.filter(t=>t.ativo!==false && frentePermitida(frenteDoRateio(t.id, null), frentesPermitidas));
+  const centros = state.centrosCusto.filter(c=>c.ativo!==false && frentePermitida(c.frente, frentesPermitidas));
   const operacoes = state.operacoes.filter(o=>o.ativo!==false);
   const equipamentoAtual = state.equipamentos.find(e=>e.id===Number(d.equipamentoId));
   const precisaLeitura = equipamentoAtual && equipamentoAtual.tipoMedidor!=='nenhum';
@@ -1331,7 +1332,7 @@ function ModalAbastecimento(){
           </div>
         </div>
         <div id="alerta-capacidade-tanque"></div>
-        <p class="hint">Rateio — escolha o talhão/área ou o centro de custo (pelo menos um dos dois).</p>
+        <p class="hint">Rateio — escolha o talhão/área ou o centro de custo (pelo menos um dos dois).${frentesPermitidas ? ` Mostrando só opções de: ${frentesPermitidas.map(labelFrente).join(', ')} (e "Geral").` : ''}</p>
         <div class="field-row">
           <div class="field"><label>Talhão / Área</label>
             <select id="f-ab-talhao">
@@ -1389,17 +1390,33 @@ function abastecimentosNoPeriodo(){
     return (!dataInicio || d>=dataInicio) && (!dataFim || d<=dataFim);
   });
 }
-function frenteDoAbastecimento(a){
-  if(a.talhaoAreaId){
-    const talhao = state.talhoesAreas.find(t=>t.id===a.talhaoAreaId);
+// frente de negócio de um rateio (talhão/área tem prioridade; sem
+// nenhum dos dois, ou sem cultura/frente definida, cai em "geral" —
+// mesma regra usada no banco por pode_acessar_frente().
+function frenteDoRateio(talhaoAreaId, centroCustoId){
+  if(talhaoAreaId){
+    const talhao = state.talhoesAreas.find(t=>t.id===talhaoAreaId);
     const cultura = talhao?.culturaId ? state.culturas.find(c=>c.id===talhao.culturaId) : null;
     return cultura?.frente || 'geral';
   }
-  if(a.centroCustoId){
-    const cc = state.centrosCusto.find(c=>c.id===a.centroCustoId);
+  if(centroCustoId){
+    const cc = state.centrosCusto.find(c=>c.id===centroCustoId);
     return cc?.frente || 'geral';
   }
   return 'geral';
+}
+function frenteDoAbastecimento(a){ return frenteDoRateio(a.talhaoAreaId, a.centroCustoId); }
+// Frentes às quais o usuário logado está restrito (null = sem
+// restrição — perfil sem frente atribuída, ou administrador). Usado só
+// pra filtrar as opções mostradas nos formulários; a regra que vale de
+// verdade é a policy pode_acessar_frente() no banco.
+function frentesPermitidasUsuario(){
+  if(souAdmin()) return null;
+  const frentes = state.perfil?.frentes || [];
+  return frentes.length ? frentes : null;
+}
+function frentePermitida(frente, frentesPermitidas){
+  return !frentesPermitidas || frente==='geral' || frentesPermitidas.includes(frente);
 }
 function agruparPorFrente(lista){
   const grupos = {};
@@ -2055,6 +2072,7 @@ function mensagemErroSupabase(error){
   if(error?.code==='23505') return 'Já existe um registro com esse nome (talvez nesta fazenda). Use outro nome ou edite o existente.';
   if(error?.code==='23503') return 'Não é possível excluir: existem outros cadastros vinculados a este registro.';
   if(error?.code==='23514') return 'Verifique os valores informados (ex: volume precisa ser maior que zero, ajuste não pode ser zero).';
+  if(error?.code==='42501') return 'Sem permissão para esse registro — provavelmente o talhão/centro de custo escolhido é de uma frente fora do seu acesso.';
   return error?.message || 'Erro desconhecido.';
 }
 function campoHtml(f, d){
@@ -2232,6 +2250,17 @@ function ModalPermissoes(){
             `).join('')}
           </tbody>
         </table>
+        <div class="field">
+          <label>Frentes de atuação (opcional)</label>
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            ${OPCOES.FRENTES.map(f=>`
+              <label style="display:flex; align-items:center; gap:6px; font-weight:400;">
+                <input type="checkbox" data-frente-check="${f.value}" ${(d.frentes||[]).includes(f.value)?'checked':''} style="width:auto;"/> ${f.label}
+              </label>
+            `).join('')}
+          </div>
+          <span class="hint">Sem nenhuma frente marcada, a pessoa vê e lança abastecimento de qualquer frente (padrão hoje). Marcando uma ou mais, ela só vê e lança abastecimento rateado pra essas frentes — ou pra um talhão/centro de custo "Geral" (sem frente específica), que continua liberado pra todo mundo. Administrador nunca é restrito, mesmo com frente marcada.</span>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -2289,7 +2318,7 @@ function attachEvents(){
   document.querySelectorAll('[data-editar-usuario]').forEach(el=>{
     el.onclick = ()=>{
       const perfil = state.perfis.find(p=>p.id===el.dataset.editarUsuario);
-      editDraft = {_perfilId: perfil.id, nome: perfil.nome, usuario: perfil.usuario, papel: perfil.papel, ativo: perfil.ativo, permissoes: {...perfil.permissoes}};
+      editDraft = {_perfilId: perfil.id, nome: perfil.nome, usuario: perfil.usuario, papel: perfil.papel, ativo: perfil.ativo, permissoes: {...perfil.permissoes}, frentes: [...(perfil.frentes||[])]};
       state.modal = {type:'permissoes'}; render();
     };
   });
@@ -2444,7 +2473,8 @@ function attachEvents(){
         const ativo = document.getElementById('f-ativousuario').checked;
         const permissoes = {};
         document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoes[sel.dataset.permModulo] = sel.value; });
-        ({error} = await db.from('profiles').update({papel, ativo, permissoes}).eq('id', editDraft._perfilId));
+        const frentes = Array.from(document.querySelectorAll('[data-frente-check]:checked')).map(el=>el.dataset.frenteCheck);
+        ({error} = await db.from('profiles').update({papel, ativo, permissoes, frentes}).eq('id', editDraft._perfilId));
       } else if(type==='trocarSenha'){
         const senhaAtual = document.getElementById('f-senhaatual').value;
         const novaSenha = document.getElementById('f-novasenha').value;
