@@ -1,28 +1,196 @@
 -- ===================================================================
+-- AE Cana — schema Fase 1 (Fundação + Cadastros base)
+-- ===================================================================
+-- Este schema roda num projeto Supabase PRÓPRIO e SEPARADO dos projetos
+-- usados por AEpecuaria.html, AECombustivel.html e AECereais.html — cada
+-- app tem seu próprio banco, login e financeiro, sem depender uns dos
+-- outros nem duplicar dado entre si (o hub AE Matriz é quem, opcionalmente,
+-- lê indicadores de cada um pra montar uma visão consolidada — ver
+-- matriz_schema.sql e a seção "AE Matriz" do README).
+--
+-- PASSO A PASSO PARA COLOCAR NO AR:
+-- 1. Crie um novo projeto em https://supabase.com (organização da empresa).
+-- 2. SQL Editor > cole e rode este arquivo inteiro.
+-- 3. Authentication > Users > Add user: crie sua conta (ex. email
+--    eduardo@aeagropecuaria.local, "Auto Confirm User" marcado). Anote o UUID.
+-- 4. Rode o INSERT no final deste arquivo (troque o UUID e o nome) para
+--    virar o primeiro administrador.
+-- 5. Project Settings > API: copie a "Project URL" e a "anon public key"
+--    e cole nas constantes no topo do AECana.html.
+-- 6. Deploy da Edge Function supabase/functions/criar-usuario-cana
+--    (necessária para o admin criar novos usuários pela tela de Administração).
+-- ===================================================================
+
+-- ---------- LOGIN E PERMISSÕES (mesmo padrão do AECombustivel.html) ----------
+
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  nome text not null,
+  usuario text not null unique, -- login (sem @dominio)
+  papel text not null default 'operador' check (papel in ('admin','gestor','encarregado','operador')),
+  permissoes jsonb not null default '{}'::jsonb, -- {"cadastros":"editar",...}
+  ativo boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+create or replace function is_admin() returns boolean
+language sql security definer set search_path = public stable as $$
+  select exists(
+    select 1 from profiles where id = auth.uid() and papel = 'admin' and ativo = true
+  );
+$$;
+
+create or replace function tem_permissao(modulo text, nivel text) returns boolean
+language sql security definer set search_path = public stable as $$
+  select case
+    when is_admin() then true
+    when nivel = 'visualizar' then (
+      select permissoes->>modulo in ('visualizar','editar')
+      from profiles where id = auth.uid() and ativo = true
+    )
+    else (
+      select permissoes->>modulo = 'editar'
+      from profiles where id = auth.uid() and ativo = true
+    )
+  end;
+$$;
+
+create policy "ver proprio perfil ou admin ve todos" on profiles for select
+  using (auth.uid() = id or is_admin());
+create policy "admin cria perfis" on profiles for insert with check (is_admin());
+create policy "admin atualiza perfis" on profiles for update using (is_admin()) with check (is_admin());
+create policy "admin exclui perfis" on profiles for delete using (is_admin());
+
+-- Trigger reutilizável: mantém updated_at/updated_by corretos em qualquer
+-- update, sem depender do front-end lembrar de mandar esses campos.
+create or replace function trg_set_updated() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+-- ---------- FAZENDAS ----------
+create table fazendas (
+  id bigint generated always as identity primary key,
+  nome text not null,
+  estado text not null check (estado in ('TO','SP')),
+  area_ha numeric(12,2),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on fazendas for each row execute function trg_set_updated();
+
+-- ---------- CULTURAS ----------
+-- "frente" segue o mesmo enum usado nos outros apps (cana/graos/pecuaria)
+-- por consistência de código — neste banco só cultura de frente 'cana'
+-- é usada de fato, mas o enum não precisa ser mais estreito que isso.
+create table culturas (
+  id bigint generated always as identity primary key,
+  nome text not null unique,
+  frente text not null check (frente in ('cana','graos','pecuaria')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+create trigger set_updated before update on culturas for each row execute function trg_set_updated();
+
+-- ---------- SAFRAS ----------
+-- Ano-safra de uma cultura numa fazenda (ex: Cana 2024/2025 na Fazenda X).
+create table safras (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  cultura_id bigint not null references culturas(id),
+  nome text not null, -- ex: "2024/2025"
+  data_inicio date,
+  data_fim date,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, cultura_id, nome)
+);
+create index idx_safras_fazenda on safras(fazenda_id);
+create index idx_safras_cultura on safras(cultura_id);
+create trigger set_updated before update on safras for each row execute function trg_set_updated();
+
+-- ---------- CENTROS DE CUSTO ----------
+-- Usado pra despesa geral que não é de um talhão específico (ex: escritório,
+-- estrutura fixa da lavoura).
+create table centros_custo (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  frente text not null check (frente in ('cana','graos','pecuaria','geral')),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_centros_custo_fazenda on centros_custo(fazenda_id);
+create trigger set_updated before update on centros_custo for each row execute function trg_set_updated();
+
+-- ---------- TALHÕES / ÁREAS ----------
+create table talhoes_areas (
+  id bigint generated always as identity primary key,
+  fazenda_id bigint not null references fazendas(id),
+  nome text not null,
+  tipo text not null check (tipo in ('talhao','lote_curral')),
+  area_ha numeric(12,2),
+  cultura_id bigint references culturas(id),
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  created_by uuid references profiles(id) default auth.uid(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id),
+  unique (fazenda_id, nome)
+);
+create index idx_talhoes_fazenda on talhoes_areas(fazenda_id);
+create index idx_talhoes_cultura on talhoes_areas(cultura_id);
+create trigger set_updated before update on talhoes_areas for each row execute function trg_set_updated();
+
+-- fazendas/culturas/safras/talhoes_areas/centros_custo: qualquer um com
+-- 'cadastros' vê; só quem tem 'cadastros':'editar' cria/edita/exclui —
+-- mesmo padrão de módulo único pros cadastros de base que o AE
+-- Combustível usa.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['fazendas','culturas','safras','centros_custo','talhoes_areas']
+  loop
+    execute format('alter table %1$s enable row level security;', t);
+    execute format('create policy "select %1$s" on %1$s for select using (tem_permissao(''cadastros'',''visualizar''));', t);
+    execute format('create policy "inserir %1$s" on %1$s for insert with check (tem_permissao(''cadastros'',''editar''));', t);
+    execute format('create policy "atualizar %1$s" on %1$s for update using (tem_permissao(''cadastros'',''editar'')) with check (tem_permissao(''cadastros'',''editar''));', t);
+    execute format('create policy "excluir %1$s" on %1$s for delete using (tem_permissao(''cadastros'',''editar''));', t);
+  end loop;
+end $$;
+
+-- ---------- PRIMEIRO ADMINISTRADOR ----------
+-- Troque o UUID (o mesmo criado em Authentication > Users) e o nome,
+-- e rode este insert manualmente depois do resto do arquivo.
+-- insert into profiles (id, nome, usuario, papel, permissoes, ativo) values
+--   ('COLE-O-UUID-AQUI', 'Seu Nome', 'seu.usuario', 'admin', '{}'::jsonb, true);
+
+-- ===================================================================
 -- AE Cana — schema Fase 2 (Operações: Plantio)
 -- ===================================================================
--- Este arquivo roda no MESMO projeto Supabase já usado pelo AE
--- Combustível — rode combustivel_schema.sql primeiro, se ainda não
--- tiver rodado, e NÃO crie um projeto novo. Fazendas, Culturas,
--- Safras e Talhões/Áreas (a "matriz" de cadastros central) já existem
--- nesse schema e são reaproveitados sem alteração pelo AE Cana — ver
--- a seção "AE Cana" do README para o racional dessa integração.
---
--- Esta migração cria só a tabela nova necessária para a Fase 2 do AE
--- Cana: o registro de Plantio por talhão. As Fases 3 (Tratos
--- culturais) e 4 (Colheita/Produção) estão logo abaixo, neste mesmo
--- arquivo — rode o arquivo inteiro de uma vez.
---
--- PASSO A PASSO:
--- 1. SQL Editor do MESMO projeto Supabase do AE Combustível > cole e
---    rode este arquivo inteiro.
--- 2. Nada muda em AECombustivel.html nem em AEpecuaria.html — as
---    tabelas e funções que este arquivo reaproveita (profiles,
---    talhoes_areas, safras, tem_permissao(), trg_set_updated()) já
---    foram criadas por combustivel_schema.sql.
--- 3. Em Administração > Usuários (em qualquer um dos dois apps, é a
---    mesma conta), libere o módulo "Operações de Cana" para quem for
---    lançar plantio.
+-- Continuação deste mesmo arquivo — rode tudo de uma vez, na ordem em
+-- que aparece (Fase 1 acima já criou fazendas/talhoes_areas/safras/
+-- tem_permissao()/trg_set_updated(), usados abaixo).
 -- ===================================================================
 
 -- ---------- PLANTIO (cana) ----------
@@ -60,8 +228,7 @@ create policy "excluir plantios_cana" on plantios_cana for delete using (tem_per
 -- AE Cana — schema Fase 3 (Operações: Tratos culturais)
 -- ===================================================================
 -- Continuação deste mesmo arquivo — rode as migrações em sequência
--- (Fase 2 acima, depois esta), no mesmo projeto Supabase do AE
--- Combustível.
+-- (Fase 2 acima, depois esta).
 --
 -- Cria o cadastro de Insumos (defensivos/fertilizantes), as Entradas
 -- de estoque (compra) e as Aplicações (o lançamento de trato cultural
@@ -143,13 +310,10 @@ end $$;
 -- AE Cana — schema Fase 4 (Operações: Colheita/Produção)
 -- ===================================================================
 -- Continuação deste mesmo arquivo — rode as migrações em sequência
--- (Fases 2 e 3 acima, depois esta), no mesmo projeto Supabase do AE
--- Combustível.
+-- (Fases 2 e 3 acima, depois esta).
 --
 -- Cria o registro de Colheita por talhão: toneladas colhidas, com TCH
--- (toneladas por hectare) calculado no app a partir da área do talhão
--- — é o dado que faltava para o AE Combustível calcular custo por
--- tonelada (ver README, seção "AE Combustível" > "Fora do escopo").
+-- (toneladas por hectare) calculado no app a partir da área do talhão.
 -- ===================================================================
 
 create table colheitas_cana (
@@ -179,8 +343,7 @@ create policy "excluir colheitas_cana" on colheitas_cana for delete using (tem_p
 -- AE Cana — schema Fase 5 (Financeiro/Resultados: Despesas e Receita)
 -- ===================================================================
 -- Continuação deste mesmo arquivo — rode as migrações em sequência
--- (Fases 2 a 4 acima, depois esta), no mesmo projeto Supabase do AE
--- Combustível.
+-- (Fases 2 a 4 acima, depois esta).
 --
 -- Cria Despesas gerais da lavoura (mão de obra, colheita terceirizada,
 -- transporte...) e Receita (venda/entrega de cana à usina). O custo de

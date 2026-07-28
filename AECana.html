@@ -198,22 +198,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===================== SUPABASE =====================
- * ATENÇÃO: este app usa DE PROPÓSITO o MESMO projeto Supabase já usado
- * pelo AECombustivel.html — não é um banco novo/separado.
- *
- * Fazendas, Culturas e Talhões/Áreas (tabelas fazendas / culturas /
- * talhoes_areas, criadas em combustivel_schema.sql) são a "matriz" de
- * cadastros centrais da empresa, pensada desde o início do AE
- * Combustível para ser compartilhada entre cana, grãos e pecuária (ver
- * README, seção "AE Combustível"). O AE Cana lança e edita esses
- * registros direto nessas mesmas tabelas — sem duplicar cadastro e sem
- * precisar de nenhuma sincronização — então uma fazenda ou talhão
- * criado aqui já aparece automaticamente no rateio de combustível do
- * AE Combustível, e vice-versa. As mesmas contas de usuário (tabela
- * profiles) e a mesma Edge Function `criar-usuario-combustivel`
- * também são reaproveitadas — não crie um projeto novo.
- * Preencha aqui as MESMAS constantes já usadas em AECombustivel.html
- * (Project Settings > API do projeto do AE Combustível). */
+ * Projeto Supabase PRÓPRIO e SEPARADO do AEpecuaria.html, do
+ * AECombustivel.html e do AECereais.html — cada app tem seu próprio
+ * banco, login e financeiro, sem duplicar dado nem depender dos
+ * outros. Fazendas, Culturas, Safras e Talhões/Áreas são cadastradas
+ * de novo aqui (ver cana_schema.sql, Fase 1) — um talhão cadastrado
+ * no AE Combustível não aparece automaticamente aqui, e vice-versa;
+ * quem precisar de uma visão consolidada entre os apps usa o AE
+ * Matriz (ver matriz_schema.sql), que lê os indicadores de cada um
+ * sem duplicar cadastro.
+ * Preencha aqui a URL/anon key do projeto Supabase do AE Cana
+ * (Project Settings > API, depois de rodar cana_schema.sql nele). */
 const db = supabase.createClient(
   'https://SUBSTITUA.supabase.co',
   'SUBSTITUA_PELA_ANON_KEY'
@@ -251,19 +246,17 @@ const OPCOES = {
  * Mesmo motor genérico do AECombustivel.html (uma entidade é descrita
  * uma vez — tabela, campos — e lista/modal/salvar/excluir são gerados
  * a partir disso). `modulo:'cadastros'` é obrigatório em fazendas,
- * culturas, safras e talhoes: é o mesmo módulo de permissão (RLS) que
- * o AE Combustível já usa para essas tabelas, então o controle de
- * acesso é sempre o mesmo dos dois apps, sem precisar duplicar a
- * checagem no banco. `plantios` (Fase 2 — Operações) usa o módulo
- * `operacoes`, próprio do AE Cana (tabela plantios_cana, só existe
- * neste app — ver cana_schema.sql).
+ * culturas, safras e talhoes: é o módulo de permissão (RLS) próprio
+ * deste app pra esses cadastros de base — ver cana_schema.sql, Fase 1.
+ * `plantios` (Fase 2 — Operações) usa o módulo `operacoes`, também
+ * próprio do AE Cana (tabela plantios_cana).
  * `culturas` e `safras` ficam de fora do menu (ver GROUPS) — entram só
  * como lista de apoio (Cultura do Talhão, Safra do Plantio); continuam
- * sendo cadastradas pelas abas Cultivo/Estrutura do AE Combustível. */
+ * sendo cadastradas pelas abas Cultivo/Estrutura deste mesmo app. */
 const CADASTROS = {
   fazendas: {
     table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'cadastros',
-    desc:'Unidades produtivas da empresa, com estado e área total — cadastro compartilhado com o AE Combustível.',
+    desc:'Unidades produtivas da empresa, com estado e área total.',
     emptyHint:'Cadastre a primeira fazenda para começar.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Fazenda Santa Fé'},
@@ -282,7 +275,7 @@ const CADASTROS = {
   },
   talhoes: {
     table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cadastros',
-    desc:'Talhões de lavoura de cana desta fazenda — mesmo cadastro (talhões/áreas) que o AE Combustível usa para ratear o diesel por área.',
+    desc:'Talhões de lavoura de cana desta fazenda.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
     historico: true,
@@ -332,7 +325,7 @@ const CADASTROS = {
   },
   colheitas: {
     table:'colheitas_cana', label:'Colheita', singular:'Colheita', modulo:'operacoes',
-    desc:'Registro da colheita de cada talhão — toneladas colhidas e TCH (toneladas por hectare), a base para o AE Combustível calcular custo por tonelada.',
+    desc:'Registro da colheita de cada talhão — toneladas colhidas e TCH (toneladas por hectare).',
     emptyHint:'Cadastre um talhão antes de registrar uma colheita.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
     fields:[
@@ -506,8 +499,9 @@ function render(){
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES =====================
- * Mesmo domínio de login e mesma tabela profiles do AE Combustível —
- * uma conta criada em qualquer um dos dois apps funciona nos dois. */
+ * Login e tabela profiles próprios deste app — uma conta criada aqui
+ * não funciona no AE Combustível nem em nenhum outro app (cada um tem
+ * seu próprio projeto Supabase e seu próprio cadastro de usuários). */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
@@ -685,7 +679,7 @@ function Sidebar(){
         <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
       `).join('')}
     </nav>
-    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase), no<br/>mesmo banco do AE Combustível.</div>
+    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase).</div>
   </div>`;
 }
 function SubTabs(){
@@ -699,7 +693,7 @@ function SubTabs(){
 }
 function Header(){
   if(state.page==='adminUsuarios'){
-    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso — as mesmas contas e permissões usadas no AE Combustível.');
+    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso.');
   }
   if(state.page==='estoqueInsumos'){
     return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
@@ -1099,21 +1093,12 @@ function PageResultado(){
   <p class="hint" style="margin-top:12px;">Resultado por hectare divide pela soma da área de todas as fazendas ativas (Cadastros &gt; Fazendas), igual ao AEpecuária. Ainda não separa por safra/período — mostra o acumulado de tudo que foi lançado.</p>`;
 }
 
-/* ===================== ADMINISTRAÇÃO: USUÁRIOS =====================
- * Mesma lista de módulos do AE Combustível (mesmo profiles.permissoes
- * do banco compartilhado) — precisa ser a lista completa, não só
- * "cadastros", senão salvar por aqui apagaria o acesso da pessoa aos
- * módulos do AE Combustível (Estoque, Abastecimento, etc.). */
+/* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
   ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
   ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
   ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
   ['resultados','Resultados de Cana (Receita, Resultado)'],
-  ['estoque','Estoque (AE Combustível)'],
-  ['abastecimento','Abastecimento (AE Combustível)'],
-  ['rateio','Rateio & Indicadores (AE Combustível)'],
-  ['alertas','Alertas (AE Combustível)'],
-  ['auditoria','Trilha de Auditoria (AE Combustível)'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
@@ -1181,7 +1166,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. Esses acessos valem tanto para o AE Cana quanto para o AE Combustível (é a mesma conta nos dois apps). <strong>Financeiro x Resultados (cana):</strong> "Financeiro: Editar" deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado (lucratividade) — isso só quem tiver "Resultados" liberado enxerga (além do Administrador, que já vê tudo).</p>
+        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. <strong>Financeiro x Resultados:</strong> "Financeiro: Editar" deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado (lucratividade) — isso só quem tiver "Resultados" liberado enxerga (além do Administrador, que já vê tudo).</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
@@ -1348,7 +1333,7 @@ function attachEvents(){
       const senha = document.getElementById('f-senhausuario').value;
       if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
       state.usuarioLoading = true; state.usuarioError = ''; render();
-      const { data, error } = await db.functions.invoke('criar-usuario-combustivel', { body: { nome, usuario, senha } });
+      const { data, error } = await db.functions.invoke('criar-usuario-cana', { body: { nome, usuario, senha } });
       state.usuarioLoading = false;
       if(error || data?.error){
         let msg = data?.error || error?.message || 'Falha ao criar usuário.';
