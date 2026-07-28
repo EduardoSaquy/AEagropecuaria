@@ -336,6 +336,11 @@ async function loadAll(){
     db.from('apps').select('*').order('ordem'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
   ]);
+  const erroCarregamento = [faz, op, ap, perfis].find(r=>r.error)?.error;
+  if(erroCarregamento){
+    console.error('Erro ao carregar dados da matriz:', erroCarregamento);
+    alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
+  }
   state.fazendas = (faz.data||[]).map(rowToFazenda);
   state.fazendaOperacoes = {};
   (op.data||[]).map(rowToOperacao).forEach(o=>{
@@ -384,7 +389,10 @@ async function carregarIndicadoresPecuaria(){
 // (as consultas ao banco já trazem TODAS as linhas, sem filtro de data).
 function mesesJanelaPecuaria(){
   const hoje = new Date();
-  const anoIni = hoje.getFullYear()-2;
+  // precisa cobrir a safra mais antiga que safrasDisponiveis() oferece: de
+  // jan a abr o ano-safra atual já é (ano-1), então a 3ª opção do seletor
+  // (safraAtual-2) pode cair 3 anos pra trás — daí o -3 (com folga).
+  const anoIni = hoje.getFullYear()-3;
   const meses = [];
   for(let ano=anoIni; ano<=hoje.getFullYear(); ano++){
     const mFim = ano===hoje.getFullYear() ? hoje.getMonth()+1 : 12;
@@ -419,9 +427,11 @@ async function carregarResultadoPecuaria(){
     });
 
     function custoVariavelDoMes(prefixo){
-      const racao = (srRes.data||[]).filter(s=>s.data.startsWith(prefixo)).reduce((a,s)=>a+(custoKgPorDieta.get(s.dieta_id)||0)*Number(s.quantidade_kg||0), 0);
-      const pasto = (ptRes.data||[]).filter(p=>p.data.startsWith(prefixo)).reduce((a,p)=>a+(custoKgPorDieta.get(p.dieta_id)||0)*Number(p.quantidade||0), 0);
-      const reproducao = (rcRes.data||[]).filter(r=>r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.custo||0), 0);
+      // "s.data &&" — uma linha antiga com data nula (banco mantido por
+      // outro app) não pode derrubar o carregamento inteiro do período.
+      const racao = (srRes.data||[]).filter(s=>s.data && s.data.startsWith(prefixo)).reduce((a,s)=>a+(custoKgPorDieta.get(s.dieta_id)||0)*Number(s.quantidade_kg||0), 0);
+      const pasto = (ptRes.data||[]).filter(p=>p.data && p.data.startsWith(prefixo)).reduce((a,p)=>a+(custoKgPorDieta.get(p.dieta_id)||0)*Number(p.quantidade||0), 0);
+      const reproducao = (rcRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.custo||0), 0);
       return {racao, pasto, reproducao, total: racao+pasto+reproducao};
     }
     function fixosDoMes(mesFiltro){
@@ -441,7 +451,7 @@ async function carregarResultadoPecuaria(){
       return total;
     }
     function receitasNoPrefixo(prefixo){
-      return (recRes.data||[]).filter(r=>r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
     }
 
     // Um item por mês da janela, já com tudo que os filtros (Mês/Ano/Safra)
@@ -495,8 +505,10 @@ const state = {
   perfis: [],
   modal: null, // {type:'fazenda'|'app'|'usuario'|'papelUsuario'|'trocarSenha', data:{...}}
   mobileMenuAberto: false,
-  indicadores: { pecuaria: {loading:false, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null} },
-  resultados: { pecuaria: {loading:false, erro:'', mensal:[]} },
+  // loading começa true (não false) — enquanto o primeiro carregamento não
+  // chega, a tela precisa mostrar "carregando", não "sem dados".
+  indicadores: { pecuaria: {loading:true, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null} },
+  resultados: { pecuaria: {loading:true, erro:'', mensal:[]} },
   // filtro de período da aba Resultados — começa no mês atual; "safra" é o
   // ano em que ela COMEÇA (safra Y = maio/Y a abril/Y+1)
   periodo: (function(){
@@ -524,10 +536,18 @@ let editDraft = null;
 
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
+// Toda tela é montada com innerHTML a partir de texto livre do usuário
+// (nome de fazenda, descrição, observação — e até dado vindo do banco do
+// AE Pecuária, outro limite de confiança) — sem escapar, um <script> ou
+// onerror= digitado num campo executaria na sessão de quem visualizar.
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function hexToRgba(hex, alpha){
-  const h = String(hex||'#1D5DA8').replace('#','');
-  const norm = h.length===3 ? h.split('').map(c=>c+c).join('') : h;
-  const n = parseInt(norm, 16) || 0x1D5DA8;
+  let h = String(hex||'').replace('#','');
+  if(/^[0-9a-fA-F]{3}$/.test(h)) h = h.split('').map(c=>c+c).join('');
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) h = '1D5DA8';
+  const n = parseInt(h, 16);
   const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
   return `rgba(${r},${g},${b},${alpha})`;
 }
@@ -645,6 +665,11 @@ async function initAuth(){
   let primeiroEvento = true;
   db.auth.onAuthStateChange(async (event, newSession)=>{
     if(primeiroEvento){ primeiroEvento = false; return; }
+    // token renovado automaticamente (a cada ~1h) não é troca de sessão de
+    // verdade — o cliente supabase-js já usa o token novo sozinho; só
+    // guardamos a referência, sem re-renderizar (senão um modal aberto com
+    // campo digitado e ainda não salvo perderia o texto no meio da digitação).
+    if(event==='TOKEN_REFRESHED'){ state.session = newSession; return; }
     if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
     state.session = newSession;
     if(newSession){
@@ -788,7 +813,7 @@ function Sidebar(){
       <div class="sidebar-user-top">
         <div class="sidebar-user-avatar">${iniciais(state.perfil?.nome)}</div>
         <div class="sidebar-user-info">
-          <div class="sidebar-user-nome">${state.perfil?.nome||''}</div>
+          <div class="sidebar-user-nome">${esc(state.perfil?.nome)}</div>
           <div class="sidebar-user-papel">${state.perfil?.papel==='admin'?'Administrador':'Gestor'}</div>
         </div>
       </div>
@@ -852,11 +877,11 @@ function AppCard(a){
     <div class="app-card-top">
       <div class="app-card-icon" style="background:${hexToRgba(a.cor,0.14)}; color:${a.cor};">${iconOperacao(a.slug)}</div>
       <div class="app-card-titles">
-        <div class="app-card-nome">${a.nome}</div>
+        <div class="app-card-nome">${esc(a.nome)}</div>
       </div>
       <span class="pill ${a.status==='ativo'?'pill-ok':'badge-em-breve'}">${a.status==='ativo'?'Ativo':'Em breve'}</span>
     </div>
-    ${a.descricao ? `<div class="app-card-desc">${a.descricao}</div>` : ''}
+    ${a.descricao ? `<div class="app-card-desc">${esc(a.descricao)}</div>` : ''}
     ${stats}
     <div class="app-card-actions">
       ${a.status==='ativo' && a.url ? `<a class="btn btn-ghost btn-sm" href="${a.url}" target="_blank" rel="noopener">${iconAbrir()} Abrir app</a>` : ''}
@@ -1005,7 +1030,10 @@ function Donut(fatias, panelId, titulo, vazioMsg){
     return `<div class="card card-pad" style="flex:1;"><p class="stat-label" style="margin-bottom:10px;">${titulo}</p>${Empty('Sem dados ainda', msg)}</div>`;
   }
   const cx=90, cy=90, rOut=80, rIn=50;
-  const gap = fatias.length>1 ? 0.03 : 0;
+  // gap sempre > 0, mesmo com 1 fatia só a 100% — sem isso, o início e o
+  // fim do arco caem no mesmíssimo ponto (frac=1 vira uma volta inteira) e
+  // dependendo do navegador o círculo renderiza como invisível.
+  const gap = fatias.length>1 ? 0.03 : 0.004;
   let angle = 0;
   const slices = fatias.map((f,idx)=>{
     const valor = Number(f.valor||0);
@@ -1022,8 +1050,8 @@ function Donut(fatias, panelId, titulo, vazioMsg){
     const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
     const showLabel = pct>=8;
     return `
-      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${f.nome}" data-tip-valor="${fmt(valor)}" data-tip-pct="${fmt(pct,1)}"
-        d="${path}" fill="${f.cor}" tabindex="0" role="img" aria-label="${f.nome}: R$ ${fmt(valor)}, ${fmt(pct,1)}%"></path>
+      <path class="donut-slice" data-slice-idx="${panelId}-${idx}" data-tip-nome="${esc(f.nome)}" data-tip-valor="${fmt(valor)}" data-tip-pct="${fmt(pct,1)}"
+        d="${path}" fill="${f.cor}" tabindex="0" role="img" aria-label="${esc(f.nome)}: R$ ${fmt(valor)}, ${fmt(pct,1)}%"></path>
       ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
     `;
   }).join('');
@@ -1033,7 +1061,7 @@ function Donut(fatias, panelId, titulo, vazioMsg){
     return `
     <div class="legenda-row" data-legenda-idx="${panelId}-${idx}">
       <span class="legenda-swatch" style="background:${f.cor}"></span>
-      <span class="legenda-nome">${f.nome}</span>
+      <span class="legenda-nome">${esc(f.nome)}</span>
       <span class="legenda-valor" style="${negativo?'color:var(--alerta); font-weight:600;':''}">R$ ${fmt(valor,0)}</span>
       <span class="legenda-pct">${negativo ? 'prejuízo' : fmt(valor/totalPositivo*100,1)+'%'}</span>
     </div>
@@ -1085,7 +1113,7 @@ function PagePorHectare(){
       <thead><tr><th>Operação</th><th>Área (ha)</th><th>Despesa/ha</th><th>Receita/ha</th><th>Lucro/ha</th></tr></thead>
       <tbody>
         ${linhas.map(l=>{
-          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug)}</span><strong>${l.nome}</strong></span>`;
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug)}</span><strong>${esc(l.nome)}</strong></span>`;
           if(l.ha<=0) return `<tr><td>${chip}</td><td colspan="4" class="hint">Sem hectares cadastrados pra essa operação — cadastre em Fazendas.</td></tr>`;
           if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
           const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
@@ -1130,7 +1158,7 @@ function PageResultados(){
       <tbody>
         ${linhasResultado().map(l=>{
           const r = l.resultado;
-          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${l.app.nome}</strong></span>`;
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${esc(l.app.nome)}</strong></span>`;
           if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
             <td>${chip}</td>
@@ -1163,10 +1191,10 @@ function PageFazendas(){
       <tbody>
         ${state.fazendas.map(f=>`
           <tr>
-            <td><strong>${f.nome}</strong></td>
+            <td><strong>${esc(f.nome)}</strong></td>
             <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
             <td>${operacoesLabel(f.id)}</td>
-            <td>${f.localizacao || '—'}</td>
+            <td>${esc(f.localizacao) || '—'}</td>
             ${souAdmin() ? `<td style="display:flex; gap:8px;">
               <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-fazenda="${f.id}">Excluir</button>
@@ -1185,12 +1213,12 @@ function ModalFazenda(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId ? 'Editar fazenda' : 'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${d.nome}" placeholder="Ex: Fazenda Santo Antônio"/></div>
+        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${esc(d.nome)}" placeholder="Ex: Fazenda Santo Antônio"/></div>
         <div class="field-row">
-          <div class="field"><label>Área total (ha)</label><input id="f-areafazenda" type="number" step="1" value="${d.areaHa??''}"/></div>
-          <div class="field"><label>Localização</label><input id="f-localfazenda" value="${d.localizacao}" placeholder="Cidade/UF"/></div>
+          <div class="field"><label>Área total (ha)</label><input id="f-areafazenda" type="number" step="1" min="0" value="${d.areaHa??''}"/></div>
+          <div class="field"><label>Localização</label><input id="f-localfazenda" value="${esc(d.localizacao)}" placeholder="Cidade/UF"/></div>
         </div>
-        <div class="field"><label>Observação</label><textarea id="f-obsfazenda" rows="2">${d.observacao}</textarea></div>
+        <div class="field"><label>Observação</label><textarea id="f-obsfazenda" rows="2">${esc(d.observacao)}</textarea></div>
         <label>Operações rodando nesta fazenda</label>
         <div style="display:flex; flex-direction:column; gap:8px;">
           ${d.operacoes.map((op,idx)=>`
@@ -1198,7 +1226,7 @@ function ModalFazenda(){
               <select data-op-tipo="${idx}">
                 ${Object.entries(OPERACOES).map(([k,l])=>`<option value="${k}" ${op.operacao===k?'selected':''}>${l}</option>`).join('')}
               </select>
-              <input data-op-area="${idx}" type="number" step="1" value="${op.areaHa??''}" placeholder="ha"/>
+              <input data-op-area="${idx}" type="number" step="1" min="0" value="${op.areaHa??''}" placeholder="ha"/>
               <button class="btn-danger-ghost" data-op-del="${idx}" style="padding:6px;">✕</button>
             </div>
           `).join('')}
@@ -1219,11 +1247,11 @@ function ModalApp(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar app — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar app — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomeapp" value="${d.nome}"/></div>
+        <div class="field"><label>Nome</label><input id="f-nomeapp" value="${esc(d.nome)}"/></div>
         <div class="field"><label>Identificador (slug)</label><input value="${d.slug}" disabled/></div>
-        <div class="field"><label>Descrição</label><textarea id="f-descapp" rows="2">${d.descricao}</textarea></div>
+        <div class="field"><label>Descrição</label><textarea id="f-descapp" rows="2">${esc(d.descricao)}</textarea></div>
         <div class="field"><label>Link do app</label><input id="f-urlapp" value="${d.url}" placeholder="https://..."/></div>
         <div class="field-row">
           <div class="field"><label>Cor</label><input id="f-corapp" type="color" value="${d.cor}"/></div>
@@ -1258,11 +1286,11 @@ function PageUsuarios(){
       <tbody>
         ${state.perfis.map(p=>`
           <tr>
-            <td><span class="op-chip"><span class="sidebar-user-avatar" style="width:28px; height:28px; font-size:11px; background:linear-gradient(135deg, var(--verde-medio), #4A8FD6);">${iniciais(p.nome)}</span><strong>${p.nome}</strong></span></td>
-            <td class="mono">${p.usuario}</td>
+            <td><span class="op-chip"><span class="sidebar-user-avatar" style="width:28px; height:28px; font-size:11px; background:linear-gradient(135deg, var(--verde-medio), #4A8FD6);">${esc(iniciais(p.nome))}</span><strong>${esc(p.nome)}</strong></span></td>
+            <td class="mono">${esc(p.usuario)}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
-            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
+            <td>${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>` : ''}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -1278,8 +1306,8 @@ function ModalUsuario(){
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
@@ -1295,9 +1323,9 @@ function ModalPapelUsuario(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar acesso — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
+        <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
             <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
@@ -1358,7 +1386,7 @@ function Modal(){
 function ModalDetalheOperacao(){
   const {panelId, slug} = state.modal;
   const app = state.apps.find(a=>a.slug===slug);
-  const nome = app ? app.nome : (OPERACOES[slug]||slug);
+  const nome = esc(app ? app.nome : (OPERACOES[slug]||slug));
   const r = resultadoOperacaoNoPeriodo(slug);
   const rotuloPeriodo = labelPeriodo(state.periodo);
   const semDadosBase = !r || r.erro;
@@ -1386,7 +1414,7 @@ function ModalDetalheOperacao(){
           <tbody>
             ${linhas.map(l=> ehDespesa
               ? `<tr><td>${l.label}</td><td class="mono">R$ ${fmt(l.valor)}</td></tr>`
-              : `<tr><td class="mono">${l.data.split('-').reverse().join('/')}</td><td>${l.descricao}</td><td class="mono">R$ ${fmt(l.valor)}</td></tr>`
+              : `<tr><td class="mono">${l.data.split('-').reverse().join('/')}</td><td>${esc(l.descricao)}</td><td class="mono">R$ ${fmt(l.valor)}</td></tr>`
             ).join('')}
           </tbody>
         </table>
@@ -1421,14 +1449,20 @@ function GraficoBarras(pontos){
   const larguraBarra = Math.min(24, passo-8);
   const barras = pontos.map((p,i)=>{
     const x = i*passo + (passo-larguraBarra)/2;
+    const [ano,mesNum] = p.mes.split('-');
+    const rotuloMes = mesNum==='01' ? `${NOMES_MES_ABREV[0]}/${ano.slice(2)}` : NOMES_MES_ABREV[Number(mesNum)-1];
+    const rotuloTexto = `<text x="${(x+larguraBarra/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="9" fill="var(--cinza)" font-family="Inter,sans-serif">${rotuloMes}</text>`;
+    // mês que ainda não aconteceu (dentro de uma safra em andamento, por
+    // exemplo) não tem como ter valor — mostrar uma barra verde/vermelha
+    // de R$ 0 ali pareceria "esse mês fechou em zero", que é mentira.
+    if(p.futuro){
+      return `<rect x="${x.toFixed(1)}" y="${(zeroY-1).toFixed(1)}" width="${larguraBarra}" height="2" rx="1" fill="var(--cinza-claro)"></rect>${rotuloTexto}`;
+    }
     const yVal = margemTopo + areaAltura*((maxV-p.valor)/range);
     const y = Math.min(zeroY,yVal), h = Math.max(1.5,Math.abs(yVal-zeroY));
     const cor = p.valor>=0 ? 'var(--bom)' : 'var(--alerta)';
-    const [ano,mesNum] = p.mes.split('-');
-    const rotuloMes = mesNum==='01' ? `${NOMES_MES_ABREV[0]}/${ano.slice(2)}` : NOMES_MES_ABREV[Number(mesNum)-1];
     return `<rect class="gbar" data-gbar-valor="R$ ${fmt(p.valor)}" data-gbar-label="${NOMES_MES_LONGO[Number(mesNum)-1]}/${ano}"
-        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra}" height="${h.toFixed(1)}" rx="3" fill="${cor}"></rect>
-      <text x="${(x+larguraBarra/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="9" fill="var(--cinza)" font-family="Inter,sans-serif">${rotuloMes}</text>`;
+        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra}" height="${h.toFixed(1)}" rx="3" fill="${cor}"></rect>${rotuloTexto}`;
   }).join('');
   return `<svg class="grafico-barras-svg" viewBox="0 0 ${largura} ${altura}">
     <line x1="0" y1="${zeroY.toFixed(1)}" x2="${largura}" y2="${zeroY.toFixed(1)}" stroke="var(--cinza-claro)" stroke-width="1"/>
@@ -1441,7 +1475,7 @@ const METRICA_CAMPO = {despesaHa:'despesa', receitaHa:'receita', resultadoHa:'re
 function ModalGraficoOperacao(){
   const {slug, metrica} = state.modal;
   const app = state.apps.find(a=>a.slug===slug);
-  const nome = app ? app.nome : (OPERACOES[slug]||slug);
+  const nome = esc(app ? app.nome : (OPERACOES[slug]||slug));
   const ha = hectaresPorOperacao(slug);
   const bruto = resultadoBrutoOperacao(slug);
   const semDados = !bruto || bruto.erro || !bruto.mensal || ha<=0;
@@ -1454,9 +1488,11 @@ function ModalGraficoOperacao(){
   } else {
     const campo = METRICA_CAMPO[metrica];
     const meses = ultimos12Meses(state.periodo);
+    const hoje = new Date();
+    const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     const pontos = meses.map(mesStr=>{
       const linha = bruto.mensal.find(x=>x.mes===mesStr);
-      return {mes: mesStr, valor: linha ? linha[campo]/ha : 0};
+      return {mes: mesStr, valor: linha ? linha[campo]/ha : 0, futuro: mesStr>mesAtualStr};
     });
     corpo = `<p class="hint" style="margin-bottom:8px;">Últimos 12 meses, em R$/ha.</p>${GraficoBarras(pontos)}`;
   }
@@ -1618,7 +1654,7 @@ function attachEvents(){
       if(type==='fazenda'){
         const f = {
           nome: document.getElementById('f-nomefazenda').value.trim(),
-          areaHa: document.getElementById('f-areafazenda').value ? Number(document.getElementById('f-areafazenda').value) : null,
+          areaHa: document.getElementById('f-areafazenda').value ? Math.max(0, Number(document.getElementById('f-areafazenda').value)||0) : null,
           localizacao: document.getElementById('f-localfazenda').value.trim(),
           observacao: document.getElementById('f-obsfazenda').value.trim(),
         };
@@ -1631,13 +1667,24 @@ function attachEvents(){
           error = inserted.error;
           fazendaId = inserted.data?.id;
         }
+        // Insere as operações novas ANTES de apagar as antigas — se o insert
+        // falhar (rede caiu no meio), as operações que já existiam continuam
+        // lá; a alternativa (apagar primeiro) perderia esse cadastro de vez
+        // numa falha no meio do caminho.
         if(!error && fazendaId){
-          await db.from('fazenda_operacoes').delete().eq('fazenda_id', fazendaId);
           const linhas = (editDraft.operacoes||[])
             .filter(op=>op.operacao)
-            .map(op=>({fazenda_id: fazendaId, operacao: op.operacao, area_ha: op.areaHa ? Number(op.areaHa) : null}));
+            .map(op=>({fazenda_id: fazendaId, operacao: op.operacao, area_ha: op.areaHa!=null && op.areaHa!=='' ? Math.max(0, Number(op.areaHa)||0) : null}));
+          let idsNovos = [];
           if(linhas.length>0){
-            ({error} = await db.from('fazenda_operacoes').insert(linhas));
+            const inseridas = await db.from('fazenda_operacoes').insert(linhas).select('id');
+            error = inseridas.error;
+            idsNovos = (inseridas.data||[]).map(r=>r.id);
+          }
+          if(!error){
+            let del = db.from('fazenda_operacoes').delete().eq('fazenda_id', fazendaId);
+            if(idsNovos.length>0) del = del.not('id', 'in', `(${idsNovos.join(',')})`);
+            ({error} = await del);
           }
         }
       } else if(type==='app'){
