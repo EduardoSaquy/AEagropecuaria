@@ -775,8 +775,6 @@ function Header(){
   let acao = '';
   if(state.page==='fazendas' && souAdmin()){
     acao = `<button class="btn btn-primary" data-nova-fazenda="1">+ Nova fazenda</button>`;
-  } else if(state.page==='painel' && souAdmin()){
-    acao = `<button class="btn btn-primary" data-novo-app="1">+ Novo app</button>`;
   } else if(state.page==='usuarios' && souAdmin()){
     acao = `<button class="btn btn-primary" data-novo-usuario="1">+ Novo usuário</button>`;
   }
@@ -1075,10 +1073,10 @@ function ModalApp(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId ? 'Editar app' : 'Novo app'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar app — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomeapp" value="${d.nome}" placeholder="Ex: AE Cana"/></div>
-        <div class="field"><label>Identificador (slug)</label><input id="f-slugapp" value="${d.slug}" placeholder="ex: cana" ${d._editId?'disabled':''}/><span class="hint">Sem espaços ou acentos. Não pode ser alterado depois de criado.</span></div>
+        <div class="field"><label>Nome</label><input id="f-nomeapp" value="${d.nome}"/></div>
+        <div class="field"><label>Identificador (slug)</label><input value="${d.slug}" disabled/></div>
         <div class="field"><label>Descrição</label><textarea id="f-descapp" rows="2">${d.descricao}</textarea></div>
         <div class="field"><label>Link do app</label><input id="f-urlapp" value="${d.url}" placeholder="https://..."/></div>
         <div class="field-row">
@@ -1334,11 +1332,6 @@ function attachEvents(){
   });
 
   // ---- apps ----
-  const novoAppBtn = document.querySelector('[data-novo-app]');
-  if(novoAppBtn) novoAppBtn.onclick = ()=>{
-    editDraft = {nome:'', slug:'', descricao:'', url:'', cor:'#1D5DA8', ordem:(state.apps.length+1)*10, status:'em_breve'};
-    state.modal = {type:'app'}; render();
-  };
   document.querySelectorAll('[data-editar-app]').forEach(el=>{
     el.onclick = ()=>{
       const a = state.apps.find(x=>x.id===Number(el.dataset.editarApp));
@@ -1436,20 +1429,15 @@ function attachEvents(){
       } else if(type==='app'){
         const a = {
           nome: document.getElementById('f-nomeapp').value.trim(),
-          slug: normalizeUsuario(document.getElementById('f-slugapp').value),
           descricao: document.getElementById('f-descapp').value.trim(),
           url: document.getElementById('f-urlapp').value.trim(),
           cor: document.getElementById('f-corapp').value,
           ordem: Number(document.getElementById('f-ordemapp').value)||0,
           status: document.getElementById('f-statusapp').value,
         };
-        if(!a.nome || !a.slug){ alert('Informe nome e identificador do app.'); return; }
-        if(editDraft._editId){
-          const row = appToRow(a); delete row.slug;
-          ({error} = await db.from('apps').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('apps').insert(appToRow(a)));
-        }
+        if(!a.nome){ alert('Informe o nome do app.'); return; }
+        const row = appToRow(a); delete row.slug;
+        ({error} = await db.from('apps').update(row).eq('id', editDraft._editId));
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
