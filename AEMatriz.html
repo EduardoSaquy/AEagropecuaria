@@ -97,6 +97,21 @@
   .op-chip{display:inline-flex; align-items:center; gap:8px; white-space:nowrap;}
   .op-chip-ic{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
 
+  /* ---------- FILTRO DE PERÍODO (Resultados) ---------- */
+  .periodo-tabs{display:inline-flex; background:var(--cinza-bg); border-radius:8px; padding:3px; gap:2px;}
+  .periodo-tab{font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; padding:7px 16px; border-radius:6px; border:none; background:none; color:var(--cinza); cursor:pointer;}
+  .periodo-tab:hover{color:var(--verde-escuro);}
+  .periodo-tab.active{background:var(--branco); color:var(--verde-escuro); box-shadow:var(--shadow);}
+  .valor-clicavel{
+    background:none; border:none; padding:2px 6px; border-radius:5px; font-family:'IBM Plex Mono',monospace;
+    font-size:13.5px; color:var(--verde-medio); cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;
+  }
+  .valor-clicavel:hover{background:var(--ok-bg);}
+  .valor-clicavel.neg{color:var(--alerta);}
+  .grafico-barras-svg{display:block; width:100%; height:auto;}
+  .gbar{cursor:pointer;}
+  .gbar:hover{opacity:0.82;}
+
   /* ---------- DONUTS (Resultados por operação) ---------- */
   .donuts-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px; margin-bottom:22px;}
   .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
@@ -363,10 +378,18 @@ async function carregarIndicadoresPecuaria(){
 // Financeiro/Resultados, só que sem o detalhamento por área (aqui o que
 // interessa é o total da fazenda inteira, pra comparar com as outras
 // operações). Se essa lógica mudar lá, precisa atualizar aqui também.
-function mesesDoAnoAtePecuaria(){
+// Janela de meses cobertos pelo cache mensal: de janeiro de (ano atual - 2)
+// até o mês atual — cobre qualquer Mês/Ano/Safra que os seletores do filtro
+// de período oferecem, sem precisar buscar de novo a cada troca de filtro
+// (as consultas ao banco já trazem TODAS as linhas, sem filtro de data).
+function mesesJanelaPecuaria(){
   const hoje = new Date();
+  const anoIni = hoje.getFullYear()-2;
   const meses = [];
-  for(let m=0; m<=hoje.getMonth(); m++) meses.push(`${hoje.getFullYear()}-${String(m+1).padStart(2,'0')}`);
+  for(let ano=anoIni; ano<=hoje.getFullYear(); ano++){
+    const mFim = ano===hoje.getFullYear() ? hoje.getMonth()+1 : 12;
+    for(let m=1; m<=mFim; m++) meses.push(`${ano}-${String(m).padStart(2,'0')}`);
+  }
   return meses;
 }
 async function carregarResultadoPecuaria(){
@@ -421,35 +444,46 @@ async function carregarResultadoPecuaria(){
       return (recRes.data||[]).filter(r=>r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
     }
 
-    const meses = mesesDoAnoAtePecuaria();
-    const mesAtual = meses[meses.length-1];
-    const variavelMes = custoVariavelDoMes(mesAtual);
-    const fixaMes = fixosDoMes(mesAtual);
-    const despesaMes = variavelMes.total + fixaMes;
-    const receitasMes = receitasNoPrefixo(mesAtual);
-    const receitaMes = receitasMes.reduce((a,r)=>a+Number(r.valor||0),0);
-    let despesaAno = 0, receitaAno = 0;
-    meses.forEach(prefixo=>{
-      despesaAno += custoVariavelDoMes(prefixo).total + fixosDoMes(prefixo);
-      receitaAno += receitasNoPrefixo(prefixo).reduce((a,r)=>a+Number(r.valor||0),0);
+    // Um item por mês da janela, já com tudo que os filtros (Mês/Ano/Safra)
+    // e o gráfico (últimos 12 meses) precisam — agregar um período depois é
+    // só somar os meses que caem nele, sem buscar nada de novo no banco.
+    const mensal = mesesJanelaPecuaria().map(mesStr=>{
+      const variavel = custoVariavelDoMes(mesStr);
+      const fixa = fixosDoMes(mesStr);
+      const receitasDoMes = receitasNoPrefixo(mesStr);
+      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0),0);
+      return {
+        mes: mesStr, despesa: variavel.total+fixa, receita, resultado: receita-(variavel.total+fixa),
+        racao: variavel.racao, pasto: variavel.pasto, reproducao: variavel.reproducao, fixa,
+        receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Receita', valor:Number(r.valor||0)})),
+      };
     });
 
-    state.resultados.pecuaria = {
-      loading:false, erro:'',
-      despesaMes, receitaMes, resultadoMes: receitaMes-despesaMes,
-      despesaAno, receitaAno, resultadoAno: receitaAno-despesaAno,
-      despesaDetalheMes: [
-        {label:'Ração (Confinamento)', valor: variavelMes.racao},
-        {label:'Pasto', valor: variavelMes.pasto},
-        {label:'Reprodução (Cria)', valor: variavelMes.reproducao},
-        {label:'Despesas fixas', valor: fixaMes},
-      ].filter(l=>l.valor>0),
-      receitasDetalheMes: receitasMes.map(r=>({data:r.data, descricao:r.descricao||'Receita', valor:Number(r.valor||0)})),
-    };
+    state.resultados.pecuaria = {loading:false, erro:'', mensal};
   } catch(e){
-    state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', despesaMes:null, receitaMes:null, resultadoMes:null, despesaAno:null, receitaAno:null, resultadoAno:null, despesaDetalheMes:[], receitasDetalheMes:[]};
+    state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
   render();
+}
+// Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
+// fora da janela carregada (ex: período futuro) simplesmente não têm
+// correspondência e contam como zero — sem precisar recortar antes.
+function agregarPeriodo(resultado, meses){
+  if(!resultado) return null;
+  if(resultado.erro) return {erro: resultado.erro};
+  const linhas = meses.map(m=>resultado.mensal.find(x=>x.mes===m)).filter(Boolean);
+  const despesa = linhas.reduce((a,l)=>a+l.despesa,0);
+  const receita = linhas.reduce((a,l)=>a+l.receita,0);
+  return {
+    despesa, receita, resultado: receita-despesa,
+    despesaDetalhe: [
+      {label:'Ração (Confinamento)', valor: linhas.reduce((a,l)=>a+l.racao,0)},
+      {label:'Pasto', valor: linhas.reduce((a,l)=>a+l.pasto,0)},
+      {label:'Reprodução (Cria)', valor: linhas.reduce((a,l)=>a+l.reproducao,0)},
+      {label:'Despesas fixas', valor: linhas.reduce((a,l)=>a+l.fixa,0)},
+    ].filter(x=>x.valor>0),
+    receitasDetalhe: [].concat(...linhas.map(l=>l.receitas)).sort((a,b)=>b.data.localeCompare(a.data)),
+  };
 }
 
 /* ===================== ESTADO ===================== */
@@ -462,7 +496,18 @@ const state = {
   modal: null, // {type:'fazenda'|'app'|'usuario'|'papelUsuario'|'trocarSenha', data:{...}}
   mobileMenuAberto: false,
   indicadores: { pecuaria: {loading:false, erro:'', lotesAtivos:null, totalAnimais:null, dietas:null} },
-  resultados: { pecuaria: {loading:false, erro:'', despesaMes:null, receitaMes:null, resultadoMes:null, despesaAno:null, receitaAno:null, resultadoAno:null, despesaDetalheMes:[], receitasDetalheMes:[]} },
+  resultados: { pecuaria: {loading:false, erro:'', mensal:[]} },
+  // filtro de período da aba Resultados — começa no mês atual; "safra" é o
+  // ano em que ela COMEÇA (safra Y = maio/Y a abril/Y+1)
+  periodo: (function(){
+    const hoje = new Date();
+    return {
+      tipo: 'mes',
+      mes: `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`,
+      ano: hoje.getFullYear(),
+      safra: hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1,
+    };
+  })(),
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -767,7 +812,7 @@ function Sidebar(){
 function Header(){
   const titles = {
     painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},
-    resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado do mês e do ano, somados de todas as operações.'},
+    resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado por operação — compare mês a mês, por ano ou por safra (maio a abril).'},
     fazendas:{eyebrow:'Cadastro central', title:'Fazendas', desc:'Cadastro único de fazendas, com as operações (pecuária, cana, cereais) e hectares de cada uma.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso à matriz. Cada app (Pecuária, Combustível...) continua com seu próprio login.'},
   };
@@ -826,21 +871,81 @@ function PagePainel(){
   return `<div class="app-grid">${state.apps.map(AppCard).join('')}</div>`;
 }
 
+/* ===================== FILTRO DE PERÍODO (Mês / Ano / Safra) ===================== */
+const NOMES_MES_LONGO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const NOMES_MES_ABREV = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+// Lista de "YYYY-MM" cobertos pelo período selecionado.
+function periodoMeses(periodo){
+  if(periodo.tipo==='mes') return [periodo.mes];
+  if(periodo.tipo==='ano'){
+    const meses = []; for(let m=1;m<=12;m++) meses.push(`${periodo.ano}-${String(m).padStart(2,'0')}`); return meses;
+  }
+  // safra: maio do ano-safra até abril do ano seguinte
+  const meses = [];
+  for(let m=5;m<=12;m++) meses.push(`${periodo.safra}-${String(m).padStart(2,'0')}`);
+  for(let m=1;m<=4;m++) meses.push(`${periodo.safra+1}-${String(m).padStart(2,'0')}`);
+  return meses;
+}
+function labelPeriodo(periodo){
+  if(periodo.tipo==='mes'){ const [a,m] = periodo.mes.split('-'); return `${NOMES_MES_LONGO[Number(m)-1]}/${a}`; }
+  if(periodo.tipo==='ano') return `Ano ${periodo.ano}`;
+  return `Safra ${periodo.safra}/${periodo.safra+1}`;
+}
+// Últimos 12 meses terminando no último mês do período selecionado — é a
+// janela usada pelo gráfico de comparação mês a mês, sempre disponível
+// independente de o filtro estar em Mês, Ano ou Safra.
+function ultimos12Meses(periodo){
+  const meses = periodoMeses(periodo);
+  const [anoStr, mesStr] = meses[meses.length-1].split('-');
+  let ano = Number(anoStr), mes = Number(mesStr);
+  const janela = [];
+  for(let i=11;i>=0;i--){
+    let a=ano, m=mes-i;
+    while(m<=0){ m+=12; a-=1; }
+    janela.push(`${a}-${String(m).padStart(2,'0')}`);
+  }
+  return janela;
+}
+function anosDisponiveis(){
+  const hoje = new Date().getFullYear();
+  return [hoje, hoje-1, hoje-2];
+}
+function safrasDisponiveis(){
+  const hoje = new Date();
+  const safraAtual = hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1;
+  return [safraAtual, safraAtual-1, safraAtual-2];
+}
+
 /* ===================== RESULTADOS (geral, todas as operações) ===================== */
-// Cada app com dados ligados vira uma linha aqui. Por enquanto só a
-// Pecuária está com o banco real; Combustível, Cana e Cereais aparecem
-// como "sem dados" até serem implantados e ganharem seu próprio cálculo.
+// Só a Pecuária está com o banco real ligado; Combustível, Cana e Cereais
+// aparecem como "sem dados" até serem implantados e ganharem seu próprio
+// cálculo — mas já entram no filtro de período e no layout, prontos pra
+// quando isso acontecer.
+function resultadoBrutoOperacao(slug){
+  return slug==='pecuaria' ? state.resultados.pecuaria : null;
+}
+function resultadoOperacaoNoPeriodo(slug){
+  return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
+}
+function hectaresPorOperacao(slug){
+  let total = 0;
+  Object.values(state.fazendaOperacoes).forEach(lista=>{
+    lista.forEach(o=>{ if(o.operacao===slug) total += Number(o.areaHa||0); });
+  });
+  return total;
+}
 function linhasResultado(){
-  return state.apps.map(a=>({
-    app: a,
-    resultado: a.slug==='pecuaria' ? state.resultados.pecuaria : null,
-  }));
+  return state.apps.map(a=>({ app: a, resultado: resultadoOperacaoNoPeriodo(a.slug) }));
 }
 function resultadoTotal(campo){
-  return linhasResultado().reduce((soma,l)=> soma + (l.resultado && l.resultado[campo]!=null ? l.resultado[campo] : 0), 0);
+  return OPERACOES_ORDEM.reduce((soma,slug)=>{
+    const r = resultadoOperacaoNoPeriodo(slug);
+    return soma + (r && !r.erro && r[campo]!=null ? r[campo] : 0);
+  }, 0);
 }
 function algumResultadoCarregando(){
-  return linhasResultado().some(l=>l.resultado?.loading);
+  return state.resultados.pecuaria.loading;
 }
 // Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
 // insumo consumido pelas outras, não uma operação com receita/despesa
@@ -849,7 +954,7 @@ const OPERACOES_ORDEM = ['pecuaria','cana','cereais'];
 function fatiasOperacoes(campo){
   return OPERACOES_ORDEM.map(slug=>{
     const app = state.apps.find(a=>a.slug===slug);
-    const r = slug==='pecuaria' ? state.resultados.pecuaria : null;
+    const r = resultadoOperacaoNoPeriodo(slug);
     const valor = (r && !r.erro && r[campo]!=null) ? r[campo] : 0;
     return {nome: app ? app.nome : (OPERACOES[slug]||slug), valor, cor: OPERACAO_COR[slug]};
   });
@@ -948,49 +1053,90 @@ function Donut(fatias, panelId, titulo, vazioMsg){
     </div>
   </div>`;
 }
+function FiltroPeriodo(){
+  const p = state.periodo;
+  return `
+  <div class="card card-pad" style="margin-bottom:18px;">
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <div class="periodo-tabs">
+        <button class="periodo-tab ${p.tipo==='mes'?'active':''}" data-periodo-tipo="mes">Mês</button>
+        <button class="periodo-tab ${p.tipo==='ano'?'active':''}" data-periodo-tipo="ano">Ano</button>
+        <button class="periodo-tab ${p.tipo==='safra'?'active':''}" data-periodo-tipo="safra">Safra</button>
+      </div>
+      ${p.tipo==='mes' ? `<input type="month" id="f-periodo-mes" value="${p.mes}"/>` : ''}
+      ${p.tipo==='ano' ? `<select id="f-periodo-ano">${anosDisponiveis().map(a=>`<option value="${a}" ${p.ano===a?'selected':''}>${a}</option>`).join('')}</select>` : ''}
+      ${p.tipo==='safra' ? `<select id="f-periodo-safra">${safrasDisponiveis().map(s=>`<option value="${s}" ${p.safra===s?'selected':''}>Safra ${s}/${s+1} (mai/${String(s).slice(2)} a abr/${String(s+1).slice(2)})</option>`).join('')}</select>` : ''}
+    </div>
+  </div>`;
+}
+
+function PagePorHectare(){
+  const linhas = OPERACOES_ORDEM.map(slug=>{
+    const app = state.apps.find(a=>a.slug===slug);
+    return {slug, nome: app ? app.nome : (OPERACOES[slug]||slug), ha: hectaresPorOperacao(slug), r: resultadoOperacaoNoPeriodo(slug)};
+  });
+  return `
+  <div class="card" style="margin-top:18px; overflow-x:auto;">
+    <div class="card-pad" style="padding-bottom:0;">
+      <p class="stat-label" style="margin-bottom:2px;">Por hectare — ${labelPeriodo(state.periodo)}</p>
+      <p class="hint" style="margin-bottom:14px;">Clique num valor pra ver a evolução mês a mês dos últimos 12 meses.</p>
+    </div>
+    <table>
+      <thead><tr><th>Operação</th><th>Área (ha)</th><th>Despesa/ha</th><th>Receita/ha</th><th>Lucro/ha</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>{
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug)}</span><strong>${l.nome}</strong></span>`;
+          if(l.ha<=0) return `<tr><td>${chip}</td><td colspan="4" class="hint">Sem hectares cadastrados pra essa operação — cadastre em Fazendas.</td></tr>`;
+          if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
+          const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
+          return `<tr>
+            <td>${chip}</td>
+            <td class="mono">${fmtInt(l.ha)}</td>
+            <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
+            <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
+            <td class="mono"><button class="valor-clicavel ${resultadoHa<0?'neg':''}" data-grafico-op="${l.slug}" data-grafico-metrica="resultadoHa">R$ ${fmt(resultadoHa)}</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function PageResultados(){
   if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz para ver os resultados aqui.');
   if(algumResultadoCarregando()){
-    return `<div class="card card-pad"><p class="hint">Carregando resultados...</p></div>`;
+    return `${FiltroPeriodo()}<div class="card card-pad"><p class="hint">Carregando resultados...</p></div>`;
   }
-  const despesaMes = resultadoTotal('despesaMes'), receitaMes = resultadoTotal('receitaMes'), resultadoMes = receitaMes-despesaMes;
-  const despesaAno = resultadoTotal('despesaAno'), receitaAno = resultadoTotal('receitaAno'), resultadoAno = receitaAno-despesaAno;
+  const despesa = resultadoTotal('despesa'), receita = resultadoTotal('receita'), resultado = receita-despesa;
   return `
-  <p class="eyebrow" style="margin-bottom:10px;">Mês atual — todas as operações</p>
+  ${FiltroPeriodo()}
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — todas as operações</p>
   <div class="stat-row">
-    ${StatCard('Receita', receitaMes, 'receita')}
-    ${StatCard('Despesa', despesaMes, 'despesa')}
-    ${StatCard('Resultado', resultadoMes, 'resultado')}
+    ${StatCard('Receita', receita, 'receita')}
+    ${StatCard('Despesa', despesa, 'despesa')}
+    ${StatCard('Resultado', resultado, 'resultado')}
   </div>
-  <p class="eyebrow" style="margin-bottom:10px;">Ano atual — todas as operações</p>
-  <div class="stat-row">
-    ${StatCard('Receita', receitaAno, 'receita')}
-    ${StatCard('Despesa', despesaAno, 'despesa')}
-    ${StatCard('Resultado', resultadoAno, 'resultado')}
-  </div>
-  <p class="eyebrow" style="margin-bottom:10px;">Impacto de cada operação (mês atual)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Impacto de cada operação</p>
   <div class="donuts-row">
-    ${Donut(fatiasOperacoes('despesaMes'), 'donut-despesa', 'Despesa por operação')}
-    ${Donut(fatiasOperacoes('receitaMes'), 'donut-receita', 'Receita por operação')}
-    ${Donut(fatiasOperacoes('resultadoMes'), 'donut-lucro', 'Lucro por operação')}
+    ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
+    ${Donut(fatiasOperacoes('receita'), 'donut-receita', 'Receita por operação')}
+    ${Donut(fatiasOperacoes('resultado'), 'donut-lucro', 'Lucro por operação')}
   </div>
   <div id="painel-tooltip" class="painel-tooltip"></div>
+  ${PagePorHectare()}
   <div class="card" style="overflow-x:auto; margin-top:18px;">
     <table>
-      <thead><tr><th>Operação</th><th>Receita (mês)</th><th>Despesa (mês)</th><th>Resultado (mês)</th><th>Receita (ano)</th><th>Despesa (ano)</th><th>Resultado (ano)</th></tr></thead>
+      <thead><tr><th>Operação</th><th>Receita</th><th>Despesa</th><th>Resultado</th></tr></thead>
       <tbody>
         ${linhasResultado().map(l=>{
           const r = l.resultado;
           const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${l.app.nome}</strong></span>`;
-          if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="6" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
+          if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
             <td>${chip}</td>
-            <td class="mono">R$ ${fmt(r.receitaMes)}</td>
-            <td class="mono">R$ ${fmt(r.despesaMes)}</td>
-            <td class="mono">R$ ${fmt(r.resultadoMes)}</td>
-            <td class="mono">R$ ${fmt(r.receitaAno)}</td>
-            <td class="mono">R$ ${fmt(r.despesaAno)}</td>
-            <td class="mono">R$ ${fmt(r.resultadoAno)}</td>
+            <td class="mono">R$ ${fmt(r.receita)}</td>
+            <td class="mono">R$ ${fmt(r.despesa)}</td>
+            <td class="mono">R$ ${fmt(r.resultado)}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1205,6 +1351,7 @@ function Modal(){
   if(state.modal.type==='papelUsuario') return ModalPapelUsuario();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
   if(state.modal.type==='detalheOperacao') return ModalDetalheOperacao();
+  if(state.modal.type==='graficoOperacao') return ModalGraficoOperacao();
   return '';
 }
 
@@ -1212,25 +1359,26 @@ function ModalDetalheOperacao(){
   const {panelId, slug} = state.modal;
   const app = state.apps.find(a=>a.slug===slug);
   const nome = app ? app.nome : (OPERACOES[slug]||slug);
-  const r = slug==='pecuaria' ? state.resultados.pecuaria : null;
-  const semDadosBase = !r;
-  const vazioMsg = slug==='pecuaria' ? 'Nenhum lançamento neste período.' : `O app ${nome} ainda não está com o banco de dados ligado à matriz.`;
+  const r = resultadoOperacaoNoPeriodo(slug);
+  const rotuloPeriodo = labelPeriodo(state.periodo);
+  const semDadosBase = !r || r.erro;
+  const vazioMsg = r?.erro || (slug==='pecuaria' ? 'Nenhum lançamento nesse período.' : `O app ${nome} ainda não está com o banco de dados ligado à matriz.`);
 
   let titulo, corpo;
   if(panelId==='donut-lucro'){
-    titulo = `Lucro do mês — ${nome}`;
+    titulo = `Lucro — ${nome} (${rotuloPeriodo})`;
     corpo = semDadosBase ? Empty('Sem dados ainda', vazioMsg) : `
       <div style="display:flex; flex-direction:column; gap:10px;">
-        <div class="total-bar"><span>Receita</span><span class="mono" style="color:var(--bom); font-weight:600;">R$ ${fmt(r.receitaMes)}</span></div>
-        <div class="total-bar"><span>Despesa</span><span class="mono" style="color:var(--trigo); font-weight:600;">R$ ${fmt(r.despesaMes)}</span></div>
-        <div class="total-bar ${r.resultadoMes>=0?'ok':''}" style="${r.resultadoMes<0?'color:var(--alerta);':''}">
-          <span>Resultado</span><span class="mono" style="font-weight:700;">R$ ${fmt(r.resultadoMes)}</span>
+        <div class="total-bar"><span>Receita</span><span class="mono" style="color:var(--bom); font-weight:600;">R$ ${fmt(r.receita)}</span></div>
+        <div class="total-bar"><span>Despesa</span><span class="mono" style="color:var(--trigo); font-weight:600;">R$ ${fmt(r.despesa)}</span></div>
+        <div class="total-bar ${r.resultado>=0?'ok':''}" style="${r.resultado<0?'color:var(--alerta);':''}">
+          <span>Resultado</span><span class="mono" style="font-weight:700;">R$ ${fmt(r.resultado)}</span>
         </div>
       </div>`;
   } else {
     const ehDespesa = panelId==='donut-despesa';
-    titulo = `${ehDespesa?'Despesa':'Receita'} do mês — ${nome}`;
-    const linhas = semDadosBase ? [] : ehDespesa ? r.despesaDetalheMes : r.receitasDetalheMes;
+    titulo = `${ehDespesa?'Despesa':'Receita'} — ${nome} (${rotuloPeriodo})`;
+    const linhas = semDadosBase ? [] : ehDespesa ? r.despesaDetalhe : r.receitasDetalhe;
     const semDados = semDadosBase || !linhas || linhas.length===0;
     corpo = semDados ? Empty('Sem dados ainda', vazioMsg) : `
         <table>
@@ -1250,6 +1398,72 @@ function ModalDetalheOperacao(){
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${titulo}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">${corpo}</div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Barras com linha de zero — despesa/receita por hectare são sempre >=0
+// (barra cresce de baixo), lucro/ha pode ser negativo (barra cresce dos
+// dois lados da linha de zero, verde acima e vermelho abaixo).
+function GraficoBarras(pontos){
+  const vals = pontos.map(p=>p.valor);
+  const maxV = Math.max(0, ...vals), minV = Math.min(0, ...vals);
+  const range = (maxV-minV) || 1;
+  const largura=560, altura=200, margemBaixo=28, margemTopo=10;
+  const areaAltura = altura-margemBaixo-margemTopo;
+  const zeroY = margemTopo + areaAltura*(maxV/range);
+  const n = pontos.length;
+  const passo = largura/n;
+  const larguraBarra = Math.min(24, passo-8);
+  const barras = pontos.map((p,i)=>{
+    const x = i*passo + (passo-larguraBarra)/2;
+    const yVal = margemTopo + areaAltura*((maxV-p.valor)/range);
+    const y = Math.min(zeroY,yVal), h = Math.max(1.5,Math.abs(yVal-zeroY));
+    const cor = p.valor>=0 ? 'var(--bom)' : 'var(--alerta)';
+    const [ano,mesNum] = p.mes.split('-');
+    const rotuloMes = mesNum==='01' ? `${NOMES_MES_ABREV[0]}/${ano.slice(2)}` : NOMES_MES_ABREV[Number(mesNum)-1];
+    return `<rect class="gbar" data-gbar-valor="R$ ${fmt(p.valor)}" data-gbar-label="${NOMES_MES_LONGO[Number(mesNum)-1]}/${ano}"
+        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra}" height="${h.toFixed(1)}" rx="3" fill="${cor}"></rect>
+      <text x="${(x+larguraBarra/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="9" fill="var(--cinza)" font-family="Inter,sans-serif">${rotuloMes}</text>`;
+  }).join('');
+  return `<svg class="grafico-barras-svg" viewBox="0 0 ${largura} ${altura}">
+    <line x1="0" y1="${zeroY.toFixed(1)}" x2="${largura}" y2="${zeroY.toFixed(1)}" stroke="var(--cinza-claro)" stroke-width="1"/>
+    ${barras}
+  </svg>`;
+}
+
+const METRICA_LABEL = {despesaHa:'Despesa por hectare', receitaHa:'Receita por hectare', resultadoHa:'Lucro por hectare'};
+const METRICA_CAMPO = {despesaHa:'despesa', receitaHa:'receita', resultadoHa:'resultado'};
+function ModalGraficoOperacao(){
+  const {slug, metrica} = state.modal;
+  const app = state.apps.find(a=>a.slug===slug);
+  const nome = app ? app.nome : (OPERACOES[slug]||slug);
+  const ha = hectaresPorOperacao(slug);
+  const bruto = resultadoBrutoOperacao(slug);
+  const semDados = !bruto || bruto.erro || !bruto.mensal || ha<=0;
+  let corpo;
+  if(semDados){
+    const msg = ha<=0
+      ? 'Cadastre os hectares dessa operação em Fazendas pra ver esse gráfico.'
+      : (bruto?.erro || `O app ${nome} ainda não está com o banco de dados ligado à matriz.`);
+    corpo = Empty('Sem dados ainda', msg);
+  } else {
+    const campo = METRICA_CAMPO[metrica];
+    const meses = ultimos12Meses(state.periodo);
+    const pontos = meses.map(mesStr=>{
+      const linha = bruto.mensal.find(x=>x.mes===mesStr);
+      return {mes: mesStr, valor: linha ? linha[campo]/ha : 0};
+    });
+    corpo = `<p class="hint" style="margin-bottom:8px;">Últimos 12 meses, em R$/ha.</p>${GraficoBarras(pontos)}`;
+  }
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1" style="max-width:640px;">
+      <div class="modal-head"><h3>${METRICA_LABEL[metrica]} — ${nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">${corpo}</div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Fechar</button>
@@ -1522,6 +1736,35 @@ function attachEvents(){
   document.querySelectorAll('[data-legenda-idx]').forEach(el=>{
     el.style.cursor = 'pointer';
     el.addEventListener('click', ()=>abrirDetalheOperacao(el.dataset.legendaIdx));
+  });
+
+  // filtro de período (Mês / Ano / Safra)
+  document.querySelectorAll('[data-periodo-tipo]').forEach(el=>{
+    el.onclick = ()=>{ state.periodo.tipo = el.dataset.periodoTipo; render(); };
+  });
+  const periodoMesEl = document.getElementById('f-periodo-mes');
+  if(periodoMesEl) periodoMesEl.onchange = (e)=>{ if(e.target.value){ state.periodo.mes = e.target.value; render(); } };
+  const periodoAnoEl = document.getElementById('f-periodo-ano');
+  if(periodoAnoEl) periodoAnoEl.onchange = (e)=>{ state.periodo.ano = Number(e.target.value); render(); };
+  const periodoSafraEl = document.getElementById('f-periodo-safra');
+  if(periodoSafraEl) periodoSafraEl.onchange = (e)=>{ state.periodo.safra = Number(e.target.value); render(); };
+
+  // "por hectare": clicar num valor abre o gráfico dos últimos 12 meses
+  document.querySelectorAll('[data-grafico-op]').forEach(el=>{
+    el.onclick = ()=>{
+      state.modal = {type:'graficoOperacao', slug: el.dataset.graficoOp, metrica: el.dataset.graficoMetrica};
+      render();
+    };
+  });
+  // tooltip das barras do gráfico (reaproveita o mesmo tooltip dos donuts)
+  document.querySelectorAll('[data-gbar-valor]').forEach(el=>{
+    el.addEventListener('pointerenter', ()=>{
+      if(tooltip){ tooltip.innerHTML = `<div class="v">${el.dataset.gbarValor}</div><div class="l">${el.dataset.gbarLabel}</div>`; tooltip.style.display = 'block'; }
+    });
+    el.addEventListener('pointermove', (e)=>{
+      if(tooltip){ tooltip.style.left = (e.clientX+14)+'px'; tooltip.style.top = (e.clientY+14)+'px'; }
+    });
+    el.addEventListener('pointerleave', ()=>{ if(tooltip) tooltip.style.display = 'none'; });
   });
 }
 
