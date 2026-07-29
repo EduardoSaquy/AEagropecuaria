@@ -2986,6 +2986,7 @@ function PageFinanceiroResumo(){
   const d = dadosFinanceiro();
   const arrobaMacho = precoArrobaAtual('macho');
   const arrobaFemea = precoArrobaAtual('femea');
+  const diasDecorridosMes = Number(d.hoje.split('-')[2]);
 
   return `
   <div class="card" style="margin-bottom:22px;">
@@ -3036,30 +3037,33 @@ function PageFinanceiroResumo(){
   <p class="eyebrow" style="margin-bottom:10px;">Custo por atividade (mês)</p>
   <div class="card" style="margin-bottom:22px;">
     <table>
-      <thead><tr><th>Atividade</th><th>Nº animais</th><th>Total no mês</th><th>Custo/animal</th></tr></thead>
+      <thead><tr><th>Atividade</th><th>Nº animais</th><th>Custo diário (méd.)</th><th>Total no mês</th><th>Custo/animal</th></tr></thead>
       <tbody>
         <tr>
           <td><strong>Confinamento</strong></td>
           <td class="mono">${fmtInt(d.animaisConfinamento)}</td>
+          <td class="mono">R$ ${fmt(d.custoTotalConfinamentoMes/diasDecorridosMes)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalConfinamentoMes)}</td>
           <td class="mono">${d.animaisConfinamento>0 ? 'R$ '+fmt(d.custoTotalConfinamentoMes/d.animaisConfinamento,2) : '—'}</td>
         </tr>
         <tr>
           <td><strong>Pasto</strong></td>
           <td class="mono">${fmtInt(d.animaisPasto)}</td>
+          <td class="mono">R$ ${fmt(d.custoTotalPastoMes/diasDecorridosMes)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalPastoMes)}</td>
           <td class="mono">${d.animaisPasto>0 ? 'R$ '+fmt(d.custoTotalPastoMes/d.animaisPasto,2) : '—'}</td>
         </tr>
         <tr>
           <td><strong>Cria</strong></td>
           <td class="mono">${fmtInt(d.animaisCria)}</td>
+          <td class="mono">R$ ${fmt(d.custoTotalCriaMes/diasDecorridosMes)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalCriaMes)}</td>
           <td class="mono">${d.animaisCria>0 ? 'R$ '+fmt(d.custoTotalCriaMes/d.animaisCria,2) : '—'}</td>
         </tr>
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">Cada atividade soma sua ração/pasto/cria do mês + a fatia do custo fixo rateada pra ela (mesmo critério de "Por Lote"). Pra ver o detalhe curral por curral, ou o custo por @ produzida de cada atividade, veja Resultados &gt; Por Lote.</p>
+  <p class="hint" style="margin:-14px 0 22px;">Cada atividade soma sua ração/pasto/cria do mês + a fatia do custo fixo rateada pra ela (mesmo critério de "Por Lote"). "Custo diário" não é o gasto de hoje especificamente — é o total já gasto no mês até agora dividido pelos dias já passados, mesmo critério usado no resto da tela. Pra ver o detalhe curral por curral, ou o custo por @ produzida de cada atividade, veja Resultados &gt; Por Lote.</p>
 
   <p class="eyebrow" style="margin:22px 0 10px;">Este ano</p>
   <div class="stat-row">
