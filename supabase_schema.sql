@@ -967,3 +967,37 @@ drop policy if exists "excluir lotes" on lotes;
 create policy "excluir lotes" on lotes for delete using (
   tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Financeiro exclusivo pra lançar receita/despesa
+-- Reorganização de telas: o detalhamento de custo (antes em Financeiro >
+-- Resumo/Por Lote) virou "Custos Detalhados"/"Por Lote" dentro de
+-- Resultados, e só aparece pra quem é Proprietário/Administrador (recorte
+-- feito na tela, não precisa de mudança de RLS pra isso). Financeiro passa
+-- a ser só lançamento de despesa (já era, "custos_fixos") e agora também
+-- de receita (antes só quem tinha Resultados podia lançar receita).
+-- "receitas" passa a aceitar select/insert/update/delete de quem tem
+-- Financeiro OU Resultados (igual ao padrão já usado em "movimentos" na
+-- migração anterior) — quem só tem Resultados continua enxergando as
+-- receitas nos demonstrativos, e quem só tem Financeiro passa a poder
+-- lançar/editar receita também.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+drop policy if exists "select receitas" on receitas;
+create policy "select receitas" on receitas for select using (
+  tem_permissao('financeiro','visualizar') or tem_permissao('resultados','visualizar')
+);
+drop policy if exists "inserir receitas" on receitas;
+create policy "inserir receitas" on receitas for insert with check (
+  tem_permissao('financeiro','editar') or tem_permissao('resultados','editar')
+);
+drop policy if exists "atualizar receitas" on receitas;
+create policy "atualizar receitas" on receitas for update using (
+  tem_permissao('financeiro','editar') or tem_permissao('resultados','editar')
+) with check (
+  tem_permissao('financeiro','editar') or tem_permissao('resultados','editar')
+);
+drop policy if exists "excluir receitas" on receitas;
+create policy "excluir receitas" on receitas for delete using (
+  tem_permissao('financeiro','editar') or tem_permissao('resultados','editar')
+);

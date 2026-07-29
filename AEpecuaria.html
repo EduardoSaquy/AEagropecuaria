@@ -615,7 +615,7 @@ async function loadAll(){
 
 /* ===================== ESTADO ===================== */
 const state = {
-  page: 'financeiroResumo',
+  page: 'financeiroCustosFixos',
   mobileNavOpen: false,
   ingredientes: [],
   movimentos: [],
@@ -679,6 +679,12 @@ function render(){
 
   const grupos = gruposVisiveis();
   const semModulos = grupos.length===0;
+  // Página restrita (soAdmin) e o perfil não é proprietário/admin -- pode
+  // acontecer se o papel mudar (ou for rebaixado) enquanto essa página
+  // ainda está aberta; redireciona pra primeira página permitida.
+  if(!semModulos && !paginaVisivel(GROUPS[currentGroupKey()]?.pages.find(p=>p.key===state.page) || {})){
+    state.page = primeiraPaginaVisivel();
+  }
   // Se qualquer Page/Modal explodir (erro de JS), melhor mostrar o erro e
   // deixar a navegação (Sidebar) funcionando do que travar a tela inteira
   // sem pista nenhuma do que aconteceu.
@@ -721,7 +727,7 @@ function render(){
     conteudo = `<div class="card" style="margin:20px;">
       <h3 style="color:var(--alerta);">Ocorreu um erro ao carregar esta tela</h3>
       <p class="hint">Mande um print desta mensagem: <strong>${String(e && e.message || e)}</strong></p>
-      <button class="btn btn-ghost btn-sm" data-voltar-erro="1" style="margin-top:10px;">Voltar pro Resumo</button>
+      <button class="btn btn-ghost btn-sm" data-voltar-erro="1" style="margin-top:10px;">Voltar pro início</button>
     </div>`;
   }
   let modalHtml = '';
@@ -760,7 +766,9 @@ const ACAO_MODULOS = {
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'], parto:['cria'],
   pesagem:['confinamento','pasto','cria'],
   custoFixo:['financeiro'], precoArroba:['financeiro'],
-  receita:['resultados'], metaMargem:['resultados'], investimento:['resultados'],
+  // Receita agora se lança pela aba Financeiro (não mais só Resultados) --
+  // ver o rateio "resultados"/margem continua exclusivo de Resultados.
+  receita:['financeiro','resultados'], metaMargem:['resultados'], investimento:['resultados'],
 };
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
@@ -792,12 +800,23 @@ function grupoVisivel(key){
   if(key==='vendas') return temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
+// Algumas páginas dentro de um grupo visível são mais sensíveis que o resto
+// do grupo (detalhamento de custo/margem) e ficam restritas a proprietário/
+// administrador mesmo pra quem tem a permissão do módulo (ex: Resultados)
+// liberada -- por isso o corte é feito por página (soAdmin), não só por grupo.
+function paginaVisivel(pagina){
+  return !pagina.soAdmin || souAdmin();
+}
+function paginasVisiveisDoGrupo(grupo){
+  return grupo ? grupo.pages.filter(paginaVisivel) : [];
+}
 function gruposVisiveis(){
   return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key));
 }
 function primeiraPaginaVisivel(){
   const grupos = gruposVisiveis();
-  return grupos[0] ? grupos[0][1].pages[0].key : null;
+  const paginas = grupos[0] ? paginasVisiveisDoGrupo(grupos[0][1]) : [];
+  return paginas[0] ? paginas[0].key : null;
 }
 
 // Perfil (nome/papel/permissões) fica salvo neste aparelho depois de toda
@@ -886,7 +905,7 @@ async function fazerLogout(){
   await db.auth.signOut();
   state.session = null;
   state.perfil = null;
-  state.page = 'financeiroResumo';
+  state.page = 'financeiroCustosFixos';
   render();
 }
 
@@ -1288,14 +1307,17 @@ const GROUPS = {
   vendas: {label:'Vendas', icon:iconVenda(), pages:[
     {key:'vendasGeral', label:'Vendas'},
   ]},
+  // Financeiro é exclusivo pra lançamento de receita/despesa -- o
+  // detalhamento de custo (antes "Resumo" e "Por Lote" aqui) foi pra
+  // Resultados, restrito a proprietário/administrador (ver PAGINAS_SO_ADMIN).
   financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
-    {key:'financeiroResumo', label:'Resumo'},
-    {key:'financeiroCurral', label:'Por Lote'},
     {key:'financeiroCustosFixos', label:'Despesas'},
+    {key:'resultadosReceitas', label:'Receitas'},
   ]},
   resultados: {label:'Resultados', icon:iconResultados(), pages:[
     {key:'resultadosResumo', label:'Resumo'},
-    {key:'resultadosReceitas', label:'Receitas'},
+    {key:'financeiroResumo', label:'Custos Detalhados', soAdmin:true},
+    {key:'financeiroCurral', label:'Por Lote', soAdmin:true},
     {key:'resultadosInvestimentos', label:'Investimentos'},
   ]},
   fazenda: {label:'Fazenda', icon:iconFazenda(), pages:[
@@ -1349,10 +1371,11 @@ function Sidebar(){
 }
 function SubTabs(){
   const group = GROUPS[currentGroupKey()];
-  if(!group || group.pages.length<2) return '';
+  const paginas = paginasVisiveisDoGrupo(group);
+  if(paginas.length<2) return '';
   return `
   <div class="subtabs">
-    ${group.pages.map(p=>`
+    ${paginas.map(p=>`
       <button class="subtab ${state.page===p.key?'active':''}" data-subnav="${p.key}">${p.label}</button>
     `).join('')}
   </div>`;
@@ -1397,12 +1420,12 @@ function Header(){
     pesagemConfinamento:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Confinamento, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     pesagemPasto:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Pasto, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     pesagemReproducao:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Cria, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
-    financeiroResumo:{eyebrow:'Gestão', title:'Resumo', desc:'Indicadores de custo do dia e do mês da operação.'},
-    financeiroCurral:{eyebrow:'Gestão', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo.'},
-    financeiroCustosFixos:{eyebrow:'Gestão', title:'Despesas', desc:'Despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Pasto ou Cria.'},
+    financeiroResumo:{eyebrow:'Resultado', title:'Custos Detalhados', desc:'Indicadores de custo do dia e do mês da operação — visível só para proprietário/administrador.'},
+    financeiroCurral:{eyebrow:'Resultado', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo — visível só para proprietário/administrador.'},
+    financeiroCustosFixos:{eyebrow:'Financeiro', title:'Despesas', desc:'Lance as despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Pasto ou Cria.'},
     resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
-    resultadosReceitas:{eyebrow:'Resultado', title:'Receitas', desc:'Venda de animais e outras receitas da operação, por data e lote.'},
+    resultadosReceitas:{eyebrow:'Financeiro', title:'Receitas', desc:'Lance a venda de animais e outras receitas da operação, por data e lote.'},
     fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Cadastro das fazendas da operação — a soma dos hectares de todas é usada para calcular o resultado financeiro por hectare.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
   };
@@ -2870,11 +2893,23 @@ function dadosFinanceiro(){
   const arrobasMes = arrobasProduzidasFazendaNoMes(mes);
   const custoPorArrobaMes = arrobasMes>0 ? totalMes/arrobasMes : null;
 
+  // Acumulado do ano (janeiro até o mês atual) -- mesmo critério já usado no
+  // "Por hectare" e nos painéis de Resultados: soma mês a mês em vez de só
+  // mostrar o mês corrente, consolidando conforme o ano avança.
+  const mesesAno = mesesDoAnoAteAgora();
+  const variavelAno = mesesAno.reduce((a,m)=>a+custoVariavelDoMes(m),0);
+  const fixosAno = mesesAno.reduce((a,m)=>a+fixosDoMes(m),0);
+  const totalAno = variavelAno + fixosAno;
+  const custoTotalPorAnimalAno = totalAnimais>0 ? totalAno/totalAnimais : 0;
+  const arrobasAno = mesesAno.reduce((a,m)=>a+arrobasProduzidasFazendaNoMes(m),0);
+  const custoPorArrobaAno = arrobasAno>0 ? totalAno/arrobasAno : null;
+
   return {hoje, mes,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
     fixoConfinamento, fixoPasto, fixoCria, detalhesPorArea,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
-    totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes};
+    totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes,
+    variavelAno, fixosAno, totalAno, custoTotalPorAnimalAno, arrobasAno, custoPorArrobaAno};
 }
 
 /* ---- Financeiro: Resumo ---- */
@@ -2924,6 +2959,25 @@ function PageFinanceiroResumo(){
       <div>
         <div class="stat-label">Total do mês (variável + fixo)</div>
         <div class="stat-value" style="font-size:26px;">R$ ${fmt(d.totalMes)}</div>
+      </div>
+      <span class="hint">${fmtInt(d.totalAnimais)} animais em lotes ativos</span>
+    </div>
+  </div>
+
+  <p class="eyebrow" style="margin:22px 0 10px;">Este ano</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo variável no ano</div><div class="stat-value">R$ ${fmt(d.variavelAno)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custos fixos no ano</div><div class="stat-value">R$ ${fmt(d.fixosAno)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total/animal/ano (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalAno,2)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo por @ produzida no ano</div><div class="stat-value">${d.custoPorArrobaAno!==null ? 'R$ '+fmt(d.custoPorArrobaAno,2) : '—'}</div><div class="hint" style="margin-top:3px;">${fmt(d.arrobasAno,1)} @ produzidas na fazenda</div></div>
+  </div>
+  <p class="hint" style="margin:10px 0 20px;">Acumulado de janeiro até o mês atual (mesmo critério do "Este mês", somado mês a mês) — vai se consolidando conforme o ano avança.</p>
+
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <div class="stat-label">Total do ano (variável + fixo)</div>
+        <div class="stat-value" style="font-size:26px;">R$ ${fmt(d.totalAno)}</div>
       </div>
       <span class="hint">${fmtInt(d.totalAnimais)} animais em lotes ativos</span>
     </div>
@@ -3150,7 +3204,7 @@ function PageResultadosReceitas(){
             <td class="mono">R$ ${fmt(r.valor)}</td>
             <td>${esc(r.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${temPermissao('resultados','editar') ? `
+              ${(temPermissao('financeiro','editar') || temPermissao('resultados','editar')) ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
               <button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>
               ` : ''}
@@ -3176,6 +3230,8 @@ function areasLabel(areas){
 }
 function PageFinanceiroCustosFixos(){
   const busca = state.searchDespesas.toLowerCase();
+  const mesAtual = mesAtualStr();
+  const acumuladoMes = fixosDoMes(mesAtual);
   const mesesDisponiveis = [...new Set(state.custosFixos.map(c=>c.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
   const list = [...state.custosFixos].filter(c=>
     (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca) || (c.descricao||'').toLowerCase().includes(busca))
@@ -3186,6 +3242,10 @@ function PageFinanceiroCustosFixos(){
     return (b.mes||'').localeCompare(a.mes||'');
   });
   return `
+  <div class="stat-row" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Despesas acumuladas em ${mesLabel(mesAtual)}</div><div class="stat-value">R$ ${fmt(acumuladoMes)}</div></div>
+  </div>
+  <p class="hint" style="margin:-6px 0 14px;">Soma dos custos fixos que valem para o mês atual — cada centro de custo usa o valor cadastrado especificamente para ${mesLabel(mesAtual)} quando existe, senão o valor recorrente.</p>
   <div class="field-row" style="margin-bottom:14px;">
     <div class="field" style="max-width:340px;">
       <input type="text" placeholder="Buscar por nome ou centro de custo..." value="${state.searchDespesas}" data-search-despesas="1"/>
@@ -4279,7 +4339,8 @@ function attachEvents(){
   document.querySelectorAll('[data-nav-group]').forEach(el=>{
     el.onclick = ()=>{
       const group = GROUPS[el.dataset.navGroup];
-      if(!group.pages.some(p=>p.key===state.page)) state.page = group.pages[0].key;
+      const paginas = paginasVisiveisDoGrupo(group);
+      if(!paginas.some(p=>p.key===state.page)) state.page = paginas[0]?.key;
       state.mobileNavOpen = false;
       render();
     };
@@ -4293,7 +4354,7 @@ function attachEvents(){
   });
   const voltarErroBtn = document.querySelector('[data-voltar-erro]');
   if(voltarErroBtn){
-    voltarErroBtn.onclick = ()=>{ state.page = 'financeiroResumo'; render(); };
+    voltarErroBtn.onclick = ()=>{ state.page = primeiraPaginaVisivel(); render(); };
   }
   const fabToggle = document.querySelector('[data-fab-toggle]');
   if(fabToggle){
