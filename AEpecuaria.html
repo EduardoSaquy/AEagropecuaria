@@ -811,7 +811,10 @@ function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.pap
 // pode excluir nada -- o botão Excluir some pra esse papel em toda a tela,
 // mesmo onde antes aparecia junto com o Editar.
 function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
-// criar lote é restrito por cargo (não pela tabela de permissões por módulo): Colaborador nunca pode.
+/// Acesso "de cargo" (não pela tabela de permissões por módulo) à aba Lotes
+// (visão geral) e a criar lote direto por lá. Colaborador ainda consegue
+// lançar entrada de animais (novo lote ou somar num existente) pela aba do
+// próprio módulo (Confinamento/Pasto/Cria) -- ver uso de podeEditarAcao('lote').
 function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
@@ -1637,7 +1640,11 @@ function FabMenu(){
   ].filter(a=>{
     if(a.type==='venda') return currentGroupKey()==='vendas' && (podeRegistrarVenda('confinamento') || podeRegistrarVenda('pasto') || podeRegistrarVenda('reproducao'));
     const nestaAba = (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]);
-    if(a.type==='lote') return nestaAba && podeCriarLote();
+    // Consultor/Administrador/Proprietário sempre podem lançar entrada de
+    // animais; Colaborador também pode, desde que tenha permissão de editar
+    // no módulo daquela aba -- só não pode editar um lote já cadastrado
+    // diretamente (botão Editar na lista, sem relação com essa ação).
+    if(a.type==='lote') return nestaAba && (podeCriarLote() || podeEditarAcao('lote'));
     return nestaAba && podeEditarAcao(a.type);
   });
   if(actions.length===0) return '';
@@ -1951,7 +1958,7 @@ function PageLotes(tipo){
             <td>${l.dataFim ? '<span class="pill pill-cat">Encerrado</span>' : '<span class="pill pill-ok">Ativo</span>'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
+              ${!souColaborador() ? `<button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>` : ''}
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>` : ''}
               ` : ''}
               ${!l.dataFim && Number(l.numeroAnimais||0)>0 && podeRegistrarVenda(tipo) ? `
@@ -1972,7 +1979,7 @@ function PageLotesGeral(){
   return `
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
-    ${podeCriarLote() ? `<button class="btn btn-primary btn-sm" data-fab-action="lote">+ Novo lote</button>` : ''}
+    ${podeCriarLote() ? `<button class="btn btn-primary btn-sm" data-fab-action="lote">+ Nova entrada de animais</button>` : ''}
   </div>
   <div class="card">
     ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre um lote e escolha o destino — Confinamento, Pasto ou Cria — para ele aparecer na aba certa.') : `
@@ -1992,7 +1999,7 @@ function PageLotesGeral(){
             <td>${l.dataFim ? '<span class="pill pill-cat">Encerrado</span>' : '<span class="pill pill-ok">Ativo</span>'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(TIPO_MODULO[loteTipo(l)],'editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
+              ${!souColaborador() ? `<button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>` : ''}
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
@@ -2123,7 +2130,7 @@ function PageSaidaRacao(tipo){
             <td class="mono">${s.criadoEm ? new Date(s.criadoEm).toLocaleString('pt-BR') : '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>
+              ${!souColaborador() ? `<button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>` : ''}
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-racao="${s.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
