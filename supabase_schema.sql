@@ -1014,3 +1014,15 @@ create policy "excluir receitas" on receitas for delete using (
 -- padrão até serem editados, sem impacto no que já existe.
 -- ===================================================================
 alter table lotes add column if not exists dieta_id bigint references dietas(id) on delete set null;
+
+-- ===================================================================
+-- MIGRAÇÃO: Sexo do lote (permite lançar partos em lotes de Confinamento)
+-- Lote de vaca de cria às vezes fica alocado no Confinamento (não só no
+-- Cria) -- pra poder lançar partos desses lotes sem misturar com lote de
+-- macho, cada lote agora pode informar o sexo dos animais (Fêmeas, Machos
+-- ou Misto). Um lote de Confinamento marcado como Fêmeas passa a aparecer
+-- também no lançamento de "Novo parto".
+-- Pode rodar a qualquer momento -- lotes já cadastrados ficam sem sexo
+-- informado até serem editados, sem impacto no que já existe.
+-- ===================================================================
+alter table lotes add column if not exists sexo text check (sexo in ('macho','femea','misto'));
