@@ -3037,12 +3037,13 @@ function PageFinanceiroResumo(){
   <p class="eyebrow" style="margin-bottom:10px;">Custo por atividade (mês)</p>
   <div class="card" style="margin-bottom:22px;">
     <table>
-      <thead><tr><th>Atividade</th><th>Nº animais</th><th>Custo diário (méd.)</th><th>Total no mês</th><th>Custo/animal</th></tr></thead>
+      <thead><tr><th>Atividade</th><th>Nº animais</th><th>Custo diário (méd.)</th><th>Custo/animal (méd./dia)</th><th>Total no mês</th><th>Custo/animal/mês</th></tr></thead>
       <tbody>
         <tr>
           <td><strong>Confinamento</strong></td>
           <td class="mono">${fmtInt(d.animaisConfinamento)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalConfinamentoMes/diasDecorridosMes)}</td>
+          <td class="mono">${d.animaisConfinamento>0 ? 'R$ '+fmt(d.custoTotalConfinamentoMes/diasDecorridosMes/d.animaisConfinamento,2) : '—'}</td>
           <td class="mono">R$ ${fmt(d.custoTotalConfinamentoMes)}</td>
           <td class="mono">${d.animaisConfinamento>0 ? 'R$ '+fmt(d.custoTotalConfinamentoMes/d.animaisConfinamento,2) : '—'}</td>
         </tr>
@@ -3050,6 +3051,7 @@ function PageFinanceiroResumo(){
           <td><strong>Pasto</strong></td>
           <td class="mono">${fmtInt(d.animaisPasto)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalPastoMes/diasDecorridosMes)}</td>
+          <td class="mono">${d.animaisPasto>0 ? 'R$ '+fmt(d.custoTotalPastoMes/diasDecorridosMes/d.animaisPasto,2) : '—'}</td>
           <td class="mono">R$ ${fmt(d.custoTotalPastoMes)}</td>
           <td class="mono">${d.animaisPasto>0 ? 'R$ '+fmt(d.custoTotalPastoMes/d.animaisPasto,2) : '—'}</td>
         </tr>
@@ -3057,6 +3059,7 @@ function PageFinanceiroResumo(){
           <td><strong>Cria</strong></td>
           <td class="mono">${fmtInt(d.animaisCria)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalCriaMes/diasDecorridosMes)}</td>
+          <td class="mono">${d.animaisCria>0 ? 'R$ '+fmt(d.custoTotalCriaMes/diasDecorridosMes/d.animaisCria,2) : '—'}</td>
           <td class="mono">R$ ${fmt(d.custoTotalCriaMes)}</td>
           <td class="mono">${d.animaisCria>0 ? 'R$ '+fmt(d.custoTotalCriaMes/d.animaisCria,2) : '—'}</td>
         </tr>
