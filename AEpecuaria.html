@@ -201,6 +201,13 @@
     border-radius:var(--radius);
     box-shadow:var(--shadow);
     border:1px solid var(--cinza-claro);
+    /* overflow-x:auto -- antes, uma tabela mais larga que a tela rolava
+       junto com a página inteira (scroll horizontal do navegador). Desde
+       que o .app virou um "shell" de altura fixa com overflow:hidden (pra
+       corrigir a barra lateral no Safari), esse scroll da página deixou de
+       existir -- sem isso aqui, colunas como Editar/Excluir ficavam cortadas
+       e inacessíveis em vez de só overflow'ando pra fora da tela. */
+    overflow-x:auto;
   }
   .card-pad{padding:22px 24px;}
   .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
