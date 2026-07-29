@@ -3034,7 +3034,7 @@ function PageFinanceiroResumo(){
     </div>
   </div>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Custo por atividade (mês)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Custo por atividade</p>
   <div class="card" style="margin-bottom:22px;">
     <table>
       <thead><tr><th>Atividade</th><th>Nº animais</th><th>Custo diário (méd.)</th><th>Custo/animal (méd./dia)</th><th>Total no mês</th><th>Custo/animal/mês</th></tr></thead>
@@ -3063,10 +3063,18 @@ function PageFinanceiroResumo(){
           <td class="mono">R$ ${fmt(d.custoTotalCriaMes)}</td>
           <td class="mono">${d.animaisCria>0 ? 'R$ '+fmt(d.custoTotalCriaMes/d.animaisCria,2) : '—'}</td>
         </tr>
+        <tr style="border-top:2px solid var(--cinza-claro);">
+          <td><strong>Média ponderada</strong></td>
+          <td class="mono"><strong>${fmtInt(d.totalAnimais)}</strong></td>
+          <td class="mono"><strong>R$ ${fmt(d.totalMes/diasDecorridosMes)}</strong></td>
+          <td class="mono"><strong>${d.totalAnimais>0 ? 'R$ '+fmt(d.custoTotalPorAnimalMedioDia,2) : '—'}</strong></td>
+          <td class="mono"><strong>R$ ${fmt(d.totalMes)}</strong></td>
+          <td class="mono"><strong>${d.totalAnimais>0 ? 'R$ '+fmt(d.custoTotalPorAnimalMes,2) : '—'}</strong></td>
+        </tr>
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">Cada atividade soma sua ração/pasto/cria do mês + a fatia do custo fixo rateada pra ela (mesmo critério de "Por Lote"). "Custo diário" não é o gasto de hoje especificamente — é o total já gasto no mês até agora dividido pelos dias já passados, mesmo critério usado no resto da tela. Pra ver o detalhe curral por curral, ou o custo por @ produzida de cada atividade, veja Resultados &gt; Por Lote.</p>
+  <p class="hint" style="margin:-14px 0 22px;">Cada atividade soma sua ração/pasto/cria do mês + a fatia do custo fixo rateada pra ela (mesmo critério de "Por Lote"). "Custo diário" não é o gasto de hoje especificamente — é o total já gasto no mês até agora dividido pelos dias já passados, mesmo critério usado no resto da tela. "Média ponderada" é a fazenda inteira somada (todas as atividades), não uma média simples das três linhas — pesa pelo número de animais de cada uma. Pra ver o detalhe curral por curral, ou o custo por @ produzida de cada atividade, veja Resultados &gt; Por Lote.</p>
 
   <p class="eyebrow" style="margin:22px 0 10px;">Este ano</p>
   <div class="stat-row">
