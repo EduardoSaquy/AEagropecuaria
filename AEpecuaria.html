@@ -2002,6 +2002,7 @@ function PageVendasGeral(){
 
 /* ===================== PÁGINA: SAÍDA DE RAÇÃO ===================== */
 function PageSaidaRacao(tipo){
+  const verValor = souAdmin();
   // Dieta de Cria é guardada com tipo "cria" (não "reproducao" -- esse é só
   // o nome do lote/módulo, herdado de TIPO_PESAGEM_LABEL/TIPO_MODULO).
   const dietaTipo = tipo==='reproducao' ? 'cria' : tipo;
