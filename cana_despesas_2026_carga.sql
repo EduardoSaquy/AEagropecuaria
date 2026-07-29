@@ -32,8 +32,13 @@
 --    balanco, nao custo da lavoura.
 --
 -- IMPORTANTE — confira antes de rodar:
--- 1. O subquery abaixo pega a fazenda de Jardinopolis-SP pelo nome.
---    Se o nome cadastrado for diferente, ajuste o 'where' abaixo.
+-- 1. O relatorio nao separa despesa por fazenda (e um total unico da
+--    operacao de cana inteira). Ha 3 fazendas cadastradas (Palhadao,
+--    Palmito, Mata Verde); o subquery abaixo aponta pra Faz. Palhadao
+--    como fazenda_id em todas as linhas -- isso e so preenchimento
+--    obrigatorio do banco, NAO afeta o calculo de custo: o app rateia
+--    despesa geral (sem talhao) pelo hectare em producao somando os
+--    talhoes de TODAS as fazendas juntas, sem separar por fazenda_id.
 -- 2. talhao_id fica NULL em todas as linhas (o relatorio nao tem
 --    informacao de talhao) -- essas despesas gerais vao entrar no
 --    rateio por hectare em producao, como ja funciona no app.
@@ -45,7 +50,7 @@
 -- ============================================================
 
 with fz as (
-  select id from fazendas where estado = 'SP' order by id limit 1
+  select id from fazendas where nome = 'Faz. Palhadão' limit 1
 )
 insert into despesas_cana (fazenda_id, talhao_id, centro_custo_id, data, categoria, descricao, valor)
 select fz.id, null, null, v.data::date, v.categoria, v.descricao, v.valor
