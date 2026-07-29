@@ -1001,3 +1001,16 @@ drop policy if exists "excluir receitas" on receitas;
 create policy "excluir receitas" on receitas for delete using (
   tem_permissao('financeiro','editar') or tem_permissao('resultados','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Dieta padrão vinculada ao lote
+-- Colaboradores esqueciam de trocar a dieta certa ao lançar Saída de
+-- Ração — a ração servida estava certa, só o lançamento no app é que
+-- ficava com a dieta errada. Agora cada lote pode ter uma dieta padrão
+-- (cadastrada na aba Lotes); ao escolher o lote na Saída de Ração, a
+-- dieta já vem pré-selecionada (ainda pode trocar na hora, se precisar,
+-- mas não salva em branco).
+-- Pode rodar a qualquer momento -- lotes já cadastrados ficam sem dieta
+-- padrão até serem editados, sem impacto no que já existe.
+-- ===================================================================
+alter table lotes add column if not exists dieta_id bigint references dietas(id) on delete set null;
