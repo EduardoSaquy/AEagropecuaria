@@ -2130,15 +2130,47 @@ function custoPasto(p){
 }
 function PagePasto(){
   const verValor = souAdmin();
-  const list = state.pasto
-    .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; })
+  const filtro = state.filtrosSaidaRacao['pasto'] || {mes:'', loteId:'', dietaId:''};
+  const listaTipo = state.pasto
+    .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; });
+  const lotesTipo = state.lotes.filter(l=>loteTipo(l)==='pasto');
+  const dietasTipo = state.dietas.filter(d=>d.tipo==='pasto');
+  const mesesDisponiveis = [...new Set(listaTipo.map(p=>p.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const list = listaTipo
+    .filter(p=> !filtro.mes || p.data.startsWith(filtro.mes))
+    .filter(p=> !filtro.loteId || String(p.loteId)===String(filtro.loteId))
+    .filter(p=> !filtro.dietaId || String(p.dietaId)===String(filtro.dietaId))
     .sort((a,b)=> b.data.localeCompare(a.data));
+  const temFiltro = !!(filtro.mes || filtro.loteId || filtro.dietaId);
+  const vazio = listaTipo.length>0
+    ? Empty('Nenhuma reposição de pasto com esse filtro','Tente outro mês, lote ou dieta.')
+    : Empty('Nenhuma reposição de pasto registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.');
   return `
+  <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
+    <div class="field" style="max-width:200px;">
+      <select data-filtro-mes-racao="pasto">
+        <option value="">Todos os meses</option>
+        ${mesesDisponiveis.map(m=>`<option value="${m}" ${filtro.mes===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field" style="max-width:220px;">
+      <select data-filtro-lote-racao="pasto">
+        <option value="">Todos os lotes</option>
+        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${l.nome}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field" style="max-width:220px;">
+      <select data-filtro-dieta-racao="pasto">
+        <option value="">Todas as dietas</option>
+        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${d.nome}</option>`).join('')}
+      </select>
+    </div>
+  </div>
   <div class="toolbar">
-    <span class="hint">${list.length} reposição(ões) registrada(s)</span>
+    <span class="hint">${list.length} reposição(ões) registrada(s)${temFiltro ? ' (filtrado)' : ''}</span>
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma reposição de pasto registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.') : `
+    ${list.length===0 ? vazio : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
