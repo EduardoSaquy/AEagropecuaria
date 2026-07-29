@@ -4,11 +4,16 @@
 -- Atividade: CANA), periodo 01/01/2026 a 31/12/2026.
 --
 -- Total de lancamentos no relatorio original: 545
--- Total de linhas geradas aqui: 2283
+-- Removidos por serem capex/financiamento, nao custo operacional
+-- (ver nota abaixo): 5 lancamentos, R$ 27.981,09
+-- Total de lancamentos considerados: 540
+-- Total de linhas geradas aqui: 2245
 --   (cada lancamento SEM competencia nem data de pagamento no
 --   relatorio foi dividido em 12 parcelas de 1/12 do valor,
---   uma por mes de 2026 -- ha 158 lancamentos nessa situacao)
--- Valor total (deve bater com o relatorio): R$ 2.484.041,58
+--   uma por mes de 2026)
+-- Valor total: R$ 2.456.060,49
+-- (relatorio original: R$ 2.484.041,58 — a diferenca e exatamente
+-- os R$ 27.981,09 removidos)
 --
 -- A data usada em cada linha e a COMPETENCIA (mes a que a despesa
 -- se refere), dia 15, e nao a data de pagamento -- para nao
@@ -16,10 +21,24 @@
 -- competencias diferentes foram pagas todas no mesmo dia).
 -- A data de pagamento original fica registrada na descricao.
 --
+-- REMOVIDO DESTA CARGA (nao e despesa operacional, nao deve
+-- pesar no custo por hectare):
+--  - 'INVESTIMENTO EM ATIVOS' (aquisicao de maquinas + obras de
+--    infraestrutura, R$ 13.748,29) -- e capex, deveria ser
+--    depreciado ao longo da vida util do bem, nao lancado
+--    inteiro num mes.
+--  - 'AMORTIZACOES DE EMPRESTIMOS E FINANCIAMENTOS' (R$ 14.232,80)
+--    -- e devolucao de principal de divida, um movimento de
+--    balanco, nao custo da lavoura.
+--
 -- IMPORTANTE — confira antes de rodar:
--- 1. O subquery abaixo pega a PRIMEIRA fazenda cadastrada em SP.
---    Se voce tiver mais de uma fazenda, troque o 'where' para
---    apontar pra fazenda certa (ex: where nome = 'Nome exato').
+-- 1. O relatorio nao separa despesa por fazenda (e um total unico da
+--    operacao de cana inteira). Ha 3 fazendas cadastradas (Palhadao,
+--    Palmito, Mata Verde); o subquery abaixo aponta pra Faz. Palhadao
+--    como fazenda_id em todas as linhas -- isso e so preenchimento
+--    obrigatorio do banco, NAO afeta o calculo de custo: o app rateia
+--    despesa geral (sem talhao) pelo hectare em producao somando os
+--    talhoes de TODAS as fazendas juntas, sem separar por fazenda_id.
 -- 2. talhao_id fica NULL em todas as linhas (o relatorio nao tem
 --    informacao de talhao) -- essas despesas gerais vao entrar no
 --    rateio por hectare em producao, como ja funciona no app.
@@ -28,16 +47,10 @@
 --    manutencao, outro) -- a categoria original do relatorio (ex:
 --    'ADUBOS E FERTILIZANTES', 'TRIBUTOS', 'COMBUSTIVEIS') ficou
 --    preservada no texto da descricao.
--- 4. Duas categorias do relatorio sao discutiveis como despesa
---    operacional: 'INVESTIMENTO EM ATIVOS' (R$ 13.748,29) e
---    'AMORTIZACOES DE EMPRESTIMOS E FINANCIAMENTOS' (R$ 14.232,80).
---    Estao incluidas aqui, mas se voce nao quiser que elas pesem
---    no custo por hectare, filtre por essas duas descricoes depois
---    de rodar, ou me avise que eu tiro antes.
 -- ============================================================
 
 with fz as (
-  select id from fazendas where estado = 'SP' order by id limit 1
+  select id from fazendas where nome = 'Faz. Palhadão' limit 1
 )
 insert into despesas_cana (fazenda_id, talhao_id, centro_custo_id, data, categoria, descricao, valor)
 select fz.id, null, null, v.data::date, v.categoria, v.descricao, v.valor
@@ -2101,32 +2114,6 @@ from fz, (values
   ('2026-10-15', 'outro', 'TRIBUTOS — SECRETARIA DA RECEITA FEDERAL (doc 9134, TRIBUTOS E CONTRIBUIÇÕES) [rateado 1/12 entre os meses do ano — sem data no relatório]', 374.38),
   ('2026-11-15', 'outro', 'TRIBUTOS — SECRETARIA DA RECEITA FEDERAL (doc 9134, TRIBUTOS E CONTRIBUIÇÕES) [rateado 1/12 entre os meses do ano — sem data no relatório]', 374.38),
   ('2026-12-15', 'outro', 'TRIBUTOS — SECRETARIA DA RECEITA FEDERAL (doc 9134, TRIBUTOS E CONTRIBUIÇÕES) [rateado 1/12 entre os meses do ano — sem data no relatório]', 374.41),
-  ('2026-05-15', 'outro', 'AQUISIÇÃO DE MÁQUINAS, CAMINHÕES E EQUIPAMENTOS — COOPERCITRUS (doc 9292, INVESTIMENTO EM ATIVOS, pago em 26/05/2026)', 7988.04),
-  ('2026-07-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9622, INVESTIMENTO EM ATIVOS, pago em 20/07/2026)', 1920.25),
-  ('2026-01-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-02-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-03-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-04-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-05-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-06-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-07-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-08-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-09-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-10-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-11-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-12-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9623, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-01-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-02-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-03-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-04-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-05-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-06-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-07-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-08-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-09-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-10-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-11-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
-  ('2026-12-15', 'outro', 'INVESTIMENTOS EM INFRAESTRUTURA — PORTÃO MATERIAIS DE CONSTRUÇÃO LTDA (doc 9624, INVESTIMENTO EM ATIVOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 160.00),
   ('2026-03-15', 'outro', 'COMBUSTÍVEL PARA FROTA TRATORES, MÁQUINAS E VEÍCULOS DA OPERAÇÃO — AGRIPETRO (doc 8702, COMBUSTÍVEIS DA OPERAÇÃO AGROPECUÁRIA, pago em 30/03/2026)', 15280.00),
   ('2026-03-15', 'outro', 'COMBUSTÍVEL PARA FROTA TRATORES, MÁQUINAS E VEÍCULOS DA OPERAÇÃO — AGRIPETRO (doc 8667, COMBUSTÍVEIS DA OPERAÇÃO AGROPECUÁRIA, pago em 30/03/2026)', 11100.00),
   ('2026-03-15', 'outro', 'COMBUSTÍVEL PARA FROTA TRATORES, MÁQUINAS E VEÍCULOS DA OPERAÇÃO — AGRIPETRO (doc 8668, COMBUSTÍVEIS DA OPERAÇÃO AGROPECUÁRIA, pago em 30/03/2026)', 11100.00),
@@ -2311,18 +2298,6 @@ from fz, (values
   ('2026-10-15', 'outro', 'CONTABILIDADE — CONTABILIDADE CRUZ (doc 8304, SERVIÇOS PROFISSIONAIS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 77.67),
   ('2026-11-15', 'outro', 'CONTABILIDADE — CONTABILIDADE CRUZ (doc 8304, SERVIÇOS PROFISSIONAIS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 77.67),
   ('2026-12-15', 'outro', 'CONTABILIDADE — CONTABILIDADE CRUZ (doc 8304, SERVIÇOS PROFISSIONAIS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 77.63),
-  ('2026-01-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-02-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-03-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-04-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-05-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-06-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-07-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-08-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-09-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-10-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-11-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.07),
-  ('2026-12-15', 'outro', 'AMORTIZAÇÃO DE FINANCIAMENTO — BANCO DO BRASIL (doc 1550, AMORTIZAÇÕES DE EMPRÉSTIMOS E FINANCIAMENTOS) [rateado 1/12 entre os meses do ano — sem data no relatório]', 1186.03),
   ('2026-06-15', 'outro', 'PROJETOS TÉCNICOS — TIAGO LUIZ FERREIRA (doc 9422, CUSTAS CONTRATUAIS, pago em 15/06/2026)', 6600.00),
   ('2026-06-15', 'outro', 'PROJETOS TÉCNICOS — TIAGO LUIZ FERREIRA (doc 9355, CUSTAS CONTRATUAIS, pago em 03/06/2026)', 2353.00)
 ) as v(data, categoria, descricao, valor);
