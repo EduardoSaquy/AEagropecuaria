@@ -57,8 +57,12 @@
     padding:24px 16px;
     position:sticky;
     top:0;
-    height:100vh;
-    overflow-y:auto;
+    /* min-height (não height fixo + overflow-y:auto): numa janela mais baixa
+       (browser com barras, notebook), o conteúdo do menu (logo + usuário +
+       8 itens + rodapé) podia passar de 100vh -- com overflow-y:auto isso
+       criava um scroll PRÓPRIO da sidebar, escondendo os itens de baixo
+       (Confinamento pra baixo) em vez de simplesmente mostrar tudo. */
+    min-height:100vh;
   }
   .brand{
     display:flex;
