@@ -807,6 +807,10 @@ const ACAO_MODULOS = {
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
+// Colaborador pode editar (quando tiver permissão do módulo), mas nunca
+// pode excluir nada -- o botão Excluir some pra esse papel em toda a tela,
+// mesmo onde antes aparecia junto com o Editar.
+function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 // criar lote é restrito por cargo (não pela tabela de permissões por módulo): Colaborador nunca pode.
 function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
@@ -1674,7 +1678,7 @@ function PageIngredientes(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('insumos','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-ing="${i.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-ing="${i.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-ing="${i.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>
@@ -1743,7 +1747,7 @@ function PageEstoque(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('insumos','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -1831,7 +1835,7 @@ function PageDietas(){
         ${temPermissao('dietas','editar') ? `
         <div style="margin-top:14px; display:flex; gap:10px;">
           <button class="btn btn-ghost btn-sm" data-edit-diet="${d.id}">Editar dieta</button>
-          <button class="btn btn-danger-ghost" data-del-diet="${d.id}">Excluir dieta</button>
+          ${!souColaborador() ? `<button class="btn btn-danger-ghost" data-del-diet="${d.id}">Excluir dieta</button>` : ''}
         </div>
         ` : ''}
       </div>` : ''}
@@ -1896,7 +1900,7 @@ function PageEstoqueRacao(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('dietas','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-producao="${p.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-producao="${p.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-producao="${p.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -1943,7 +1947,7 @@ function PageLotes(tipo){
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>` : ''}
               ` : ''}
               ${!l.dataFim && Number(l.numeroAnimais||0)>0 && podeRegistrarVenda(tipo) ? `
               <button class="btn-ghost btn-sm" data-vender-lote="${l.id}">Vender</button>
@@ -1984,7 +1988,7 @@ function PageLotesGeral(){
             <td style="display:flex; gap:6px;">
               ${temPermissao(TIPO_MODULO[loteTipo(l)],'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-lote="${l.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>
@@ -2036,7 +2040,7 @@ function PageVendasGeral(){
             <td style="display:flex; gap:6px;">
               ${tipo && podeRegistrarVenda(tipo) ? `
               <button class="btn-ghost btn-sm" data-edit-venda="${v.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-venda="${v.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-venda="${v.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -2115,7 +2119,7 @@ function PageSaidaRacao(tipo){
             <td style="display:flex; gap:6px;">
               ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-racao="${s.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-racao="${s.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -2159,7 +2163,7 @@ function PageCocho(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('confinamento','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-cocho="${c.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-cocho="${c.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-cocho="${c.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -2235,7 +2239,7 @@ function PagePasto(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('pasto','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-pasto="${p.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-pasto="${p.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -2273,7 +2277,7 @@ function PageReproducao(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-reproducao="${r.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-reproducao="${r.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-reproducao="${r.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -2312,7 +2316,7 @@ function PagePartos(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-parto="${p.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-parto="${p.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-parto="${p.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -2399,7 +2403,7 @@ function PagePesagem(tipo){
             <td style="display:flex; gap:6px;">
               ${temPermissao(TIPO_MODULO[tipo],'editar') ? `
               <button class="btn-ghost btn-sm" data-edit-pesagem="${p.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-pesagem="${p.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-pesagem="${p.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -3329,7 +3333,7 @@ function PageResultadosReceitas(){
             <td style="display:flex; gap:6px;">
               ${(temPermissao('financeiro','editar') || temPermissao('resultados','editar')) ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>`;
@@ -3398,7 +3402,7 @@ function PageFinanceiroCustosFixos(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>
@@ -3430,7 +3434,7 @@ function PageResultadosInvestimentos(){
             <td style="display:flex; gap:6px;">
               ${temPermissao('resultados','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>
