@@ -496,6 +496,10 @@ function render(){
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
+// Operador pode editar (quando tiver permissão do módulo), mas nunca pode
+// excluir nada -- o botão Excluir some pra esse papel, mesmo onde antes
+// aparecia junto com o Editar.
+function souOperador(){ return state.perfil?.papel === 'operador'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -744,7 +748,7 @@ function PageCadastro(key){
               ${cfg.historico ? `<button class="btn-ghost btn-sm" data-historico-talhao="${item.id}">Histórico</button>` : ''}
               ${podeEditar ? `
               <button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>
+              ${!souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
           </tr>
