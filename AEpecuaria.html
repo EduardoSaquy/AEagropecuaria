@@ -42,9 +42,15 @@
   @media (prefers-reduced-motion: reduce){
     *{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important;}
   }
+  /* A barra lateral usa um "shell" de altura fixa (.app com height:100vh
+     + overflow:hidden) em vez de position:sticky -- em algumas versões do
+     Safari o sticky não engata dentro de flex, e assim ela nem precisa
+     ficar "grudada": ela simplesmente nunca faz parte de nada que rola.
+     Quem rola é só o .main (overflow-y:auto), por dentro. */
   .app{
     display:flex;
-    min-height:100vh;
+    height:100vh;
+    overflow:hidden;
   }
   /* ---------- SIDEBAR ---------- */
   .sidebar{
@@ -55,19 +61,11 @@
     display:flex;
     flex-direction:column;
     padding:24px 16px;
-    position:-webkit-sticky;
-    position:sticky;
-    top:0;
-    /* align-self:flex-start -- em alguns WebKit/Safari, um item de flex com
-       align-items:stretch (padrão do .app) quebra o cálculo do "containing
-       block" do position:sticky. Forçar align-self evita esse bug conhecido. */
-    align-self:flex-start;
-    /* min-height (não height fixo + overflow-y:auto): numa janela mais baixa
-       (browser com barras, notebook), o conteúdo do menu (logo + usuário +
-       8 itens + rodapé) podia passar de 100vh -- com overflow-y:auto isso
-       criava um scroll PRÓPRIO da sidebar, escondendo os itens de baixo
-       (Confinamento pra baixo) em vez de simplesmente mostrar tudo. */
-    min-height:100vh;
+    height:100%;
+    /* overflow-y:auto -- rede de segurança: se o conteúdo do menu (logo +
+       usuário + itens + rodapé) passar da altura da tela, rola só a barra
+       em vez de vazar/cortar itens. */
+    overflow-y:auto;
   }
   .brand{
     display:flex;
@@ -146,6 +144,8 @@
     flex:1;
     padding:32px 40px 60px 40px;
     max-width:1180px;
+    height:100%;
+    overflow-y:auto;
   }
   .page-header{
     display:flex;
@@ -492,7 +492,10 @@
   /* ---------- RESPONSIVO (celular) ---------- */
   .mobile-nav-toggle{display:none;}
   @media (max-width:760px){
-    .app{flex-direction:column;}
+    /* No celular a barra vira um cabeçalho compacto (não uma coluna cheia
+       de altura) -- volta pro scroll normal da página em vez do "shell"
+       de altura fixa usado no desktop. */
+    .app{flex-direction:column; height:auto; overflow:visible;}
     .sidebar{
       width:100%; flex-direction:column; align-items:stretch;
       padding:12px 16px; gap:10px;
@@ -515,7 +518,7 @@
     .nav-item{padding:10px 12px; font-size:14px;}
     .sidebar-footer{display:none;}
     .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none;}
-    .main{padding:20px 16px 48px 16px; max-width:100%;}
+    .main{padding:20px 16px 48px 16px; max-width:100%; height:auto; overflow-y:visible;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
     .btn{width:100%; justify-content:center;}
@@ -2966,7 +2969,7 @@ function dadosFinanceiro(){
   return {hoje, mes,
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
     fixoConfinamento, fixoPasto, fixoCria, detalhesPorArea,
-    custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, receitaMes, resultadoMes, margemAtualPct,
+    custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, animaisConfinamento, animaisPasto, animaisCria, receitaMes, resultadoMes, margemAtualPct,
     totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes,
     variavelAno, fixosAno, totalAno, custoTotalPorAnimalAno, arrobasAno, custoPorArrobaAno};
 }
@@ -3022,6 +3025,34 @@ function PageFinanceiroResumo(){
       <span class="hint">${fmtInt(d.totalAnimais)} animais em lotes ativos</span>
     </div>
   </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Custo por atividade (mês)</p>
+  <div class="card" style="margin-bottom:22px;">
+    <table>
+      <thead><tr><th>Atividade</th><th>Nº animais</th><th>Total no mês</th><th>Custo/animal</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Confinamento</strong></td>
+          <td class="mono">${fmtInt(d.animaisConfinamento)}</td>
+          <td class="mono">R$ ${fmt(d.custoTotalConfinamentoMes)}</td>
+          <td class="mono">${d.animaisConfinamento>0 ? 'R$ '+fmt(d.custoTotalConfinamentoMes/d.animaisConfinamento,2) : '—'}</td>
+        </tr>
+        <tr>
+          <td><strong>Pasto</strong></td>
+          <td class="mono">${fmtInt(d.animaisPasto)}</td>
+          <td class="mono">R$ ${fmt(d.custoTotalPastoMes)}</td>
+          <td class="mono">${d.animaisPasto>0 ? 'R$ '+fmt(d.custoTotalPastoMes/d.animaisPasto,2) : '—'}</td>
+        </tr>
+        <tr>
+          <td><strong>Cria</strong></td>
+          <td class="mono">${fmtInt(d.animaisCria)}</td>
+          <td class="mono">R$ ${fmt(d.custoTotalCriaMes)}</td>
+          <td class="mono">${d.animaisCria>0 ? 'R$ '+fmt(d.custoTotalCriaMes/d.animaisCria,2) : '—'}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin:-14px 0 22px;">Cada atividade soma sua ração/pasto/cria do mês + a fatia do custo fixo rateada pra ela (mesmo critério de "Por Lote"). Pra ver o detalhe curral por curral, ou o custo por @ produzida de cada atividade, veja Resultados &gt; Por Lote.</p>
 
   <p class="eyebrow" style="margin:22px 0 10px;">Este ano</p>
   <div class="stat-row">
