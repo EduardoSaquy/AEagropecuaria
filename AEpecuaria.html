@@ -1969,13 +1969,14 @@ function PageLotesGeral(){
     ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre um lote e escolha o destino — Confinamento, Pasto ou Cria — para ele aparecer na aba certa.') : `
     <table>
       <thead><tr>
-        <th>Lote</th><th>Destino</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
+        <th>Lote</th><th>Destino</th><th>Sexo</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${list.map(l=>`
           <tr>
             <td><strong>${esc(l.nome)}</strong></td>
             <td><span class="pill pill-cat">${DESTINO_LOTE_LABEL[l.destino]||l.destino||'—'}</span></td>
+            <td>${SEXO_LOTE_LABEL[l.sexo] || '<span class="hint">— não informado —</span>'}</td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             <td class="mono">${l.dataInicio ? l.dataInicio.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">${l.dataFim ? l.dataFim.split('-').reverse().join('/') : '—'}</td>
