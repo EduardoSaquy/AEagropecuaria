@@ -101,9 +101,20 @@
   .despesa-barra-fill{background:var(--verde-medio); height:100%; border-radius:5px; transition:width 0.2s;}
   .despesa-barra-linha.ativa .despesa-barra-fill{background:var(--bom);}
   .despesa-barra-valor{font-size:12.5px; text-align:right; color:var(--cinza);}
-  .despesa-row{cursor:pointer;}
-  .despesa-row:hover{background:var(--fundo,#F7F9F7);}
-  .despesa-row-detalhe td{background:var(--fundo,#F7F9F7); font-size:12.5px; color:var(--cinza); padding:8px 14px 14px 14px; border-top:none;}
+  .despesa-grupo{margin-bottom:10px; overflow:visible;}
+  .despesa-grupo-header{
+    display:flex; align-items:center; gap:12px; padding:14px 20px; cursor:pointer;
+  }
+  .despesa-grupo-header:hover{background:var(--fundo,#F7F9F7);}
+  .despesa-grupo-seta{color:var(--verde-medio); font-size:11px; width:12px; flex-shrink:0;}
+  .despesa-grupo-nome{font-weight:600; color:var(--verde-escuro); flex-shrink:0;}
+  .despesa-grupo-valor{margin-left:auto; font-size:13.5px;}
+  .despesa-grupo-tabela{width:100%; border-collapse:collapse;}
+  .despesa-grupo-tabela td{padding:9px 20px; border-top:1px solid var(--cinza-claro); font-size:13px; background:var(--fundo,#F7F9F7);}
+  .despesa-grupo-data{white-space:nowrap; width:100px; color:var(--cinza);}
+  .despesa-grupo-valorlinha{white-space:nowrap; width:130px; text-align:right;}
+  .despesa-grupo-acoes{white-space:nowrap; width:170px; text-align:right;}
+  .despesa-grupo-acoes .btn-ghost, .despesa-grupo-acoes .btn-danger-ghost{margin-left:6px;}
   /* ---------- DONUT (Despesa por centro de custo, em Resultados) ---------- */
   .painel-resultados{display:flex; gap:32px; align-items:center; flex-wrap:wrap;}
   .donut-wrap{flex-shrink:0;}
@@ -434,7 +445,7 @@ const CADASTROS = {
       {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
       {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='cana'||c.frente==='geral'},
       {key:'data', label:'Data', type:'date', required:true},
-      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_DESPESA, required:true},
+      {key:'categoria', type:'fixed', value:'outro'},
       {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de trator terceirizado'},
       {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
@@ -535,7 +546,7 @@ const state = {
   usuarioLoading: false,
   despesaFiltroMes: '',
   despesaFiltroCentro: '',
-  despesaExpandidaId: null,
+  despesaGruposAbertos: {},
 };
 
 function render(){
@@ -1223,12 +1234,15 @@ function PageDespesas(){
   const barras = despesaPorCentroCusto(porMes);
   const maxBarra = barras.reduce((a,b)=>Math.max(a,b.total),0);
 
-  const lista = porMes.filter(d=>{
-    if(!state.despesaFiltroCentro) return true;
-    if(state.despesaFiltroCentro==='sem') return d.centroCustoId==null;
-    return String(d.centroCustoId)===String(state.despesaFiltroCentro);
-  }).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
-  const totalFiltrado = lista.reduce((a,d)=>a+Number(d.valor||0),0);
+  // Grupos: um por centro de custo, recolhido por padrão -- clicar no
+  // cabeçalho abre e mostra os lançamentos daquele centro. Escolher um
+  // centro de custo no filtro (ou clicar numa barra/fatia do gráfico)
+  // restringe a só aquele grupo, já aberto.
+  const gruposVisiveis = state.despesaFiltroCentro
+    ? barras.filter(b=>String(b.chave)===String(state.despesaFiltroCentro))
+    : barras;
+  const totalFiltrado = gruposVisiveis.reduce((a,g)=>a+g.total,0);
+  const totalLancamentos = gruposVisiveis.reduce((a,g)=>a + porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).length, 0);
 
   return `
   <div class="toolbar">
@@ -1243,7 +1257,7 @@ function PageDespesas(){
         <option value="sem" ${state.despesaFiltroCentro==='sem'?'selected':''}>Sem centro de custo</option>
       </select>
     </div>
-    <span class="hint">${lista.length} lançamento(s) · R$ ${fmt(totalFiltrado)}</span>
+    <span class="hint">${totalLancamentos} lançamento(s) · R$ ${fmt(totalFiltrado)}</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="despesas">+ Nova Despesa</button>` : ''}
   </div>
   ${barras.length===0 ? '' : `
@@ -1259,30 +1273,37 @@ function PageDespesas(){
       `).join('')}
     </div>
   </div>`}
-  <div class="card" style="overflow-x:auto;">
-    ${lista.length===0 ? Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.') : `
-    <table>
-      <thead><tr><th>Data</th><th>Centro de custo</th><th>Valor</th><th></th></tr></thead>
-      <tbody>
-        ${lista.map(d=>{
-          const expandida = state.despesaExpandidaId===d.id;
-          return `
-          <tr class="despesa-row" data-despesa-toggle="${d.id}">
-            <td>${fmtData(d.data)}</td>
-            <td><strong>${d.centroCustoId ? fkNome('centrosCusto', d.centroCustoId) : 'Sem centro de custo'}</strong> <span class="hint">${expandida?'▲':'▼'}</span></td>
-            <td class="mono">R$ ${fmt(d.valor)}</td>
-            <td style="display:flex; gap:6px;" data-stop-toggle="1">
-              ${podeEditar ? `
-              <button class="btn-ghost btn-sm" data-edit-cadastro="despesas:${d.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-cadastro="despesas:${d.id}">Excluir</button>
-              ` : ''}
-            </td>
-          </tr>
-          ${expandida ? `<tr class="despesa-row-detalhe"><td colspan="4">${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td></tr>` : ''}
-        `;}).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
+  ${gruposVisiveis.length===0 ? `<div class="card">${Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.')}</div>` : gruposVisiveis.map(g=>{
+    const itens = porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+    const aberto = !!state.despesaGruposAbertos[g.chave] || (!!state.despesaFiltroCentro && String(state.despesaFiltroCentro)===String(g.chave));
+    return `
+    <div class="card despesa-grupo">
+      <div class="despesa-grupo-header" data-despesa-grupo-toggle="${g.chave}">
+        <span class="despesa-grupo-seta">${aberto?'▼':'▶'}</span>
+        <span class="despesa-grupo-nome">${g.nome}</span>
+        <span class="hint">${itens.length} lançamento(s)</span>
+        <span class="mono despesa-grupo-valor">R$ ${fmt(g.total)}</span>
+      </div>
+      ${aberto ? `
+      <table class="despesa-grupo-tabela">
+        <tbody>
+          ${itens.map(d=>`
+            <tr>
+              <td class="despesa-grupo-data">${fmtData(d.data)}</td>
+              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td>
+              <td class="mono despesa-grupo-valorlinha">R$ ${fmt(d.valor)}</td>
+              <td class="despesa-grupo-acoes">
+                ${podeEditar ? `
+                <button class="btn-ghost btn-sm" data-edit-cadastro="despesas:${d.id}">Editar</button>
+                <button class="btn-danger-ghost" data-del-cadastro="despesas:${d.id}">Excluir</button>
+                ` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>` : ''}
+    </div>`;
+  }).join('')}`;
 }
 
 /* ===================== RESULTADOS: RECEITA x DESPESA =====================
@@ -1644,11 +1665,10 @@ function attachEvents(){
       render();
     };
   });
-  document.querySelectorAll('[data-despesa-toggle]').forEach(el=>{
-    el.onclick = (e)=>{
-      if(e.target.closest('[data-stop-toggle]')) return;
-      const id = Number(el.dataset.despesaToggle);
-      state.despesaExpandidaId = state.despesaExpandidaId===id ? null : id;
+  document.querySelectorAll('[data-despesa-grupo-toggle]').forEach(el=>{
+    el.onclick = ()=>{
+      const chave = el.dataset.despesaGrupoToggle;
+      state.despesaGruposAbertos[chave] = !state.despesaGruposAbertos[chave];
       render();
     };
   });
