@@ -18,7 +18,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const DOMINIO_LOGIN = 'aeagropecuaria.local'
-const PAPEIS_VALIDOS = ['admin', 'gestor', 'encarregado', 'operador']
+const PAPEIS_VALIDOS = ['admin', 'proprietario', 'gestor', 'encarregado', 'colaborador', 'operador']
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

@@ -27,7 +27,7 @@ create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   nome text not null,
   usuario text not null unique, -- login (sem @dominio)
-  papel text not null default 'operador' check (papel in ('admin','gestor','encarregado','operador')),
+  papel text not null default 'operador' check (papel in ('admin','proprietario','gestor','encarregado','colaborador','operador')),
   permissoes jsonb not null default '{}'::jsonb, -- {"cadastros":"editar",...}
   ativo boolean not null default true,
   created_at timestamptz not null default now()
@@ -408,3 +408,17 @@ create policy "select receitas_cana" on receitas_cana for select using (tem_perm
 create policy "inserir receitas_cana" on receitas_cana for insert with check (tem_permissao('resultados','editar') or tem_permissao('financeiro','editar'));
 create policy "atualizar receitas_cana" on receitas_cana for update using (tem_permissao('resultados','editar')) with check (tem_permissao('resultados','editar'));
 create policy "excluir receitas_cana" on receitas_cana for delete using (tem_permissao('resultados','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: novos perfis (Proprietário, Colaborador)
+-- Se você já rodou este arquivo antes desta atualização, a tabela
+-- profiles ainda só aceita papel in ('admin','gestor','encarregado',
+-- 'operador'). Este comando troca a regra pra também aceitar
+-- 'proprietario' e 'colaborador' — cada um continua funcionando com
+-- as mesmas permissões por módulo configuradas na tela de Usuários
+-- (papel aqui é só rótulo/organização, quem manda é a permissão).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table profiles drop constraint if exists profiles_papel_check;
+alter table profiles add constraint profiles_papel_check
+  check (papel in ('admin','proprietario','gestor','encarregado','colaborador','operador'));
