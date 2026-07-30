@@ -1171,16 +1171,27 @@ function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
 }
 const DONUT_PALETTE = ['#1B4332','#2D6A4F','#40916C','#74C69D','#95D5B2','#C98A2B','#E0A458','#8A5A2B','#B3462F','#D98A73','#4A5A7A','#6E7BA6','#2E4057','#7A5C61','#A6798E','#65758A'];
 function corCentroCusto(idx){ return DONUT_PALETTE[idx % DONUT_PALETTE.length]; }
+// Fatias abaixo de LIMITE_PCT_OUTROS viram uma única fatia "Outros" (soma
+// delas) — sem isso, um centro de custo de 0,1% vira uma lasquinha
+// ilegível no donut e some no meio das cores. A soma continua batendo:
+// "Outros" é só uma forma de exibir, não descarta nenhum valor.
+const LIMITE_PCT_OUTROS = 3;
 function donutChart(entries, opts){
   opts = opts || {};
-  const total = entries.reduce((a,e)=>a+e.total,0);
-  if(entries.length===0 || total<=0){
+  const totalGeral = entries.reduce((a,e)=>a+e.total,0);
+  if(entries.length===0 || totalGeral<=0){
     return `<div class="card">${Empty('Sem despesa para compor o gráfico', 'Lance uma despesa para ver o gráfico por centro de custo.')}</div>`;
   }
+  const principais = entries.filter(e => (e.total/totalGeral*100) >= LIMITE_PCT_OUTROS);
+  const pequenas = entries.filter(e => (e.total/totalGeral*100) < LIMITE_PCT_OUTROS);
+  const agrupadas = pequenas.length>0
+    ? [...principais, {chave:'outros', nome:`Outros (${pequenas.length})`, total: pequenas.reduce((a,e)=>a+e.total,0)}]
+    : principais;
+  const total = totalGeral;
   const cx=110, cy=110, rOut=100, rIn=64;
-  const gap = entries.length>1 ? 0.025 : 0;
+  const gap = agrupadas.length>1 ? 0.025 : 0;
   let angle = 0;
-  const slices = entries.map((e,idx)=>{
+  const slices = agrupadas.map((e,idx)=>{
     const frac = total>0 ? e.total/total : 0;
     const sweep = frac*Math.PI*2;
     const a0 = angle + gap/2;
@@ -1191,20 +1202,23 @@ function donutChart(entries, opts){
     const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
     const pct = frac*100;
     const showLabel = pct>=6;
+    const clicavel = e.chave!=='outros';
     return `
-      <path class="donut-slice" data-donut-centro="${e.chave}" d="${path}" fill="${corCentroCusto(idx)}"
+      <path class="donut-slice" ${clicavel?`data-donut-centro="${e.chave}"`:'style="cursor:default;"'} d="${path}" fill="${corCentroCusto(idx)}"
         tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.total)}, ${fmt(pct,1)}%"></path>
       ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
     `;
   }).join('');
-  const legenda = entries.map((e,idx)=>`
-    <div class="legenda-row" data-donut-centro="${e.chave}">
+  const legenda = agrupadas.map((e,idx)=>{
+    const clicavel = e.chave!=='outros';
+    return `
+    <div class="legenda-row" ${clicavel?`data-donut-centro="${e.chave}"`:'style="cursor:default;"'}>
       <span class="legenda-swatch" style="background:${corCentroCusto(idx)}"></span>
       <span class="legenda-nome">${e.nome}</span>
       <span class="legenda-valor">R$ ${fmt(e.total)}</span>
       <span class="legenda-pct">${fmt(total>0?e.total/total*100:0,1)}%</span>
     </div>
-  `).join('');
+  `;}).join('');
   return `
   <div class="card card-pad" style="margin-bottom:16px;">
     <div class="eyebrow" style="margin-bottom:12px;">${opts.titulo||'Despesa por centro de custo (ano)'}</div>
