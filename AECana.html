@@ -101,9 +101,40 @@
   .despesa-barra-fill{background:var(--verde-medio); height:100%; border-radius:5px; transition:width 0.2s;}
   .despesa-barra-linha.ativa .despesa-barra-fill{background:var(--bom);}
   .despesa-barra-valor{font-size:12.5px; text-align:right; color:var(--cinza);}
-  .despesa-row{cursor:pointer;}
-  .despesa-row:hover{background:var(--fundo,#F7F9F7);}
-  .despesa-row-detalhe td{background:var(--fundo,#F7F9F7); font-size:12.5px; color:var(--cinza); padding:8px 14px 14px 14px; border-top:none;}
+  .despesa-grupo{margin-bottom:10px; overflow:visible;}
+  .despesa-grupo-header{
+    display:flex; align-items:center; gap:12px; padding:14px 20px; cursor:pointer;
+  }
+  .despesa-grupo-header:hover{background:var(--fundo,#F7F9F7);}
+  .despesa-grupo-seta{color:var(--verde-medio); font-size:11px; width:12px; flex-shrink:0;}
+  .despesa-grupo-nome{font-weight:600; color:var(--verde-escuro); flex-shrink:0;}
+  .despesa-grupo-valor{margin-left:auto; font-size:13.5px;}
+  .despesa-grupo-tabela{width:100%; border-collapse:collapse;}
+  .despesa-grupo-tabela td{padding:9px 20px; border-top:1px solid var(--cinza-claro); font-size:13px; background:var(--fundo,#F7F9F7);}
+  .despesa-grupo-data{white-space:nowrap; width:100px; color:var(--cinza);}
+  .despesa-grupo-valorlinha{white-space:nowrap; width:130px; text-align:right;}
+  .despesa-grupo-acoes{white-space:nowrap; width:170px; text-align:right;}
+  .despesa-grupo-acoes .btn-ghost, .despesa-grupo-acoes .btn-danger-ghost{margin-left:6px;}
+  /* ---------- DONUT (Despesa por centro de custo, em Resultados) ---------- */
+  .painel-resultados{display:flex; gap:32px; align-items:center; flex-wrap:wrap;}
+  .donut-wrap{flex-shrink:0;}
+  .donut-svg{display:block;}
+  .donut-slice{cursor:pointer; transition:opacity 0.15s;}
+  .donut-slice:hover{opacity:0.82;}
+  .donut-label{font-family:'Inter',monospace; font-size:11px; font-weight:600; fill:#fff; pointer-events:none;}
+  .donut-center-value{font-family:'Inter',monospace; font-size:17px; font-weight:600; fill:var(--verde-escuro);}
+  .donut-center-label{font-family:'Inter',sans-serif; font-size:10px; fill:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
+  .painel-legenda{flex:1; min-width:220px; display:flex; flex-direction:column; gap:2px;}
+  .legenda-row{
+    display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px;
+    padding:7px 8px; border-radius:6px; cursor:pointer;
+  }
+  .legenda-row:hover{background:var(--fundo,#F7F9F7);}
+  .legenda-swatch{width:12px; height:12px; border-radius:3px;}
+  .legenda-nome{font-size:13px; color:var(--verde-escuro);}
+  .legenda-valor{font-family:'Inter',monospace; font-size:12.5px; color:var(--verde-escuro); font-variant-numeric:tabular-nums;}
+  .legenda-pct{font-family:'Inter',monospace; font-size:12.5px; color:var(--cinza); min-width:48px; text-align:right; font-variant-numeric:tabular-nums;}
+  @media (max-width:760px){ .painel-resultados{flex-direction:column; align-items:stretch;} .donut-wrap{align-self:center;} }
   .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
   .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--verde-escuro); margin-top:6px;}
   .stat-value.alerta{color:var(--alerta);}
@@ -414,7 +445,7 @@ const CADASTROS = {
       {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
       {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='cana'||c.frente==='geral'},
       {key:'data', label:'Data', type:'date', required:true},
-      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_DESPESA, required:true},
+      {key:'categoria', type:'fixed', value:'outro'},
       {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de trator terceirizado'},
       {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
@@ -463,11 +494,29 @@ function carregarCacheLocal(){
   }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
 }
 
+/* O Supabase limita cada consulta a no máximo 1000 linhas por padrão
+ * (Project Settings > API > Max Rows) — sem paginar, uma tabela que
+ * passa disso (ex: despesas_cana depois da carga do relatório, com
+ * 2245 linhas) vinha cortada silenciosamente nas primeiras 1000,
+ * subestimando totais no Custo por Talhão e em Resultados. */
+async function fetchAllRows(table, orderBy, ascending){
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while(true){
+    const { data, error } = await db.from(table).select('*').order(orderBy, {ascending}).range(from, from+PAGE-1);
+    if(error) return { data: all, error };
+    all = all.concat(data||[]);
+    if(!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return { data: all, error: null };
+}
 async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
       const cfg = CADASTROS[k];
-      return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
+      return fetchAllRows(cfg.table, cfg.orderBy || 'nome', !cfg.orderDesc);
     }),
     db.from('profiles').select('*').order('nome'),
   ]);
@@ -497,7 +546,7 @@ const state = {
   usuarioLoading: false,
   despesaFiltroMes: '',
   despesaFiltroCentro: '',
-  despesaExpandidaId: null,
+  despesaGruposAbertos: {},
 };
 
 function render(){
@@ -1098,6 +1147,79 @@ function mesLabel(yyyyMm){
   const [y,m] = String(yyyyMm).split('-');
   return `${MESES_PT[Number(m)-1]||m}/${y}`;
 }
+/* Agregação de despesa por centro de custo, reaproveitada pelo gráfico
+ * de barras clicável (Despesas) e pelo donut anual (Resultados). */
+function despesaPorCentroCusto(lista){
+  const agreg = new Map();
+  lista.forEach(d=>{
+    const chave = d.centroCustoId ?? 'sem';
+    agreg.set(chave, (agreg.get(chave)||0) + Number(d.valor||0));
+  });
+  return [...agreg.entries()].map(([chave,total])=>({
+    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
+  })).sort((a,b)=>b.total-a.total);
+}
+/* ---------- DONUT (mesmo componente visual do AEpecuária) ---------- */
+function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
+function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
+  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
+  const [x0,y0] = polarXY(cx,cy,rOut,a0);
+  const [x1,y1] = polarXY(cx,cy,rOut,a1);
+  const [x2,y2] = polarXY(cx,cy,rIn,a1);
+  const [x3,y3] = polarXY(cx,cy,rIn,a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+}
+const DONUT_PALETTE = ['#1B4332','#2D6A4F','#40916C','#74C69D','#95D5B2','#C98A2B','#E0A458','#8A5A2B','#B3462F','#D98A73','#4A5A7A','#6E7BA6','#2E4057','#7A5C61','#A6798E','#65758A'];
+function corCentroCusto(idx){ return DONUT_PALETTE[idx % DONUT_PALETTE.length]; }
+function donutChart(entries, opts){
+  opts = opts || {};
+  const total = entries.reduce((a,e)=>a+e.total,0);
+  if(entries.length===0 || total<=0){
+    return `<div class="card">${Empty('Sem despesa para compor o gráfico', 'Lance uma despesa para ver o gráfico por centro de custo.')}</div>`;
+  }
+  const cx=110, cy=110, rOut=100, rIn=64;
+  const gap = entries.length>1 ? 0.025 : 0;
+  let angle = 0;
+  const slices = entries.map((e,idx)=>{
+    const frac = total>0 ? e.total/total : 0;
+    const sweep = frac*Math.PI*2;
+    const a0 = angle + gap/2;
+    const a1 = angle + sweep - gap/2;
+    angle += sweep;
+    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
+    const midAngle = (a0+a1)/2;
+    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
+    const pct = frac*100;
+    const showLabel = pct>=6;
+    return `
+      <path class="donut-slice" data-donut-centro="${e.chave}" d="${path}" fill="${corCentroCusto(idx)}"
+        tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.total)}, ${fmt(pct,1)}%"></path>
+      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
+    `;
+  }).join('');
+  const legenda = entries.map((e,idx)=>`
+    <div class="legenda-row" data-donut-centro="${e.chave}">
+      <span class="legenda-swatch" style="background:${corCentroCusto(idx)}"></span>
+      <span class="legenda-nome">${e.nome}</span>
+      <span class="legenda-valor">R$ ${fmt(e.total)}</span>
+      <span class="legenda-pct">${fmt(total>0?e.total/total*100:0,1)}%</span>
+    </div>
+  `).join('');
+  return `
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="eyebrow" style="margin-bottom:12px;">${opts.titulo||'Despesa por centro de custo (ano)'}</div>
+    <div class="painel-resultados">
+      <div class="donut-wrap">
+        <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
+          ${slices}
+          <text class="donut-center-value" x="110" y="104" text-anchor="middle">R$ ${fmt(total,0)}</text>
+          <text class="donut-center-label" x="110" y="123" text-anchor="middle">ano</text>
+        </svg>
+      </div>
+      <div class="painel-legenda">${legenda}</div>
+    </div>
+  </div>`;
+}
 function PageDespesas(){
   const cfg = CADASTROS.despesas;
   const podeEditar = temPermissao(cfg.modulo,'editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
@@ -1109,22 +1231,18 @@ function PageDespesas(){
 
   const porMes = state.despesaFiltroMes ? todas.filter(d=>String(d.data||'').slice(0,7)===state.despesaFiltroMes) : todas;
 
-  const agregPorCentro = new Map();
-  porMes.forEach(d=>{
-    const chave = d.centroCustoId ?? 'sem';
-    agregPorCentro.set(chave, (agregPorCentro.get(chave)||0) + Number(d.valor||0));
-  });
-  const barras = [...agregPorCentro.entries()].map(([chave,total])=>({
-    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
-  })).sort((a,b)=>b.total-a.total);
+  const barras = despesaPorCentroCusto(porMes);
   const maxBarra = barras.reduce((a,b)=>Math.max(a,b.total),0);
 
-  const lista = porMes.filter(d=>{
-    if(!state.despesaFiltroCentro) return true;
-    if(state.despesaFiltroCentro==='sem') return d.centroCustoId==null;
-    return String(d.centroCustoId)===String(state.despesaFiltroCentro);
-  }).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
-  const totalFiltrado = lista.reduce((a,d)=>a+Number(d.valor||0),0);
+  // Grupos: um por centro de custo, recolhido por padrão -- clicar no
+  // cabeçalho abre e mostra os lançamentos daquele centro. Escolher um
+  // centro de custo no filtro (ou clicar numa barra/fatia do gráfico)
+  // restringe a só aquele grupo, já aberto.
+  const gruposVisiveis = state.despesaFiltroCentro
+    ? barras.filter(b=>String(b.chave)===String(state.despesaFiltroCentro))
+    : barras;
+  const totalFiltrado = gruposVisiveis.reduce((a,g)=>a+g.total,0);
+  const totalLancamentos = gruposVisiveis.reduce((a,g)=>a + porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).length, 0);
 
   return `
   <div class="toolbar">
@@ -1139,7 +1257,7 @@ function PageDespesas(){
         <option value="sem" ${state.despesaFiltroCentro==='sem'?'selected':''}>Sem centro de custo</option>
       </select>
     </div>
-    <span class="hint">${lista.length} lançamento(s) · R$ ${fmt(totalFiltrado)}</span>
+    <span class="hint">${totalLancamentos} lançamento(s) · R$ ${fmt(totalFiltrado)}</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="despesas">+ Nova Despesa</button>` : ''}
   </div>
   ${barras.length===0 ? '' : `
@@ -1155,30 +1273,37 @@ function PageDespesas(){
       `).join('')}
     </div>
   </div>`}
-  <div class="card" style="overflow-x:auto;">
-    ${lista.length===0 ? Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.') : `
-    <table>
-      <thead><tr><th>Data</th><th>Centro de custo</th><th>Valor</th><th></th></tr></thead>
-      <tbody>
-        ${lista.map(d=>{
-          const expandida = state.despesaExpandidaId===d.id;
-          return `
-          <tr class="despesa-row" data-despesa-toggle="${d.id}">
-            <td>${fmtData(d.data)}</td>
-            <td><strong>${d.centroCustoId ? fkNome('centrosCusto', d.centroCustoId) : 'Sem centro de custo'}</strong> <span class="hint">${expandida?'▲':'▼'}</span></td>
-            <td class="mono">R$ ${fmt(d.valor)}</td>
-            <td style="display:flex; gap:6px;" data-stop-toggle="1">
-              ${podeEditar ? `
-              <button class="btn-ghost btn-sm" data-edit-cadastro="despesas:${d.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-cadastro="despesas:${d.id}">Excluir</button>
-              ` : ''}
-            </td>
-          </tr>
-          ${expandida ? `<tr class="despesa-row-detalhe"><td colspan="4">${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td></tr>` : ''}
-        `;}).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
+  ${gruposVisiveis.length===0 ? `<div class="card">${Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.')}</div>` : gruposVisiveis.map(g=>{
+    const itens = porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+    const aberto = !!state.despesaGruposAbertos[g.chave] || (!!state.despesaFiltroCentro && String(state.despesaFiltroCentro)===String(g.chave));
+    return `
+    <div class="card despesa-grupo">
+      <div class="despesa-grupo-header" data-despesa-grupo-toggle="${g.chave}">
+        <span class="despesa-grupo-seta">${aberto?'▼':'▶'}</span>
+        <span class="despesa-grupo-nome">${g.nome}</span>
+        <span class="hint">${itens.length} lançamento(s)</span>
+        <span class="mono despesa-grupo-valor">R$ ${fmt(g.total)}</span>
+      </div>
+      ${aberto ? `
+      <table class="despesa-grupo-tabela">
+        <tbody>
+          ${itens.map(d=>`
+            <tr>
+              <td class="despesa-grupo-data">${fmtData(d.data)}</td>
+              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td>
+              <td class="mono despesa-grupo-valorlinha">R$ ${fmt(d.valor)}</td>
+              <td class="despesa-grupo-acoes">
+                ${podeEditar ? `
+                <button class="btn-ghost btn-sm" data-edit-cadastro="despesas:${d.id}">Editar</button>
+                <button class="btn-danger-ghost" data-del-cadastro="despesas:${d.id}">Excluir</button>
+                ` : ''}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>` : ''}
+    </div>`;
+  }).join('')}`;
 }
 
 /* ===================== RESULTADOS: RECEITA x DESPESA =====================
@@ -1218,6 +1343,7 @@ function PageResultado(){
       </div>
     </div>
   </div>
+  ${donutChart(despesaPorCentroCusto(state.despesas), {titulo:'Despesa por centro de custo (ano)'})}
   <div class="card card-pad">
     <table>
       <tbody>
@@ -1531,11 +1657,18 @@ function attachEvents(){
       render();
     };
   });
-  document.querySelectorAll('[data-despesa-toggle]').forEach(el=>{
-    el.onclick = (e)=>{
-      if(e.target.closest('[data-stop-toggle]')) return;
-      const id = Number(el.dataset.despesaToggle);
-      state.despesaExpandidaId = state.despesaExpandidaId===id ? null : id;
+  document.querySelectorAll('[data-donut-centro]').forEach(el=>{
+    el.onclick = ()=>{
+      state.despesaFiltroMes = '';
+      state.despesaFiltroCentro = el.dataset.donutCentro;
+      state.page = 'despesas';
+      render();
+    };
+  });
+  document.querySelectorAll('[data-despesa-grupo-toggle]').forEach(el=>{
+    el.onclick = ()=>{
+      const chave = el.dataset.despesaGrupoToggle;
+      state.despesaGruposAbertos[chave] = !state.despesaGruposAbertos[chave];
       render();
     };
   });
