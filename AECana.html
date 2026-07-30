@@ -463,11 +463,29 @@ function carregarCacheLocal(){
   }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
 }
 
+/* O Supabase limita cada consulta a no máximo 1000 linhas por padrão
+ * (Project Settings > API > Max Rows) — sem paginar, uma tabela que
+ * passa disso (ex: despesas_cana depois da carga do relatório, com
+ * 2245 linhas) vinha cortada silenciosamente nas primeiras 1000,
+ * subestimando totais no Custo por Talhão e em Resultados. */
+async function fetchAllRows(table, orderBy, ascending){
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while(true){
+    const { data, error } = await db.from(table).select('*').order(orderBy, {ascending}).range(from, from+PAGE-1);
+    if(error) return { data: all, error };
+    all = all.concat(data||[]);
+    if(!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return { data: all, error: null };
+}
 async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
       const cfg = CADASTROS[k];
-      return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
+      return fetchAllRows(cfg.table, cfg.orderBy || 'nome', !cfg.orderDesc);
     }),
     db.from('profiles').select('*').order('nome'),
   ]);
