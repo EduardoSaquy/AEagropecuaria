@@ -104,6 +104,26 @@
   .despesa-row{cursor:pointer;}
   .despesa-row:hover{background:var(--fundo,#F7F9F7);}
   .despesa-row-detalhe td{background:var(--fundo,#F7F9F7); font-size:12.5px; color:var(--cinza); padding:8px 14px 14px 14px; border-top:none;}
+  /* ---------- DONUT (Despesa por centro de custo, em Resultados) ---------- */
+  .painel-resultados{display:flex; gap:32px; align-items:center; flex-wrap:wrap;}
+  .donut-wrap{flex-shrink:0;}
+  .donut-svg{display:block;}
+  .donut-slice{cursor:pointer; transition:opacity 0.15s;}
+  .donut-slice:hover{opacity:0.82;}
+  .donut-label{font-family:'Inter',monospace; font-size:11px; font-weight:600; fill:#fff; pointer-events:none;}
+  .donut-center-value{font-family:'Inter',monospace; font-size:17px; font-weight:600; fill:var(--verde-escuro);}
+  .donut-center-label{font-family:'Inter',sans-serif; font-size:10px; fill:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
+  .painel-legenda{flex:1; min-width:220px; display:flex; flex-direction:column; gap:2px;}
+  .legenda-row{
+    display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px;
+    padding:7px 8px; border-radius:6px; cursor:pointer;
+  }
+  .legenda-row:hover{background:var(--fundo,#F7F9F7);}
+  .legenda-swatch{width:12px; height:12px; border-radius:3px;}
+  .legenda-nome{font-size:13px; color:var(--verde-escuro);}
+  .legenda-valor{font-family:'Inter',monospace; font-size:12.5px; color:var(--verde-escuro); font-variant-numeric:tabular-nums;}
+  .legenda-pct{font-family:'Inter',monospace; font-size:12.5px; color:var(--cinza); min-width:48px; text-align:right; font-variant-numeric:tabular-nums;}
+  @media (max-width:760px){ .painel-resultados{flex-direction:column; align-items:stretch;} .donut-wrap{align-self:center;} }
   .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
   .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--verde-escuro); margin-top:6px;}
   .stat-value.alerta{color:var(--alerta);}
@@ -1116,6 +1136,79 @@ function mesLabel(yyyyMm){
   const [y,m] = String(yyyyMm).split('-');
   return `${MESES_PT[Number(m)-1]||m}/${y}`;
 }
+/* Agregação de despesa por centro de custo, reaproveitada pelo gráfico
+ * de barras clicável (Despesas) e pelo donut anual (Resultados). */
+function despesaPorCentroCusto(lista){
+  const agreg = new Map();
+  lista.forEach(d=>{
+    const chave = d.centroCustoId ?? 'sem';
+    agreg.set(chave, (agreg.get(chave)||0) + Number(d.valor||0));
+  });
+  return [...agreg.entries()].map(([chave,total])=>({
+    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
+  })).sort((a,b)=>b.total-a.total);
+}
+/* ---------- DONUT (mesmo componente visual do AEpecuária) ---------- */
+function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
+function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
+  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
+  const [x0,y0] = polarXY(cx,cy,rOut,a0);
+  const [x1,y1] = polarXY(cx,cy,rOut,a1);
+  const [x2,y2] = polarXY(cx,cy,rIn,a1);
+  const [x3,y3] = polarXY(cx,cy,rIn,a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+}
+const DONUT_PALETTE = ['#1B4332','#2D6A4F','#40916C','#74C69D','#95D5B2','#C98A2B','#E0A458','#8A5A2B','#B3462F','#D98A73','#4A5A7A','#6E7BA6','#2E4057','#7A5C61','#A6798E','#65758A'];
+function corCentroCusto(idx){ return DONUT_PALETTE[idx % DONUT_PALETTE.length]; }
+function donutChart(entries, opts){
+  opts = opts || {};
+  const total = entries.reduce((a,e)=>a+e.total,0);
+  if(entries.length===0 || total<=0){
+    return `<div class="card">${Empty('Sem despesa para compor o gráfico', 'Lance uma despesa para ver o gráfico por centro de custo.')}</div>`;
+  }
+  const cx=110, cy=110, rOut=100, rIn=64;
+  const gap = entries.length>1 ? 0.025 : 0;
+  let angle = 0;
+  const slices = entries.map((e,idx)=>{
+    const frac = total>0 ? e.total/total : 0;
+    const sweep = frac*Math.PI*2;
+    const a0 = angle + gap/2;
+    const a1 = angle + sweep - gap/2;
+    angle += sweep;
+    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
+    const midAngle = (a0+a1)/2;
+    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
+    const pct = frac*100;
+    const showLabel = pct>=6;
+    return `
+      <path class="donut-slice" data-donut-centro="${e.chave}" d="${path}" fill="${corCentroCusto(idx)}"
+        tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.total)}, ${fmt(pct,1)}%"></path>
+      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
+    `;
+  }).join('');
+  const legenda = entries.map((e,idx)=>`
+    <div class="legenda-row" data-donut-centro="${e.chave}">
+      <span class="legenda-swatch" style="background:${corCentroCusto(idx)}"></span>
+      <span class="legenda-nome">${e.nome}</span>
+      <span class="legenda-valor">R$ ${fmt(e.total)}</span>
+      <span class="legenda-pct">${fmt(total>0?e.total/total*100:0,1)}%</span>
+    </div>
+  `).join('');
+  return `
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="eyebrow" style="margin-bottom:12px;">${opts.titulo||'Despesa por centro de custo (ano)'}</div>
+    <div class="painel-resultados">
+      <div class="donut-wrap">
+        <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
+          ${slices}
+          <text class="donut-center-value" x="110" y="104" text-anchor="middle">R$ ${fmt(total,0)}</text>
+          <text class="donut-center-label" x="110" y="123" text-anchor="middle">ano</text>
+        </svg>
+      </div>
+      <div class="painel-legenda">${legenda}</div>
+    </div>
+  </div>`;
+}
 function PageDespesas(){
   const cfg = CADASTROS.despesas;
   const podeEditar = temPermissao(cfg.modulo,'editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
@@ -1127,14 +1220,7 @@ function PageDespesas(){
 
   const porMes = state.despesaFiltroMes ? todas.filter(d=>String(d.data||'').slice(0,7)===state.despesaFiltroMes) : todas;
 
-  const agregPorCentro = new Map();
-  porMes.forEach(d=>{
-    const chave = d.centroCustoId ?? 'sem';
-    agregPorCentro.set(chave, (agregPorCentro.get(chave)||0) + Number(d.valor||0));
-  });
-  const barras = [...agregPorCentro.entries()].map(([chave,total])=>({
-    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
-  })).sort((a,b)=>b.total-a.total);
+  const barras = despesaPorCentroCusto(porMes);
   const maxBarra = barras.reduce((a,b)=>Math.max(a,b.total),0);
 
   const lista = porMes.filter(d=>{
@@ -1236,6 +1322,7 @@ function PageResultado(){
       </div>
     </div>
   </div>
+  ${donutChart(despesaPorCentroCusto(state.despesas), {titulo:'Despesa por centro de custo (ano)'})}
   <div class="card card-pad">
     <table>
       <tbody>
@@ -1546,6 +1633,14 @@ function attachEvents(){
     el.onclick = ()=>{
       const chave = el.dataset.despesaFiltroCentroBar;
       state.despesaFiltroCentro = String(state.despesaFiltroCentro)===String(chave) ? '' : chave;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-donut-centro]').forEach(el=>{
+    el.onclick = ()=>{
+      state.despesaFiltroMes = '';
+      state.despesaFiltroCentro = el.dataset.donutCentro;
+      state.page = 'despesas';
       render();
     };
   });
