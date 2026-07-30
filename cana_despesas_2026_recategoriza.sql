@@ -50,7 +50,7 @@ with fz as (
 )
 insert into despesas_cana (fazenda_id, talhao_id, centro_custo_id, data, categoria, descricao, valor)
 select fz.id, null, cc.id, v.data::date, v.categoria, v.descricao, v.valor
-from fz, (values
+from fz, centros_custo cc, (values
   ('2026-04-15', 'outro', 'Insumos Agrícolas', 'SEMENTES E MUDAS DE PLANTIO — MAYCON FELIPE CAMPOS NOGUEIRA (doc 8977, pago em 20/04/2026)', 3200.00),
   ('2026-07-15', 'outro', 'Insumos Agrícolas', 'ADUBOS E FERTILIZANTES — COPERCANA (doc 6819, pago em 04/03/2026)', 184608.76),
   ('2026-07-15', 'outro', 'Insumos Agrícolas', 'ADUBOS E FERTILIZANTES — COPERCANA (doc 6820, pago em 04/03/2026)', 182136.90),
@@ -2297,4 +2297,4 @@ from fz, (values
   ('2026-06-15', 'outro', 'Custas Contratuais', 'PROJETOS TÉCNICOS — TIAGO LUIZ FERREIRA (doc 9422, pago em 15/06/2026)', 6600.00),
   ('2026-06-15', 'outro', 'Custas Contratuais', 'PROJETOS TÉCNICOS — TIAGO LUIZ FERREIRA (doc 9355, pago em 03/06/2026)', 2353.00)
 ) as v(data, categoria, cc_nome, descricao, valor)
-join centros_custo cc on cc.nome = v.cc_nome and cc.fazenda_id = fz.id;
+where cc.nome = v.cc_nome and cc.fazenda_id = fz.id;
