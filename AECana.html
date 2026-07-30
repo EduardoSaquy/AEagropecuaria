@@ -38,11 +38,14 @@
     color:var(--grafite);
     -webkit-font-smoothing:antialiased;
   }
-  .app{display:flex; min-height:100vh;}
+  .app{display:flex; height:100vh; overflow:hidden;}
   /* ---------- SIDEBAR ---------- */
   .sidebar{
     width:230px; flex-shrink:0; background:var(--verde-escuro); color:var(--branco);
-    display:flex; flex-direction:column; padding:24px 16px;
+    display:flex; flex-direction:column; padding:24px 16px; height:100%;
+    /* overflow-y:auto -- rede de segurança: se o conteúdo do menu passar
+       da altura da tela, rola só a barra em vez de vazar/cortar itens. */
+    overflow-y:auto;
   }
   .brand{
     display:flex; align-items:center; gap:10px; padding:0 8px 24px 8px; margin-bottom:8px;
@@ -64,7 +67,7 @@
     font-size:11px; color:rgba(255,255,255,0.45); line-height:1.5;
   }
   /* ---------- MAIN ---------- */
-  .main{flex:1; padding:32px 40px 60px 40px; max-width:1180px;}
+  .main{flex:1; padding:32px 40px 60px 40px; max-width:1180px; height:100%; overflow-y:auto;}
   .page-header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px;}
   .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--verde-medio); font-weight:600; margin:0 0 4px 0;}
   h1{font-family:'Fraunces',serif; font-size:28px; font-weight:600; margin:0; color:var(--verde-escuro);}
@@ -81,10 +84,26 @@
   .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
   .btn-danger-ghost:hover{background:var(--alerta-bg);}
   .btn-sm{padding:6px 12px; font-size:12.5px;}
-  .card{background:var(--branco); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--cinza-claro);}
+  .card{background:var(--branco); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--cinza-claro); overflow-x:auto;}
   .card-pad{padding:22px 24px;}
   .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
   .stat-card{background:var(--branco); border:1px solid var(--cinza-claro); border-radius:var(--radius); padding:16px 18px;}
+  /* ---------- GRÁFICO DE BARRAS (Despesas por centro de custo, Receita x Despesa) ---------- */
+  .despesa-barras{display:flex; flex-direction:column; gap:10px;}
+  .despesa-barra-linha{
+    display:grid; grid-template-columns:200px 1fr 130px; align-items:center; gap:12px;
+    cursor:pointer; padding:4px 6px; border-radius:6px; transition:background 0.12s;
+  }
+  .despesa-barra-linha:hover{background:var(--verde-bg,#EEF5F0);}
+  .despesa-barra-linha.ativa{background:var(--bom-bg);}
+  .despesa-barra-nome{font-size:13px; color:var(--verde-escuro); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .despesa-barra-track{background:var(--cinza-claro); border-radius:5px; height:14px; overflow:hidden;}
+  .despesa-barra-fill{background:var(--verde-medio); height:100%; border-radius:5px; transition:width 0.2s;}
+  .despesa-barra-linha.ativa .despesa-barra-fill{background:var(--bom);}
+  .despesa-barra-valor{font-size:12.5px; text-align:right; color:var(--cinza);}
+  .despesa-row{cursor:pointer;}
+  .despesa-row:hover{background:var(--fundo,#F7F9F7);}
+  .despesa-row-detalhe td{background:var(--fundo,#F7F9F7); font-size:12.5px; color:var(--cinza); padding:8px 14px 14px 14px; border-top:none;}
   .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
   .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--verde-escuro); margin-top:6px;}
   .stat-value.alerta{color:var(--alerta);}
@@ -173,14 +192,18 @@
   .status-dot.inativo{background:var(--cinza);}
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
-    .app{flex-direction:column;}
-    .sidebar{width:100%; flex-direction:row; align-items:center; justify-content:space-between; padding:12px 16px; gap:12px; overflow-x:auto;}
+    .app{flex-direction:column; height:auto; overflow:visible;}
+    .sidebar{
+      width:100%; flex-direction:row; align-items:center; justify-content:space-between;
+      padding:12px 16px; gap:12px; overflow-x:auto; height:auto;
+      position:-webkit-sticky; position:sticky; top:0; z-index:40;
+    }
     .brand{border-bottom:none; padding:0; margin-bottom:0; flex-shrink:0;}
     nav{margin-top:0; flex-direction:row; gap:4px;}
     .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
     .sidebar-footer{display:none;}
     .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
-    .main{padding:20px 16px 48px 16px; max-width:100%;}
+    .main{padding:20px 16px 48px 16px; max-width:100%; height:auto; overflow-y:visible;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:23px;}
     .btn{width:100%; justify-content:center;}
@@ -472,6 +495,9 @@ const state = {
   loginLoading: false,
   usuarioError: '',
   usuarioLoading: false,
+  despesaFiltroMes: '',
+  despesaFiltroCentro: '',
+  despesaExpandidaId: null,
 };
 
 function render(){
@@ -489,7 +515,7 @@ function render(){
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
         ${Header()}
         ${SubTabs()}
-        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : state.page==='resultado' ? PageResultado() : PageCadastro(state.page)}
+        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : state.page==='resultado' ? PageResultado() : state.page==='despesas' ? PageDespesas() : PageCadastro(state.page)}
         `}
       </div>
     </div>
@@ -505,10 +531,6 @@ function render(){
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
-// Operador pode editar (quando tiver permissão do módulo), mas nunca pode
-// excluir nada -- o botão Excluir some pra esse papel, mesmo onde antes
-// aparecia junto com o Editar.
-function souOperador(){ return state.perfil?.papel === 'operador'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -777,7 +799,7 @@ function PageCadastro(key){
               ${cfg.historico ? `<button class="btn-ghost btn-sm" data-historico-talhao="${item.id}">Histórico</button>` : ''}
               ${podeEditar ? `
               <button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>
-              ${!souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>` : ''}
+              <button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>
               ` : ''}
             </td>
           </tr>
@@ -1063,6 +1085,102 @@ function PageCustoProducao(){
   <p class="hint" style="margin-top:12px;">Custo de insumos pelo preço médio ponderado (Operações &gt; Estoque); aplicação sem nenhuma entrada com preço informado entra com custo zero. Despesa com talhão marcado (Financeiro &gt; Despesas) entra 100% nele; despesa geral (sem talhão) é rateada entre os talhões com plantio ativo, proporcional à área de cada um.</p>`;
 }
 
+/* ===================== FINANCEIRO: DESPESAS =====================
+ * Lista customizada (não usa a tabela genérica do CADASTROS) para dar
+ * espaço a filtro por mês/centro de custo, gráfico de despesa por
+ * centro de custo (clicável, filtra a lista) e descrição colapsada —
+ * mostra só o centro de custo na linha, expande pra ver o texto
+ * completo (fornecedor, nº do documento, data de pagamento original
+ * etc.) ao clicar. Novo/editar/excluir reaproveitam o motor genérico
+ * de CADASTROS (mesmos data-attributes, mesmo modal). */
+const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function mesLabel(yyyyMm){
+  const [y,m] = String(yyyyMm).split('-');
+  return `${MESES_PT[Number(m)-1]||m}/${y}`;
+}
+function PageDespesas(){
+  const cfg = CADASTROS.despesas;
+  const podeEditar = temPermissao(cfg.modulo,'editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
+  const todas = state.despesas;
+  const meses = [...new Set(todas.map(d=>String(d.data||'').slice(0,7)).filter(Boolean))].sort();
+  const centrosUsados = [...new Set(todas.map(d=>d.centroCustoId).filter(id=>id!=null))]
+    .map(id=>state.centrosCusto.find(c=>c.id===id)).filter(Boolean)
+    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+
+  const porMes = state.despesaFiltroMes ? todas.filter(d=>String(d.data||'').slice(0,7)===state.despesaFiltroMes) : todas;
+
+  const agregPorCentro = new Map();
+  porMes.forEach(d=>{
+    const chave = d.centroCustoId ?? 'sem';
+    agregPorCentro.set(chave, (agregPorCentro.get(chave)||0) + Number(d.valor||0));
+  });
+  const barras = [...agregPorCentro.entries()].map(([chave,total])=>({
+    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
+  })).sort((a,b)=>b.total-a.total);
+  const maxBarra = barras.reduce((a,b)=>Math.max(a,b.total),0);
+
+  const lista = porMes.filter(d=>{
+    if(!state.despesaFiltroCentro) return true;
+    if(state.despesaFiltroCentro==='sem') return d.centroCustoId==null;
+    return String(d.centroCustoId)===String(state.despesaFiltroCentro);
+  }).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+  const totalFiltrado = lista.reduce((a,d)=>a+Number(d.valor||0),0);
+
+  return `
+  <div class="toolbar">
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <select data-despesa-filtro-mes>
+        <option value="">Todos os meses</option>
+        ${meses.map(m=>`<option value="${m}" ${state.despesaFiltroMes===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
+      </select>
+      <select data-despesa-filtro-centro>
+        <option value="">Todos os centros de custo</option>
+        ${centrosUsados.map(c=>`<option value="${c.id}" ${String(state.despesaFiltroCentro)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}
+        <option value="sem" ${state.despesaFiltroCentro==='sem'?'selected':''}>Sem centro de custo</option>
+      </select>
+    </div>
+    <span class="hint">${lista.length} lançamento(s) · R$ ${fmt(totalFiltrado)}</span>
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="despesas">+ Nova Despesa</button>` : ''}
+  </div>
+  ${barras.length===0 ? '' : `
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="eyebrow" style="margin-bottom:12px;">Despesa por centro de custo${state.despesaFiltroMes?` — ${mesLabel(state.despesaFiltroMes)}`:' (ano)'}</div>
+    <div class="despesa-barras">
+      ${barras.map(b=>`
+        <div class="despesa-barra-linha ${String(state.despesaFiltroCentro)===String(b.chave)?'ativa':''}" data-despesa-filtro-centro-bar="${b.chave}">
+          <div class="despesa-barra-nome">${b.nome}</div>
+          <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${maxBarra>0?(b.total/maxBarra*100):0}%"></div></div>
+          <div class="despesa-barra-valor mono">R$ ${fmt(b.total)}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`}
+  <div class="card" style="overflow-x:auto;">
+    ${lista.length===0 ? Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.') : `
+    <table>
+      <thead><tr><th>Data</th><th>Centro de custo</th><th>Valor</th><th></th></tr></thead>
+      <tbody>
+        ${lista.map(d=>{
+          const expandida = state.despesaExpandidaId===d.id;
+          return `
+          <tr class="despesa-row" data-despesa-toggle="${d.id}">
+            <td>${fmtData(d.data)}</td>
+            <td><strong>${d.centroCustoId ? fkNome('centrosCusto', d.centroCustoId) : 'Sem centro de custo'}</strong> <span class="hint">${expandida?'▲':'▼'}</span></td>
+            <td class="mono">R$ ${fmt(d.valor)}</td>
+            <td style="display:flex; gap:6px;" data-stop-toggle="1">
+              ${podeEditar ? `
+              <button class="btn-ghost btn-sm" data-edit-cadastro="despesas:${d.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-cadastro="despesas:${d.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>
+          ${expandida ? `<tr class="despesa-row-detalhe"><td colspan="4">${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td></tr>` : ''}
+        `;}).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
 /* ===================== RESULTADOS: RECEITA x DESPESA =====================
  * Módulo de acesso separado do Financeiro (mesmo racional do
  * AEpecuária: quem vê custo de insumo não necessariamente deve ver
@@ -1077,12 +1195,28 @@ function PageResultado(){
   const resultado = receitaTotal - despesaTotal;
   const areaTotal = state.fazendas.filter(f=>f.ativo!==false).reduce((a,f)=>a+Number(f.areaHa||0),0);
   const resultadoHa = areaTotal>0 ? resultado/areaTotal : null;
+  const maxRD = Math.max(receitaTotal, despesaTotal, 1);
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(receitaTotal)}</div></div>
     <div class="stat-card"><div class="stat-label">Despesa total</div><div class="stat-value">R$ ${fmt(despesaTotal)}</div></div>
     <div class="stat-card"><div class="stat-label">Resultado</div><div class="stat-value ${resultado<0?'alerta':''}">R$ ${fmt(resultado)}</div></div>
     <div class="stat-card"><div class="stat-label">Resultado / hectare</div><div class="stat-value ${resultadoHa!=null&&resultadoHa<0?'alerta':''}">${resultadoHa==null?'—':'R$ '+fmt(resultadoHa)}</div></div>
+  </div>
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="eyebrow" style="margin-bottom:12px;">Receita x Despesa (ano)</div>
+    <div class="despesa-barras">
+      <div class="despesa-barra-linha" style="cursor:default;">
+        <div class="despesa-barra-nome">Receita</div>
+        <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${(receitaTotal/maxRD*100)}%; background:var(--bom);"></div></div>
+        <div class="despesa-barra-valor mono">R$ ${fmt(receitaTotal)}</div>
+      </div>
+      <div class="despesa-barra-linha" style="cursor:default;">
+        <div class="despesa-barra-nome">Despesa</div>
+        <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${(despesaTotal/maxRD*100)}%; background:var(--alerta);"></div></div>
+        <div class="despesa-barra-valor mono">R$ ${fmt(despesaTotal)}</div>
+      </div>
+    </div>
   </div>
   <div class="card card-pad">
     <table>
@@ -1383,6 +1517,25 @@ function attachEvents(){
   document.querySelectorAll('[data-historico-talhao]').forEach(el=>{
     el.onclick = ()=>{
       state.modal = {type:'historicoTalhao', talhaoId:Number(el.dataset.historicoTalhao)};
+      render();
+    };
+  });
+  const despesaMesEl = document.querySelector('[data-despesa-filtro-mes]');
+  if(despesaMesEl) despesaMesEl.onchange = (e)=>{ state.despesaFiltroMes = e.target.value; render(); };
+  const despesaCentroEl = document.querySelector('[data-despesa-filtro-centro]');
+  if(despesaCentroEl) despesaCentroEl.onchange = (e)=>{ state.despesaFiltroCentro = e.target.value; render(); };
+  document.querySelectorAll('[data-despesa-filtro-centro-bar]').forEach(el=>{
+    el.onclick = ()=>{
+      const chave = el.dataset.despesaFiltroCentroBar;
+      state.despesaFiltroCentro = String(state.despesaFiltroCentro)===String(chave) ? '' : chave;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-despesa-toggle]').forEach(el=>{
+    el.onclick = (e)=>{
+      if(e.target.closest('[data-stop-toggle]')) return;
+      const id = Number(el.dataset.despesaToggle);
+      state.despesaExpandidaId = state.despesaExpandidaId===id ? null : id;
       render();
     };
   });
