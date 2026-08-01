@@ -136,6 +136,7 @@ td.falta{text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:70
 }
 .tbl-input.wide{width:98px;}
 .tbl-input:focus{outline:none; border-color:var(--verde-medio); background:var(--branco);}
+.tbl-shared{font-style:italic; color:var(--cinza); font-size:11.5px; font-family:'Inter',sans-serif; font-weight:600;}
 
 .big-result{text-align:center; padding:6px 0 2px 0;}
 .big-result .value{font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:var(--verde-escuro);}
@@ -337,7 +338,7 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 
   <div class="card card-pad">
     <div class="card-title">🛒 Mistura de Fertilizantes</div>
-    <div class="card-sub" style="margin-bottom:6px;">Toque numa célula e digite o adubo, o teor (%) e o preço que você tem — sem preço padrão.</div>
+    <div class="card-sub" style="margin-bottom:6px;">Toque numa célula e digite o adubo, o teor (%) e o preço que você tem — sem preço padrão. Formulado com mais de um nutriente (ex.: NPK)? Repita o mesmo nome nas linhas que ele cobre — o custo é contado uma única vez.</div>
     <div style="overflow-x:auto;"><table id="tabelaMistura"></table></div>
     <div class="note" id="custoFertResumo" style="margin-top:6px; font-weight:600;"></div>
   </div>
@@ -618,19 +619,57 @@ function computeAll(state, selection) {
   // -- mistura de fertilizantes: doses/custo a partir do que o usuário digitar --
   // (sem banco de dados pré-carregado: o usuário informa nome/teor/preço do produto
   // que ele realmente vai usar - dose = necessidade / (teor%/100); custo = dose x preço).
+  // Formulados com mais de um nutriente (ex.: NPK 08-20-20): se o MESMO nome de adubo
+  // for digitado em mais de uma linha, entende-se que é uma única compra - a dose
+  // aplicada passa a ser a maior entre as exigidas por cada nutriente que ele contém
+  // (o nutriente mais exigente dita a dose do produto), e o custo é cobrado uma única
+  // vez, evitando contar o mesmo saco de adubo duas ou três vezes.
   const need = { N: nDose, P2O5: pDose, K2O: kDose, S: sDose, Zn: znDose, B: bDose, Cu: cuDose, Mn: mnDose, Mo: moDose };
   const sel = selection || {};
 
-  function doseCusto(slot, needVal) {
+  function itemBruto(slot, needVal) {
+    const nome = ((slot && slot.nome) || "").trim();
     const pct = parseFloat(slot && slot.pct) || 0;
     const preco = parseFloat(slot && slot.preco) || 0;
     const dose = pct > 0 ? needVal / (pct / 100) : 0;
-    return { dose, total: dose * s.area, preco, custo: (dose * preco) / 1000 };
+    return { nome, pct, preco, dose };
   }
-  const rN = doseCusto(sel.n, need.N);
-  const rP = doseCusto(sel.p, need.P2O5);
-  const rK = doseCusto(sel.k, need.K2O);
-  const rS = doseCusto(sel.s, need.S);
+
+  const itens = {
+    N: itemBruto(sel.n, need.N), P2O5: itemBruto(sel.p, need.P2O5),
+    K2O: itemBruto(sel.k, need.K2O), S: itemBruto(sel.s, need.S),
+  };
+
+  // agrupa linhas com o mesmo nome de adubo (case-insensitive), só considerando
+  // linhas com dose > 0 (teor preenchido) - nomes em branco nunca se agrupam
+  const grupos = {};
+  Object.entries(itens).forEach(([chaveNutriente, it]) => {
+    const chaveNome = it.nome.toLowerCase();
+    if (!chaveNome || it.dose <= 0) return;
+    (grupos[chaveNome] = grupos[chaveNome] || []).push(chaveNutriente);
+  });
+
+  const mist = {};
+  Object.entries(itens).forEach(([chaveNutriente, it]) => {
+    mist[chaveNutriente] = {
+      ...it, doseAplicada: it.dose, custo: (it.dose * it.preco) / 1000,
+      compartilhado: false, principal: true, suprido: it.dose * (it.pct / 100),
+    };
+  });
+  Object.values(grupos).forEach(chaves => {
+    if (chaves.length < 2) return; // nome usado numa única linha: nada a mudar
+    const doseAplicada = Math.max(...chaves.map(k => itens[k].dose));
+    const precoGrupo = chaves.map(k => itens[k].preco).find(p => p > 0) || 0;
+    chaves.forEach((k, idx) => {
+      mist[k].doseAplicada = doseAplicada;
+      mist[k].compartilhado = true;
+      mist[k].principal = idx === 0;
+      mist[k].custo = idx === 0 ? (doseAplicada * precoGrupo) / 1000 : 0;
+      mist[k].suprido = doseAplicada * (itens[k].pct / 100);
+    });
+  });
+
+  const rN = mist.N, rP = mist.P2O5, rK = mist.K2O, rS = mist.S;
   const custoFertHa = rN.custo + rP.custo + rK.custo + rS.custo;
 
   const precoCalcario = parseFloat(sel.calcario && sel.calcario.preco) || 0;
@@ -672,6 +711,7 @@ const MANUAL_TECNICO_HTML = `
 
 <div class="manual-h">5. Mistura de fertilizantes</div>
 <p class="manual-p">Sem banco de dados pré-carregado: você digita o nome (referência), o teor (%) do nutriente-alvo na embalagem e o preço (R$/t) do produto que vai usar de fato - a dose (kg/ha) é a necessidade dividida pelo teor, e o custo é a dose vezes o preço. Isso reflete o que muda por região e por safra sem impor uma composição/preço padrão.</p>
+<p class="manual-p"><b>Formulados com mais de um nutriente (ex.: NPK 08-20-20):</b> digitando o mesmo nome de adubo em mais de uma linha (N, P2O5, K2O e/ou S), o app entende que é a mesma compra física. A dose aplicada passa a ser a maior entre as exigidas por cada nutriente que esse produto contém (o nutriente mais exigente dita quanto produto comprar), e o custo é lançado uma única vez - nas demais linhas do mesmo produto aparece "↑ mesmo adubo" no lugar do custo, para deixar claro que ele já foi contado. Os nutrientes menos exigentes tendem a ficar com sobra (dose aplicada maior do que a estritamente necessária para eles); isso é esperado ao usar um formulado pronto e não é contabilizado como custo extra.</p>
 
 <div class="manual-h">6. Limitações conhecidas</div>
 <p class="manual-p">• Classes de pH, V%, saturação de Al e parte dos micronutrientes (Cu, Mn, Fe, Mo) são valores consolidados na literatura agronômica brasileira, não reverificados contra o texto integral do Boletim 100 nesta versão.<br>
@@ -867,8 +907,12 @@ function render(out, s) {
   const setRow = (id, r) => {
     const doseEl = document.getElementById("dose_" + id);
     const custoEl = document.getElementById("custo_" + id);
-    if (doseEl) doseEl.textContent = r.dose > 0 ? fmt(r.dose, 1) : "-";
-    if (custoEl) custoEl.textContent = r.dose > 0 ? fmtMoney(r.custo) : "-";
+    if (doseEl) doseEl.textContent = r.doseAplicada > 0 ? fmt(r.doseAplicada, 1) : "-";
+    if (custoEl) {
+      if (r.doseAplicada <= 0) custoEl.innerHTML = "-";
+      else if (r.compartilhado && !r.principal) custoEl.innerHTML = `<span class="tbl-shared">↑ mesmo adubo</span>`;
+      else custoEl.innerHTML = fmtMoney(r.custo);
+    }
   };
   setRow("n", mi.rN); setRow("p", mi.rP); setRow("k", mi.rK); setRow("s", mi.rS);
   const doseCal = document.getElementById("dose_calcario");
@@ -908,18 +952,19 @@ function buildFertInputs() {
     linhaTabela("calcario", "Calcário", false) +
     linhaTabela("gesso", "Gesso", false);
 
-  ["fert_n_pct", "fert_n_preco", "fert_p_pct", "fert_p_preco", "fert_k_pct", "fert_k_preco",
-   "fert_s_pct", "fert_s_preco", "fert_calcario_preco", "fert_gesso_preco"]
+  ["fert_n_nome", "fert_n_pct", "fert_n_preco", "fert_p_nome", "fert_p_pct", "fert_p_preco",
+   "fert_k_nome", "fert_k_pct", "fert_k_preco", "fert_s_nome", "fert_s_pct", "fert_s_preco",
+   "fert_calcario_preco", "fert_gesso_preco"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
 }
 
 function readFertInputs() {
   const g = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
   return {
-    n: { pct: g("fert_n_pct"), preco: g("fert_n_preco") },
-    p: { pct: g("fert_p_pct"), preco: g("fert_p_preco") },
-    k: { pct: g("fert_k_pct"), preco: g("fert_k_preco") },
-    s: { pct: g("fert_s_pct"), preco: g("fert_s_preco") },
+    n: { nome: g("fert_n_nome"), pct: g("fert_n_pct"), preco: g("fert_n_preco") },
+    p: { nome: g("fert_p_nome"), pct: g("fert_p_pct"), preco: g("fert_p_preco") },
+    k: { nome: g("fert_k_nome"), pct: g("fert_k_pct"), preco: g("fert_k_preco") },
+    s: { nome: g("fert_s_nome"), pct: g("fert_s_pct"), preco: g("fert_s_preco") },
     calcario: { preco: g("fert_calcario_preco") },
     gesso: { preco: g("fert_gesso_preco") },
   };
