@@ -257,23 +257,13 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     </div>
   </details>
 
-  <details class="card">
-    <summary>Fertilizantes disponíveis <span class="chev">▾</span></summary>
-    <div class="card-pad">
-      <div class="note" style="margin-top:0; margin-bottom:10px;">Ajuste o preço (varia por região/safra), edite a composição ou adicione um produto próprio. A escolha de qual usar é feita lá embaixo, em "Mistura de Fertilizantes".</div>
-      <div id="fertList"></div>
-      <button type="button" id="btnAddFert" style="width:100%; border:none; cursor:pointer; font-family:'Inter',sans-serif; font-size:13.5px; background:var(--cinza-bg); color:var(--verde-escuro); border-radius:9px; margin-top:8px; padding:10px; font-weight:700;">+ Adicionar fertilizante</button>
-      <div id="fertAddForm" style="display:none; margin-top:12px; border-top:1px solid var(--cinza-claro); padding-top:12px;"></div>
-    </div>
-  </details>
 
   <!-- ===================== RESULTADOS ===================== -->
   <div class="section-label" style="margin-top:24px;">Resultado</div>
 
   <div class="card card-pad">
-    <div class="card-title">🔍 Diagnóstico do Solo</div>
-    <div class="diag-grid" id="diagGrid"></div>
-    <div id="diagResumo" class="note"></div>
+    <div class="card-title">🔍 Índices do Solo</div>
+    <div class="diag-grid" id="indicesGrid"></div>
   </div>
 
   <div class="card card-pad">
@@ -288,7 +278,7 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
       <tr><td>Parcelamento</td><td class="num" id="calParcelamento">-</td></tr>
     </table>
     <details style="margin-top:8px;">
-      <summary style="cursor:pointer; font-size:12.5px; color:var(--verde-medio); font-weight:600;">Ver os 3 métodos calculados</summary>
+      <summary style="cursor:pointer; font-size:12.5px; color:var(--verde-medio); font-weight:600;">Ver os métodos calculados</summary>
       <table style="margin-top:8px;">
         <tr><th>Método</th><th>t/ha</th></tr>
         <tr><td>Saturação por bases</td><td class="num" id="m1">-</td></tr>
@@ -308,18 +298,17 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
   </div>
 
   <div class="card card-pad">
-    <div class="card-title">🧪 Necessidade de Nutrientes</div>
+    <div class="card-title">🧪 Solo × Necessidade</div>
+    <div class="card-sub" style="margin-bottom:6px;">Teor atual no solo lado a lado com a dose recomendada.</div>
     <table id="tabelaNutrientes"></table>
+    <div class="note" id="nDoseInfo"></div>
   </div>
 
   <div class="card card-pad">
     <div class="card-title">🛒 Mistura de Fertilizantes</div>
-    <div class="card-sub" style="margin-bottom:6px;">Sugestão automática pré-selecionada — troque à vontade pelo que você for usar.</div>
-    <div id="fertSelects"></div>
-    <div id="balancoS" class="note"></div>
-    <div class="section-label" style="margin:14px 0 6px 0;">Corretivos</div>
-    <div id="corretivoSelects"></div>
-    <div class="note" id="custoFertResumo" style="margin-top:10px; font-weight:600;"></div>
+    <div class="card-sub" style="margin-bottom:10px;">Digite o fertilizante que você vai usar, o teor do nutriente na embalagem e o preço — a dose e o custo saem na hora. Deixe em branco o que não quiser calcular.</div>
+    <div id="fertInputs"></div>
+    <div class="note" id="custoFertResumo" style="margin-top:6px; font-weight:600;"></div>
   </div>
 
   <div class="cost-total">
@@ -432,38 +421,6 @@ const MICRO_DOSE = {
   Mo: { "Baixo": 0.05, "Médio": 0.02, "Alto": 0, "Muito alto": 0, "Adequado": 0, "Muito baixo": 0.05 },
 };
 
-// Composição garantida e preço de referência (R$/t) - lista editável pelo usuário
-// (preços variam por região/safra; o usuário pode ajustar preço, composição, remover
-// ou adicionar um produto próprio com a formulação que ele realmente vai usar).
-const NUTRIENT_KEYS = ["N", "P2O5", "K2O", "S", "Ca", "Mg", "CaO", "MgO", "B", "Zn", "Cu", "Mn", "Mo"];
-
-let FERTILIZER_LIST = [
-  { nome: "Ureia", N: 45, preco: 2600, categorias: ["N"] },
-  { nome: "Sulfato de Amônio", N: 20, S: 24, preco: 2100, categorias: ["N", "S"] },
-  { nome: "Nitrato de Amônio", N: 32, preco: 2700, categorias: ["N"] },
-  { nome: "MAP (11-52-00)", N: 11, P2O5: 52, preco: 4200, categorias: ["N", "P"] },
-  { nome: "DAP (18-46-00)", N: 18, P2O5: 46, preco: 4100, categorias: ["N", "P"] },
-  { nome: "Superfosfato Simples", P2O5: 18, S: 10, Ca: 18, preco: 2000, categorias: ["P", "S"] },
-  { nome: "Superfosfato Triplo", P2O5: 41, Ca: 12, preco: 3600, categorias: ["P"] },
-  { nome: "Cloreto de Potássio", K2O: 58, preco: 3600, categorias: ["K"] },
-  { nome: "Sulfato de Potássio", K2O: 50, S: 17, preco: 5200, categorias: ["K", "S"] },
-  { nome: "Nitrato de Potássio", N: 13, K2O: 44, preco: 6800, categorias: ["N", "K"] },
-  { nome: "K-Mag (Sulpomag)", K2O: 18, Mg: 11, S: 22, preco: 4500, categorias: ["K", "S"] },
-  { nome: "FTE BR-12", B: 1.8, Cu: 0.8, Mn: 2.0, Zn: 9.0, Mo: 0.1, S: 3.0, preco: 9500, categorias: ["micro"] },
-  { nome: "Ácido Bórico", B: 17, preco: 12000, categorias: ["micro"] },
-  { nome: "Sulfato de Zinco", Zn: 20, S: 10, preco: 7500, categorias: ["micro", "S"] },
-  { nome: "Calcário Calcítico (PRNT 90%)", CaO: 48, MgO: 4, preco: 130, categorias: ["calcario"] },
-  { nome: "Calcário Dolomítico (PRNT 90%)", CaO: 32, MgO: 18, preco: 140, categorias: ["calcario"] },
-  { nome: "Gesso Agrícola", Ca: 16, S: 15, preco: 350, categorias: ["gesso", "S"] },
-];
-
-function getFert(nome) {
-  return FERTILIZER_LIST.find(f => f.nome === nome) || null;
-}
-function fertsByCategoria(cat) {
-  return FERTILIZER_LIST.filter(f => f.categorias.includes(cat));
-}
-
 function textureClass(argila) {
   if (argila < 15) return "Arenoso";
   if (argila <= 35) return "Médio";
@@ -533,13 +490,24 @@ function computeAll(state, selection) {
   const v2 = s.v2Override !== null && !isNaN(s.v2Override) ? s.v2Override : (LIMING_V2_TARGET[s.cultura] || 70);
   const alCmolc = s.al / 10;
   const caMgCmolc = (s.ca + s.mg) / 10;
-  const m1Bruta = Math.max(0, (ctcPh7 * (v2 - vPct)) / 10);
+  // NC (t/ha, a PRNT 100%) = CTC(mmolc/dm³) x (V2-V1) / 1000 - Raij et al., Boletim 100.
+  // (equivale a CTC(cmolc/dm³) x (V2-V1)/100; dividir por 1000 e não por 10 evita um
+  // erro de escala de 100x que gerava doses irreais de calcário)
+  const m1Bruta = Math.max(0, (ctcPh7 * (v2 - vPct)) / 1000);
   const m2Bruta = alCmolc * 2;
   const m3Bruta = alCmolc * 2 + Math.max(0, 2 - caMgCmolc);
   const corr = (b) => b * (100 / s.prnt);
   const isCerrado = CERRADO_STATES.has(s.estado);
-  const metodoEscolhido = isCerrado ? "Al³⁺ + elevação de Ca/Mg (Cerrado)" : "Saturação por bases";
-  const ncFinal = isCerrado ? corr(m3Bruta) : corr(m1Bruta);
+  // Em estados de Cerrado, o método Al+Ca/Mg (Sousa & Lobato) só enxerga toxidez de
+  // Al e deficiência de Ca/Mg - se o solo já tem Al baixo e Ca/Mg ok mas a saturação
+  // por bases (V%) ainda está longe da meta, esse método sozinho pode dar ~0 mesmo
+  // quando calagem é claramente necessária. Por isso, em Cerrado usa-se o MAIOR valor
+  // entre os dois métodos aplicáveis (nunca subestima).
+  const ncCerrado = Math.max(corr(m1Bruta), corr(m3Bruta));
+  const metodoEscolhido = isCerrado
+    ? (corr(m3Bruta) >= corr(m1Bruta) ? "Al³⁺ + elevação de Ca/Mg (Cerrado)" : "Saturação por bases (maior que o método Cerrado neste caso)")
+    : "Saturação por bases";
+  const ncFinal = isCerrado ? ncCerrado : corr(m1Bruta);
   out.calagem = {
     v2, isCerrado, metodoEscolhido, ncFinal, ncTotal: ncFinal * s.area,
     m1: corr(m1Bruta), m2: corr(m2Bruta), m3: corr(m3Bruta),
@@ -600,86 +568,36 @@ function computeAll(state, selection) {
     fonteCurta: crop.fonteCurta, confiancaCurta: crop.confiancaCurta,
   };
 
-  // -- mistura de fertilizantes: doses/custo pelo produto REALMENTE escolhido pelo usuário --
+  // -- mistura de fertilizantes: doses/custo a partir do que o usuário digitar --
+  // (sem banco de dados pré-carregado: o usuário informa nome/teor/preço do produto
+  // que ele realmente vai usar - dose = necessidade / (teor%/100); custo = dose x preço).
   const need = { N: nDose, P2O5: pDose, K2O: kDose, S: sDose, Zn: znDose, B: bDose, Cu: cuDose, Mn: mnDose, Mo: moDose };
   const sel = selection || {};
-  const nSource = sel.nSource || null;
-  const pSource = sel.pSource || null;
-  const kSource = sel.kSource || null;
-  const microSource = sel.microSource || null;
-  const calcarioProduto = sel.calcarioProduto || null;
-  const gessoProduto = sel.gessoProduto || null;
 
-  function doseOf(nomeProduto, needVal, pctField) {
-    const f = nomeProduto ? getFert(nomeProduto) : null;
-    if (!f) return 0;
-    const pct = f[pctField] || 0;
-    if (pct === 0) return 0;
-    return needVal / (pct / 100);
+  function doseCusto(slot, needVal) {
+    const pct = parseFloat(slot && slot.pct) || 0;
+    const preco = parseFloat(slot && slot.preco) || 0;
+    const dose = pct > 0 ? needVal / (pct / 100) : 0;
+    return { dose, total: dose * s.area, preco, custo: (dose * preco) / 1000 };
   }
-  const doseN = doseOf(nSource, need.N, "N");
-  const doseP = doseOf(pSource, need.P2O5, "P2O5");
-  const doseK = doseOf(kSource, need.K2O, "K2O");
-  // Dose pelo micronutriente mais limitante na composição do produto escolhido
-  // (generaliza a lógica do FTE BR-12 para qualquer produto de micronutriente).
-  const fMicro = microSource ? getFert(microSource) : null;
-  let doseMicro = 0;
-  if (fMicro) {
-    ["Zn", "B", "Cu", "Mn", "Mo"].forEach(nut => {
-      const pct = fMicro[nut] || 0;
-      if (pct > 0 && need[nut] > 0) {
-        doseMicro = Math.max(doseMicro, need[nut] / (pct / 100));
-      }
-    });
-  }
+  const rN = doseCusto(sel.n, need.N);
+  const rP = doseCusto(sel.p, need.P2O5);
+  const rK = doseCusto(sel.k, need.K2O);
+  const rS = doseCusto(sel.s, need.S);
+  const custoFertHa = rN.custo + rP.custo + rK.custo + rS.custo;
 
-  const products = [
-    { nome: nSource, alvo: "N", dose: doseN },
-    { nome: pSource, alvo: "P2O5", dose: doseP },
-    { nome: kSource, alvo: "K2O", dose: doseK },
-  ];
-  if (microSource) products.push({ nome: microSource, alvo: "Zn/B/Cu/Mn/Mo", dose: doseMicro });
-
-  let custoFertHa = 0;
-  products.forEach(p => {
-    const f = p.nome ? getFert(p.nome) : null;
-    p.total = p.dose * s.area;
-    p.preco = f ? f.preco : 0;
-    p.custo = (p.dose * p.preco) / 1000;
-    custoFertHa += p.custo;
-  });
-
-  const fN = nSource ? getFert(nSource) : null;
-  const fP = pSource ? getFert(pSource) : null;
-  const sFromN = doseN * ((fN && fN.S) || 0) / 100;
-  const sFromP = doseP * ((fP && fP.S) || 0) / 100;
-  const sSaldo = need.S - sFromN - sFromP - out.gessagem.sSuprido;
-
-  const fCalcario = calcarioProduto ? getFert(calcarioProduto) : null;
-  const fGesso = gessoProduto ? getFert(gessoProduto) : null;
-  const custoCalcario = out.calagem.ncFinal * (fCalcario ? fCalcario.preco : 0);
-  const custoGesso = (out.gessagem.doseGesso / 1000) * (fGesso ? fGesso.preco : 0);
+  const precoCalcario = parseFloat(sel.calcario && sel.calcario.preco) || 0;
+  const precoGesso = parseFloat(sel.gesso && sel.gesso.preco) || 0;
+  const custoCalcario = out.calagem.ncFinal * precoCalcario;
+  const custoGesso = (out.gessagem.doseGesso / 1000) * precoGesso;
   const custoTotalHa = custoFertHa + custoCalcario + custoGesso;
 
   out.mistura = {
-    products, sFromN, sFromP, sSaldo, custoFertHa, custoCalcario, custoGesso,
+    rN, rP, rK, rS, custoFertHa, custoCalcario, custoGesso,
     custoTotalHa, custoTotalArea: custoTotalHa * s.area,
   };
 
   return out;
-}
-
-// Sugestão inicial (heurística) - usada só para pré-selecionar os menus na
-// primeira renderização; depois disso o usuário tem controle total.
-function heuristicSelection(need, classeMg, classeS) {
-  const pSource = need.S > 0 ? "Superfosfato Simples" : "MAP (11-52-00)";
-  const kSource = classeMg === "Baixo" ? "K-Mag (Sulpomag)" : "Cloreto de Potássio";
-  const nSource = pSource === "Superfosfato Simples" ? "Ureia" : (need.S > 0 ? "Sulfato de Amônio" : "Ureia");
-  const microSource = (need.Zn > 0 || need.B > 0 || need.Cu > 0 || need.Mn > 0 || need.Mo > 0) ? "FTE BR-12" : "Nenhum";
-  return {
-    nSource, pSource, kSource, microSource,
-    calcarioProduto: "Calcário Dolomítico (PRNT 90%)", gessoProduto: "Gesso Agrícola",
-  };
 }
 
 
@@ -694,7 +612,7 @@ const MANUAL_TECNICO_HTML = `
 <p class="manual-p"><b>Saturação por bases:</b> NC (t/ha) = CTC pH7 (mmolc/dm³) × (V2−V1) / (10×PRNT). Fonte: Raij et al., Boletim Técnico 100, IAC, 1997. Confiança: Alta.</p>
 <p class="manual-p"><b>Neutralização do Alumínio (Kamprath):</b> NC (t/ha) = Al³⁺(cmolc/dm³) × 2 × (100/PRNT). Fonte: Kamprath, 1970. Confiança: Média.</p>
 <p class="manual-p"><b>Al³⁺ + elevação de Ca/Mg (Cerrado):</b> NC (t/ha) = [Al³⁺(cmolc/dm³)×2 + MAX(0; 2−(Ca+Mg)(cmolc/dm³))] × (100/PRNT). Fonte: Sousa &amp; Lobato, Embrapa Cerrados, 2004. Confiança: Alta.</p>
-<p class="manual-p">Escolha automática: estados de Cerrado típico (MT, GO, MS, TO, MA, PI, BA, DF, RO, PA) usam o método Cerrado; demais usam saturação por bases — convenção da literatura agronômica, não norma formal.</p>
+<p class="manual-p">Escolha automática: em estados de Cerrado típico (MT, GO, MS, TO, MA, PI, BA, DF, RO, PA) usa-se o MAIOR valor entre o método Cerrado e o de saturação por bases - o método Cerrado só enxerga toxidez de Al e deficiência de Ca/Mg, então sozinho pode indicar dose zero mesmo com V% baixo; tomar o maior evita subestimar a necessidade. Fora do Cerrado, usa-se saturação por bases.</p>
 
 <div class="manual-h">3. Gessagem</div>
 <p class="manual-p">Recomendado quando m% &gt; 20% OU Ca²⁺ &lt; 0,5 cmolc/dm³ (5 mmolc/dm³) na camada avaliada (idealmente 20-40cm). Dose: 50×argila(%) para culturas anuais, 75×argila(%) para perenes/pastagens. Fonte: Sousa &amp; Lobato, Circular Técnica 32, Embrapa Cerrados. Confiança: Alta (fórmula); Média (limiar exato de Ca varia entre 0,2-0,5 cmolc/dm³ conforme a fonte).</p>
@@ -706,7 +624,7 @@ const MANUAL_TECNICO_HTML = `
 <p class="manual-p"><b>Micronutrientes:</b> dose fixa por classe (Zn e B confirmados em referência secundária do Boletim 100; Cu, Mn e Mo são estimativas de uso corrente — Confiança Baixa).</p>
 
 <div class="manual-h">5. Mistura de fertilizantes</div>
-<p class="manual-p">Seleção por heurística de regras (não é um otimizador de programação linear): P traz enxofre (Superfosfato Simples) quando há necessidade de S, senão MAP; K é K-Mag quando Mg está baixo, senão Cloreto de Potássio; N é Ureia, exceto quando falta S e a fonte de P não supre (então Sulfato de Amônio); micronutrientes via FTE BR-12, dosado pelo mais limitante.</p>
+<p class="manual-p">Sem banco de dados pré-carregado: você digita o nome (referência), o teor (%) do nutriente-alvo na embalagem e o preço (R$/t) do produto que vai usar de fato - a dose (kg/ha) é a necessidade dividida pelo teor, e o custo é a dose vezes o preço. Isso reflete o que muda por região e por safra sem impor uma composição/preço padrão.</p>
 
 <div class="manual-h">6. Limitações conhecidas</div>
 <p class="manual-p">• Classes de pH, V%, saturação de Al e parte dos micronutrientes (Cu, Mn, Fe, Mo) são valores consolidados na literatura agronômica brasileira, não reverificados contra o texto integral do Boletim 100 nesta versão.<br>
@@ -841,23 +759,15 @@ function fmtMoney(v) {
 }
 
 function render(out, s) {
-  // Diagnóstico
-  const diagWrap = document.getElementById("diagGrid");
-  const items = [
-    ["pH", out.classes.pH, false], ["M.O.", out.classes.MO, false], ["Fósforo", out.classes.P, false],
-    ["Potássio", out.classes.K, false], ["Cálcio", out.classes.Ca, false], ["Magnésio", out.classes.Mg, false],
-    ["V%", out.classes.V, false], ["m% (Al)", out.classes.m, true], ["Enxofre", out.classes.S, false],
-    ["Zinco", out.classes.Zn, false], ["Boro", out.classes.B, false], ["Cobre", out.classes.Cu, false],
-    ["Manganês", out.classes.Mn, false], ["Molibdênio", out.classes.Mo, false],
+  // Índices do solo (pH, M.O., V%, m%) - contexto para Calagem/Gessagem
+  const indicesWrap = document.getElementById("indicesGrid");
+  const indices = [
+    ["pH", out.classes.pH, false], ["M.O.", out.classes.MO, false],
+    ["V%", out.classes.V, false], ["m% (Al)", out.classes.m, true],
   ];
-  diagWrap.innerHTML = items.map(([label, classe, inv]) =>
+  indicesWrap.innerHTML = indices.map(([label, classe, inv]) =>
     `<div class="diag-item"><span>${label}</span><span class="pill ${inv ? pillClassInverso(classe) : pillClass(classe)}">${classe}</span></div>`
   ).join("");
-
-  const limitantes = items.filter(([label, classe, inv]) => inv ? ["Alto", "Muito alto"].includes(classe) : ["Muito baixo", "Baixo"].includes(classe)).map(i => i[0]);
-  document.getElementById("diagResumo").textContent = limitantes.length
-    ? "Prioridade de correção: " + limitantes.join(", ")
-    : "Nenhuma limitação identificada nos parâmetros avaliados.";
 
   // Calagem
   document.getElementById("calDose").textContent = fmt(out.calagem.ncFinal, 2);
@@ -876,183 +786,110 @@ function render(out, s) {
   document.getElementById("gessoDose").textContent = fmt(out.gessagem.doseGesso, 0) + " kg/ha";
   document.getElementById("gessoTotal").textContent = fmt(out.gessagem.doseTotal, 1) + " t";
 
-  // Nutrientes
+  // Solo x Necessidade (lado a lado, para comparar)
   const ad = out.adubacao;
-  const nutRows = [
-    ["N", ad.N], ["P2O5", ad.P2O5], ["K2O", ad.K2O], ["S", ad.S],
-    ["Zn", ad.Zn], ["B", ad.B], ["Cu", ad.Cu], ["Mn", ad.Mn], ["Mo", ad.Mo],
+  const compRows = [
+    ["Fósforo (P2O5)", s.p, "mg/dm³", out.classes.P, ad.P2O5],
+    ["Potássio (K2O)", s.k, "mmolc/dm³", out.classes.K, ad.K2O],
+    ["Enxofre (S)", s.s, "mg/dm³", out.classes.S, ad.S],
+    ["Zinco (Zn)", s.zn, "mg/dm³", out.classes.Zn, ad.Zn],
+    ["Boro (B)", s.b, "mg/dm³", out.classes.B, ad.B],
+    ["Cobre (Cu)", s.cu, "mg/dm³", out.classes.Cu, ad.Cu],
+    ["Manganês (Mn)", s.mn, "mg/dm³", out.classes.Mn, ad.Mn],
+    ["Molibdênio (Mo)", s.moMicro, "mg/dm³", out.classes.Mo, ad.Mo],
   ];
   document.getElementById("tabelaNutrientes").innerHTML =
-    `<tr><th>Nutriente</th><th style="text-align:right">kg/ha</th><th style="text-align:right">Total área</th></tr>` +
-    nutRows.map(([n, v]) => `<tr><td>${n}</td><td class="num">${fmt(v, 2)}</td><td class="num">${fmt(v * s.area, 0)}</td></tr>`).join("") +
-    `<tr><td colspan="3" style="border-bottom:none; padding-top:10px;"><span class="pill ${confPill(ad.confiancaCurta)}">Confiança: ${ad.confiancaCurta}</span> <span class="note" style="display:inline">${ad.fonteCurta}</span></td></tr>`;
+    `<tr><th>Nutriente</th><th>Teor no solo</th><th>Classe</th><th style="text-align:right">Necessidade</th></tr>` +
+    compRows.map(([nome, teor, unid, classe, need]) =>
+      `<tr><td>${nome}</td><td class="num">${fmt(teor, 2)} ${unid}</td>` +
+      `<td><span class="pill ${pillClass(classe)}">${classe}</span></td>` +
+      `<td class="num">${fmt(need, 2)} kg/ha</td></tr>`
+    ).join("");
+  document.getElementById("nDoseInfo").innerHTML =
+    `Nitrogênio (N): <b>${fmt(ad.N, 2)} kg/ha</b> — não tem teor de solo comparável (ver critério em Manual Técnico). ` +
+    `Cálcio e Magnésio são corrigidos via Calagem/Gessagem, não por adubação direta. ` +
+    `<span class="pill ${confPill(ad.confiancaCurta)}">Confiança: ${ad.confiancaCurta}</span> ${ad.fonteCurta}`;
 
-  // Mistura - resultado por linha (dose/custo do produto escolhido em cada select)
+  // Mistura - dose/custo a partir do que o usuário digitou em cada campo
   const mi = out.mistura;
-  const mapId = { N: "selN", P2O5: "selP", K2O: "selK", "Zn/B/Cu/Mn/Mo": "selMicro" };
-  mi.products.forEach(p => {
-    const id = mapId[p.alvo];
-    const resEl = id && document.getElementById("res_" + id);
-    if (resEl) {
-      resEl.textContent = p.nome
-        ? `${fmt(p.dose, 1)} kg/ha · ${fmtMoney(p.custo)}/ha`
-        : "sem fonte selecionada";
-    }
-  });
-  const resCal = document.getElementById("res_selCalcario");
+  const setRes = (id, r, unidade) => {
+    const el = document.getElementById("res_" + id);
+    if (!el) return;
+    el.textContent = r.dose > 0
+      ? `${fmt(r.dose, 1)} ${unidade} · ${fmtMoney(r.custo)}/ha`
+      : "preencha o teor (%) para calcular a dose";
+  };
+  setRes("n", mi.rN, "kg/ha"); setRes("p", mi.rP, "kg/ha"); setRes("k", mi.rK, "kg/ha"); setRes("s", mi.rS, "kg/ha");
+  const resCal = document.getElementById("res_calcario");
   if (resCal) resCal.textContent = `${fmt(out.calagem.ncFinal, 2)} t/ha · ${fmtMoney(mi.custoCalcario)}/ha`;
-  const resGes = document.getElementById("res_selGesso");
+  const resGes = document.getElementById("res_gesso");
   if (resGes) resGes.textContent = `${fmt(out.gessagem.doseGesso, 0)} kg/ha · ${fmtMoney(mi.custoGesso)}/ha`;
 
-  document.getElementById("balancoS").textContent = mi.sSaldo > 0
-    ? `Saldo de enxofre: falta ${fmt(mi.sSaldo, 1)} kg/ha (considere gesso adicional ou Sulfato de Potássio).`
-    : `Saldo de enxofre: suprido pelas fontes escolhidas (excedente de ${fmt(-mi.sSaldo, 1)} kg/ha).`;
   document.getElementById("custoFertResumo").textContent = `Subtotal fertilizantes: ${fmtMoney(mi.custoFertHa)}/ha`;
-
   document.getElementById("custoHa").textContent = fmtMoney(mi.custoTotalHa);
   document.getElementById("custoArea").textContent = `Total da área: ${fmtMoney(mi.custoTotalArea)}`;
 }
 
-/* ---------------- Gestão de fertilizantes (editável pelo usuário) ---------------- */
-function fmtComposicao(f) {
-  return NUTRIENT_KEYS.filter(k => f[k]).map(k => `${k} ${f[k]}%`).join(" · ") || "sem composição cadastrada";
-}
-
-function renderFertilizerManagement() {
-  const wrap = document.getElementById("fertList");
-  wrap.innerHTML = FERTILIZER_LIST.map((f, i) => `
-    <div style="border-bottom:1px solid var(--cinza-claro); padding:9px 0;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-        <div style="flex:1;">
-          <div style="font-weight:700; font-size:13px;">${f.nome}</div>
-          <div class="hint">${fmtComposicao(f)}</div>
-        </div>
-        <button type="button" data-i="${i}" class="btnRemoveFert" title="Remover" style="background:none; border:none; color:var(--alerta); font-size:17px; cursor:pointer; padding:2px 6px;">🗑</button>
-      </div>
-      <div class="field" style="margin:8px 0 0 0;">
-        <label class="hint">Preço (R$/t)</label>
-        <input type="number" data-i="${i}" class="inpFertPreco" value="${f.preco}" step="10">
-      </div>
-    </div>
-  `).join("");
-
-  wrap.querySelectorAll(".btnRemoveFert").forEach(btn => {
-    btn.addEventListener("click", () => {
-      FERTILIZER_LIST.splice(parseInt(btn.dataset.i, 10), 1);
-      onFertilizerListChanged();
-    });
-  });
-  wrap.querySelectorAll(".inpFertPreco").forEach(inp => {
-    inp.addEventListener("input", () => {
-      FERTILIZER_LIST[parseInt(inp.dataset.i, 10)].preco = parseFloat(inp.value) || 0;
-      recalc();
-    });
-  });
-}
-
-function toggleAddFertForm() {
-  const el = document.getElementById("fertAddForm");
-  if (el.style.display !== "none") { el.style.display = "none"; return; }
-  el.style.display = "block";
-  const camposPct = ["N", "P2O5", "K2O", "S", "Ca", "Mg", "B", "Zn", "Cu", "Mn"];
-  el.innerHTML = `
-    <div class="field"><label>Nome do produto</label><input type="text" id="newFertNome" placeholder="ex: Formulado 08-20-20"></div>
-    <div class="row2">
-      ${camposPct.map(k => `<div class="field"><label>${k} (%)</label><input type="number" id="newFert_${k}" value="0" step="0.1"></div>`).join("")}
-    </div>
-    <div class="field"><label>Preço (R$/t)</label><input type="number" id="newFertPreco" value="0" step="10"></div>
-    <button type="button" id="btnSaveFert" style="width:100%; background:var(--verde-escuro); color:#fff; border:none; border-radius:9px; padding:11px; font-weight:700; font-size:13.5px; cursor:pointer;">Adicionar à lista</button>
-  `;
-  document.getElementById("btnSaveFert").addEventListener("click", saveNewFert);
-}
-
-function saveNewFert() {
-  const nome = document.getElementById("newFertNome").value.trim();
-  if (!nome) { alert("Digite o nome do produto."); return; }
-  const f = { nome, preco: parseFloat(document.getElementById("newFertPreco").value) || 0, categorias: [] };
-  ["N", "P2O5", "K2O", "S", "Ca", "Mg", "B", "Zn", "Cu", "Mn"].forEach(k => {
-    const v = parseFloat(document.getElementById("newFert_" + k).value) || 0;
-    if (v > 0) f[k] = v;
-  });
-  if (f.N) f.categorias.push("N");
-  if (f.P2O5) f.categorias.push("P");
-  if (f.K2O) f.categorias.push("K");
-  if (f.S) f.categorias.push("S");
-  if (f.B || f.Zn || f.Cu || f.Mn) f.categorias.push("micro");
-  if (!f.categorias.length) f.categorias.push("outro");
-  FERTILIZER_LIST.push(f);
-  document.getElementById("fertAddForm").style.display = "none";
-  onFertilizerListChanged();
-}
-
-/* ---------------- Seleção de fontes (selects) ---------------- */
-function selectOptionsHtml(cat, preferido) {
-  const opts = fertsByCategoria(cat).map(f => f.nome);
-  return ["Nenhum", ...opts].map(o => `<option value="${o}" ${o === preferido ? "selected" : ""}>${o}</option>`).join("");
-}
-
-function val0(id) {
-  const el = document.getElementById(id);
-  if (!el) return null;
-  return el.value === "Nenhum" ? null : el.value;
-}
-
-function currentSelectionOrNull() {
-  if (!document.getElementById("selN")) return null;
-  return {
-    nSource: val0("selN"), pSource: val0("selP"), kSource: val0("selK"),
-    microSource: val0("selMicro"), calcarioProduto: val0("selCalcario"), gessoProduto: val0("selGesso"),
-  };
-}
-
-function readSelection() {
-  return currentSelectionOrNull() || {};
-}
-
-function buildFertilizerSelects(preferred) {
-  const pref = preferred || {};
-  const rows = [
-    ["N", "selN", "nSource", "N"], ["P2O5", "selP", "pSource", "P"],
-    ["K2O", "selK", "kSource", "K"], ["Micronutrientes", "selMicro", "microSource", "micro"],
+/* ---------------- Mistura: campos livres (sem banco de dados) ---------------- */
+// Cada linha = um produto que o usuário informa (nome só de referência, teor% do
+// nutriente-alvo na embalagem, e preço R$/t). Nada vem pré-preenchido.
+function buildFertInputs() {
+  const linhas = [
+    ["n", "Nitrogênio (N)", "ex: Ureia", "ex: 45"],
+    ["p", "Fósforo (P2O5)", "ex: MAP", "ex: 52"],
+    ["k", "Potássio (K2O)", "ex: Cloreto de Potássio", "ex: 58"],
+    ["s", "Enxofre (S)", "ex: Gesso Agrícola", "ex: 15"],
   ];
-  document.getElementById("fertSelects").innerHTML = rows.map(([label, id]) => `
-    <div class="field">
-      <label>Fonte de ${label}</label>
-      <select id="${id}"></select>
-      <div class="note" id="res_${id}" style="margin-top:2px;"></div>
+  document.getElementById("fertInputs").innerHTML = linhas.map(([id, label, nomePh, pctPh]) => `
+    <div class="field" style="border-bottom:1px solid var(--cinza-claro); padding-bottom:12px; margin-bottom:12px;">
+      <label>${label}</label>
+      <div class="row2">
+        <input type="text" id="fert_${id}_nome" placeholder="${nomePh}">
+        <input type="number" id="fert_${id}_pct" placeholder="Teor % (${pctPh.replace('ex: ', '')})" step="0.1">
+      </div>
+      <div class="row2" style="margin-top:8px;">
+        <input type="number" id="fert_${id}_preco" placeholder="Preço R$/t" step="10">
+        <div class="note" id="res_${id}" style="align-self:center;"></div>
+      </div>
     </div>
-  `).join("");
-  rows.forEach(([label, id, key, cat]) => {
-    document.getElementById(id).innerHTML = selectOptionsHtml(cat, pref[key]);
-    document.getElementById(id).addEventListener("change", recalc);
-  });
-
-  document.getElementById("corretivoSelects").innerHTML = `
-    <div class="field"><label>Produto de calcário</label><select id="selCalcario"></select><div class="note" id="res_selCalcario" style="margin-top:2px;"></div></div>
-    <div class="field"><label>Produto de gesso</label><select id="selGesso"></select><div class="note" id="res_selGesso" style="margin-top:2px;"></div></div>
+  `).join("") + `
+    <div class="field">
+      <label>Calcário</label>
+      <div class="row2">
+        <input type="text" id="fert_calcario_nome" placeholder="ex: Calcário Dolomítico">
+        <input type="number" id="fert_calcario_preco" placeholder="Preço R$/t" step="10">
+      </div>
+      <div class="note" id="res_calcario" style="margin-top:4px;"></div>
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label>Gesso agrícola</label>
+      <div class="row2">
+        <input type="text" id="fert_gesso_nome" placeholder="ex: Gesso Agrícola">
+        <input type="number" id="fert_gesso_preco" placeholder="Preço R$/t" step="10">
+      </div>
+      <div class="note" id="res_gesso" style="margin-top:4px;"></div>
+    </div>
   `;
-  document.getElementById("selCalcario").innerHTML = selectOptionsHtml("calcario", pref.calcarioProduto);
-  document.getElementById("selGesso").innerHTML = selectOptionsHtml("gesso", pref.gessoProduto);
-  document.getElementById("selCalcario").addEventListener("change", recalc);
-  document.getElementById("selGesso").addEventListener("change", recalc);
+  ["fert_n_pct", "fert_n_preco", "fert_p_pct", "fert_p_preco", "fert_k_pct", "fert_k_preco",
+   "fert_s_pct", "fert_s_preco", "fert_calcario_preco", "fert_gesso_preco"]
+    .forEach(id => document.getElementById(id).addEventListener("input", recalc));
 }
 
-function onFertilizerListChanged() {
-  const preserved = currentSelectionOrNull();
-  renderFertilizerManagement();
-  buildFertilizerSelects(preserved || {});
-  recalc();
+function readFertInputs() {
+  const g = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+  return {
+    n: { pct: g("fert_n_pct"), preco: g("fert_n_preco") },
+    p: { pct: g("fert_p_pct"), preco: g("fert_p_preco") },
+    k: { pct: g("fert_k_pct"), preco: g("fert_k_preco") },
+    s: { pct: g("fert_s_pct"), preco: g("fert_s_preco") },
+    calcario: { preco: g("fert_calcario_preco") },
+    gesso: { preco: g("fert_gesso_preco") },
+  };
 }
 
 function recalc() {
   const s = readState();
-  const pre = computeAll(s, {});
-  if (!document.getElementById("selN")) {
-    const need = { N: pre.adubacao.N, P2O5: pre.adubacao.P2O5, K2O: pre.adubacao.K2O, S: pre.adubacao.S,
-                   Zn: pre.adubacao.Zn, B: pre.adubacao.B, Cu: pre.adubacao.Cu, Mn: pre.adubacao.Mn, Mo: pre.adubacao.Mo };
-    buildFertilizerSelects(heuristicSelection(need, pre.classes.Mg, pre.classes.S));
-  }
-  const out = computeAll(s, readSelection());
+  const out = computeAll(s, readFertInputs());
   render(out, s);
   document.getElementById("unidProdLabel").textContent = CROP_DB[s.cultura].unidade;
   document.getElementById("classeTexturalOut").textContent = "Textura: " + textureClass(s.argila) +
@@ -1078,8 +915,7 @@ function init() {
   estadoSel.innerHTML = UFS.map(uf => `<option ${uf === "GO" ? "selected" : ""}>${uf}</option>`).join("");
 
   buildQuimFields();
-  renderFertilizerManagement();
-  document.getElementById("btnAddFert").addEventListener("click", toggleAddFertForm);
+  buildFertInputs();
 
   ["cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
