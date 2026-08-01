@@ -45,9 +45,12 @@ a{color:var(--verde-escuro);}
   position:sticky; top:0; z-index:20; background:var(--verde-escuro); color:var(--branco);
   padding:14px 16px 0 16px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
 }
-.brand{display:flex; align-items:center; gap:8px; font-family:'Fraunces',serif; font-weight:700; font-size:19px; padding-bottom:12px;}
+.brand{display:flex; align-items:center; gap:8px; font-family:'Fraunces',serif; font-weight:700; font-size:19px; padding-bottom:12px; max-width:560px; margin:0 auto;}
 .brand .leaf{font-size:22px;}
-.tabs{display:flex; gap:4px;}
+.tabs{display:flex; gap:4px; max-width:560px; margin:0 auto;}
+@media (min-width:760px){ .brand, .tabs{max-width:880px;} }
+@media (min-width:1040px){ .brand, .tabs{max-width:1180px;} .tabs{gap:8px;} .tab-btn{flex:none; padding:10px 22px;} }
+@media (min-width:1400px){ .brand, .tabs{max-width:1360px;} }
 .tab-btn{
   flex:1; background:none; border:none; color:rgba(255,255,255,0.68); font-family:'Inter',sans-serif;
   font-weight:600; font-size:14px; padding:10px 6px; cursor:pointer; border-bottom:3px solid transparent;
@@ -56,6 +59,19 @@ a{color:var(--verde-escuro);}
 
 /* ---------- LAYOUT ---------- */
 main{max-width:560px; margin:0 auto; padding:14px 14px 0 14px;}
+.layout-grid{display:block;}
+.col-inputs, .col-results{min-width:0;}
+@media (min-width:760px){
+  main{max-width:880px; padding:20px 24px 0 24px;}
+}
+@media (min-width:1040px){
+  main{max-width:1180px; padding:24px 28px 0 28px;}
+  .layout-grid{display:grid; grid-template-columns:minmax(360px,420px) 1fr; gap:26px; align-items:start;}
+  .col-inputs{position:sticky; top:96px; max-height:calc(100vh - 116px); overflow-y:auto; padding-right:4px;}
+}
+@media (min-width:1400px){
+  main{max-width:1360px;}
+}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
 
@@ -113,6 +129,13 @@ th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0
 td{padding:9px 8px; border-bottom:1px solid var(--cinza-claro); vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 td.num{text-align:right; font-family:'IBM Plex Mono',monospace;}
+td.falta{text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--verde-escuro);}
+.tbl-input{
+  width:64px; font-family:'Inter',sans-serif; font-size:12.5px; padding:6px 5px; border-radius:6px;
+  border:1.5px solid var(--cinza-claro); background:var(--cinza-bg); color:var(--grafite);
+}
+.tbl-input.wide{width:98px;}
+.tbl-input:focus{outline:none; border-color:var(--verde-medio); background:var(--branco);}
 
 .big-result{text-align:center; padding:6px 0 2px 0;}
 .big-result .value{font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:var(--verde-escuro);}
@@ -133,6 +156,9 @@ td.num{text-align:right; font-family:'IBM Plex Mono',monospace;}
 .manual-ref{font-size:12.5px; line-height:1.6; color:var(--cinza); margin:0 0 10px 0;}
 
 footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px; color:var(--cinza); text-align:center; line-height:1.6;}
+@media (min-width:760px){ footer{max-width:880px;} }
+@media (min-width:1040px){ footer{max-width:1180px;} }
+@media (min-width:1400px){ footer{max-width:1360px;} }
 </style>
 </head>
 <body>
@@ -149,6 +175,8 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 
 <!-- ===================== ABA CALCULADORA ===================== -->
 <section id="tab-calc" class="tab-panel active">
+<div class="layout-grid">
+<div class="col-inputs">
 
   <div class="card card-pad">
     <div class="section-label">Cultura e Produtividade</div>
@@ -258,8 +286,18 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
   </details>
 
 
+</div><!-- /col-inputs -->
+
+<div class="col-results">
   <!-- ===================== RESULTADOS ===================== -->
-  <div class="section-label" style="margin-top:24px;">Resultado</div>
+  <div class="section-label" style="margin-top:0;">Resultado</div>
+
+  <div class="card card-pad">
+    <div class="card-title">🧪 Solo × Necessidade × Falta</div>
+    <div class="card-sub" style="margin-bottom:6px;">Tudo em kg/ha, pra comparar direto: o que o solo já tem, o que a cultura precisa para essa produtividade, e o que falta.</div>
+    <div style="overflow-x:auto;"><table id="tabelaNutrientes"></table></div>
+    <div class="note" id="nDoseInfo"></div>
+  </div>
 
   <div class="card card-pad">
     <div class="card-title">🔍 Índices do Solo</div>
@@ -298,16 +336,9 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
   </div>
 
   <div class="card card-pad">
-    <div class="card-title">🧪 Solo × Necessidade</div>
-    <div class="card-sub" style="margin-bottom:6px;">Teor atual no solo lado a lado com a dose recomendada.</div>
-    <table id="tabelaNutrientes"></table>
-    <div class="note" id="nDoseInfo"></div>
-  </div>
-
-  <div class="card card-pad">
     <div class="card-title">🛒 Mistura de Fertilizantes</div>
-    <div class="card-sub" style="margin-bottom:10px;">Digite o fertilizante que você vai usar, o teor do nutriente na embalagem e o preço — a dose e o custo saem na hora. Deixe em branco o que não quiser calcular.</div>
-    <div id="fertInputs"></div>
+    <div class="card-sub" style="margin-bottom:6px;">Toque numa célula e digite o adubo, o teor (%) e o preço que você tem — sem preço padrão.</div>
+    <div style="overflow-x:auto;"><table id="tabelaMistura"></table></div>
     <div class="note" id="custoFertResumo" style="margin-top:6px; font-weight:600;"></div>
   </div>
 
@@ -318,6 +349,8 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     <div class="sub" id="custoArea" style="margin-top:10px; font-weight:600;"></div>
   </div>
 
+</div><!-- /col-results -->
+</div><!-- /layout-grid -->
 </section>
 
 <!-- ===================== ABA MANUAL TÉCNICO ===================== -->
@@ -485,6 +518,20 @@ function computeAll(state, selection) {
   out.classes = { P: classeP, K: classeK, Ca: classeCa, Mg: classeMg, MO: classeMO, pH: classePH,
     V: classeV, m: classeM, S: classeS, Zn: classeZn, Cu: classeCu, Mn: classeMn, Fe: classeFe,
     B: classeB, Mo: classeMo };
+
+  // -- teor do solo convertido para kg/ha (camada 0-20cm, densidade ≈ 1 g/cm³) --
+  // Fator padrão: 1 mg/dm³ ≈ 2 kg/ha (2.000.000 kg de solo por ha na camada de 20cm).
+  // P e K convertidos para a base óxido (P2O5, K2O) para poderem ser comparados
+  // diretamente com a necessidade da cultura, que já é calculada nessa mesma base.
+  const KGHA = 2;
+  const P_P2O5 = 2.2914;
+  const K_K2O = 1.2046;
+  out.soloKgHa = {
+    P2O5: s.p * KGHA * P_P2O5,
+    K2O: (s.k * 39.1) * KGHA * K_K2O,
+    S: s.s * KGHA,
+    Zn: s.zn * KGHA, B: s.b * KGHA, Cu: s.cu * KGHA, Mn: s.mn * KGHA, Mo: s.moMicro * KGHA,
+  };
 
   // -- calagem --
   const v2 = s.v2Override !== null && !isNaN(s.v2Override) ? s.v2Override : (LIMING_V2_TARGET[s.cultura] || 70);
@@ -786,90 +833,81 @@ function render(out, s) {
   document.getElementById("gessoDose").textContent = fmt(out.gessagem.doseGesso, 0) + " kg/ha";
   document.getElementById("gessoTotal").textContent = fmt(out.gessagem.doseTotal, 1) + " t";
 
-  // Solo x Necessidade (lado a lado, para comparar)
+  // Solo x Necessidade x Falta - tudo em kg/ha, direto comparável
   const ad = out.adubacao;
+  const sk = out.soloKgHa;
   const compRows = [
-    ["Fósforo (P2O5)", s.p, "mg/dm³", out.classes.P, ad.P2O5],
-    ["Potássio (K2O)", s.k, "mmolc/dm³", out.classes.K, ad.K2O],
-    ["Enxofre (S)", s.s, "mg/dm³", out.classes.S, ad.S],
-    ["Zinco (Zn)", s.zn, "mg/dm³", out.classes.Zn, ad.Zn],
-    ["Boro (B)", s.b, "mg/dm³", out.classes.B, ad.B],
-    ["Cobre (Cu)", s.cu, "mg/dm³", out.classes.Cu, ad.Cu],
-    ["Manganês (Mn)", s.mn, "mg/dm³", out.classes.Mn, ad.Mn],
-    ["Molibdênio (Mo)", s.moMicro, "mg/dm³", out.classes.Mo, ad.Mo],
+    ["Fósforo (P2O5)", sk.P2O5, out.classes.P, ad.P2O5],
+    ["Potássio (K2O)", sk.K2O, out.classes.K, ad.K2O],
+    ["Enxofre (S)", sk.S, out.classes.S, ad.S],
+    ["Zinco (Zn)", sk.Zn, out.classes.Zn, ad.Zn],
+    ["Boro (B)", sk.B, out.classes.B, ad.B],
+    ["Cobre (Cu)", sk.Cu, out.classes.Cu, ad.Cu],
+    ["Manganês (Mn)", sk.Mn, out.classes.Mn, ad.Mn],
+    ["Molibdênio (Mo)", sk.Mo, out.classes.Mo, ad.Mo],
   ];
   document.getElementById("tabelaNutrientes").innerHTML =
-    `<tr><th>Nutriente</th><th>Teor no solo</th><th>Classe</th><th style="text-align:right">Necessidade</th></tr>` +
-    compRows.map(([nome, teor, unid, classe, need]) =>
-      `<tr><td>${nome}</td><td class="num">${fmt(teor, 2)} ${unid}</td>` +
-      `<td><span class="pill ${pillClass(classe)}">${classe}</span></td>` +
-      `<td class="num">${fmt(need, 2)} kg/ha</td></tr>`
-    ).join("");
+    `<tr><th>Nutriente</th><th style="text-align:right">Solo (kg/ha)</th><th>Classe</th>` +
+    `<th style="text-align:right">Necessidade</th><th style="text-align:right">Falta</th></tr>` +
+    compRows.map(([nome, solo, classe, need]) => {
+      const falta = Math.max(0, need - solo);
+      return `<tr><td>${nome}</td><td class="num">${fmt(solo, 1)}</td>` +
+        `<td><span class="pill ${pillClass(classe)}">${classe}</span></td>` +
+        `<td class="num">${fmt(need, 1)}</td><td class="falta">${fmt(falta, 1)}</td></tr>`;
+    }).join("");
   document.getElementById("nDoseInfo").innerHTML =
-    `Nitrogênio (N): <b>${fmt(ad.N, 2)} kg/ha</b> — não tem teor de solo comparável (ver critério em Manual Técnico). ` +
+    `Nitrogênio (N): <b>${fmt(ad.N, 2)} kg/ha</b> de necessidade — sem teor de solo comparável nesta análise (ver Manual Técnico). ` +
     `Cálcio e Magnésio são corrigidos via Calagem/Gessagem, não por adubação direta. ` +
-    `<span class="pill ${confPill(ad.confiancaCurta)}">Confiança: ${ad.confiancaCurta}</span> ${ad.fonteCurta}`;
+    `A coluna "Solo" converte o teor do laudo para kg/ha assumindo camada de 0-20cm (comparação de referência; ` +
+    `a dose em "Necessidade" já considera eficiência de aproveitamento e não é uma subtração simples). ` +
+    `<span class="pill ${confPill(ad.confiancaCurta)}">Confiança da necessidade: ${ad.confiancaCurta}</span> ${ad.fonteCurta}`;
 
-  // Mistura - dose/custo a partir do que o usuário digitou em cada campo
+  // Mistura - dose/custo a partir do que o usuário digitou na tabela
   const mi = out.mistura;
-  const setRes = (id, r, unidade) => {
-    const el = document.getElementById("res_" + id);
-    if (!el) return;
-    el.textContent = r.dose > 0
-      ? `${fmt(r.dose, 1)} ${unidade} · ${fmtMoney(r.custo)}/ha`
-      : "preencha o teor (%) para calcular a dose";
+  const setRow = (id, r) => {
+    const doseEl = document.getElementById("dose_" + id);
+    const custoEl = document.getElementById("custo_" + id);
+    if (doseEl) doseEl.textContent = r.dose > 0 ? fmt(r.dose, 1) : "-";
+    if (custoEl) custoEl.textContent = r.dose > 0 ? fmtMoney(r.custo) : "-";
   };
-  setRes("n", mi.rN, "kg/ha"); setRes("p", mi.rP, "kg/ha"); setRes("k", mi.rK, "kg/ha"); setRes("s", mi.rS, "kg/ha");
-  const resCal = document.getElementById("res_calcario");
-  if (resCal) resCal.textContent = `${fmt(out.calagem.ncFinal, 2)} t/ha · ${fmtMoney(mi.custoCalcario)}/ha`;
-  const resGes = document.getElementById("res_gesso");
-  if (resGes) resGes.textContent = `${fmt(out.gessagem.doseGesso, 0)} kg/ha · ${fmtMoney(mi.custoGesso)}/ha`;
+  setRow("n", mi.rN); setRow("p", mi.rP); setRow("k", mi.rK); setRow("s", mi.rS);
+  const doseCal = document.getElementById("dose_calcario");
+  if (doseCal) doseCal.textContent = fmt(out.calagem.ncFinal, 2) + " t";
+  const custoCal = document.getElementById("custo_calcario");
+  if (custoCal) custoCal.textContent = mi.custoCalcario > 0 ? fmtMoney(mi.custoCalcario) : "-";
+  const doseGes = document.getElementById("dose_gesso");
+  if (doseGes) doseGes.textContent = fmt(out.gessagem.doseGesso, 0) + " kg";
+  const custoGes = document.getElementById("custo_gesso");
+  if (custoGes) custoGes.textContent = mi.custoGesso > 0 ? fmtMoney(mi.custoGesso) : "-";
 
   document.getElementById("custoFertResumo").textContent = `Subtotal fertilizantes: ${fmtMoney(mi.custoFertHa)}/ha`;
   document.getElementById("custoHa").textContent = fmtMoney(mi.custoTotalHa);
   document.getElementById("custoArea").textContent = `Total da área: ${fmtMoney(mi.custoTotalArea)}`;
 }
 
-/* ---------------- Mistura: campos livres (sem banco de dados) ---------------- */
-// Cada linha = um produto que o usuário informa (nome só de referência, teor% do
-// nutriente-alvo na embalagem, e preço R$/t). Nada vem pré-preenchido.
+/* ---------------- Mistura: tabela clicável, sem banco de dados ---------------- */
+// Cada linha = um produto que o usuário digita direto na tabela (nome de referência,
+// teor % do nutriente-alvo na embalagem, e preço R$/t). Nada vem pré-preenchido -
+// dose e custo só aparecem depois que o teor (e o preço, para custo) forem informados.
 function buildFertInputs() {
-  const linhas = [
-    ["n", "Nitrogênio (N)", "ex: Ureia", "ex: 45"],
-    ["p", "Fósforo (P2O5)", "ex: MAP", "ex: 52"],
-    ["k", "Potássio (K2O)", "ex: Cloreto de Potássio", "ex: 58"],
-    ["s", "Enxofre (S)", "ex: Gesso Agrícola", "ex: 15"],
+  const linhasNutriente = [
+    ["n", "N"], ["p", "P2O5"], ["k", "K2O"], ["s", "S"],
   ];
-  document.getElementById("fertInputs").innerHTML = linhas.map(([id, label, nomePh, pctPh]) => `
-    <div class="field" style="border-bottom:1px solid var(--cinza-claro); padding-bottom:12px; margin-bottom:12px;">
-      <label>${label}</label>
-      <div class="row2">
-        <input type="text" id="fert_${id}_nome" placeholder="${nomePh}">
-        <input type="number" id="fert_${id}_pct" placeholder="Teor % (${pctPh.replace('ex: ', '')})" step="0.1">
-      </div>
-      <div class="row2" style="margin-top:8px;">
-        <input type="number" id="fert_${id}_preco" placeholder="Preço R$/t" step="10">
-        <div class="note" id="res_${id}" style="align-self:center;"></div>
-      </div>
-    </div>
-  `).join("") + `
-    <div class="field">
-      <label>Calcário</label>
-      <div class="row2">
-        <input type="text" id="fert_calcario_nome" placeholder="ex: Calcário Dolomítico">
-        <input type="number" id="fert_calcario_preco" placeholder="Preço R$/t" step="10">
-      </div>
-      <div class="note" id="res_calcario" style="margin-top:4px;"></div>
-    </div>
-    <div class="field" style="margin-top:10px;">
-      <label>Gesso agrícola</label>
-      <div class="row2">
-        <input type="text" id="fert_gesso_nome" placeholder="ex: Gesso Agrícola">
-        <input type="number" id="fert_gesso_preco" placeholder="Preço R$/t" step="10">
-      </div>
-      <div class="note" id="res_gesso" style="margin-top:4px;"></div>
-    </div>
-  `;
+  const linhaTabela = (id, label, temTeor) => `
+    <tr>
+      <td>${label}</td>
+      <td><input type="text" class="tbl-input wide" id="fert_${id}_nome" placeholder="adubo"></td>
+      ${temTeor ? `<td><input type="number" class="tbl-input" id="fert_${id}_pct" placeholder="%" step="0.1"></td>` : `<td>-</td>`}
+      <td><input type="number" class="tbl-input" id="fert_${id}_preco" placeholder="R$/t" step="10"></td>
+      <td class="num" id="dose_${id}">-</td>
+      <td class="num" id="custo_${id}">-</td>
+    </tr>`;
+  document.getElementById("tabelaMistura").innerHTML =
+    `<tr><th>Nutriente</th><th>Adubo</th><th>Teor %</th><th>Preço</th><th style="text-align:right">Dose</th><th style="text-align:right">Custo/ha</th></tr>` +
+    linhasNutriente.map(([id, label]) => linhaTabela(id, label, true)).join("") +
+    linhaTabela("calcario", "Calcário", false) +
+    linhaTabela("gesso", "Gesso", false);
+
   ["fert_n_pct", "fert_n_preco", "fert_p_pct", "fert_p_preco", "fert_k_pct", "fert_k_preco",
    "fert_s_pct", "fert_s_preco", "fert_calcario_preco", "fert_gesso_preco"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
