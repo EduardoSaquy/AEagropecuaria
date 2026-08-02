@@ -1129,11 +1129,14 @@ function iconSetaAlta(){ return `<svg width="16" height="16" viewBox="0 0 24 24"
 function iconCarteira(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"/></svg>`; }
 function iconCheckCircle(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>`; }
 function iconAlertTriangle(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>`; }
-function iconOperacao(slug){
+function iconAdubacao(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
+function normalizarTexto(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function iconOperacao(slug, nome){
   if(slug==='pecuaria') return iconEstabulo();
   if(slug==='combustivel') return iconGota();
   if(slug==='cana') return iconCana();
   if(slug==='cereais') return iconTrigo();
+  if(normalizarTexto(slug).includes('adub') || normalizarTexto(nome).includes('adub')) return iconAdubacao();
   return iconPainel();
 }
 
@@ -1239,7 +1242,7 @@ function AppCard(a){
   return `
   <div class="app-card" style="--app-cor:${a.cor}">
     <div class="app-card-top">
-      <div class="app-card-icon" style="background:${hexToRgba(a.cor,0.14)}; color:${a.cor};">${iconOperacao(a.slug)}</div>
+      <div class="app-card-icon" style="background:${hexToRgba(a.cor,0.14)}; color:${a.cor};">${iconOperacao(a.slug, a.nome)}</div>
       <div class="app-card-titles">
         <div class="app-card-nome">${esc(a.nome)}</div>
       </div>
@@ -1487,7 +1490,7 @@ function PagePorHectare(){
       <thead><tr><th>Operação</th><th>Área (ha)</th><th>Despesa/ha</th><th>Receita/ha</th><th>Lucro/ha</th></tr></thead>
       <tbody>
         ${linhas.map(l=>{
-          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug)}</span><strong>${esc(l.nome)}</strong></span>`;
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug, l.nome)}</span><strong>${esc(l.nome)}</strong></span>`;
           if(l.ha<=0) return `<tr><td>${chip}</td><td colspan="4" class="hint">Sem hectares cadastrados pra essa operação — cadastre em Fazendas.</td></tr>`;
           if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
           const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
@@ -1532,7 +1535,7 @@ function PageResultados(){
       <tbody>
         ${linhasResultado().map(l=>{
           const r = l.resultado;
-          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug)}</span><strong>${esc(l.app.nome)}</strong></span>`;
+          const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug, l.app.nome)}</span><strong>${esc(l.app.nome)}</strong></span>`;
           if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
             <td>${chip}${r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : r.semReceita ? `<div class="hint" style="margin-top:2px;">despesa própria, mas ainda sem módulo de receita</div>` : ''}</td>
