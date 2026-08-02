@@ -1132,11 +1132,12 @@ function iconAlertTriangle(){ return `<svg width="16" height="16" viewBox="0 0 2
 function iconAdubacao(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
 function normalizarTexto(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function iconOperacao(slug, nome){
+  if(normalizarTexto(nome).includes('adub')) return iconAdubacao();
   if(slug==='pecuaria') return iconEstabulo();
   if(slug==='combustivel') return iconGota();
   if(slug==='cana') return iconCana();
   if(slug==='cereais') return iconTrigo();
-  if(normalizarTexto(slug).includes('adub') || normalizarTexto(nome).includes('adub')) return iconAdubacao();
+  if(normalizarTexto(slug).includes('adub')) return iconAdubacao();
   return iconPainel();
 }
 
