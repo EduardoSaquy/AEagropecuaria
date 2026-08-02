@@ -1,5 +1,5 @@
 const CACHE = 'confinar-v1';
-const SHELL = ['./AEpecuaria.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const SHELL = ['./AEpecuaria.html', './manifest.json', './icon-pecuaria-192.png', './icon-pecuaria-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

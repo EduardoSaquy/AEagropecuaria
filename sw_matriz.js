@@ -1,5 +1,5 @@
 const CACHE = 'matriz-v1';
-const SHELL = ['./AEMatriz.html', './manifest_matriz.json', './icon-192.png', './icon-512.png'];
+const SHELL = ['./AEMatriz.html', './manifest_matriz.json', './icon-matriz-192.png', './icon-matriz-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
