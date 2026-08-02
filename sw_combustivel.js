@@ -1,5 +1,5 @@
 const CACHE = 'combustivel-v1';
-const SHELL = ['./AECombustivel.html', './manifest_combustivel.json', './icon-192.png', './icon-512.png'];
+const SHELL = ['./AECombustivel.html', './manifest_combustivel.json', './icon-combustivel-192.png', './icon-combustivel-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AE Matriz</title>
 <link rel="manifest" href="manifest_matriz.json">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-matriz-192.png">
+<link rel="apple-touch-icon" href="icon-matriz-192.png">
 <meta name="theme-color" content="#0F2A4A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1132,11 +1132,12 @@ function iconAlertTriangle(){ return `<svg width="16" height="16" viewBox="0 0 2
 function iconAdubacao(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
 function normalizarTexto(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function iconOperacao(slug, nome){
+  if(normalizarTexto(nome).includes('adub')) return iconAdubacao();
   if(slug==='pecuaria') return iconEstabulo();
   if(slug==='combustivel') return iconGota();
   if(slug==='cana') return iconCana();
   if(slug==='cereais') return iconTrigo();
-  if(normalizarTexto(slug).includes('adub') || normalizarTexto(nome).includes('adub')) return iconAdubacao();
+  if(normalizarTexto(slug).includes('adub')) return iconAdubacao();
   return iconPainel();
 }
 
