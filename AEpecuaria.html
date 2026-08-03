@@ -680,9 +680,11 @@ const state = {
   openDietId: null,
   search: '',
   searchDespesas: '',
+  searchMovimentos: '',
   paineisResultadosDados: {},
   filtroMesDespesas: '',
   filtroMesReceitas: '',
+  filtroMesMovimentos: '',
   filtrosSaidaRacao: {}, // {[tipo]: {mes, loteId, dietaId}} -- um filtro por aba (Confinamento/Cria), pra não misturar
   fabOpen: false,
   // ---- autenticação ----
@@ -1719,7 +1721,12 @@ function PageEstoque(){
   const alertas = rows.filter(r=>r.baixo).length;
   const verValor = souAdmin();
 
-  const movRows = [...state.movimentos].sort((a,b)=> b.data.localeCompare(a.data)).slice(0,8);
+  const buscaMov = state.searchMovimentos.toLowerCase();
+  const mesesMovDisponiveis = [...new Set(state.movimentos.map(m=>m.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const movRows = [...state.movimentos]
+    .filter(m=>{ const ing = getIng(m.ingredienteId); return !buscaMov || (ing && ing.nome.toLowerCase().includes(buscaMov)); })
+    .filter(m=> !state.filtroMesMovimentos || m.data.startsWith(state.filtroMesMovimentos))
+    .sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
 
   return `
   <div class="stat-row">
@@ -1749,9 +1756,20 @@ function PageEstoque(){
     </table>
   </div>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Últimas movimentações</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Movimentações</p>
+  <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
+    <div class="field" style="max-width:260px;">
+      <input type="text" placeholder="Buscar por ingrediente..." value="${esc(state.searchMovimentos)}" data-search-movimentos="1"/>
+    </div>
+    <div class="field" style="max-width:200px;">
+      <select data-filtro-mes-movimentos="1">
+        <option value="">Todos os meses</option>
+        ${mesesMovDisponiveis.map(m=>`<option value="${m}" ${state.filtroMesMovimentos===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
+      </select>
+    </div>
+  </div>
   <div class="card">
-    ${movRows.length===0 ? Empty('Nenhuma movimentação','Registre entradas e saídas de insumos.') : `
+    ${movRows.length===0 ? Empty(state.movimentos.length===0 ? 'Nenhuma movimentação' : 'Nenhuma movimentação com esse filtro', state.movimentos.length===0 ? 'Registre entradas e saídas de insumos.' : 'Tente outro ingrediente ou mês.') : `
     <table>
       <thead><tr><th>Data</th><th>Ingrediente</th><th>Tipo</th><th>Quantidade</th><th></th></tr></thead>
       <tbody>
@@ -4506,6 +4524,17 @@ function attachEvents(){
   const filtroMesDespesasEl = document.querySelector('[data-filtro-mes-despesas]');
   if(filtroMesDespesasEl){
     filtroMesDespesasEl.onchange = (e)=>{ state.filtroMesDespesas = e.target.value; render(); };
+  }
+  const searchMovimentosEl = document.querySelector('[data-search-movimentos]');
+  if(searchMovimentosEl){
+    searchMovimentosEl.oninput = (e)=>{ state.searchMovimentos = e.target.value; render();
+      const s = document.querySelector('[data-search-movimentos]');
+      s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+    };
+  }
+  const filtroMesMovimentosEl = document.querySelector('[data-filtro-mes-movimentos]');
+  if(filtroMesMovimentosEl){
+    filtroMesMovimentosEl.onchange = (e)=>{ state.filtroMesMovimentos = e.target.value; render(); };
   }
   const filtroMesReceitasEl = document.querySelector('[data-filtro-mes-receitas]');
   if(filtroMesReceitasEl){
