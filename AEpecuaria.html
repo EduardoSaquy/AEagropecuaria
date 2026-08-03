@@ -5025,7 +5025,11 @@ function attachEvents(){
             }
           }
         } else {
-          ({error} = await db.from('movimentos').insert(row));
+          const resDebug = await db.from('movimentos').insert(row);
+          error = resDebug.error;
+          // DIAGNÓSTICO TEMPORÁRIO -- remover depois de descobrir por que a
+          // movimentação não estava salvando/aparecendo pro usuário.
+          alert('DEBUG movimento -- error: ' + JSON.stringify(resDebug.error) + ' | row enviado: ' + JSON.stringify(row) + ' | data retornada: ' + JSON.stringify(resDebug.data));
           // Uma entrada com preço informado recalcula o preço/kg do ingrediente
           // pela média ponderada entre o estoque que já tinha (antes dessa
           // entrada) e o que está entrando — só numa entrada nova, nunca ao
