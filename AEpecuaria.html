@@ -604,26 +604,32 @@ function fazendaToRow(f){ return {nome:f.nome, hectares:f.hectares}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
+  // .range() é obrigatório em toda consulta -- sem ele, o Supabase corta a
+  // resposta em 1000 linhas por padrão (a API nem avisa, só devolve as 1000
+  // primeiras pela ordenação pedida). Numa tabela como "movimentos", que
+  // passa de 1000 linhas com o tempo, isso fazia lançamentos novos (com o
+  // id mais alto) somem simplesmente por ficarem de fora desse corte --
+  // pareciam "não salvar", mas na verdade só não voltavam na consulta.
   const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt] = await Promise.all([
-    db.from('ingredientes').select('*').order('id'),
-    db.from('movimentos').select('*').order('id'),
-    db.from('dietas').select('*').order('id'),
-    db.from('lotes').select('*').order('id'),
-    db.from('saidas_racao').select('*').order('id'),
-    db.from('leituras_cocho').select('*').order('id'),
-    db.from('pasto').select('*').order('id'),
-    db.from('reproducao_custos').select('*').order('id'),
-    db.from('custos_fixos').select('*').order('id'),
-    db.from('investimentos').select('*').order('id'),
-    db.from('receitas').select('*').order('id'),
-    db.from('precos_arroba').select('*').order('id'),
+    db.from('ingredientes').select('*').order('id').range(0, 19999),
+    db.from('movimentos').select('*').order('id').range(0, 19999),
+    db.from('dietas').select('*').order('id').range(0, 19999),
+    db.from('lotes').select('*').order('id').range(0, 19999),
+    db.from('saidas_racao').select('*').order('id').range(0, 19999),
+    db.from('leituras_cocho').select('*').order('id').range(0, 19999),
+    db.from('pasto').select('*').order('id').range(0, 19999),
+    db.from('reproducao_custos').select('*').order('id').range(0, 19999),
+    db.from('custos_fixos').select('*').order('id').range(0, 19999),
+    db.from('investimentos').select('*').order('id').range(0, 19999),
+    db.from('receitas').select('*').order('id').range(0, 19999),
+    db.from('precos_arroba').select('*').order('id').range(0, 19999),
     db.from('config_financeiro').select('*').eq('id', 1),
-    db.from('profiles').select('*').order('nome'),
-    db.from('fazendas').select('*').order('id'),
-    db.from('partos').select('*').order('id'),
-    db.from('pesagens').select('*').order('id'),
-    db.from('producoes_racao').select('*').order('id'),
-    db.from('abates').select('*').order('id'),
+    db.from('profiles').select('*').order('nome').range(0, 19999),
+    db.from('fazendas').select('*').order('id').range(0, 19999),
+    db.from('partos').select('*').order('id').range(0, 19999),
+    db.from('pesagens').select('*').order('id').range(0, 19999),
+    db.from('producoes_racao').select('*').order('id').range(0, 19999),
+    db.from('abates').select('*').order('id').range(0, 19999),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -5041,11 +5047,7 @@ function attachEvents(){
             }
           }
         } else {
-          const resDebug = await db.from('movimentos').insert(row);
-          error = resDebug.error;
-          // DIAGNÓSTICO TEMPORÁRIO -- remover depois de descobrir por que a
-          // movimentação não estava salvando/aparecendo pro usuário.
-          alert('DEBUG movimento -- error: ' + JSON.stringify(resDebug.error) + ' | row enviado: ' + JSON.stringify(row) + ' | data retornada: ' + JSON.stringify(resDebug.data));
+          ({error} = await db.from('movimentos').insert(row));
           // Uma entrada com preço informado recalcula o preço/kg do ingrediente
           // pela média ponderada entre o estoque que já tinha (antes dessa
           // entrada) e o que está entrando — só numa entrada nova, nunca ao
