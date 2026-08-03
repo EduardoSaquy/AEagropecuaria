@@ -4560,6 +4560,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-ing]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir este ingrediente? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delIng);
       await db.from('ingredientes').delete().eq('id', id);
       await loadAll();
@@ -4575,6 +4576,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-mov]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta movimentação de estoque? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delMov);
       await db.from('movimentos').delete().eq('id', id);
       await loadAll();
@@ -4582,6 +4584,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-diet]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta dieta? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delDiet);
       await db.from('dietas').delete().eq('id', id);
       await loadAll();
@@ -4605,6 +4608,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-lote]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e lançamentos de reprodução desse lote também são apagados junto.')) return;
       const id = Number(el.dataset.delLote);
       await db.from('lotes').delete().eq('id', id);
       await loadAll();
@@ -4630,6 +4634,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-racao]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta saída de ração? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delRacao);
       await db.from('saidas_racao').delete().eq('id', id);
       await loadAll();
@@ -4645,6 +4650,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-cocho]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta leitura de cocho? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delCocho);
       await db.from('leituras_cocho').delete().eq('id', id);
       await loadAll();
@@ -4663,6 +4669,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-pasto]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta reposição de pasto? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delPasto);
       await db.from('pasto').delete().eq('id', id);
       await loadAll();
@@ -4678,6 +4685,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-producao]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta produção de ração? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delProducao);
       await db.from('producoes_racao').delete().eq('id', id);
       await loadAll();
@@ -4693,6 +4701,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-reproducao]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir este lançamento de reprodução? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delReproducao);
       await db.from('reproducao_custos').delete().eq('id', id);
       await loadAll();
@@ -4708,6 +4717,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-parto]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir este parto? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delParto);
       await db.from('partos').delete().eq('id', id);
       await loadAll();
@@ -4724,6 +4734,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-pesagem]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta pesagem? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delPesagem);
       await db.from('pesagens').delete().eq('id', id);
       await loadAll();
@@ -4744,6 +4755,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-venda]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta venda? Essa ação não pode ser desfeita -- o número de animais volta a somar no lote de origem.')) return;
       const id = Number(el.dataset.delVenda);
       const venda = state.vendas.find(x=>x.id===id);
       if(venda && venda.loteId){
@@ -4766,6 +4778,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-custofixo]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta despesa? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delCustofixo);
       await db.from('custos_fixos').delete().eq('id', id);
       await loadAll();
@@ -4781,6 +4794,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-fazenda]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta fazenda? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delFazenda);
       await db.from('fazendas').delete().eq('id', id);
       await loadAll();
@@ -4796,6 +4810,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-investimento]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir este investimento? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delInvestimento);
       await db.from('investimentos').delete().eq('id', id);
       await loadAll();
@@ -4811,6 +4826,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-receita]').forEach(el=>{
     el.onclick = async ()=>{
+      if(!confirm('Excluir esta receita? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delReceita);
       await db.from('receitas').delete().eq('id', id);
       await loadAll();
@@ -5025,7 +5041,11 @@ function attachEvents(){
             }
           }
         } else {
-          ({error} = await db.from('movimentos').insert(row));
+          const resDebug = await db.from('movimentos').insert(row);
+          error = resDebug.error;
+          // DIAGNÓSTICO TEMPORÁRIO -- remover depois de descobrir por que a
+          // movimentação não estava salvando/aparecendo pro usuário.
+          alert('DEBUG movimento -- error: ' + JSON.stringify(resDebug.error) + ' | row enviado: ' + JSON.stringify(row) + ' | data retornada: ' + JSON.stringify(resDebug.data));
           // Uma entrada com preço informado recalcula o preço/kg do ingrediente
           // pela média ponderada entre o estoque que já tinha (antes dessa
           // entrada) e o que está entrando — só numa entrada nova, nunca ao
