@@ -1035,7 +1035,7 @@ function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 const FILA_OFFLINE_KEY = 'aepecuaria_fila_offline_v1';
 const LANCAMENTO_LABEL = {
   saidaRacao:'Saída de ração', saidaRacaoCria:'Saída de ração (Cria)', cocho:'Leitura de cocho',
-  pasto:'Reposição de pasto', reproducaoCusto:'Lançamento de reprodução', parto:'Parto', pesagem:'Pesagem',
+  pasto:'Saída de ração (Pasto)', reproducaoCusto:'Lançamento de reprodução', parto:'Parto', pesagem:'Pesagem',
 };
 function lerFilaOffline(){
   try{ return JSON.parse(localStorage.getItem(FILA_OFFLINE_KEY)||'[]'); }
@@ -1555,7 +1555,7 @@ function openNewModal(type){
     const dietasPasto = state.dietas.filter(x=>x.tipo==='pasto');
     const lotesPasto = state.lotes.filter(l=>loteTipo(l)==='pasto');
     if(lotesPasto.length===0 || dietasPasto.length===0){
-      alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta de Pasto antes de registrar uma reposição de pasto.');
+      alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta de Pasto antes de registrar uma saída de ração (pasto).');
       return false;
     }
     editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: lotesPasto[0]?.dietaId||'', data:new Date().toISOString().slice(0,10), quantidade:''};
@@ -1634,7 +1634,7 @@ function FabMenu(){
     {type:'lote', label:'Nova entrada de animais'},
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
-    {type:'pasto', label:'Nova reposição de pasto'},
+    {type:'pasto', label:'Nova saída de ração (Pasto)'},
     {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Novo lançamento de reprodução'},
     {type:'parto', label:'Novo parto'},
@@ -1919,7 +1919,7 @@ function PageEstoqueRacao(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">O estoque pronto sobe quando você registra uma "Produção de ração" (desconta os ingredientes da composição) e desce automaticamente com cada Saída de Ração ou reposição de Pasto lançada dessa dieta.</p>
+  <p class="hint" style="margin:-14px 0 22px;">O estoque pronto sobe quando você registra uma "Produção de ração" (desconta os ingredientes da composição) e desce automaticamente com cada Saída de Ração lançada dessa dieta.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Últimas produções</p>
   <div class="card">
@@ -2244,8 +2244,8 @@ function PagePasto(){
     .sort((a,b)=> b.data.localeCompare(a.data));
   const temFiltro = !!(filtro.mes || filtro.loteId || filtro.dietaId);
   const vazio = listaTipo.length>0
-    ? Empty('Nenhuma reposição de pasto com esse filtro','Tente outro mês, lote ou dieta.')
-    : Empty('Nenhuma reposição de pasto registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.');
+    ? Empty('Nenhuma saída de ração (Pasto) com esse filtro','Tente outro mês, lote ou dieta.')
+    : Empty('Nenhuma saída de ração (Pasto) registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.');
   return `
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:200px;">
@@ -2268,7 +2268,7 @@ function PagePasto(){
     </div>
   </div>
   <div class="toolbar">
-    <span class="hint">${list.length} reposição(ões) registrada(s)${temFiltro ? ' (filtrado)' : ''}</span>
+    <span class="hint">${list.length} saída(s) de ração (Pasto) registrada(s)${temFiltro ? ' (filtrado)' : ''}</span>
   </div>
   <div class="card">
     ${list.length===0 ? vazio : `
@@ -4030,7 +4030,7 @@ function ModalPasto(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar reposição de pasto':'Nova reposição de pasto'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar saída de ração (Pasto)':'Nova saída de ração (Pasto)'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
           <div class="field"><label>Lote (Pasto)</label>
@@ -4053,7 +4053,7 @@ function ModalPasto(){
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="pasto">${d._editId?'Salvar alterações':'Registrar reposição'}</button>
+        <button class="btn btn-primary" data-save="pasto">${d._editId?'Salvar alterações':'Registrar saída'}</button>
       </div>
     </div>
   </div>`;
@@ -4719,7 +4719,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-pasto]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir esta reposição de pasto? Essa ação não pode ser desfeita.')) return;
+      if(!confirm('Excluir esta saída de ração (pasto)? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delPasto);
       await db.from('pasto').delete().eq('id', id);
       await loadAll();
