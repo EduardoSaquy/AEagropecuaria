@@ -613,6 +613,7 @@ function parseNumerosAnimais(texto){
 }
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
+function rowToPesagemAnimal(r){ return {id:r.id, pesagemId:r.pesagem_id, numeroAnimal:r.numero_animal, pesoKg:r.peso_kg}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
 function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantidade_kg:p.quantidadeKg}; }
 function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, descricao:r.descricao||'', valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
@@ -639,7 +640,7 @@ async function loadAll(){
   // passa de 1000 linhas com o tempo, isso fazia lançamentos novos (com o
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim, pesagAnim] = await Promise.all([
     db.from('ingredientes').select('*').order('id').range(0, 19999),
     db.from('movimentos').select('*').order('id').range(0, 19999),
     db.from('dietas').select('*').order('id').range(0, 19999),
@@ -662,6 +663,7 @@ async function loadAll(){
     db.from('diagnosticos_gestacionais').select('*').order('id').range(0, 19999),
     db.from('desmamas').select('*').order('id').range(0, 19999),
     db.from('animais').select('*').order('id').range(0, 19999),
+    db.from('pesagens_animais').select('*').order('id').range(0, 19999),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -685,6 +687,7 @@ async function loadAll(){
   state.diagnosticos = (dg.data||[]).map(rowToDiagnostico);
   state.desmamas = (desm.data||[]).map(rowToDesmama);
   state.animais = (anim.data||[]).map(rowToAnimal);
+  state.pesagensAnimais = (pesagAnim.data||[]).map(rowToPesagemAnimal);
   render();
 }
 
@@ -703,6 +706,7 @@ const state = {
   diagnosticos: [],
   desmamas: [],
   animais: [],
+  pesagensAnimais: [],
   partos: [],
   pesagens: [],
   producoesRacao: [],
@@ -716,6 +720,7 @@ const state = {
   perfis: [],
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
+  pesagemExpandidaId: null,
   search: '',
   searchDespesas: '',
   searchMovimentos: '',
@@ -1670,7 +1675,7 @@ function openNewModal(type){
       alert(`Cadastre ao menos um lote com destino ${TIPO_PESAGEM_LABEL[tipo]} (aba Lotes) antes de registrar uma pesagem.`);
       return false;
     }
-    editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:''};
+    editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:'', modoPesagem:'media', entradasPesagem:[]};
     state.modal = {type:'pesagem'};
   } else if(type==='venda'){
     const lotesElegiveis = state.lotes.filter(l=>!l.dataFim && Number(l.numeroAnimais||0)>0);
@@ -2666,18 +2671,20 @@ function PagePesagem(tipo){
   <div class="card">
     ${pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote com data, peso médio e uma observação opcional.') : `
     <table>
-      <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Observação</th><th>Lançado por</th><th></th></tr></thead>
+      <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Animais pesados</th><th>Observação</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
         ${pesagensTipo.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
           const historico = lote ? pesagensDoLote(lote.id) : [];
           const idx = historico.findIndex(h=>h.id===p.id);
           const gmd = idx>0 ? gmdEntre(Number(historico[idx-1].pesoMedioKg), Number(p.pesoMedioKg), historico[idx-1].data, p.data) : null;
+          const detalhesAnimais = state.pesagensAnimais.filter(pa=>pa.pesagemId===p.id);
           return `<tr>
             <td><strong>${lote?esc(lote.nome):'—'}</strong></td>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td class="mono">${fmt(Number(p.pesoMedioKg),1)} kg</td>
             <td class="mono">${gmd!==null ? (gmd>=0?'+':'')+fmt(gmd,2)+' kg/dia' : '—'}</td>
+            <td>${detalhesAnimais.length>0 ? `<button class="btn-ghost btn-sm" data-toggle-pesagem-animais="${p.id}">${detalhesAnimais.length} animal(is) ${state.pesagemExpandidaId===p.id?'▲':'▼'}</button>` : '—'}</td>
             <td>${esc(p.observacao)||'—'}</td>
             <td>${esc(p.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
@@ -2686,7 +2693,13 @@ function PagePesagem(tipo){
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-pesagem="${p.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
-          </tr>`;
+          </tr>
+          ${state.pesagemExpandidaId===p.id ? `<tr><td colspan="8">
+            <table style="margin:4px 0;">
+              <thead><tr><th>Número do animal</th><th>Peso</th></tr></thead>
+              <tbody>${detalhesAnimais.map(pa=>`<tr><td class="mono">${esc(pa.numeroAnimal)}</td><td class="mono">${fmt(Number(pa.pesoKg),1)} kg</td></tr>`).join('')}</tbody>
+            </table>
+          </td></tr>` : ''}`;
         }).join('')}
       </tbody>
     </table>`}
@@ -4650,6 +4663,9 @@ function ModalDesmama(){
 function ModalPesagem(){
   const d = editDraft;
   const lotesTipo = state.lotes.filter(l=>loteTipo(l)===d.tipo);
+  const modoIndividual = !d._editId && d.modoPesagem==='individual';
+  const entradas = d.entradasPesagem||[];
+  const mediaCalculada = entradas.length>0 ? entradas.reduce((a,e)=>a+Number(e.pesoKg),0)/entradas.length : null;
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -4660,16 +4676,46 @@ function ModalPesagem(){
             ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
+        ${!d._editId ? `
+        <div class="field"><label>Como pesar</label>
+          <select id="f-modopesagem">
+            <option value="media" ${!modoIndividual?'selected':''}>Média direta (um número só)</option>
+            <option value="individual" ${modoIndividual?'selected':''}>Peso por animal (lança um a um)</option>
+          </select>
+        </div>
+        ` : ''}
         <div class="field-row">
           <div class="field"><label>Data</label><input id="f-datapesagem" type="date" value="${d.data}"/></div>
-          <div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesomedio" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>
+          ${!modoIndividual ? `<div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesomedio" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>` : ''}
         </div>
+        ${modoIndividual ? `
+        <div class="field-row">
+          <div class="field"><label>Número do animal</label><input id="f-numeropesado" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320"/></div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-add-pesagem-animal="1">+ Adicionar e ir pro próximo</button>
+        ${entradas.length>0 ? `
+        <table style="margin-top:12px;">
+          <thead><tr><th>Número</th><th>Peso</th><th></th></tr></thead>
+          <tbody>
+            ${entradas.map((en,idx)=>`
+              <tr>
+                <td class="mono">${esc(en.numero)}</td>
+                <td class="mono">${fmt(Number(en.pesoKg),1)} kg</td>
+                <td><button type="button" class="btn-ghost btn-sm" data-del-pesagem-animal="${idx}">Remover</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <p class="hint" style="margin-top:8px;"><strong>${entradas.length} animal(is) pesado(s) — média: ${fmt(mediaCalculada,1)} kg</strong> (essa é a média que vira o peso do lote).</p>
+        ` : `<p class="hint">Adicione ao menos um animal pra formar a média do lote. Não precisa pesar todo o lote — só quem você for pesando agora.</p>`}
+        ` : ''}
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obspesagem" rows="2" placeholder="Ex: lote pronto pra abate">${esc(d.observacao)}</textarea></div>
-        <p class="hint">O peso é a média por animal do lote (não o total). O ganho desde a última pesagem (GMD) e a arroba produzida são calculados automaticamente.</p>
+        ${!modoIndividual ? `<p class="hint">O peso é a média por animal do lote (não o total). O ganho desde a última pesagem (GMD) e a arroba produzida são calculados automaticamente.</p>` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="pesagem">${d._editId?'Salvar alterações':'Salvar pesagem'}</button>
+        <button class="btn btn-primary" data-save="pesagem" ${modoIndividual && entradas.length===0 ? 'disabled' : ''}>${d._editId?'Salvar alterações':'Salvar pesagem'}</button>
       </div>
     </div>
   </div>`;
@@ -5362,10 +5408,17 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-pesagem]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir esta pesagem? Essa ação não pode ser desfeita.')) return;
+      if(!confirm('Excluir esta pesagem? Essa ação não pode ser desfeita -- os pesos individuais dessa pesagem (se houver) também são apagados junto.')) return;
       const id = Number(el.dataset.delPesagem);
       await db.from('pesagens').delete().eq('id', id);
       await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-toggle-pesagem-animais]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.togglePesagemAnimais);
+      state.pesagemExpandidaId = state.pesagemExpandidaId===id ? null : id;
+      render();
     };
   });
   document.querySelectorAll('[data-edit-venda]').forEach(el=>{
@@ -5642,6 +5695,44 @@ function attachEvents(){
       editDraft.partoId = Number(e.target.value)||'';
       render();
     };
+  }
+  if(state.modal && state.modal.type==='pesagem' && !editDraft._editId){
+    const modoPesagemEl = document.getElementById('f-modopesagem');
+    if(modoPesagemEl) modoPesagemEl.onchange = (e)=>{
+      editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
+      editDraft.data = document.getElementById('f-datapesagem').value;
+      const pesoMedioEl = document.getElementById('f-pesomedio');
+      if(pesoMedioEl) editDraft.pesoMedioKg = pesoMedioEl.value;
+      editDraft.observacao = document.getElementById('f-obspesagem').value;
+      editDraft.modoPesagem = e.target.value;
+      render();
+    };
+    const addPesagemAnimalBtn = document.querySelector('[data-add-pesagem-animal]');
+    if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = ()=>{
+      const numEl = document.getElementById('f-numeropesado');
+      const pesoEl = document.getElementById('f-pesopesado');
+      const numero = (numEl.value||'').trim();
+      const peso = pesoEl.value;
+      if(!numero){ alert('Informe o número do animal.'); return; }
+      if(!peso || Number(peso)<=0){ alert('Informe um peso maior que zero.'); return; }
+      editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
+      editDraft.data = document.getElementById('f-datapesagem').value;
+      editDraft.observacao = document.getElementById('f-obspesagem').value;
+      editDraft.entradasPesagem = [...(editDraft.entradasPesagem||[]), {numero, pesoKg: Number(peso)}];
+      render();
+      const numEl2 = document.getElementById('f-numeropesado');
+      if(numEl2) numEl2.focus();
+    };
+    document.querySelectorAll('[data-del-pesagem-animal]').forEach(el=>{
+      el.onclick = ()=>{
+        const idx = Number(el.dataset.delPesagemAnimal);
+        editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
+        editDraft.data = document.getElementById('f-datapesagem').value;
+        editDraft.observacao = document.getElementById('f-obspesagem').value;
+        editDraft.entradasPesagem = (editDraft.entradasPesagem||[]).filter((_,i)=>i!==idx);
+        render();
+      };
+    });
   }
 
   // save handlers
@@ -6136,25 +6227,52 @@ function attachEvents(){
         }
       } else if(type==='pesagem'){
         const dataPesagemVal = document.getElementById('f-datapesagem').value;
-        const pesoVal = document.getElementById('f-pesomedio').value;
-        if(!validarObrigatorios([[dataPesagemVal,'Data'],[pesoVal,'Peso médio por animal']])) return;
-        if(Number(pesoVal)<=0){ alert('O peso precisa ser maior que zero.'); return; }
-        const campos = {
-          loteId: Number(document.getElementById('f-lotepesagem').value),
-          data: dataPesagemVal,
-          pesoMedioKg: Number(pesoVal),
-          observacao: document.getElementById('f-obspesagem').value,
-        };
-        if(editDraft._editId){
-          ({error} = await db.from('pesagens').update(pesagemToRow(campos)).eq('id', editDraft._editId));
-        } else {
-          const resultado = await salvarOuEnfileirar(type, campos);
-          if(resultado.enfileirado){
-            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
-            state.modal = null; editDraft = null; render();
-            return;
+        const loteIdPesagemVal = Number(document.getElementById('f-lotepesagem').value);
+        const modoPesagemEl = document.getElementById('f-modopesagem');
+        const modoPesagem = (!editDraft._editId && modoPesagemEl) ? modoPesagemEl.value : 'media';
+        if(!editDraft._editId && modoPesagem==='individual'){
+          const entradasPesagem = editDraft.entradasPesagem||[];
+          if(!validarObrigatorios([[dataPesagemVal,'Data']])) return;
+          if(entradasPesagem.length===0){ alert('Adicione ao menos um animal pesado antes de salvar.'); return; }
+          const mediaCalculada = entradasPesagem.reduce((a,en)=>a+Number(en.pesoKg),0)/entradasPesagem.length;
+          const observacaoIndividualVal = document.getElementById('f-obspesagem').value;
+          const res = await db.from('pesagens').insert(pesagemToRow({
+            loteId: loteIdPesagemVal, data: dataPesagemVal, pesoMedioKg: mediaCalculada, observacao: observacaoIndividualVal,
+          })).select().single();
+          error = res.error;
+          if(!error && res.data){
+            const linhasAnimais = entradasPesagem.map(en=>({pesagem_id: res.data.id, numero_animal: en.numero, peso_kg: Number(en.pesoKg)}));
+            ({error} = await db.from('pesagens_animais').insert(linhasAnimais));
           }
-          error = resultado.error;
+          if(!error){
+            const loteDaPesagem = state.lotes.find(l=>l.id===loteIdPesagemVal);
+            const sexoLotePesagem = loteDaPesagem && (loteDaPesagem.sexo==='macho'||loteDaPesagem.sexo==='femea') ? loteDaPesagem.sexo : null;
+            for(const en of entradasPesagem){
+              const resAnimal = await upsertAnimal(en.numero, loteIdPesagemVal, sexoLotePesagem?{sexo:sexoLotePesagem}:{});
+              if(resAnimal.error){ error = resAnimal.error; break; }
+            }
+          }
+        } else {
+          const pesoVal = document.getElementById('f-pesomedio').value;
+          if(!validarObrigatorios([[dataPesagemVal,'Data'],[pesoVal,'Peso médio por animal']])) return;
+          if(Number(pesoVal)<=0){ alert('O peso precisa ser maior que zero.'); return; }
+          const campos = {
+            loteId: loteIdPesagemVal,
+            data: dataPesagemVal,
+            pesoMedioKg: Number(pesoVal),
+            observacao: document.getElementById('f-obspesagem').value,
+          };
+          if(editDraft._editId){
+            ({error} = await db.from('pesagens').update(pesagemToRow(campos)).eq('id', editDraft._editId));
+          } else {
+            const resultado = await salvarOuEnfileirar(type, campos);
+            if(resultado.enfileirado){
+              alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+              state.modal = null; editDraft = null; render();
+              return;
+            }
+            error = resultado.error;
+          }
         }
       } else if(type==='custoFixo'){
         const data = document.getElementById('f-datacustofixo').value || null;
