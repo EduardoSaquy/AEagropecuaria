@@ -606,6 +606,11 @@ async function upsertAnimal(numero, loteId, extra){
   }
   return await db.from('animais').insert({...row, criado_por:autorAtual()});
 }
+// "128, 129 130\n131" -> ['128','129','130','131'] -- aceita vírgula, espaço
+// ou linha como separador, pra não exigir um formato rígido de digitação.
+function parseNumerosAnimais(texto){
+  return String(texto||'').split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
+}
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
@@ -1573,7 +1578,7 @@ function openNewModal(type){
     editDraft = {
       modoEntrada:'novo',
       nome:'', numeroAnimais:'', dataInicio:new Date().toISOString().slice(0,10), dataFim:'', destino:destinoPadrao, sexo:'',
-      pesoMedioEntrada:'',
+      pesoMedioEntrada:'', numerosAnimais:'',
       loteExistenteId:'', qtdEntrada:'', dataEntrada:new Date().toISOString().slice(0,10),
     };
     state.modal = {type:'lote'};
@@ -4268,7 +4273,9 @@ function ModalLote(){
           <div class="field"><label>Data de início</label><input id="f-datainicio" type="date" value="${d.dataInicio}"/></div>
         </div>
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
-        <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>` : ''}
+        <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
+        <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
+        <p class="hint">Se já souber os números desses animais, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos, só quem você for numerando agora (aba Animais).</p>` : ''}
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
         ` : `
@@ -4282,7 +4289,8 @@ function ModalLote(){
           <div class="field"><label>Peso médio dos animais chegando (kg)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         </div>
         <div class="field"><label>Data de entrada</label><input id="f-dataentrada" type="date" value="${d.dataEntrada}"/></div>
-        <p class="hint">O número de animais soma no lote escolhido, e o peso médio do lote é recalculado por média ponderada (peso e quantidade de quem já estava + de quem está chegando).</p>
+        <div class="field"><label>Números dos animais chegando (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
+        <p class="hint">O número de animais soma no lote escolhido, e o peso médio do lote é recalculado por média ponderada (peso e quantidade de quem já estava + de quem está chegando). Se já souber os números, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos.</p>
         `}
       </div>
       <div class="modal-foot">
@@ -5598,6 +5606,8 @@ function attachEvents(){
       }
       const pesoEl2 = document.getElementById('f-pesoentrada');
       if(pesoEl2) editDraft.pesoMedioEntrada = pesoEl2.value;
+      const numerosEl2 = document.getElementById('f-numerosanimais');
+      if(numerosEl2) editDraft.numerosAnimais = numerosEl2.value;
       editDraft.modoEntrada = e.target.value;
       render();
     };
@@ -5736,6 +5746,17 @@ function attachEvents(){
       } else if(type==='lote'){
         const modoEntradaEl = document.getElementById('f-modoentrada');
         const modoEntrada = modoEntradaEl ? modoEntradaEl.value : 'novo';
+        const numerosAnimaisLista = parseNumerosAnimais(document.getElementById('f-numerosanimais')?.value);
+        // Registra (ou move) cada número listado pra composição do lote --
+        // usa o sexo do próprio lote como padrão do animal, quando o lote
+        // tem um sexo definido (não misto).
+        async function registrarNumerosAnimais(loteIdDestino, sexoLote){
+          for(const numero of numerosAnimaisLista){
+            const res = await upsertAnimal(numero, loteIdDestino, (sexoLote==='macho'||sexoLote==='femea')?{sexo:sexoLote}:{});
+            if(res.error) return res.error;
+          }
+          return null;
+        }
         if(!editDraft._editId && modoEntrada==='existente'){
           // Entrada de animais num lote que já existe -- soma a quantidade e
           // recalcula o peso médio do lote por média ponderada (peso × qtd de
@@ -5763,6 +5784,9 @@ function attachEvents(){
               observacao: `Entrada de ${qtdNova} animal(is) (peso médio informado: ${fmt(pesoNovo,1)} kg) — peso médio do lote recalculado por média ponderada.`,
             }));
           }
+          if(!error && numerosAnimaisLista.length>0){
+            error = await registrarNumerosAnimais(loteAlvo.id, loteAlvo.sexo);
+          }
         } else {
           const campos = {
             nome: document.getElementById('f-nome').value || 'Sem nome',
@@ -5786,6 +5810,9 @@ function attachEvents(){
                 lote_id: res.data.id, data: campos.dataInicio, peso_medio_kg: Number(pesoInicialVal),
                 observacao: 'Peso médio na entrada dos animais.',
               }));
+            }
+            if(!error && numerosAnimaisLista.length>0 && res.data){
+              error = await registrarNumerosAnimais(res.data.id, campos.sexo);
             }
           }
         }
@@ -6032,6 +6059,11 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
+        }
+        // A vaca inseminada entra (ou é movida) na composição do lote --
+        // é sempre fêmea, então já preenche o sexo automaticamente.
+        if(!error){
+          ({error} = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea'}));
         }
       } else if(type==='diagnosticoGestacional'){
         const dataDgVal = document.getElementById('f-data').value;
