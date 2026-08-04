@@ -1128,3 +1128,39 @@ create policy "atualizar animais" on animais for update using (
 create policy "excluir animais" on animais for delete using (
   tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Pesagem por animal
+-- A Pesagem ganha um segundo modo (escolhido na hora do lançamento):
+-- além da média direta (como já era), dá pra lançar peso + número de
+-- cada animal, um a um -- a média do lote é calculada a partir dessas
+-- entradas. "pesagens" continua sendo o registro "cabeçalho" (média,
+-- usada em GMD/arroba); pesagens_animais guarda cada peso individual
+-- daquela sessão, já preparando a base pro histórico de peso por
+-- animal no futuro. Excluir a pesagem apaga as entradas individuais
+-- junto (cascade).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table if not exists pesagens_animais (
+  id bigint generated always as identity primary key,
+  pesagem_id bigint references pesagens(id) on delete cascade,
+  numero_animal text not null,
+  peso_kg numeric not null
+);
+
+alter table pesagens_animais enable row level security;
+
+create policy "select pesagens_animais" on pesagens_animais for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('pasto','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir pesagens_animais" on pesagens_animais for insert with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "atualizar pesagens_animais" on pesagens_animais for update using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+) with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "excluir pesagens_animais" on pesagens_animais for delete using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
