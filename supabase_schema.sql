@@ -1090,3 +1090,41 @@ create policy "select desmamas" on desmamas for select using (tem_permissao('cri
 create policy "inserir desmamas" on desmamas for insert with check (tem_permissao('cria','editar'));
 create policy "atualizar desmamas" on desmamas for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
 create policy "excluir desmamas" on desmamas for delete using (tem_permissao('cria','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Cadastro individual de animais (composição do lote)
+-- Numeração gradual dos animais -- não precisa numerar o lote inteiro
+-- de uma vez. "numero" é único na fazenda inteira: se o número
+-- cadastrado já existir (em qualquer lote), o app atualiza o lote
+-- desse animal em vez de duplicar -- é como o app trata um animal que
+-- mudou de lote (ex: bezerro desmamado que muda de curral).
+-- Usado por Confinamento, Pasto e Cria (mesmo critério de lotes e
+-- saidas_racao, que também são compartilhados entre módulos).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table if not exists animais (
+  id bigint generated always as identity primary key,
+  numero text not null unique,
+  lote_id bigint references lotes(id) on delete set null,
+  sexo text check (sexo in ('macho','femea')),
+  raca text check (raca in ('angus','nelore','outro')),
+  criado_por text,
+  criado_em timestamptz default now()
+);
+
+alter table animais enable row level security;
+
+create policy "select animais" on animais for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('pasto','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir animais" on animais for insert with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "atualizar animais" on animais for update using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+) with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "excluir animais" on animais for delete using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);

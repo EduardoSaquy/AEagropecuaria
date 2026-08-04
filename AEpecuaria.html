@@ -586,6 +586,26 @@ function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMa
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
 function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca:r.raca||'', pesoKg:r.peso_kg, criadoPor:r.criado_por||''}; }
 function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg}; }
+function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', criadoPor:r.criado_por||''}; }
+function animalToRow(a){ return {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null}; }
+// Cadastra ou move um animal pro lote informado, por número -- número é
+// único na fazenda inteira, então se já existir (em qualquer lote) só
+// atualiza o lote (e sexo/raça, quando informados) em vez de duplicar.
+// Usado tanto pelo cadastro direto (aba Animais) quanto pelos ganchos em
+// outros lançamentos (Nova entrada de animais, Nova inseminação).
+async function upsertAnimal(numero, loteId, extra){
+  const numeroNorm = String(numero||'').trim();
+  if(!numeroNorm) return {error:null};
+  extra = extra || {};
+  const existente = state.animais.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase());
+  const row = {numero: numeroNorm, lote_id: loteId};
+  if(extra.sexo) row.sexo = extra.sexo;
+  if(extra.raca) row.raca = extra.raca;
+  if(existente){
+    return await db.from('animais').update(row).eq('id', existente.id);
+  }
+  return await db.from('animais').insert({...row, criado_por:autorAtual()});
+}
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
@@ -614,7 +634,7 @@ async function loadAll(){
   // passa de 1000 linhas com o tempo, isso fazia lançamentos novos (com o
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim] = await Promise.all([
     db.from('ingredientes').select('*').order('id').range(0, 19999),
     db.from('movimentos').select('*').order('id').range(0, 19999),
     db.from('dietas').select('*').order('id').range(0, 19999),
@@ -636,6 +656,7 @@ async function loadAll(){
     db.from('abates').select('*').order('id').range(0, 19999),
     db.from('diagnosticos_gestacionais').select('*').order('id').range(0, 19999),
     db.from('desmamas').select('*').order('id').range(0, 19999),
+    db.from('animais').select('*').order('id').range(0, 19999),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -658,6 +679,7 @@ async function loadAll(){
   state.fazendas = (faz.data||[]).map(rowToFazenda);
   state.diagnosticos = (dg.data||[]).map(rowToDiagnostico);
   state.desmamas = (desm.data||[]).map(rowToDesmama);
+  state.animais = (anim.data||[]).map(rowToAnimal);
   render();
 }
 
@@ -675,6 +697,7 @@ const state = {
   reproducao: [],
   diagnosticos: [],
   desmamas: [],
+  animais: [],
   partos: [],
   pesagens: [],
   producoesRacao: [],
@@ -754,11 +777,14 @@ function render(){
         ${state.page==='lotesGeral' ? PageLotesGeral() : ''}
         ${state.page==='vendasGeral' ? PageVendasGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
+        ${state.page==='animaisConfinamento' ? PageAnimais('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao('confinamento') : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
         ${state.page==='lotesPasto' ? PageLotes('pasto') : ''}
+        ${state.page==='animaisPasto' ? PageAnimais('pasto') : ''}
         ${state.page==='pasto' ? PagePasto() : ''}
         ${state.page==='lotesReproducao' ? PageLotes('reproducao') : ''}
+        ${state.page==='animaisReproducao' ? PageAnimais('reproducao') : ''}
         ${state.page==='racaoCria' ? PageSaidaRacao('reproducao') : ''}
         ${state.page==='reproducaoGeral' ? PageReproducaoGeral() : ''}
         ${state.page==='pesagemConfinamento' ? PagePesagem('confinamento') : ''}
@@ -817,6 +843,7 @@ const ACAO_MODULOS = {
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'], diagnosticoGestacional:['cria'], parto:['cria','confinamento'], desmama:['cria','confinamento'],
+  animal:['confinamento','pasto','cria'],
   pesagem:['confinamento','pasto','cria'],
   custoFixo:['financeiro'], precoArroba:['financeiro'],
   // Receita agora se lança pela aba Financeiro (não mais só Resultados) --
@@ -1363,17 +1390,20 @@ const GROUPS = {
   ]},
   confinamento: {label:'Confinamento', icon:iconLote(), pages:[
     {key:'lotes', label:'Lotes'},
+    {key:'animaisConfinamento', label:'Animais'},
     {key:'racao', label:'Saída de Ração'},
     {key:'cocho', label:'Leitura de Cocho'},
     {key:'pesagemConfinamento', label:'Pesagem'},
   ]},
   pasto: {label:'Pasto', icon:iconPasto(), pages:[
     {key:'lotesPasto', label:'Lotes'},
+    {key:'animaisPasto', label:'Animais'},
     {key:'pasto', label:'Saída de Ração'},
     {key:'pesagemPasto', label:'Pesagem'},
   ]},
   reproducao: {label:'Cria', icon:iconReproducao(), pages:[
     {key:'lotesReproducao', label:'Lotes'},
+    {key:'animaisReproducao', label:'Animais'},
     {key:'racaoCria', label:'Saída de Ração'},
     {key:'reproducaoGeral', label:'Reprodução'},
     {key:'pesagemReproducao', label:'Pesagem'},
@@ -1484,11 +1514,14 @@ function Header(){
     lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
     vendasGeral:{eyebrow:'Movimentação', title:'Vendas', desc:'Todas as vendas de animais de Confinamento, Pasto e Cria juntas numa lista só (abate por @, venda por animal ou por kg) — cada uma desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
+    animaisConfinamento:{eyebrow:'Confinamento', title:'Animais', desc:'Composição do lote por número de animal — cadastro gradual, não precisa numerar o lote inteiro de uma vez.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
     lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
+    animaisPasto:{eyebrow:'Pasto', title:'Animais', desc:'Composição do lote por número de animal — cadastro gradual, não precisa numerar o lote inteiro de uma vez.'},
     pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
+    animaisReproducao:{eyebrow:'Cria', title:'Animais', desc:'Composição do lote por número de animal — cadastro gradual, não precisa numerar o lote inteiro de uma vez.'},
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducaoGeral:{eyebrow:'Cria', title:'Reprodução', desc:'Inseminação, diagnóstico gestacional, partos e desmama dos lotes de Cria.'},
     pesagemConfinamento:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Confinamento, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
@@ -1544,6 +1577,17 @@ function openNewModal(type){
       loteExistenteId:'', qtdEntrada:'', dataEntrada:new Date().toISOString().slice(0,10),
     };
     state.modal = {type:'lote'};
+  } else if(type==='animal'){
+    const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
+    if(lotesAtivos.length===0){
+      alert('Cadastre ao menos um lote (aba Lotes) antes de numerar um animal.');
+      return false;
+    }
+    const grupoAtual = currentGroupKey();
+    const tipoAtual = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'reproducao' : 'confinamento';
+    const loteDefault = lotesAtivos.find(l=>loteTipo(l)===tipoAtual) || lotesAtivos[0];
+    editDraft = {numero:'', loteId: loteDefault.id, sexo:'', raca:''};
+    state.modal = {type:'animal'};
   } else if(type==='saidaRacao'){
     const dietasConf = state.dietas.filter(x=>x.tipo==='confinamento');
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
@@ -1669,6 +1713,7 @@ function FabMenu(){
     {type:'dieta', label:'Nova dieta'},
     {type:'producaoRacao', label:'Nova produção de ração'},
     {type:'lote', label:'Nova entrada de animais'},
+    {type:'animal', label:'Novo animal'},
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
     {type:'pasto', label:'Nova saída de ração (Pasto)'},
@@ -2030,6 +2075,51 @@ function PageLotes(tipo){
             </td>
           </tr>
         `;}).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: ANIMAIS (COMPOSIÇÃO DO LOTE) ===================== */
+function PageAnimais(tipo){
+  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo && !l.dataFim);
+  const totalAnimaisLote = lotesTipo.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const animaisTipo = state.animais.filter(a=>{ const l=state.lotes.find(x=>x.id===a.loteId); return l && loteTipo(l)===tipo; });
+  const list = [...animaisTipo].sort((a,b)=>{
+    const nomeA = state.lotes.find(l=>l.id===a.loteId)?.nome || '';
+    const nomeB = state.lotes.find(l=>l.id===b.loteId)?.nome || '';
+    return nomeA.localeCompare(nomeB) || String(a.numero).localeCompare(String(b.numero));
+  });
+  return `
+  <div class="stat-row" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Animais numerados</div><div class="stat-value">${fmtInt(animaisTipo.length)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total de animais nos lotes</div><div class="stat-value">${fmtInt(totalAnimaisLote)}</div></div>
+  </div>
+  <p class="hint" style="margin:-6px 0 14px;">Cadastro gradual — conforme você numera os animais (aqui, na Nova entrada de animais ou na Nova inseminação), esse número vai subindo. Não precisa numerar o lote inteiro de uma vez.</p>
+  <div class="toolbar">
+    <span class="hint">${list.length} animal(is) cadastrado(s)</span>
+    ${temPermissao(TIPO_MODULO[tipo],'editar') ? `<button class="btn btn-primary btn-sm" data-fab-action="animal">+ Novo animal</button>` : ''}
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhum animal numerado ainda','Cadastre o número dos animais aos poucos — aqui, na Nova entrada de animais ou na Nova inseminação.') : `
+    <table>
+      <thead><tr><th>Número</th><th>Lote</th><th>Sexo</th><th>Raça</th><th></th></tr></thead>
+      <tbody>
+        ${list.map(a=>{
+          const lote = state.lotes.find(l=>l.id===a.loteId);
+          return `<tr>
+            <td class="mono"><strong>${esc(a.numero)}</strong></td>
+            <td>${lote?esc(lote.nome):'—'}</td>
+            <td>${SEXO_BEZERRO_LABEL[a.sexo]||'<span class="hint">— não informado —</span>'}</td>
+            <td>${RACA_TOURO_LABEL[a.raca]||'<span class="hint">— não informado —</span>'}</td>
+            <td style="display:flex; gap:6px;">
+              ${temPermissao(TIPO_MODULO[tipo],'editar') ? `
+              <button class="btn-ghost btn-sm" data-edit-animal="${a.id}">Editar</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-animal="${a.id}">Excluir</button>` : ''}
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>`}
   </div>`;
@@ -3950,6 +4040,7 @@ function Modal(){
   if(state.modal.type==='dieta') return ModalDieta();
   if(state.modal.type==='producaoRacao') return ModalProducaoRacao();
   if(state.modal.type==='lote') return ModalLote();
+  if(state.modal.type==='animal') return ModalAnimal();
   if(state.modal.type==='saidaRacao') return ModalSaidaRacao();
   if(state.modal.type==='saidaRacaoCria') return ModalSaidaRacaoCria();
   if(state.modal.type==='cocho') return ModalCocho();
@@ -4197,6 +4288,48 @@ function ModalLote(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="lote">${d._editId?'Salvar alterações':'Salvar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalAnimal(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar animal':'Novo animal'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Número do animal</label><input id="f-numeroanimal" value="${esc(d.numero)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Lote</label>
+            <select id="f-loteanimal">
+              ${state.lotes.filter(l=>!l.dataFim).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Sexo (opcional)</label>
+            <select id="f-sexoanimal">
+              <option value="" ${!d.sexo?'selected':''}>— Não informado —</option>
+              <option value="macho" ${d.sexo==='macho'?'selected':''}>Macho</option>
+              <option value="femea" ${d.sexo==='femea'?'selected':''}>Fêmea</option>
+            </select>
+          </div>
+          <div class="field"><label>Raça (opcional)</label>
+            <select id="f-racaanimal">
+              <option value="" ${!d.raca?'selected':''}>— Não informado —</option>
+              <option value="angus" ${d.raca==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.raca==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.raca==='outro'?'selected':''}>Outro</option>
+            </select>
+          </div>
+        </div>
+        ${!d._editId ? `<p class="hint">Se esse número já existir em outro lote, o animal é movido pra esse lote em vez de duplicar.</p>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="animal">${d._editId?'Salvar alterações':'Salvar animal'}</button>
       </div>
     </div>
   </div>`;
@@ -5052,6 +5185,22 @@ function attachEvents(){
       await loadAll();
     };
   });
+  document.querySelectorAll('[data-edit-animal]').forEach(el=>{
+    el.onclick = ()=>{
+      const a = state.animais.find(x=>x.id===Number(el.dataset.editAnimal));
+      editDraft = {...a, _editId: a.id};
+      state.modal = {type:'animal'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-animal]').forEach(el=>{
+    el.onclick = async ()=>{
+      if(!confirm('Excluir o cadastro deste animal? Essa ação não pode ser desfeita.')) return;
+      const id = Number(el.dataset.delAnimal);
+      await db.from('animais').delete().eq('id', id);
+      await loadAll();
+    };
+  });
   document.querySelectorAll('[data-vender-lote]').forEach(el=>{
     el.onclick = ()=>{
       const lote = state.lotes.find(l=>l.id===Number(el.dataset.venderLote));
@@ -5639,6 +5788,17 @@ function attachEvents(){
               }));
             }
           }
+        }
+      } else if(type==='animal'){
+        const numeroAnimalVal = document.getElementById('f-numeroanimal').value.trim();
+        const loteAnimalVal = document.getElementById('f-loteanimal').value;
+        if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote']])) return;
+        const sexoAnimalVal = document.getElementById('f-sexoanimal').value;
+        const racaAnimalVal = document.getElementById('f-racaanimal').value;
+        if(editDraft._editId){
+          ({error} = await db.from('animais').update(animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal})).eq('id', editDraft._editId));
+        } else {
+          ({error} = await upsertAnimal(numeroAnimalVal, Number(loteAnimalVal), {sexo:sexoAnimalVal, raca:racaAnimalVal}));
         }
       } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaIdVal = document.getElementById('f-dieta').value;
