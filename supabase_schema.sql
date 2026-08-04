@@ -1064,3 +1064,29 @@ create policy "select diagnosticos_gestacionais" on diagnosticos_gestacionais fo
 create policy "inserir diagnosticos_gestacionais" on diagnosticos_gestacionais for insert with check (tem_permissao('cria','editar'));
 create policy "atualizar diagnosticos_gestacionais" on diagnosticos_gestacionais for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
 create policy "excluir diagnosticos_gestacionais" on diagnosticos_gestacionais for delete using (tem_permissao('cria','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Desmama (4ª sub-aba de Reprodução, dentro de Cria) +
+-- Relatório de Reprodução (taxa de prenhez, taxa de desmame e custo
+-- por bezerro desmamado, em Resultados)
+-- Cada desmama é vinculada a um parto já lançado (não duplica número
+-- da mãe/sexo do bezerro, que já vêm do parto) -- isso deixa o cálculo
+-- de custo por bezerro e a taxa de desmame exatos, pareando nascimento
+-- com desmama do mesmo animal.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table if not exists desmamas (
+  id bigint generated always as identity primary key,
+  parto_id bigint references partos(id) on delete cascade,
+  data date not null,
+  raca text check (raca in ('angus','nelore','outro')),
+  peso_kg numeric not null,
+  criado_por text
+);
+
+alter table desmamas enable row level security;
+
+create policy "select desmamas" on desmamas for select using (tem_permissao('cria','visualizar'));
+create policy "inserir desmamas" on desmamas for insert with check (tem_permissao('cria','editar'));
+create policy "atualizar desmamas" on desmamas for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
+create policy "excluir desmamas" on desmamas for delete using (tem_permissao('cria','editar'));

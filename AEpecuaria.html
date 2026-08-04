@@ -584,6 +584,8 @@ function rowToDiagnostico(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nu
 function diagnosticoToRow(d){ return {data:d.data, lote_id:d.loteId, numero_vaca:d.numeroVaca, resultado:d.resultado, previsao_parto: d.resultado==='prenha' ? (d.previsaoParto||null) : null}; }
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, criadoPor:r.criado_por||''}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
+function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca:r.raca||'', pesoKg:r.peso_kg, criadoPor:r.criado_por||''}; }
+function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg}; }
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||''}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
@@ -612,7 +614,7 @@ async function loadAll(){
   // passa de 1000 linhas com o tempo, isso fazia lançamentos novos (com o
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm] = await Promise.all([
     db.from('ingredientes').select('*').order('id').range(0, 19999),
     db.from('movimentos').select('*').order('id').range(0, 19999),
     db.from('dietas').select('*').order('id').range(0, 19999),
@@ -633,6 +635,7 @@ async function loadAll(){
     db.from('producoes_racao').select('*').order('id').range(0, 19999),
     db.from('abates').select('*').order('id').range(0, 19999),
     db.from('diagnosticos_gestacionais').select('*').order('id').range(0, 19999),
+    db.from('desmamas').select('*').order('id').range(0, 19999),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -654,6 +657,7 @@ async function loadAll(){
   state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
   state.fazendas = (faz.data||[]).map(rowToFazenda);
   state.diagnosticos = (dg.data||[]).map(rowToDiagnostico);
+  state.desmamas = (desm.data||[]).map(rowToDesmama);
   render();
 }
 
@@ -670,6 +674,7 @@ const state = {
   pasto: [],
   reproducao: [],
   diagnosticos: [],
+  desmamas: [],
   partos: [],
   pesagens: [],
   producoesRacao: [],
@@ -761,6 +766,7 @@ function render(){
         ${state.page==='pesagemReproducao' ? PagePesagem('reproducao') : ''}
         ${state.page==='financeiroResumo' ? PageFinanceiroResumo() : ''}
         ${state.page==='financeiroCurral' ? PageFinanceiroCurral() : ''}
+        ${state.page==='resultadosReproducao' ? PageResultadosReproducao() : ''}
         ${state.page==='financeiroCustosFixos' ? PageFinanceiroCustosFixos() : ''}
         ${state.page==='resultadosInvestimentos' ? PageResultadosInvestimentos() : ''}
         ${state.page==='resultadosResumo' ? PageResultadosResumo() : ''}
@@ -810,7 +816,7 @@ const ACAO_MODULOS = {
   lote:['confinamento','pasto','cria'],
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
-  saidaRacaoCria:['cria'], reproducaoCusto:['cria'], diagnosticoGestacional:['cria'], parto:['cria','confinamento'],
+  saidaRacaoCria:['cria'], reproducaoCusto:['cria'], diagnosticoGestacional:['cria'], parto:['cria','confinamento'], desmama:['cria','confinamento'],
   pesagem:['confinamento','pasto','cria'],
   custoFixo:['financeiro'], precoArroba:['financeiro'],
   // Receita agora se lança pela aba Financeiro (não mais só Resultados) --
@@ -1040,7 +1046,7 @@ function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 const FILA_OFFLINE_KEY = 'aepecuaria_fila_offline_v1';
 const LANCAMENTO_LABEL = {
   saidaRacao:'Saída de ração', saidaRacaoCria:'Saída de ração (Cria)', cocho:'Leitura de cocho',
-  pasto:'Saída de ração (Pasto)', reproducaoCusto:'Inseminação', diagnosticoGestacional:'Diagnóstico gestacional', parto:'Parto', pesagem:'Pesagem',
+  pasto:'Saída de ração (Pasto)', reproducaoCusto:'Inseminação', diagnosticoGestacional:'Diagnóstico gestacional', parto:'Parto', desmama:'Desmama', pesagem:'Pesagem',
 };
 function lerFilaOffline(){
   try{ return JSON.parse(localStorage.getItem(FILA_OFFLINE_KEY)||'[]'); }
@@ -1185,6 +1191,10 @@ async function executarInsertLancamento(type, campos){
   }
   if(type==='parto'){
     const {error} = await db.from('partos').insert({...partoToRow(campos), criado_por:autorAtual()});
+    return {error};
+  }
+  if(type==='desmama'){
+    const {error} = await db.from('desmamas').insert({...desmamaToRow(campos), criado_por:autorAtual()});
     return {error};
   }
   if(type==='pesagem'){
@@ -1382,6 +1392,7 @@ const GROUPS = {
     {key:'resultadosResumo', label:'Resumo'},
     {key:'financeiroResumo', label:'Custos Detalhados', soAdmin:true},
     {key:'financeiroCurral', label:'Por Lote', soAdmin:true},
+    {key:'resultadosReproducao', label:'Reprodução', soAdmin:true},
     {key:'resultadosInvestimentos', label:'Investimentos'},
   ]},
   fazenda: {label:'Fazenda', icon:iconFazenda(), pages:[
@@ -1479,12 +1490,13 @@ function Header(){
     pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
-    reproducaoGeral:{eyebrow:'Cria', title:'Reprodução', desc:'Inseminação, diagnóstico gestacional e partos dos lotes de Cria.'},
+    reproducaoGeral:{eyebrow:'Cria', title:'Reprodução', desc:'Inseminação, diagnóstico gestacional, partos e desmama dos lotes de Cria.'},
     pesagemConfinamento:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Confinamento, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     pesagemPasto:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Pasto, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     pesagemReproducao:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Cria, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     financeiroResumo:{eyebrow:'Resultado', title:'Custos Detalhados', desc:'Indicadores de custo do dia e do mês da operação — visível só para proprietário/administrador.'},
     financeiroCurral:{eyebrow:'Resultado', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo — visível só para proprietário/administrador.'},
+    resultadosReproducao:{eyebrow:'Resultado', title:'Reprodução', desc:'Taxa de prenhez e taxa de desmame por lote, e o custo estimado de cada bezerro desmamado — visível só para proprietário/administrador.'},
     financeiroCustosFixos:{eyebrow:'Financeiro', title:'Despesas', desc:'Lance as despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Pasto ou Cria.'},
     resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
@@ -1591,6 +1603,16 @@ function openNewModal(type){
     }
     editDraft = {loteId: lotesElegiveis[0]?.id||'', data:new Date().toISOString().slice(0,10), numeroMae:'', sexoBezerro:'macho'};
     state.modal = {type:'parto'};
+  } else if(type==='desmama'){
+    const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
+    const loteComPartoDisponivel = lotesElegiveis.find(l=>partosSemDesmama(l.id).length>0);
+    if(!loteComPartoDisponivel){
+      alert('Nenhum parto aguardando desmama. Registre um parto (Cria > Reprodução > Parto) antes de lançar uma desmama.');
+      return false;
+    }
+    const partosDisponiveis = partosSemDesmama(loteComPartoDisponivel.id);
+    editDraft = {loteId: loteComPartoDisponivel.id, partoId: partosDisponiveis[0].id, data:new Date().toISOString().slice(0,10), raca:'', pesoKg:''};
+    state.modal = {type:'desmama'};
   } else if(type==='pesagem'){
     const grupoAtual = currentGroupKey();
     const tipo = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'reproducao' : 'confinamento';
@@ -1654,6 +1676,7 @@ function FabMenu(){
     {type:'reproducaoCusto', label:'Nova inseminação'},
     {type:'diagnosticoGestacional', label:'Novo diagnóstico gestacional'},
     {type:'parto', label:'Novo parto'},
+    {type:'desmama', label:'Nova desmama'},
     {type:'pesagem', label:'Nova pesagem'},
     {type:'venda', label:'Nova venda'},
     {type:'custoFixo', label:'Nova despesa'},
@@ -2328,10 +2351,12 @@ function PageReproducaoGeral(){
     <button class="subtab ${sub==='inseminacao'?'active':''}" data-subaba-reproducao="inseminacao">Inseminação</button>
     <button class="subtab ${sub==='diagnostico'?'active':''}" data-subaba-reproducao="diagnostico">Diagnóstico Gestacional</button>
     <button class="subtab ${sub==='parto'?'active':''}" data-subaba-reproducao="parto">Parto</button>
+    <button class="subtab ${sub==='desmama'?'active':''}" data-subaba-reproducao="desmama">Desmama</button>
   </div>
   ${sub==='inseminacao' ? PageReproducao() : ''}
   ${sub==='diagnostico' ? PageDiagnosticoGestacional() : ''}
   ${sub==='parto' ? PagePartos() : ''}
+  ${sub==='desmama' ? PageDesmama() : ''}
   `;
 }
 function PageReproducao(){
@@ -2445,6 +2470,45 @@ function PagePartos(){
       </tbody>
     </table>`}
   </div>`;
+}
+function PageDesmama(){
+  const list = state.desmamas
+    .map(d=>({d, custo: custoBezerroDesmama(d)}))
+    .filter(x=>x.custo)
+    .sort((a,b)=> b.d.data.localeCompare(a.d.data));
+  return `
+  <div class="toolbar">
+    <span class="hint">${list.length} desmama(s) registrada(s)</span>
+  </div>
+  <div class="card">
+    ${list.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro, vinculando ao parto correspondente — precisa de um parto lançado antes.') : `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Lote</th><th>Nº da mãe</th><th>Sexo</th><th>Raça</th><th>Peso</th><th>Dias até a desmama</th><th>Lançado por</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${list.map(({d,custo})=>`
+          <tr>
+            <td class="mono">${d.data.split('-').reverse().join('/')}</td>
+            <td>${custo.lote?esc(custo.lote.nome):'—'}</td>
+            <td class="mono">${esc(custo.parto.numeroMae)||'—'}</td>
+            <td>${SEXO_BEZERRO_LABEL[custo.parto.sexoBezerro]||'—'}</td>
+            <td>${RACA_TOURO_LABEL[d.raca]||'—'}</td>
+            <td class="mono">${fmt(d.pesoKg,1)} kg</td>
+            <td class="mono">${custo.dias}</td>
+            <td>${esc(d.criadoPor) || '—'}</td>
+            <td style="display:flex; gap:6px;">
+              ${temPermissao('cria','editar') ? `
+              <button class="btn-ghost btn-sm" data-edit-desmama="${d.id}">Editar</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-desmama="${d.id}">Excluir</button>` : ''}
+              ` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin-top:12px;">O custo de cada bezerro (protocolo de inseminação + ração/pasto + fatia do custo fixo) e as taxas de prenhez/desmame por lote aparecem em Resultados &gt; Reprodução.</p>`;
 }
 
 /* ===================== PÁGINA: PESAGEM ===================== */
@@ -3280,7 +3344,12 @@ function PageResultadosResumo(){
 }
 
 /* ---- Financeiro: Por Curral ---- */
-function PageFinanceiroCurral(){
+// Custo diário/mensal por lote ativo (ração+pasto+cria + fatia do custo
+// fixo do mês, tudo amortizado pelos dias já passados) -- usado em
+// Financeiro > Por Lote e no Relatório de Reprodução (custo diário
+// aproximado por animal, pra estimar o custo de manutenção de um
+// bezerro do nascimento até a desmama).
+function custosDiariosPorLote(){
   const d = dadosFinanceiro();
 
   const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
@@ -3357,6 +3426,149 @@ function PageFinanceiroCurral(){
       custoPorAnimal: totalAnimais>0 ? totalCusto/totalAnimais : null,
     };
   }).filter(r=>r.numeroLotes>0);
+
+  return {custosMesPorLote, custosPorLote, custoPorAreaMes};
+}
+
+/* ===================== RELATÓRIO DE REPRODUÇÃO ===================== */
+// Custo por bezerro desmamado: soma o custo do protocolo de inseminação
+// daquela vaca específica (quando encontrado) com a fatia de ração/pasto
+// (gasto real do lote entre o nascimento e a desmama, exato pelas datas
+// dos lançamentos) e uma estimativa de custo fixo (taxa diária atual do
+// lote × dias) -- o app não guarda o histórico de quantos animais o lote
+// tinha em cada mês passado, então o custo fixo é sempre uma aproximação
+// (mesmo critério já usado em outras contas do ano no app).
+function diasEntreDatas(a, b){
+  return Math.max(1, Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000));
+}
+// Encontra a inseminação mais recente daquela vaca (mesmo lote + número da
+// vaca) até a data do parto -- é a que mais provavelmente resultou nesse
+// nascimento. Não há um vínculo explícito gravado, então é uma dedução.
+function inseminacaoDoParto(parto){
+  const candidatas = state.reproducao.filter(r=>r.loteId===parto.loteId && r.numeroVaca && r.numeroVaca===parto.numeroMae && r.data<=parto.data);
+  if(candidatas.length===0) return null;
+  return candidatas.reduce((a,b)=> a.data>=b.data ? a : b);
+}
+function custoBezerroDesmama(desmama, custosPorLoteList){
+  const parto = state.partos.find(p=>p.id===desmama.partoId);
+  if(!parto) return null;
+  const lote = state.lotes.find(l=>l.id===parto.loteId);
+  const dias = diasEntreDatas(parto.data, desmama.data);
+  const insem = inseminacaoDoParto(parto);
+  const custoProtocolo = insem ? Number(insem.custo)||0 : 0;
+  const racaoPeriodo = state.saidasRacao.filter(s=>s.loteId===parto.loteId && s.data>=parto.data && s.data<=desmama.data).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const pastoPeriodo = state.pasto.filter(p=>p.loteId===parto.loteId && p.data>=parto.data && p.data<=desmama.data).reduce((a,p)=>a+custoPasto(p),0);
+  const custoVariavelPorAnimal = lote && lote.numeroAnimais>0 ? (racaoPeriodo+pastoPeriodo)/lote.numeroAnimais : 0;
+  const listaCustos = custosPorLoteList || custosDiariosPorLote().custosPorLote;
+  const diarioLote = lote ? listaCustos.find(r=>r.lote.id===lote.id) : null;
+  const custoFixoPeriodo = (diarioLote ? diarioLote.fixoAlocado : 0) * dias;
+  const custoTotal = custoProtocolo + custoVariavelPorAnimal + custoFixoPeriodo;
+  return {parto, lote, desmama, dias, custoProtocolo, custoVariavelPorAnimal, custoFixoPeriodo, custoTotal, temInseminacao: !!insem};
+}
+// Taxa de prenhez = vacas prenhas ÷ vacas já diagnosticadas (prenha+vazia)
+// daquele lote -- inseminações sem diagnóstico ainda não entram na conta.
+function taxasPrenhezPorLote(){
+  const lotes = state.lotes.filter(l=>loteTipo(l)==='reproducao');
+  return lotes.map(l=>{
+    const insem = state.reproducao.filter(r=>r.loteId===l.id).length;
+    const dgs = state.diagnosticos.filter(d=>d.loteId===l.id);
+    const prenha = dgs.filter(d=>d.resultado==='prenha').length;
+    const vazia = dgs.filter(d=>d.resultado==='vazia').length;
+    const diagnosticadas = prenha+vazia;
+    const taxa = diagnosticadas>0 ? prenha/diagnosticadas*100 : null;
+    return {lote:l, insem, prenha, vazia, diagnosticadas, taxa};
+  }).filter(r=>r.insem>0 || r.diagnosticadas>0);
+}
+// Taxa de desmame = bezerros desmamados ÷ bezerros nascidos (partos)
+// daquele lote.
+function taxasDesmamePorLote(){
+  const lotes = state.lotes.filter(loteElegivelParaParto);
+  return lotes.map(l=>{
+    const nascidos = state.partos.filter(p=>p.loteId===l.id).length;
+    const desmamados = state.desmamas.filter(d=>{ const p=state.partos.find(pp=>pp.id===d.partoId); return p && p.loteId===l.id; }).length;
+    const taxa = nascidos>0 ? desmamados/nascidos*100 : null;
+    return {lote:l, nascidos, desmamados, taxa};
+  }).filter(r=>r.nascidos>0);
+}
+function PageResultadosReproducao(){
+  const prenhez = taxasPrenhezPorLote();
+  const desmame = taxasDesmamePorLote();
+  const custosPorLoteList = custosDiariosPorLote().custosPorLote;
+  const bezerros = state.desmamas.map(d=>custoBezerroDesmama(d, custosPorLoteList)).filter(Boolean).sort((a,b)=> b.desmama.data.localeCompare(a.desmama.data));
+  const custoMedioBezerro = bezerros.length>0 ? bezerros.reduce((a,c)=>a+c.custoTotal,0)/bezerros.length : null;
+  return `
+  <div class="stat-row" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Bezerros desmamados</div><div class="stat-value">${fmtInt(bezerros.length)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo médio por bezerro</div><div class="stat-value">${custoMedioBezerro!==null?'R$ '+fmt(custoMedioBezerro):'—'}</div></div>
+  </div>
+
+  <p class="eyebrow" style="margin:22px 0 10px;">Taxa de prenhez por lote</p>
+  <div class="card" style="margin-bottom:22px;">
+    ${prenhez.length===0 ? Empty('Nenhuma inseminação ou diagnóstico registrado','Registre inseminações e diagnósticos gestacionais (Cria &gt; Reprodução) para ver a taxa de prenhez de cada lote.') : `
+    <table>
+      <thead><tr><th>Lote</th><th>Inseminações</th><th>Prenha</th><th>Vazia</th><th>Taxa de prenhez</th></tr></thead>
+      <tbody>
+        ${prenhez.map(r=>`
+          <tr>
+            <td><strong>${esc(r.lote.nome)}</strong></td>
+            <td class="mono">${fmtInt(r.insem)}</td>
+            <td class="mono">${fmtInt(r.prenha)}</td>
+            <td class="mono">${fmtInt(r.vazia)}</td>
+            <td class="mono">${r.taxa!==null ? fmt(r.taxa,1)+'%' : '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin:-14px 0 22px;">Taxa de prenhez = prenha ÷ (prenha + vazia) das vacas já diagnosticadas naquele lote — inseminações ainda sem diagnóstico não entram na conta.</p>
+
+  <p class="eyebrow" style="margin:22px 0 10px;">Taxa de desmame por lote</p>
+  <div class="card" style="margin-bottom:22px;">
+    ${desmame.length===0 ? Empty('Nenhum parto registrado','Registre partos (Cria &gt; Reprodução) para ver a taxa de desmame de cada lote.') : `
+    <table>
+      <thead><tr><th>Lote</th><th>Nascidos</th><th>Desmamados</th><th>Taxa de desmame</th></tr></thead>
+      <tbody>
+        ${desmame.map(r=>`
+          <tr>
+            <td><strong>${esc(r.lote.nome)}</strong></td>
+            <td class="mono">${fmtInt(r.nascidos)}</td>
+            <td class="mono">${fmtInt(r.desmamados)}</td>
+            <td class="mono">${r.taxa!==null ? fmt(r.taxa,1)+'%' : '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin:-14px 0 22px;">Taxa de desmame = bezerros desmamados ÷ bezerros nascidos (partos) daquele lote.</p>
+
+  <p class="eyebrow" style="margin:22px 0 10px;">Custo por bezerro desmamado</p>
+  <div class="card">
+    ${bezerros.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro (Cria &gt; Reprodução &gt; Desmama) para ver o custo aqui.') : `
+    <table>
+      <thead><tr><th>Lote</th><th>Nº da mãe</th><th>Nasceu em</th><th>Desmamou em</th><th>Dias</th><th>Protocolo</th><th>Ração+Pasto</th><th>Fixo (estimado)</th><th>Total</th></tr></thead>
+      <tbody>
+        ${bezerros.map(c=>`
+          <tr>
+            <td>${c.lote?esc(c.lote.nome):'—'}</td>
+            <td class="mono">${esc(c.parto.numeroMae)||'—'}</td>
+            <td class="mono">${c.parto.data.split('-').reverse().join('/')}</td>
+            <td class="mono">${c.desmama.data.split('-').reverse().join('/')}</td>
+            <td class="mono">${c.dias}</td>
+            <td class="mono">${c.temInseminacao ? 'R$ '+fmt(c.custoProtocolo) : '—'}</td>
+            <td class="mono">R$ ${fmt(c.custoVariavelPorAnimal)}</td>
+            <td class="mono">R$ ${fmt(c.custoFixoPeriodo)}</td>
+            <td class="mono"><strong>R$ ${fmt(c.custoTotal)}</strong></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin-top:12px;">Estimativa: "Protocolo" é o custo da inseminação daquela vaca específica, quando encontrada pelo lote e número da vaca (aparece "—" quando não há inseminação registrada pra essa vaca); "Ração+Pasto" é o gasto real do lote entre o nascimento e a desmama, dividido pelo nº de animais do lote; "Fixo" usa a taxa diária atual do lote × os dias até a desmama — o app não guarda o histórico de quantos animais o lote tinha em cada mês passado.</p>
+  `;
+}
+
+function PageFinanceiroCurral(){
+  const {custosMesPorLote, custosPorLote, custoPorAreaMes} = custosDiariosPorLote();
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral no mês (ração + pasto + cria + fatia do custo fixo)</p>
@@ -3745,6 +3957,7 @@ function Modal(){
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
   if(state.modal.type==='diagnosticoGestacional') return ModalDiagnostico();
   if(state.modal.type==='parto') return ModalParto();
+  if(state.modal.type==='desmama') return ModalDesmama();
   if(state.modal.type==='pesagem') return ModalPesagem();
   if(state.modal.type==='venda') return ModalVenda();
   if(state.modal.type==='custoFixo') return ModalCustoFixo();
@@ -4238,6 +4451,56 @@ function ModalParto(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="parto">${d._editId?'Salvar alterações':'Salvar parto'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Partos daquele lote que ainda não têm desmama vinculada -- na edição, o
+// próprio parto já vinculado à desmama sendo editada continua na lista
+// (senão ele sumiria do dropdown assim que a desmama é criada).
+function partosSemDesmama(loteId, ignorarDesmamaId){
+  return state.partos.filter(p=>p.loteId===loteId && !state.desmamas.some(x=>x.partoId===p.id && x.id!==ignorarDesmamaId));
+}
+function ModalDesmama(){
+  const d = editDraft;
+  const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
+  const partosDisponiveis = partosSemDesmama(d.loteId, d._editId);
+  const partoSelecionado = state.partos.find(p=>p.id===Number(d.partoId));
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar desmama':'Nova desmama'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Lote (da vaca)</label>
+            <select id="f-lote" ${d._editId?'disabled':''}>
+              ${lotesElegiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Bezerro (parto)</label>
+            <select id="f-parto" ${d._editId?'disabled':''}>
+              ${partosDisponiveis.length===0 ? `<option value="">— nenhum parto disponível neste lote —</option>` : partosDisponiveis.map(p=>`<option value="${p.id}" ${d.partoId==p.id?'selected':''}>Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <p class="hint">Sexo do bezerro (vem do parto selecionado): <strong>${partoSelecionado ? (SEXO_BEZERRO_LABEL[partoSelecionado.sexoBezerro]||'—') : '—'}</strong>${d._editId ? ' — na edição não dá pra trocar o lote/bezerro, só data, raça e peso.' : ''}</p>
+        <div class="field-row">
+          <div class="field"><label>Data da desmama</label><input id="f-data" type="date" value="${d.data}"/></div>
+          <div class="field"><label>Raça</label>
+            <select id="f-racadesmama">
+              <option value="" ${!d.raca?'selected':''}>— Selecione —</option>
+              <option value="angus" ${d.raca==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.raca==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.raca==='outro'?'selected':''}>Outro</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Peso (kg)</label><input id="f-pesodesmama" type="number" step="0.1" value="${d.pesoKg}"/></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="desmama" ${(!d._editId && partosDisponiveis.length===0) ? 'disabled' : ''}>${d._editId?'Salvar alterações':'Salvar desmama'}</button>
       </div>
     </div>
   </div>`;
@@ -4908,9 +5171,26 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-parto]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir este parto? Essa ação não pode ser desfeita.')) return;
+      if(!confirm('Excluir este parto? Essa ação não pode ser desfeita -- a desmama vinculada a este parto (se houver) também é apagada junto.')) return;
       const id = Number(el.dataset.delParto);
       await db.from('partos').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-edit-desmama]').forEach(el=>{
+    el.onclick = ()=>{
+      const d = state.desmamas.find(x=>x.id===Number(el.dataset.editDesmama));
+      const parto = state.partos.find(p=>p.id===d.partoId);
+      editDraft = {...d, loteId: parto?parto.loteId:'', _editId: d.id};
+      state.modal = {type:'desmama'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-del-desmama]').forEach(el=>{
+    el.onclick = async ()=>{
+      if(!confirm('Excluir esta desmama? Essa ação não pode ser desfeita.')) return;
+      const id = Number(el.dataset.delDesmama);
+      await db.from('desmamas').delete().eq('id', id);
       await loadAll();
     };
   });
@@ -5181,6 +5461,26 @@ function attachEvents(){
       const previsaoEl = document.getElementById('f-previsaoparto');
       if(previsaoEl) editDraft.previsaoParto = previsaoEl.value;
       editDraft.resultado = e.target.value;
+      render();
+    };
+  }
+  // Lote/parto só existem no formulário na criação (não na edição, onde
+  // ficam desabilitados) -- trocar o lote refaz a lista de partos ainda
+  // sem desmama daquele lote.
+  if(state.modal && state.modal.type==='desmama' && !editDraft._editId){
+    const loteDesmamaEl = document.getElementById('f-lote');
+    if(loteDesmamaEl) loteDesmamaEl.onchange = (e)=>{
+      editDraft.data = document.getElementById('f-data').value;
+      editDraft.raca = document.getElementById('f-racadesmama').value;
+      editDraft.pesoKg = document.getElementById('f-pesodesmama').value;
+      editDraft.loteId = Number(e.target.value);
+      const partosDoLote = partosSemDesmama(editDraft.loteId, null);
+      editDraft.partoId = partosDoLote[0]?.id || '';
+      render();
+    };
+    const partoDesmamaEl = document.getElementById('f-parto');
+    if(partoDesmamaEl) partoDesmamaEl.onchange = (e)=>{
+      editDraft.partoId = Number(e.target.value)||'';
       render();
     };
   }
@@ -5609,6 +5909,30 @@ function attachEvents(){
         };
         if(editDraft._editId){
           ({error} = await db.from('partos').update(partoToRow(campos)).eq('id', editDraft._editId));
+        } else {
+          const resultado = await salvarOuEnfileirar(type, campos);
+          if(resultado.enfileirado){
+            alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
+            state.modal = null; editDraft = null; render();
+            return;
+          }
+          error = resultado.error;
+        }
+      } else if(type==='desmama'){
+        const dataDesmamaVal = document.getElementById('f-data').value;
+        const racaVal = document.getElementById('f-racadesmama').value;
+        const pesoVal = document.getElementById('f-pesodesmama').value;
+        if(!editDraft._editId && !editDraft.partoId){ alert('Selecione o bezerro (parto) que está sendo desmamado.'); return; }
+        if(!validarObrigatorios([[dataDesmamaVal,'Data da desmama'],[racaVal,'Raça'],[pesoVal,'Peso']])) return;
+        if(Number(pesoVal)<=0){ alert('O peso precisa ser maior que zero.'); return; }
+        const campos = {
+          partoId: editDraft._editId ? editDraft.partoId : Number(document.getElementById('f-parto').value),
+          data: dataDesmamaVal,
+          raca: racaVal,
+          pesoKg: Number(pesoVal),
+        };
+        if(editDraft._editId){
+          ({error} = await db.from('desmamas').update(desmamaToRow(campos)).eq('id', editDraft._editId));
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
