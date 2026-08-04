@@ -2000,7 +2000,22 @@ function PageLotes(tipo){
 const DESTINO_LOTE_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
 function PageLotesGeral(){
   const list = [...state.lotes].sort((a,b)=> (b.dataInicio||'').localeCompare(a.dataInicio||''));
+  // Só conta lote ativo (sem data de encerramento) -- mesmo critério já usado
+  // no resto do app pra "quantos animais tenho agora". Lote sem sexo
+  // informado (ou Misto) entra no Total, mas não dá pra saber quantos são
+  // macho/fêmea dentro dele, então não entra nas colunas separadas.
+  const lotesAtivos = list.filter(l=>!l.dataFim);
+  const totalMachos = lotesAtivos.filter(l=>l.sexo==='macho').reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const totalFemeas = lotesAtivos.filter(l=>l.sexo==='femea').reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const totalAnimais = lotesAtivos.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const temSexoIndefinido = lotesAtivos.some(l=>(!l.sexo || l.sexo==='misto') && Number(l.numeroAnimais||0)>0);
   return `
+  <div class="stat-row" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Machos</div><div class="stat-value">${fmtInt(totalMachos)}</div></div>
+    <div class="stat-card"><div class="stat-label">Fêmeas</div><div class="stat-value">${fmtInt(totalFemeas)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total de animais</div><div class="stat-value">${fmtInt(totalAnimais)}</div></div>
+  </div>
+  ${temSexoIndefinido ? `<p class="hint" style="margin:-6px 0 14px;">Lote sem sexo informado (ou marcado como Misto) entra no Total, mas não em Machos/Fêmeas — edite o lote e defina o sexo pra ele contar certo.</p>` : ''}
   <div class="toolbar">
     <span class="hint">${list.length} lote(s) cadastrado(s)</span>
     ${podeCriarLote() ? `<button class="btn btn-primary btn-sm" data-fab-action="lote">+ Nova entrada de animais</button>` : ''}
