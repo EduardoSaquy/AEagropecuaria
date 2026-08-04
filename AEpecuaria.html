@@ -591,8 +591,9 @@ function animalToRow(a){ return {numero:a.numero, lote_id:a.loteId, sexo:a.sexo|
 // Cadastra ou move um animal pro lote informado, por número -- número é
 // único na fazenda inteira, então se já existir (em qualquer lote) só
 // atualiza o lote (e sexo/raça, quando informados) em vez de duplicar.
-// Usado tanto pelo cadastro direto (aba Animais) quanto pelos ganchos em
-// outros lançamentos (Nova entrada de animais, Nova inseminação).
+// Usado pelos ganchos em outros lançamentos (Nova entrada de animais,
+// Nova inseminação, Peso por animal) -- não existe cadastro direto de
+// animal, só edição de um que já foi criado por um desses ganchos.
 async function upsertAnimal(numero, loteId, extra){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return {error:null};
@@ -853,7 +854,6 @@ const ACAO_MODULOS = {
   saidaRacao:['confinamento'], cocho:['confinamento'],
   pasto:['pasto'],
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'], diagnosticoGestacional:['cria'], parto:['cria','confinamento'], desmama:['cria','confinamento'],
-  animal:['confinamento','pasto','cria'],
   pesagem:['confinamento','pasto','cria'],
   custoFixo:['financeiro'], precoArroba:['financeiro'],
   // Receita agora se lança pela aba Financeiro (não mais só Resultados) --
@@ -1083,7 +1083,7 @@ function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 const FILA_OFFLINE_KEY = 'aepecuaria_fila_offline_v1';
 const LANCAMENTO_LABEL = {
   saidaRacao:'Saída de ração', saidaRacaoCria:'Saída de ração (Cria)', cocho:'Leitura de cocho',
-  pasto:'Saída de ração (Pasto)', reproducaoCusto:'Inseminação', diagnosticoGestacional:'Diagnóstico gestacional', parto:'Parto', desmama:'Desmama', pesagem:'Pesagem',
+  pasto:'Saída de ração (Pasto)', reproducaoCusto:'Inseminação', diagnosticoGestacional:'Diagnóstico gestacional', parto:'Parto', desmama:'Desmama',
 };
 function lerFilaOffline(){
   try{ return JSON.parse(localStorage.getItem(FILA_OFFLINE_KEY)||'[]'); }
@@ -1232,10 +1232,6 @@ async function executarInsertLancamento(type, campos){
   }
   if(type==='desmama'){
     const {error} = await db.from('desmamas').insert({...desmamaToRow(campos), criado_por:autorAtual()});
-    return {error};
-  }
-  if(type==='pesagem'){
-    const {error} = await db.from('pesagens').insert({...pesagemToRow(campos), criado_por:autorAtual()});
     return {error};
   }
   return {error:{message:'Tipo de lançamento desconhecido: '+type}};
@@ -1587,17 +1583,6 @@ function openNewModal(type){
       loteExistenteId:'', qtdEntrada:'', dataEntrada:new Date().toISOString().slice(0,10),
     };
     state.modal = {type:'lote'};
-  } else if(type==='animal'){
-    const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
-    if(lotesAtivos.length===0){
-      alert('Cadastre ao menos um lote (aba Lotes) antes de numerar um animal.');
-      return false;
-    }
-    const grupoAtual = currentGroupKey();
-    const tipoAtual = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'reproducao' : 'confinamento';
-    const loteDefault = lotesAtivos.find(l=>loteTipo(l)===tipoAtual) || lotesAtivos[0];
-    editDraft = {numero:'', loteId: loteDefault.id, sexo:'', raca:''};
-    state.modal = {type:'animal'};
   } else if(type==='saidaRacao'){
     const dietasConf = state.dietas.filter(x=>x.tipo==='confinamento');
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
@@ -1675,7 +1660,7 @@ function openNewModal(type){
       alert(`Cadastre ao menos um lote com destino ${TIPO_PESAGEM_LABEL[tipo]} (aba Lotes) antes de registrar uma pesagem.`);
       return false;
     }
-    editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:'', modoPesagem:'media', entradasPesagem:[]};
+    editDraft = {tipo, loteId: lotesTipo[0].id, data:new Date().toISOString().slice(0,10), pesoMedioKg:'', observacao:'', entradasPesagem:[]};
     state.modal = {type:'pesagem'};
   } else if(type==='venda'){
     const lotesElegiveis = state.lotes.filter(l=>!l.dataFim && Number(l.numeroAnimais||0)>0);
@@ -1723,7 +1708,6 @@ function FabMenu(){
     {type:'dieta', label:'Nova dieta'},
     {type:'producaoRacao', label:'Nova produção de ração'},
     {type:'lote', label:'Nova entrada de animais'},
-    {type:'animal', label:'Novo animal'},
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
     {type:'pasto', label:'Nova saída de ração (Pasto)'},
@@ -2105,13 +2089,12 @@ function PageAnimais(tipo){
     <div class="stat-card"><div class="stat-label">Animais numerados</div><div class="stat-value">${fmtInt(animaisTipo.length)}</div></div>
     <div class="stat-card"><div class="stat-label">Total de animais nos lotes</div><div class="stat-value">${fmtInt(totalAnimaisLote)}</div></div>
   </div>
-  <p class="hint" style="margin:-6px 0 14px;">Cadastro gradual — conforme você numera os animais (aqui, na Nova entrada de animais ou na Nova inseminação), esse número vai subindo. Não precisa numerar o lote inteiro de uma vez.</p>
+  <p class="hint" style="margin:-6px 0 14px;">Cadastro gradual — conforme você numera os animais (na Nova entrada de animais, na Nova inseminação ou pesando animal por animal), esse número vai subindo. Não precisa numerar o lote inteiro de uma vez.</p>
   <div class="toolbar">
     <span class="hint">${list.length} animal(is) cadastrado(s)</span>
-    ${temPermissao(TIPO_MODULO[tipo],'editar') ? `<button class="btn btn-primary btn-sm" data-fab-action="animal">+ Novo animal</button>` : ''}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum animal numerado ainda','Cadastre o número dos animais aos poucos — aqui, na Nova entrada de animais ou na Nova inseminação.') : `
+    ${list.length===0 ? Empty('Nenhum animal numerado ainda','Cadastre o número dos animais aos poucos — na Nova entrada de animais, na Nova inseminação ou pesando animal por animal (Pesagem).') : `
     <table>
       <thead><tr><th>Número</th><th>Lote</th><th>Sexo</th><th>Raça</th><th></th></tr></thead>
       <tbody>
@@ -4314,12 +4297,15 @@ function ModalLote(){
   </div>`;
 }
 
+// O cadastro de animal só é feito pela Nova entrada de animais, Nova
+// inseminação ou Peso por animal (Pesagem) -- esse modal só edita um
+// animal que já existe (corrigir número, trocar lote/sexo/raça).
 function ModalAnimal(){
   const d = editDraft;
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar animal':'Novo animal'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar animal</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
           <div class="field"><label>Número do animal</label><input id="f-numeroanimal" value="${esc(d.numero)}" placeholder="Ex: 128"/></div>
@@ -4346,11 +4332,10 @@ function ModalAnimal(){
             </select>
           </div>
         </div>
-        ${!d._editId ? `<p class="hint">Se esse número já existir em outro lote, o animal é movido pra esse lote em vez de duplicar.</p>` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="animal">${d._editId?'Salvar alterações':'Salvar animal'}</button>
+        <button class="btn btn-primary" data-save="animal">Salvar alterações</button>
       </div>
     </div>
   </div>`;
@@ -4663,7 +4648,6 @@ function ModalDesmama(){
 function ModalPesagem(){
   const d = editDraft;
   const lotesTipo = state.lotes.filter(l=>loteTipo(l)===d.tipo);
-  const modoIndividual = !d._editId && d.modoPesagem==='individual';
   const entradas = d.entradasPesagem||[];
   const mediaCalculada = entradas.length>0 ? entradas.reduce((a,e)=>a+Number(e.pesoKg),0)/entradas.length : null;
   return `
@@ -4676,21 +4660,13 @@ function ModalPesagem(){
             ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
-        ${!d._editId ? `
-        <div class="field"><label>Como pesar</label>
-          <select id="f-modopesagem">
-            <option value="media" ${!modoIndividual?'selected':''}>Média direta (um número só)</option>
-            <option value="individual" ${modoIndividual?'selected':''}>Peso por animal (lança um a um)</option>
-          </select>
-        </div>
-        ` : ''}
         <div class="field-row">
           <div class="field"><label>Data</label><input id="f-datapesagem" type="date" value="${d.data}"/></div>
-          ${!modoIndividual ? `<div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesomedio" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>` : ''}
+          ${d._editId ? `<div class="field"><label>Peso médio por animal (kg)</label><input id="f-pesomedio" type="number" step="0.1" value="${d.pesoMedioKg}"/></div>` : ''}
         </div>
-        ${modoIndividual ? `
+        ${!d._editId ? `
         <div class="field-row">
-          <div class="field"><label>Número do animal</label><input id="f-numeropesado" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" placeholder="Ex: 128"/></div>
           <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320"/></div>
         </div>
         <button type="button" class="btn btn-ghost btn-sm" data-add-pesagem-animal="1">+ Adicionar e ir pro próximo</button>
@@ -4700,7 +4676,7 @@ function ModalPesagem(){
           <tbody>
             ${entradas.map((en,idx)=>`
               <tr>
-                <td class="mono">${esc(en.numero)}</td>
+                <td class="mono">${en.numero ? esc(en.numero) : '<span class="hint">— sem número —</span>'}</td>
                 <td class="mono">${fmt(Number(en.pesoKg),1)} kg</td>
                 <td><button type="button" class="btn-ghost btn-sm" data-del-pesagem-animal="${idx}">Remover</button></td>
               </tr>
@@ -4708,14 +4684,14 @@ function ModalPesagem(){
           </tbody>
         </table>
         <p class="hint" style="margin-top:8px;"><strong>${entradas.length} animal(is) pesado(s) — média: ${fmt(mediaCalculada,1)} kg</strong> (essa é a média que vira o peso do lote).</p>
-        ` : `<p class="hint">Adicione ao menos um animal pra formar a média do lote. Não precisa pesar todo o lote — só quem você for pesando agora.</p>`}
+        ` : `<p class="hint">Lance o peso de cada animal (o número é opcional — sem número, o peso ainda entra na média, só não numera o animal). Não precisa pesar todo o lote.</p>`}
         ` : ''}
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obspesagem" rows="2" placeholder="Ex: lote pronto pra abate">${esc(d.observacao)}</textarea></div>
-        ${!modoIndividual ? `<p class="hint">O peso é a média por animal do lote (não o total). O ganho desde a última pesagem (GMD) e a arroba produzida são calculados automaticamente.</p>` : ''}
+        <p class="hint">O ganho desde a última pesagem (GMD) e a arroba produzida são calculados automaticamente a partir da média do lote.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="pesagem" ${modoIndividual && entradas.length===0 ? 'disabled' : ''}>${d._editId?'Salvar alterações':'Salvar pesagem'}</button>
+        <button class="btn btn-primary" data-save="pesagem" ${!d._editId && entradas.length===0 ? 'disabled' : ''}>${d._editId?'Salvar alterações':'Salvar pesagem'}</button>
       </div>
     </div>
   </div>`;
@@ -5697,23 +5673,12 @@ function attachEvents(){
     };
   }
   if(state.modal && state.modal.type==='pesagem' && !editDraft._editId){
-    const modoPesagemEl = document.getElementById('f-modopesagem');
-    if(modoPesagemEl) modoPesagemEl.onchange = (e)=>{
-      editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
-      editDraft.data = document.getElementById('f-datapesagem').value;
-      const pesoMedioEl = document.getElementById('f-pesomedio');
-      if(pesoMedioEl) editDraft.pesoMedioKg = pesoMedioEl.value;
-      editDraft.observacao = document.getElementById('f-obspesagem').value;
-      editDraft.modoPesagem = e.target.value;
-      render();
-    };
     const addPesagemAnimalBtn = document.querySelector('[data-add-pesagem-animal]');
     if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = ()=>{
       const numEl = document.getElementById('f-numeropesado');
       const pesoEl = document.getElementById('f-pesopesado');
       const numero = (numEl.value||'').trim();
       const peso = pesoEl.value;
-      if(!numero){ alert('Informe o número do animal.'); return; }
       if(!peso || Number(peso)<=0){ alert('Informe um peso maior que zero.'); return; }
       editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
       editDraft.data = document.getElementById('f-datapesagem').value;
@@ -5913,11 +5878,7 @@ function attachEvents(){
         if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote']])) return;
         const sexoAnimalVal = document.getElementById('f-sexoanimal').value;
         const racaAnimalVal = document.getElementById('f-racaanimal').value;
-        if(editDraft._editId){
-          ({error} = await db.from('animais').update(animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal})).eq('id', editDraft._editId));
-        } else {
-          ({error} = await upsertAnimal(numeroAnimalVal, Number(loteAnimalVal), {sexo:sexoAnimalVal, raca:racaAnimalVal}));
-        }
+        ({error} = await db.from('animais').update(animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal})).eq('id', editDraft._editId));
       } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaIdVal = document.getElementById('f-dieta').value;
         const dietaId = Number(dietaIdVal);
@@ -6228,12 +6189,10 @@ function attachEvents(){
       } else if(type==='pesagem'){
         const dataPesagemVal = document.getElementById('f-datapesagem').value;
         const loteIdPesagemVal = Number(document.getElementById('f-lotepesagem').value);
-        const modoPesagemEl = document.getElementById('f-modopesagem');
-        const modoPesagem = (!editDraft._editId && modoPesagemEl) ? modoPesagemEl.value : 'media';
-        if(!editDraft._editId && modoPesagem==='individual'){
+        if(!editDraft._editId){
           const entradasPesagem = editDraft.entradasPesagem||[];
           if(!validarObrigatorios([[dataPesagemVal,'Data']])) return;
-          if(entradasPesagem.length===0){ alert('Adicione ao menos um animal pesado antes de salvar.'); return; }
+          if(entradasPesagem.length===0){ alert('Adicione ao menos um peso antes de salvar.'); return; }
           const mediaCalculada = entradasPesagem.reduce((a,en)=>a+Number(en.pesoKg),0)/entradasPesagem.length;
           const observacaoIndividualVal = document.getElementById('f-obspesagem').value;
           const res = await db.from('pesagens').insert(pesagemToRow({
@@ -6241,13 +6200,14 @@ function attachEvents(){
           })).select().single();
           error = res.error;
           if(!error && res.data){
-            const linhasAnimais = entradasPesagem.map(en=>({pesagem_id: res.data.id, numero_animal: en.numero, peso_kg: Number(en.pesoKg)}));
+            const linhasAnimais = entradasPesagem.map(en=>({pesagem_id: res.data.id, numero_animal: en.numero || null, peso_kg: Number(en.pesoKg)}));
             ({error} = await db.from('pesagens_animais').insert(linhasAnimais));
           }
           if(!error){
             const loteDaPesagem = state.lotes.find(l=>l.id===loteIdPesagemVal);
             const sexoLotePesagem = loteDaPesagem && (loteDaPesagem.sexo==='macho'||loteDaPesagem.sexo==='femea') ? loteDaPesagem.sexo : null;
             for(const en of entradasPesagem){
+              if(!en.numero) continue;
               const resAnimal = await upsertAnimal(en.numero, loteIdPesagemVal, sexoLotePesagem?{sexo:sexoLotePesagem}:{});
               if(resAnimal.error){ error = resAnimal.error; break; }
             }
@@ -6262,17 +6222,7 @@ function attachEvents(){
             pesoMedioKg: Number(pesoVal),
             observacao: document.getElementById('f-obspesagem').value,
           };
-          if(editDraft._editId){
-            ({error} = await db.from('pesagens').update(pesagemToRow(campos)).eq('id', editDraft._editId));
-          } else {
-            const resultado = await salvarOuEnfileirar(type, campos);
-            if(resultado.enfileirado){
-              alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
-              state.modal = null; editDraft = null; render();
-              return;
-            }
-            error = resultado.error;
-          }
+          ({error} = await db.from('pesagens').update(pesagemToRow(campos)).eq('id', editDraft._editId));
         }
       } else if(type==='custoFixo'){
         const data = document.getElementById('f-datacustofixo').value || null;

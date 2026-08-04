@@ -1164,3 +1164,11 @@ create policy "atualizar pesagens_animais" on pesagens_animais for update using 
 create policy "excluir pesagens_animais" on pesagens_animais for delete using (
   tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
 );
+
+-- ===================================================================
+-- MIGRAÇÃO: Pesagem por animal vira o único jeito de lançar (número
+-- do animal passa a ser opcional em cada entrada -- quem não quiser
+-- numerar, só lança o peso, que ainda entra na média do lote).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table pesagens_animais alter column numero_animal drop not null;
