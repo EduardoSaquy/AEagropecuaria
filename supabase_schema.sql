@@ -1026,3 +1026,41 @@ alter table lotes add column if not exists dieta_id bigint references dietas(id)
 -- informado até serem editados, sem impacto no que já existe.
 -- ===================================================================
 alter table lotes add column if not exists sexo text check (sexo in ('macho','femea','misto'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Inseminação + Diagnóstico Gestacional (nova sub-aba
+-- "Reprodução" dentro de Cria, com Inseminação / Diagnóstico
+-- Gestacional / Parto)
+-- A tela antes chamada "Inseminação" só registrava um item de custo
+-- avulso (ex: "Sêmen touro Angus"). Agora registra de fato o evento de
+-- inseminação de cada vaca: número da vaca, raça do touro/sêmen usado,
+-- qual inseminação é (1ª, 2ª ou 3ª) e o custo do protocolo -- que
+-- continua entrando no Financeiro como custo de Cria, igual antes.
+-- Guarda tudo na mesma tabela reproducao_custos que já existia, só com
+-- colunas novas -- "item" fica sem uso daqui pra frente, mas nenhum
+-- dado antigo é apagado ou sobrescrito.
+-- Diagnóstico Gestacional é registro novo: se a vaca inseminada ficou
+-- prenha ou vazia, com previsão de parto quando prenha.
+-- Pode rodar a qualquer momento -- lançamentos já feitos ficam sem os
+-- campos novos até serem editados, sem impacto no que já existe.
+-- ===================================================================
+alter table reproducao_custos add column if not exists numero_vaca text;
+alter table reproducao_custos add column if not exists raca_touro text check (raca_touro in ('angus','nelore','outro'));
+alter table reproducao_custos add column if not exists qual_inseminacao text check (qual_inseminacao in ('1','2','3'));
+
+create table if not exists diagnosticos_gestacionais (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete set null,
+  numero_vaca text,
+  resultado text not null check (resultado in ('prenha','vazia')),
+  previsao_parto date,
+  criado_por text
+);
+
+alter table diagnosticos_gestacionais enable row level security;
+
+create policy "select diagnosticos_gestacionais" on diagnosticos_gestacionais for select using (tem_permissao('cria','visualizar'));
+create policy "inserir diagnosticos_gestacionais" on diagnosticos_gestacionais for insert with check (tem_permissao('cria','editar'));
+create policy "atualizar diagnosticos_gestacionais" on diagnosticos_gestacionais for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
+create policy "excluir diagnosticos_gestacionais" on diagnosticos_gestacionais for delete using (tem_permissao('cria','editar'));
