@@ -2555,8 +2555,9 @@ function PagePartos(){
   </div>`;
 }
 function PageDesmama(){
+  const custosPorLoteList = custosDiariosPorLote().custosPorLote;
   const list = state.desmamas
-    .map(d=>({d, custo: custoBezerroDesmama(d)}))
+    .map(d=>({d, custo: custoBezerroDesmama(d, custosPorLoteList)}))
     .filter(x=>x.custo)
     .sort((a,b)=> b.d.data.localeCompare(a.d.data));
   return `
@@ -5209,7 +5210,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-lote]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e lançamentos de reprodução desse lote também são apagados junto.')) return;
+      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e lançamentos de reprodução desse lote também são apagados junto. Animais numerados desse lote não são apagados, mas ficam sem lote até você reatribuir (aba Animais).')) return;
       const id = Number(el.dataset.delLote);
       await db.from('lotes').delete().eq('id', id);
       await loadAll();
@@ -5841,7 +5842,13 @@ function attachEvents(){
             }));
           }
           if(!error && numerosAnimaisLista.length>0){
-            error = await registrarNumerosAnimais(loteAlvo.id, loteAlvo.sexo);
+            // Registro de animal é um efeito colateral (best-effort) do
+            // lançamento -- não bloqueia o save (senão, uma falha aqui
+            // deixaria a entrada "salva mas com erro na tela", e clicar em
+            // Salvar de novo duplicaria a entrada, já que a parte principal
+            // já tinha sido gravada).
+            const erroAnimais = await registrarNumerosAnimais(loteAlvo.id, loteAlvo.sexo);
+            if(erroAnimais) alert('A entrada foi salva, mas não deu pra registrar um dos números de animal: ' + erroAnimais.message);
           }
         } else {
           const campos = {
@@ -5868,7 +5875,8 @@ function attachEvents(){
               }));
             }
             if(!error && numerosAnimaisLista.length>0 && res.data){
-              error = await registrarNumerosAnimais(res.data.id, campos.sexo);
+              const erroAnimais = await registrarNumerosAnimais(res.data.id, campos.sexo);
+              if(erroAnimais) alert('O lote foi salvo, mas não deu pra registrar um dos números de animal: ' + erroAnimais.message);
             }
           }
         }
@@ -6113,9 +6121,13 @@ function attachEvents(){
           error = resultado.error;
         }
         // A vaca inseminada entra (ou é movida) na composição do lote --
-        // é sempre fêmea, então já preenche o sexo automaticamente.
+        // é sempre fêmea, então já preenche o sexo automaticamente. Não
+        // bloqueia o save (best-effort, mesmo motivo do gancho de entrada
+        // de animais) -- senão, uma falha aqui deixaria a inseminação
+        // "salva mas com erro na tela", e salvar de novo duplicaria.
         if(!error){
-          ({error} = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea'}));
+          const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea'});
+          if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
         }
       } else if(type==='diagnosticoGestacional'){
         const dataDgVal = document.getElementById('f-data').value;
@@ -6201,15 +6213,25 @@ function attachEvents(){
           error = res.error;
           if(!error && res.data){
             const linhasAnimais = entradasPesagem.map(en=>({pesagem_id: res.data.id, numero_animal: en.numero || null, peso_kg: Number(en.pesoKg)}));
-            ({error} = await db.from('pesagens_animais').insert(linhasAnimais));
-          }
-          if(!error){
-            const loteDaPesagem = state.lotes.find(l=>l.id===loteIdPesagemVal);
-            const sexoLotePesagem = loteDaPesagem && (loteDaPesagem.sexo==='macho'||loteDaPesagem.sexo==='femea') ? loteDaPesagem.sexo : null;
-            for(const en of entradasPesagem){
-              if(!en.numero) continue;
-              const resAnimal = await upsertAnimal(en.numero, loteIdPesagemVal, sexoLotePesagem?{sexo:sexoLotePesagem}:{});
-              if(resAnimal.error){ error = resAnimal.error; break; }
+            const resAnimais = await db.from('pesagens_animais').insert(linhasAnimais);
+            if(resAnimais.error){
+              // Sem o detalhe por animal a pesagem fica incompleta (é a
+              // parte que forma a própria média) -- desfaz a linha já
+              // criada em vez de deixar "pela metade", senão salvar de
+              // novo depois de corrigir o erro duplicaria a pesagem.
+              await db.from('pesagens').delete().eq('id', res.data.id);
+              error = resAnimais.error;
+            } else {
+              const loteDaPesagem = state.lotes.find(l=>l.id===loteIdPesagemVal);
+              const sexoLotePesagem = loteDaPesagem && (loteDaPesagem.sexo==='macho'||loteDaPesagem.sexo==='femea') ? loteDaPesagem.sexo : null;
+              // O upsert do cadastro de animal, aqui sim, é só um efeito
+              // colateral (best-effort) -- não desfaz a pesagem (que já
+              // está correta e completa) se uma dessas atualizações falhar.
+              for(const en of entradasPesagem){
+                if(!en.numero) continue;
+                const resAnimal = await upsertAnimal(en.numero, loteIdPesagemVal, sexoLotePesagem?{sexo:sexoLotePesagem}:{});
+                if(resAnimal.error){ alert('A pesagem foi salva, mas não deu pra atualizar o cadastro de um dos animais: ' + resAnimal.error.message); break; }
+              }
             }
           }
         } else {
