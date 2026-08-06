@@ -570,8 +570,8 @@ function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categori
 function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
 function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg}; }
 function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade, preco_kg:m.precoKg||null}; }
-function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0}; }
-function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento', estoque_min_pronta:d.estoqueMinPronta||0}; }
+function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0, consumoDireto:!!r.consumo_direto}; }
+function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento', estoque_min_pronta:d.estoqueMinPronta||0, consumo_direto:!!d.consumoDireto}; }
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino, dietaId:r.dieta_id, sexo:r.sexo||''}; }
 function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino, dieta_id:l.dietaId||null, sexo:l.sexo||null}; }
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||'', criadoEm:r.criado_em||null}; }
@@ -1123,45 +1123,40 @@ function pareceErroDeRede(err){
 // lançamento de campo pra saber quem fez, sem afetar edições posteriores
 // (só o insert grava; editar não troca o autor original).
 function autorAtual(){ return state.perfil?.nome || state.perfil?.usuario || null; }
-async function executarInsertLancamento(type, campos){
-  if(type==='saidaRacao'){
-    // Confinamento: a ração é formulada e servida na hora (sem virar um lote
-    // guardado) — desconta o ingrediente cru direto, igual antes de existir
-    // o estoque de ração pronta (que só faz sentido pra dieta produzida em
-    // lote e guardada, como a da Cria).
-    const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
-    const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual(), criado_em:new Date().toISOString()};
-    const res = await db.from('saidas_racao').insert(row).select().single();
-    if(res.error) return {error:res.error};
-    const saidaId = res.data.id;
-    if(dieta){
-      const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
-        const ing = getIng(it.ingredienteId);
-        const consumoKg = campos.quantidadeKg*it.pct/100;
-        return {data:campos.data, ingrediente_id:it.ingredienteId, tipo:'saida', quantidade:kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id:saidaId};
-      });
-      if(movs.length){
-        const {error} = await db.from('movimentos').insert(movs);
-        if(error){
-          // Não deixa a saída salva sem o desconto de estoque correspondente
-          // (ex: falha de permissão na gravação de movimentos) — desfaz a
-          // linha já criada em vez de ficar "pela metade". Sem isso, se este
-          // erro virar reenfileiramento (falha de rede), o retry recriaria a
-          // saída de ração inteira de novo, duplicando o lançamento e o custo.
-          await db.from('saidas_racao').delete().eq('id', saidaId);
-          return {error};
-        }
+// Insere um lançamento de "saída de ração" -- Confinamento, Cria ou Pasto,
+// não importa mais, quem decide como descontar o estoque é a própria dieta
+// escolhida: "consumo direto" desconta os insumos crus na hora (via
+// movimentos, igual sempre foi o Confinamento); senão, só grava a saída,
+// consumindo do estoque de ração pronta dessa dieta (quem descontou o
+// insumo cru foi a Produção de Ração, antes). Desfaz a linha se o desconto
+// falhar -- sem isso, um reenfileiramento por falha de rede duplicaria o
+// lançamento inteiro no retry.
+async function inserirSaidaComDesconto(tabela, fkCol, row, campos){
+  const res = await db.from(tabela).insert(row).select().single();
+  if(res.error) return {error:res.error};
+  const novoId = res.data.id;
+  const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
+  if(dieta && dieta.consumoDireto){
+    const quantidadeBase = campos.quantidadeKg!==undefined ? campos.quantidadeKg : campos.quantidade;
+    const movs = (dieta.itens||[]).filter(it=>it.ingredienteId).map(it=>{
+      const ing = getIng(it.ingredienteId);
+      const consumoKg = quantidadeBase*it.pct/100;
+      return {data:campos.data, ingrediente_id:it.ingredienteId, tipo:'saida', quantidade:kgParaUnidade(consumoKg, ing?.unidade), [fkCol]:novoId};
+    });
+    if(movs.length){
+      const {error} = await db.from('movimentos').insert(movs);
+      if(error){
+        await db.from(tabela).delete().eq('id', novoId);
+        return {error};
       }
     }
-    return {error:null};
   }
-  if(type==='saidaRacaoCria'){
-    // Cria: a ração é produzida em lote e guardada (estoque de ração
-    // pronta) — a Saída de Ração só consome desse estoque; quem desconta o
-    // ingrediente cru é a Produção de Ração.
+  return {error:null};
+}
+async function executarInsertLancamento(type, campos){
+  if(type==='saidaRacao' || type==='saidaRacaoCria'){
     const row = {data:campos.data, dieta_id:campos.dietaId, lote_id:campos.loteId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual(), criado_em:new Date().toISOString()};
-    const {error} = await db.from('saidas_racao').insert(row);
-    return {error};
+    return await inserirSaidaComDesconto('saidas_racao', 'saida_racao_id', row, campos);
   }
   if(type==='cocho'){
     const {error} = await db.from('leituras_cocho').insert({...leituraCochoToRow(campos), criado_por:autorAtual()});
@@ -1169,8 +1164,7 @@ async function executarInsertLancamento(type, campos){
   }
   if(type==='pasto'){
     const row = {data:campos.data, lote_id:campos.loteId, dieta_id:campos.dietaId, quantidade:campos.quantidade, criado_por:autorAtual()};
-    const {error} = await db.from('pasto').insert(row);
-    return {error};
+    return await inserirSaidaComDesconto('pasto', 'pasto_id', row, campos);
   }
   if(type==='producaoRacao'){
     const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
@@ -1247,9 +1241,9 @@ async function salvarOuEnfileirar(type, campos){
   // que a dieta tiver quando a sincronização rodar (pode ter sido editada
   // nesse meio tempo) — por isso o snapshot é tirado aqui, antes de
   // qualquer tentativa, e viaja junto com o lançamento se ele for enfileirado.
-  if((type==='saidaRacao' || type==='producaoRacao') && !campos._dietaSnapshot){
+  if((type==='saidaRacao' || type==='saidaRacaoCria' || type==='pasto' || type==='producaoRacao') && !campos._dietaSnapshot){
     const dietaAgora = state.dietas.find(x=>x.id===campos.dietaId);
-    if(dietaAgora) campos = {...campos, _dietaSnapshot:{itens: dietaAgora.itens}};
+    if(dietaAgora) campos = {...campos, _dietaSnapshot:{itens: dietaAgora.itens, consumoDireto: dietaAgora.consumoDireto}};
   }
   try{
     const resultado = await executarInsertLancamento(type, campos);
@@ -1351,10 +1345,12 @@ function recomputarPrecoIngrediente(movs, unidade){
 }
 
 // Dietas que fazem sentido controlar por estoque de ração pronta (produzida
-// em lote e guardada — Cria, Pasto). Confinamento é formulado e servido na
-// hora, sem virar um lote guardado, então não entra aqui.
+// em lote e guardada). Quem é "consumo direto" é formulada e servida na
+// hora, sem virar um lote guardado, então não entra aqui. Não depende mais
+// da área (Confinamento/Cria/Pasto) -- qualquer dieta pode ser "produzida
+// e guardada", a própria dieta decide.
 function dietasComEstoquePronto(){
-  return state.dietas.filter(d=>d.tipo!=='confinamento');
+  return state.dietas.filter(d=>!d.consumoDireto);
 }
 
 // Estoque (kg) de ração já pronta/misturada de uma dieta: soma das produções
@@ -1563,7 +1559,7 @@ function openNewModal(type){
     editDraft = {ingredienteId: state.ingredientes[0]?.id||'', tipo:'entrada', data:new Date().toISOString().slice(0,10), quantidade:'', precoKg:''};
     state.modal = {type:'movimento'};
   } else if(type==='dieta'){
-    editDraft = {nome:'', tipo:'confinamento', categoriaAnimal:'', kgAnimalDia:9, estoqueMinPronta:'', itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
+    editDraft = {nome:'', tipo:'confinamento', categoriaAnimal:'', kgAnimalDia:9, estoqueMinPronta:'', consumoDireto:true, itens:[{ingredienteId:state.ingredientes[0]?.id||'', pct:''}]};
     state.modal = {type:'dieta'};
   } else if(type==='producaoRacao'){
     const dietasEstocaveis = dietasComEstoquePronto();
@@ -1584,19 +1580,17 @@ function openNewModal(type){
     };
     state.modal = {type:'lote'};
   } else if(type==='saidaRacao'){
-    const dietasConf = state.dietas.filter(x=>x.tipo==='confinamento');
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
-    if(dietasConf.length===0 || lotesConf.length===0){
-      alert('Cadastre ao menos uma dieta de Confinamento e um lote com destino Confinamento (aba Lotes) antes de registrar uma saída de ração.');
+    if(state.dietas.length===0 || lotesConf.length===0){
+      alert('Cadastre ao menos uma dieta e um lote com destino Confinamento (aba Lotes) antes de registrar uma saída de ração.');
       return false;
     }
     editDraft = {dietaId: lotesConf[0]?.dietaId||'', loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
   } else if(type==='saidaRacaoCria'){
-    const dietasCria = state.dietas.filter(x=>x.tipo==='cria');
     const lotesCria = state.lotes.filter(l=>loteTipo(l)==='reproducao');
-    if(dietasCria.length===0 || lotesCria.length===0){
-      alert('Cadastre ao menos uma dieta de Cria e um lote com destino Cria (aba Lotes) antes de registrar uma saída de ração para a Cria.');
+    if(state.dietas.length===0 || lotesCria.length===0){
+      alert('Cadastre ao menos uma dieta e um lote com destino Cria (aba Lotes) antes de registrar uma saída de ração para a Cria.');
       return false;
     }
     editDraft = {dietaId: lotesCria[0]?.dietaId||'', loteId: lotesCria[0]?.id||'', data:new Date().toISOString().slice(0,10), quantidadeKg:''};
@@ -1610,10 +1604,9 @@ function openNewModal(type){
     editDraft = {loteId: lotesConf[0]?.id||'', data:new Date().toISOString().slice(0,10), nota:2, observacao:''};
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
-    const dietasPasto = state.dietas.filter(x=>x.tipo==='pasto');
     const lotesPasto = state.lotes.filter(l=>loteTipo(l)==='pasto');
-    if(lotesPasto.length===0 || dietasPasto.length===0){
-      alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta de Pasto antes de registrar uma saída de ração (pasto).');
+    if(lotesPasto.length===0 || state.dietas.length===0){
+      alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta antes de registrar uma saída de ração (pasto).');
       return false;
     }
     editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: lotesPasto[0]?.dietaId||'', data:new Date().toISOString().slice(0,10), quantidade:''};
@@ -1915,7 +1908,7 @@ function PageDietas(){
     <div class="diet-card">
       <div class="diet-head" data-toggle-diet="${d.id}">
         <div>
-          <div class="diet-title">${esc(d.nome)} <span class="pill ${d.tipo==='pasto'?'pill-warn':d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[d.tipo]||'Confinamento'}</span></div>
+          <div class="diet-title">${esc(d.nome)} <span class="pill ${d.tipo==='pasto'?'pill-warn':d.tipo==='cria'?'pill-cat':'pill-ok'}">${DIETA_TIPO_LABEL[d.tipo]||'Confinamento'}</span> <span class="pill pill-cat">${d.consumoDireto?'Consumo direto':'Produzida e guardada'}</span></div>
           <div class="diet-sub">${esc(d.categoriaAnimal)} · ${fmt(d.kgAnimalDia,1)} kg MN/animal/dia</div>
         </div>
         <div class="diet-metrics">
@@ -2226,14 +2219,14 @@ function PageVendasGeral(){
 /* ===================== PÁGINA: SAÍDA DE RAÇÃO ===================== */
 function PageSaidaRacao(tipo){
   const verValor = souAdmin();
-  // Dieta de Cria é guardada com tipo "cria" (não "reproducao" -- esse é só
-  // o nome do lote/módulo, herdado de TIPO_PESAGEM_LABEL/TIPO_MODULO).
-  const dietaTipo = tipo==='reproducao' ? 'cria' : tipo;
   const filtro = state.filtrosSaidaRacao[tipo] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.saidasRacao
     .filter(s=>{ const lote = state.lotes.find(l=>l.id===s.loteId); return lote && loteTipo(lote)===tipo; });
   const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo);
-  const dietasTipo = state.dietas.filter(d=>d.tipo===dietaTipo);
+  // Dietas que já foram usadas em algum lançamento dessa área -- não dá
+  // mais pra filtrar por dieta.tipo, já que qualquer dieta pode ser usada
+  // em qualquer área agora.
+  const dietasTipo = [...new Set(listaTipo.map(s=>s.dietaId))].map(id=>state.dietas.find(d=>d.id===id)).filter(Boolean);
   const mesesDisponiveis = [...new Set(listaTipo.map(s=>s.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
   const list = listaTipo
     .filter(s=> !filtro.mes || s.data.startsWith(filtro.mes))
@@ -2357,7 +2350,10 @@ function PagePasto(){
   const listaTipo = state.pasto
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; });
   const lotesTipo = state.lotes.filter(l=>loteTipo(l)==='pasto');
-  const dietasTipo = state.dietas.filter(d=>d.tipo==='pasto');
+  // Dietas que já foram usadas em algum lançamento de Pasto -- não dá mais
+  // pra filtrar por dieta.tipo, já que qualquer dieta pode ser usada em
+  // qualquer área agora.
+  const dietasTipo = [...new Set(listaTipo.map(p=>p.dietaId))].map(id=>state.dietas.find(d=>d.id===id)).filter(Boolean);
   const mesesDisponiveis = [...new Set(listaTipo.map(p=>p.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
   const list = listaTipo
     .filter(p=> !filtro.mes || p.data.startsWith(filtro.mes))
@@ -4158,13 +4154,12 @@ function ModalDieta(){
       <div class="modal-body">
         <div class="field"><label>Nome da dieta</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Dieta Terminação Alto Grão"/></div>
         <div class="field-row">
-          <div class="field"><label>Tipo</label>
-            <select id="f-tipodieta" ${d._editId?'disabled':''}>
+          <div class="field"><label>Categoria</label>
+            <select id="f-tipodieta">
               <option value="confinamento" ${d.tipo==='confinamento'?'selected':''}>Confinamento</option>
               <option value="cria" ${d.tipo==='cria'?'selected':''}>Cria</option>
               <option value="pasto" ${d.tipo==='pasto'?'selected':''}>Pasto</option>
             </select>
-            ${d._editId?'<span class="hint">Não dá pra trocar o tipo de uma dieta já em uso — o jeito de descontar estoque é diferente pra cada tipo. Crie uma dieta nova se precisar de outro tipo.</span>':''}
           </div>
           <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${esc(d.categoriaAnimal)}" placeholder="Ex: Boi terminação"/></div>
         </div>
@@ -4172,7 +4167,13 @@ function ModalDieta(){
           <div class="field"><label>Kg de dieta / animal / dia</label><input id="f-kganimal" type="number" step="0.1" value="${d.kgAnimalDia}"/></div>
           <div class="field"><label>Estoque mínimo de ração pronta (kg, alerta)</label><input id="f-estoqueminpronta" type="number" step="1" value="${d.estoqueMinPronta||''}"/></div>
         </div>
-        <p class="hint">Dietas de "Confinamento" aparecem em Saída de Ração (Confinamento); dietas de "Cria" aparecem em Saída de Ração (Cria); dietas de "Pasto" aparecem no lançamento de Pasto. O estoque mínimo é usado no alerta da aba "Estoque de Ração".</p>
+        <div class="field"><label>Como é consumida</label>
+          <select id="f-consumodieta">
+            <option value="produzido" ${!d.consumoDireto?'selected':''}>Produzida e guardada (passa por Produção de Ração)</option>
+            <option value="direto" ${d.consumoDireto?'selected':''}>Direto do estoque de insumos (mistura e serve na hora)</option>
+          </select>
+        </div>
+        <p class="hint">"Direto do estoque" desconta os insumos crus na hora que a Saída de Ração é lançada. "Produzida e guardada" exige produzir um lote antes (Produção de Ração) — a Saída de Ração só consome desse estoque pronto. Qualquer dieta pode ser usada por qualquer lote (Confinamento, Cria ou Pasto) — a Categoria acima é só pra organizar a lista. O estoque mínimo (produzida e guardada) é usado no alerta da aba "Estoque de Ração".</p>
         <label>Composição (% da dieta)</label>
         <div style="display:flex; flex-direction:column; gap:8px;">
           ${d.itens.map((it,idx)=>`
@@ -4261,7 +4262,7 @@ function ModalLote(){
         <div class="field"><label>Dieta padrão (opcional)</label>
           <select id="f-dietalote">
             <option value="" ${!d.dietaId?'selected':''}>— Nenhuma (escolher na hora do lançamento) —</option>
-            ${state.dietas.filter(x=>x.tipo===d.destino).map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
+            ${state.dietas.map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
           </select>
         </div>
         <p class="hint">Ao lançar Saída de Ração pra esse lote, essa dieta já vem selecionada — ainda dá pra trocar na hora, se precisar.</p>
@@ -4355,10 +4356,10 @@ function ModalSaidaRacao(){
               ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Dieta (Confinamento)</label>
+          <div class="field"><label>Dieta</label>
             <select id="f-dieta">
               <option value="" ${!d.dietaId?'selected':''}>— Selecione a dieta —</option>
-              ${state.dietas.filter(x=>x.tipo==='confinamento').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
+              ${state.dietas.map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
             </select>
           </div>
         </div>
@@ -4368,7 +4369,7 @@ function ModalSaidaRacao(){
         </div>
         ${d._editId && !souAdmin() ? `<p class="hint">A data desse lançamento já registrado só pode ser alterada por um Administrador ou Proprietário.</p>` : ''}
         ${d.criadoEm ? `<p class="hint">Lançado em ${new Date(d.criadoEm).toLocaleString('pt-BR')}</p>` : ''}
-        <p class="hint">A dieta vem pré-selecionada pela dieta padrão do lote (aba Lotes) — pode trocar aqui se precisar, mas não salva em branco. Ao salvar, o app desconta automaticamente do estoque cada ingrediente da dieta escolhida, na proporção da composição cadastrada.</p>
+        <p class="hint">A dieta vem pré-selecionada pela dieta padrão do lote (aba Lotes) — pode trocar aqui se precisar, mas não salva em branco. Se a dieta for "Consumo direto", desconta os insumos crus do estoque na hora; se for "Produzida e guardada", consome do estoque de ração pronta dessa dieta (produzido via Produção de Ração).</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -4391,10 +4392,10 @@ function ModalSaidaRacaoCria(){
               ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Dieta (Cria)</label>
+          <div class="field"><label>Dieta</label>
             <select id="f-dieta">
               <option value="" ${!d.dietaId?'selected':''}>— Selecione a dieta —</option>
-              ${state.dietas.filter(x=>x.tipo==='cria').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
+              ${state.dietas.map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
             </select>
           </div>
         </div>
@@ -4404,7 +4405,7 @@ function ModalSaidaRacaoCria(){
         </div>
         ${d._editId && !souAdmin() ? `<p class="hint">A data desse lançamento já registrado só pode ser alterada por um Administrador ou Proprietário.</p>` : ''}
         ${d.criadoEm ? `<p class="hint">Lançado em ${new Date(d.criadoEm).toLocaleString('pt-BR')}</p>` : ''}
-        <p class="hint">A dieta vem pré-selecionada pela dieta padrão do lote (aba Lotes) — pode trocar aqui se precisar, mas não salva em branco. Ao salvar, o app desconta automaticamente do estoque cada ingrediente da dieta escolhida, na proporção da composição cadastrada.</p>
+        <p class="hint">A dieta vem pré-selecionada pela dieta padrão do lote (aba Lotes) — pode trocar aqui se precisar, mas não salva em branco. Se a dieta for "Consumo direto", desconta os insumos crus do estoque na hora; se for "Produzida e guardada", consome do estoque de ração pronta dessa dieta (produzido via Produção de Ração).</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -4462,10 +4463,10 @@ function ModalPasto(){
               ${state.lotes.filter(l=>loteTipo(l)==='pasto').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Dieta de pasto</label>
+          <div class="field"><label>Dieta</label>
             <select id="f-dietapasto">
               <option value="" ${!d.dietaId?'selected':''}>— Selecione a dieta —</option>
-              ${state.dietas.filter(x=>x.tipo==='pasto').map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}
+              ${state.dietas.map(x=>`<option value="${x.id}" ${d.dietaId==x.id?'selected':''}>${esc(x.nome)} (${DIETA_TIPO_LABEL[x.tipo]||'Confinamento'})</option>`).join('')}
             </select>
           </div>
         </div>
@@ -4473,7 +4474,7 @@ function ModalPasto(){
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
           <div class="field"><label>Quantidade total colocada no cocho (kg)</label><input id="f-qtdpasto" type="number" step="0.1" value="${d.quantidade}"/></div>
         </div>
-        <p class="hint">A dieta vem pré-selecionada pela dieta padrão do lote (aba Lotes) — pode trocar aqui se precisar, mas não salva em branco. O estoque de cada ingrediente da dieta escolhida é descontado automaticamente, na proporção da composição.</p>
+        <p class="hint">A dieta vem pré-selecionada pela dieta padrão do lote (aba Lotes) — pode trocar aqui se precisar, mas não salva em branco. Se a dieta for "Consumo direto", desconta os insumos crus do estoque na hora; se for "Produzida e guardada", consome do estoque de ração pronta dessa dieta (produzido via Produção de Ração).</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -5784,6 +5785,7 @@ function attachEvents(){
           categoriaAnimal: document.getElementById('f-categoria').value,
           kgAnimalDia: Number(document.getElementById('f-kganimal').value)||0,
           estoqueMinPronta: Number(document.getElementById('f-estoqueminpronta').value)||0,
+          consumoDireto: document.getElementById('f-consumodieta').value==='direto',
           itens: editDraft.itens.map(it=>({ingredienteId:Number(it.ingredienteId), pct:Number(it.pct)||0})),
         };
         const pctTotalDieta = campos.itens.reduce((a,it)=>a+it.pct,0);
@@ -5912,24 +5914,24 @@ function attachEvents(){
           const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
           const saidaId = editDraft._editId;
           ({error} = await db.from('saidas_racao').update(row).eq('id', saidaId));
-          if(type==='saidaRacao'){
-            // Confinamento desconta o ingrediente cru direto — refaz os
-            // movimentos dessa saída com os valores novos (mesmo esquema
-            // de antes de existir o estoque de ração pronta).
-            const dieta = state.dietas.find(x=>x.id===dietaId);
-            if(!error) await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
-            if(!error && dieta){
-              const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
-                const ing = getIng(it.ingredienteId);
-                const consumoKg = quantidadeKg*it.pct/100;
-                return {
-                  data, ingrediente_id: it.ingredienteId, tipo: 'saida',
-                  quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
-                };
-              });
-              if(movs.length){
-                ({error} = await db.from('movimentos').insert(movs));
-              }
+          // Quem decide se desconta o ingrediente cru é a dieta escolhida
+          // (consumo direto), não mais o tipo (Confinamento/Cria) -- refaz
+          // os movimentos dessa saída do zero com os valores novos (limpa
+          // antes de tudo, pro caso de ter trocado pra uma dieta "produzida
+          // e guardada" e não sobrar movimento antigo órfão).
+          const dieta = state.dietas.find(x=>x.id===dietaId);
+          if(!error) await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
+          if(!error && dieta && dieta.consumoDireto){
+            const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
+              const ing = getIng(it.ingredienteId);
+              const consumoKg = quantidadeKg*it.pct/100;
+              return {
+                data, ingrediente_id: it.ingredienteId, tipo: 'saida',
+                quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
+              };
+            });
+            if(movs.length){
+              ({error} = await db.from('movimentos').insert(movs));
             }
           }
         } else {
@@ -5977,7 +5979,23 @@ function attachEvents(){
         const quantidade = Number(qtdPastoVal);
         if(editDraft._editId){
           const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
-          ({error} = await db.from('pasto').update(row).eq('id', editDraft._editId));
+          const pastoId = editDraft._editId;
+          ({error} = await db.from('pasto').update(row).eq('id', pastoId));
+          // Mesma lógica da Saída de Ração: quem decide se desconta o
+          // ingrediente cru é a dieta escolhida (consumo direto) -- refaz
+          // os movimentos do zero com os valores novos.
+          const dietaPasto = state.dietas.find(x=>x.id===dietaId);
+          if(!error) await db.from('movimentos').delete().eq('pasto_id', pastoId);
+          if(!error && dietaPasto && dietaPasto.consumoDireto){
+            const movs = dietaPasto.itens.filter(it=>it.ingredienteId).map(it=>{
+              const ing = getIng(it.ingredienteId);
+              const consumoKg = quantidade*it.pct/100;
+              return {data, ingrediente_id: it.ingredienteId, tipo: 'saida', quantidade: kgParaUnidade(consumoKg, ing?.unidade), pasto_id: pastoId};
+            });
+            if(movs.length){
+              ({error} = await db.from('movimentos').insert(movs));
+            }
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, {loteId, dietaId, data, quantidade});
           if(resultado.enfileirado){

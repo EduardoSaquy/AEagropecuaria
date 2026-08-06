@@ -1172,3 +1172,23 @@ create policy "excluir pesagens_animais" on pesagens_animais for delete using (
 -- Pode rodar a qualquer momento.
 -- ===================================================================
 alter table pesagens_animais alter column numero_animal drop not null;
+
+-- ===================================================================
+-- MIGRAÇÃO: Consumo direto x produzido, por dieta (Confinamento, Cria
+-- e Pasto unificados)
+-- Antes, o jeito de descontar estoque era fixo por área: Confinamento
+-- sempre descontava os insumos crus na hora, Cria e Pasto sempre
+-- exigiam produzir e guardar um lote de ração pronta (Produção de
+-- Ração) antes. Isso não cobria o caso de um lote de Cria (ou Pasto)
+-- cuja dieta não dá pra produzir e guardar -- precisa ser misturada e
+-- servida na hora, igual Confinamento.
+-- Agora quem decide é a própria dieta ("consumo_direto"), não mais a
+-- área -- e qualquer dieta pode ser usada por qualquer lote (Confinamento,
+-- Cria ou Pasto). Dietas existentes mantêm o comportamento de antes:
+-- as de Confinamento viram consumo_direto=true (não muda nada pra
+-- quem já usava assim); as de Cria/Pasto ficam consumo_direto=false
+-- (continuam exigindo Produção de Ração, como já era).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table dietas add column if not exists consumo_direto boolean not null default false;
+update dietas set consumo_direto = true where tipo = 'confinamento';
