@@ -617,8 +617,8 @@ function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p
 function rowToPesagemAnimal(r){ return {id:r.id, pesagemId:r.pesagem_id, numeroAnimal:r.numero_animal, pesoKg:r.peso_kg}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
 function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantidade_kg:p.quantidadeKg}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, descricao:r.descricao||'', valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, descricao:c.descricao||'', valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
+function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, descricao:r.descricao||'', fornecedor:r.fornecedor||'', valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
+function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, descricao:c.descricao||'', fornecedor:c.fornecedor||'', valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
 function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||'', vendaId:r.abate_id||null}; }
 function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor, observacao:r.observacao||''}; }
 // Guardado na tabela "abates" (nome antigo, de quando só existia venda por
@@ -628,8 +628,40 @@ function rowToVenda(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantida
 function vendaToRow(v){ return {data:v.data, lote_id:v.loteId, quantidade:v.quantidade, tipo_venda:v.tipoVenda||'arroba', peso_medio_kg:v.pesoMedioKg||null, valor_arroba:v.valorArroba||null, valor_por_animal:v.valorPorAnimal||null, valor_kg:v.valorKg||null, observacao:v.observacao||''}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor, sexo:r.sexo||'macho'}; }
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor, sexo:p.sexo||'macho'}; }
-function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, valor:r.valor, data:r.data}; }
-function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, valor:i.valor, data:i.data}; }
+function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor||'', valor:r.valor, data:r.data}; }
+function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor||'', valor:i.valor, data:i.data}; }
+// Sugestões de centro de custo e fornecedor pra preencher os datalists dos
+// campos de Despesa/Investimento -- lista inicial vem de um comparativo com
+// o plano de contas real da fazenda (ERP Conag), pra já nascer com opções
+// consistentes; qualquer nome novo digitado pelo usuário some pra lista viva
+// via fornecedoresConhecidos()/centrosCustoConhecidos() abaixo.
+const CENTROS_CUSTO_SUGERIDOS = [
+  'Armazenagem & Logística', 'Combustíveis da Operação Agropecuária', 'Custas Contratuais',
+  'Despesas com a Casa-Sede', 'Despesas com Instalações', 'Despesas com Veículos',
+  'Energia Elétrica de Infraestrutura Operacional', 'Insumos Agrícolas', 'Insumos Pecuários',
+  'Manutenção de Tratores, Caminhões, Máquinas, Equipamentos e Implementos',
+  'Manutenção e Reparo de Infraestruturas', 'Mão-de-obra de Operacional',
+  'Refeitório, Restaurantes & Alimentação', 'Serviços Profissionais',
+  'Serviços Técnicos Profissionais (Consultorias de Campo)',
+  'Terceirização de Serviços Agropecuários', 'Tributos e Contribuições',
+];
+const CENTROS_CUSTO_INVESTIMENTO_SUGERIDOS = ['Investimento em Animais', 'Investimento em Ativos'];
+function fornecedoresConhecidos(){
+  const vistos = new Set();
+  state.custosFixos.forEach(c=>{ if(c.fornecedor) vistos.add(c.fornecedor); });
+  state.investimentos.forEach(i=>{ if(i.fornecedor) vistos.add(i.fornecedor); });
+  return [...vistos].sort((a,b)=>a.localeCompare(b));
+}
+function centrosCustoConhecidos(){
+  const vistos = new Set(CENTROS_CUSTO_SUGERIDOS);
+  state.custosFixos.forEach(c=>{ if(c.categoria) vistos.add(c.categoria); });
+  return [...vistos].sort((a,b)=>a.localeCompare(b));
+}
+function centrosCustoInvestimentoConhecidos(){
+  const vistos = new Set(CENTROS_CUSTO_INVESTIMENTO_SUGERIDOS);
+  state.investimentos.forEach(i=>{ if(i.categoria) vistos.add(i.categoria); });
+  return [...vistos].sort((a,b)=>a.localeCompare(b));
+}
 function rowToFazenda(r){ return {id:r.id, nome:r.nome, hectares:r.hectares}; }
 function fazendaToRow(f){ return {nome:f.nome, hectares:f.hectares}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
@@ -1665,10 +1697,10 @@ function openNewModal(type){
     editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:new Date().toISOString().slice(0,10), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
     state.modal = {type:'venda'};
   } else if(type==='custoFixo'){
-    editDraft = {nome:'', categoria:'', descricao:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
+    editDraft = {nome:'', categoria:'', descricao:'', fornecedor:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
     state.modal = {type:'custoFixo'};
   } else if(type==='investimento'){
-    editDraft = {nome:'', categoria:'', valor:'', data:new Date().toISOString().slice(0,10)};
+    editDraft = {nome:'', categoria:'', fornecedor:'', valor:'', data:new Date().toISOString().slice(0,10)};
     state.modal = {type:'investimento'};
   } else if(type==='receita'){
     editDraft = {loteId:'', descricao:'', arrobas:'', valor:'', data:new Date().toISOString().slice(0,10), observacao:''};
@@ -3782,7 +3814,7 @@ function PageFinanceiroCustosFixos(){
   const acumuladoMes = fixosDoMes(mesAtual);
   const mesesDisponiveis = [...new Set(state.custosFixos.map(c=>c.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
   const list = [...state.custosFixos].filter(c=>
-    (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca) || (c.descricao||'').toLowerCase().includes(busca))
+    (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca) || (c.descricao||'').toLowerCase().includes(busca) || (c.fornecedor||'').toLowerCase().includes(busca))
     && (!state.filtroMesDespesas || (state.filtroMesDespesas==='__recorrente__' ? !c.mes : c.mes===state.filtroMesDespesas))
   ).sort((a,b)=>{
     if(!a.mes && b.mes) return -1;
@@ -3796,7 +3828,7 @@ function PageFinanceiroCustosFixos(){
   <p class="hint" style="margin:-6px 0 14px;">Soma dos custos fixos que valem para o mês atual — cada centro de custo usa o valor cadastrado especificamente para ${mesLabel(mesAtual)} quando existe, senão o valor recorrente.</p>
   <div class="field-row" style="margin-bottom:14px;">
     <div class="field" style="max-width:340px;">
-      <input type="text" placeholder="Buscar por nome ou centro de custo..." value="${state.searchDespesas}" data-search-despesas="1"/>
+      <input type="text" placeholder="Buscar por nome, centro de custo ou fornecedor..." value="${state.searchDespesas}" data-search-despesas="1"/>
     </div>
     <div class="field" style="max-width:220px;">
       <select data-filtro-mes-despesas="1">
@@ -3809,12 +3841,13 @@ function PageFinanceiroCustosFixos(){
   <div class="card">
     ${list.length===0 ? Empty(state.custosFixos.length===0 ? 'Nenhuma despesa cadastrada' : 'Nenhuma despesa encontrada', state.custosFixos.length===0 ? 'Cadastre as despesas da operação, como mão de obra, energia, manutenção ou nutrição — recorrentes ou de um mês específico.' : 'Nenhuma despesa bate com essa busca/filtro.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Mês</th><th>Data</th><th>Área</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Fornecedor</th><th>Mês</th><th>Data</th><th>Área</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
       <tbody>
         ${list.map(c=>`
           <tr>
             <td><strong>${esc(c.nome)}</strong>${c.descricao ? `<div class="hint" style="margin-top:2px;">${esc(c.descricao)}</div>` : ''}</td>
             <td>${esc(c.categoria) || '—'}</td>
+            <td>${esc(c.fornecedor) || '—'}</td>
             <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
             <td class="mono">${c.data ? c.data.split('-').reverse().join('/') : '—'}</td>
             <td>${areasLabel(c.areas)}</td>
@@ -3844,12 +3877,13 @@ function PageResultadosInvestimentos(){
   <div class="card">
     ${state.investimentos.length===0 ? Empty('Nenhum investimento registrado','Registre aqui compras de animais, máquinas e outros bens — esse valor não entra no custo diário/mensal de alimentação.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Categoria</th><th>Data</th><th>Valor</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Categoria</th><th>Fornecedor</th><th>Data</th><th>Valor</th><th></th></tr></thead>
       <tbody>
         ${state.investimentos.map(i=>`
           <tr>
             <td><strong>${esc(i.nome)}</strong></td>
             <td>${esc(i.categoria) || '—'}</td>
+            <td>${esc(i.fornecedor) || '—'}</td>
             <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">R$ ${fmt(i.valor)}</td>
             <td style="display:flex; gap:6px;">
@@ -3861,7 +3895,7 @@ function PageResultadosInvestimentos(){
           </tr>
         `).join('')}
         <tr>
-          <td colspan="3" style="text-align:right; font-weight:600;">Total investido</td>
+          <td colspan="4" style="text-align:right; font-weight:600;">Total investido</td>
           <td class="mono" style="font-weight:600;">R$ ${fmt(state.investimentos.reduce((a,i)=>a+Number(i.valor||0),0))}</td>
           <td></td>
         </tr>
@@ -4770,11 +4804,16 @@ function ModalCustoFixo(){
         <div class="field"><label>Nome (categoria)</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
         <div class="field"><label>Descrição detalhada (opcional)</label><input id="f-descricaocustofixo" value="${esc(d.descricao||'')}" placeholder="Ex: 20 sacos de ureia, NF 4521"/></div>
         <div class="field-row">
-          <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" value="${esc(d.categoria)}" placeholder="Ex: Mão-de-obra Operacional"/></div>
-          <div class="field"><label>Valor (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
+          <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" list="dl-centro-custo" value="${esc(d.categoria)}" placeholder="Ex: Mão-de-obra Operacional"/>
+            <datalist id="dl-centro-custo">${centrosCustoConhecidos().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+          </div>
+          <div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedor" list="dl-fornecedor" value="${esc(d.fornecedor||'')}" placeholder="Quem recebeu o pagamento"/>
+            <datalist id="dl-fornecedor">${fornecedoresConhecidos().map(f=>`<option value="${esc(f)}">`).join('')}</datalist>
+          </div>
         </div>
-        <div class="field">
-          <label>Data (opcional)</label><input id="f-datacustofixo" type="date" value="${d.data||''}"/>
+        <div class="field-row">
+          <div class="field"><label>Valor (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
+          <div class="field"><label>Data (opcional)</label><input id="f-datacustofixo" type="date" value="${d.data||''}"/></div>
         </div>
         <div class="field" style="margin-top:6px;">
           <label>Atividade(s)</label>
@@ -4804,10 +4843,17 @@ function ModalInvestimento(){
       <div class="modal-body">
         <div class="field"><label>Nome do investimento</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Compra de animais, Trator novo"/></div>
         <div class="field-row">
-          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" value="${esc(d.categoria)}" placeholder="Ex: Animais, Ativos"/></div>
-          <div class="field"><label>Valor (R$)</label><input id="f-valorinvest" type="number" step="0.01" value="${d.valor}"/></div>
+          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" list="dl-centro-custo-investimento" value="${esc(d.categoria)}" placeholder="Ex: Investimento em Animais"/>
+            <datalist id="dl-centro-custo-investimento">${centrosCustoInvestimentoConhecidos().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+          </div>
+          <div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedor" list="dl-fornecedor" value="${esc(d.fornecedor||'')}" placeholder="Quem vendeu"/>
+            <datalist id="dl-fornecedor">${fornecedoresConhecidos().map(f=>`<option value="${esc(f)}">`).join('')}</datalist>
+          </div>
         </div>
-        <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        <div class="field-row">
+          <div class="field"><label>Valor (R$)</label><input id="f-valorinvest" type="number" step="0.01" value="${d.valor}"/></div>
+          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
         <p class="hint">Investimentos ficam registrados separadamente e não entram no custo diário/mensal de alimentação do Financeiro.</p>
       </div>
       <div class="modal-foot">
@@ -6271,6 +6317,7 @@ function attachEvents(){
           nome: document.getElementById('f-nome').value || 'Sem nome',
           categoria: document.getElementById('f-categoria').value,
           descricao: document.getElementById('f-descricaocustofixo').value,
+          fornecedor: document.getElementById('f-fornecedor').value,
           valorMensal: Number(document.getElementById('f-valormensal').value)||0,
           data,
           mes: data ? data.slice(0,7) : null,
@@ -6287,6 +6334,7 @@ function attachEvents(){
         const campos = {
           nome: document.getElementById('f-nome').value || 'Sem nome',
           categoria: document.getElementById('f-categoria').value,
+          fornecedor: document.getElementById('f-fornecedor').value,
           valor: Number(document.getElementById('f-valorinvest').value)||0,
           data: document.getElementById('f-data').value,
         };

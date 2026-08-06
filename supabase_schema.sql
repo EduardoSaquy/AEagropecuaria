@@ -1192,3 +1192,16 @@ alter table pesagens_animais alter column numero_animal drop not null;
 -- ===================================================================
 alter table dietas add column if not exists consumo_direto boolean not null default false;
 update dietas set consumo_direto = true where tipo = 'confinamento';
+
+-- ===================================================================
+-- MIGRAÇÃO: Fornecedor em Despesas e Investimentos
+-- Comparando com o relatório de despesas do ERP que a fazenda usa
+-- (Conag), faltava um campo pra guardar quem recebeu o pagamento --
+-- só dava pra anotar isso no meio da observação. Agora Despesas
+-- (custos_fixos) e Investimentos ganham um campo "Fornecedor" próprio,
+-- opcional, com sugestões (autocomplete) na tela puxadas dos nomes já
+-- usados. Não muda nada em lançamentos existentes (fica em branco).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table custos_fixos add column if not exists fornecedor text;
+alter table investimentos add column if not exists fornecedor text;
