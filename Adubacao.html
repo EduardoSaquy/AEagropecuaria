@@ -601,7 +601,12 @@ function computeAll(state, selection) {
   const sExport = yieldTHa * crop.exp.S;
   const sManut = sExport / (s.effS / 100);
   const sFator = FATOR_CLASSE[classeS] || 1;
-  const sDose = sManut * sFator;
+  const sBruto = sManut * sFator;
+  // Gesso agrícola (CaSO4·2H2O) tem ~15% de S (ver out.gessagem.sSuprido) - quando a
+  // gessagem é recomendada, esse S já entra no solo junto com o gesso, então abate da
+  // necessidade antes de sugerir adubo à base de enxofre (nunca fica negativo).
+  const sSupridoGesso = out.gessagem.recomendaGesso ? out.gessagem.sSuprido : 0;
+  const sDose = Math.max(0, sBruto - sSupridoGesso);
 
   const znDose = MICRO_DOSE.Zn[classeZn] || 0;
   const bDose = MICRO_DOSE.B[classeB] || 0;
@@ -612,6 +617,7 @@ function computeAll(state, selection) {
   out.adubacao = {
     yieldTHa, textura, effP, effK,
     N: nDose, P2O5: pDose, K2O: kDose, S: sDose, Zn: znDose, B: bDose, Cu: cuDose, Mn: mnDose, Mo: moDose,
+    sBruto, sSupridoGesso,
     caExport: yieldTHa * crop.exp.Ca, mgExport: yieldTHa * crop.exp.Mg,
     fonteCurta: crop.fonteCurta, confiancaCurta: crop.confiancaCurta,
   };
@@ -708,6 +714,7 @@ const MANUAL_TECNICO_HTML = `
 <p class="manual-p"><b>Nitrogênio - Soja:</b> com inoculação correta de Bradyrhizobium, não se recomenda N mineral (Confiança Alta, Embrapa Soja). Sem inoculação, usa-se o mesmo modelo do milho.</p>
 <p class="manual-p"><b>Nitrogênio - demais culturas:</b> Exportação ÷ eficiência (padrão 60%), com crédito de 25 kg N/ha se a cultura antecessora foi leguminosa. Confiança: Média.</p>
 <p class="manual-p"><b>Micronutrientes:</b> dose fixa por classe (Zn e B confirmados em referência secundária do Boletim 100; Cu, Mn e Mo são estimativas de uso corrente — Confiança Baixa).</p>
+<p class="manual-p"><b>Enxofre e gessagem:</b> gesso agrícola (CaSO₄·2H₂O) tem ~15% de S. Quando a gessagem é recomendada, esse S é abatido da necessidade calculada para o Enxofre antes de sugerir adubo (nunca fica negativo) — evita recomendar enxofre em dobro quando o gesso já supre parte dele. Confiança: Média (teor de S do gesso varia por origem/pureza, 12-18% é a faixa usual).</p>
 
 <div class="manual-h">5. Mistura de fertilizantes</div>
 <p class="manual-p">Sem banco de dados pré-carregado: você digita o nome (referência), o teor (%) do nutriente-alvo na embalagem e o preço (R$/t) do produto que vai usar de fato - a dose (kg/ha) é a necessidade dividida pelo teor, e o custo é a dose vezes o preço. Isso reflete o que muda por região e por safra sem impor uma composição/preço padrão.</p>
@@ -898,6 +905,9 @@ function render(out, s) {
   document.getElementById("nDoseInfo").innerHTML =
     `Nitrogênio (N): <b>${fmt(ad.N, 2)} kg/ha</b> de necessidade — sem teor de solo comparável nesta análise (ver Manual Técnico). ` +
     `Cálcio e Magnésio são corrigidos via Calagem/Gessagem, não por adubação direta. ` +
+    (ad.sSupridoGesso > 0
+      ? `Enxofre (S): a necessidade bruta seria <b>${fmt(ad.sBruto, 1)} kg/ha</b>, mas o gesso recomendado (Gessagem, abaixo) já fornece ~${fmt(ad.sSupridoGesso, 1)} kg/ha de S — por isso a necessidade líquida de adubo com enxofre caiu para ${fmt(ad.S, 1)} kg/ha. `
+      : ``) +
     `A coluna "Solo" converte o teor do laudo para kg/ha assumindo camada de 0-20cm (comparação de referência; ` +
     `a dose em "Necessidade" já considera eficiência de aproveitamento e não é uma subtração simples). ` +
     `<span class="pill ${confPill(ad.confiancaCurta)}">Confiança da necessidade: ${ad.confiancaCurta}</span> ${ad.fonteCurta}`;
@@ -936,11 +946,16 @@ function render(out, s) {
 // calculada de cara - o preço fica em branco (varia demais por região/época pra ter
 // padrão) e o custo só aparece quando ele for informado. Nome e teor podem ser trocados
 // livremente pelo produto que o produtor realmente vai usar.
+// P2O5 e S usam o mesmo produto por padrão (Superfosfato Simples, ~18% P2O5 e ~12% S) -
+// o Simples já entrega uma quantidade relevante de enxofre junto com o fósforo, então
+// as duas linhas vêm com o mesmo nome de propósito: a lógica de "formulado" acima
+// entende que é uma única compra e cobra o custo uma vez só (dose = a maior das duas,
+// pra nunca faltar nenhum dos dois nutrientes).
 const ADUBO_PADRAO = {
   n: { nome: "Ureia", pct: 45 },
-  p: { nome: "Superfosfato Triplo", pct: 41 },
+  p: { nome: "Superfosfato Simples", pct: 18 },
   k: { nome: "Cloreto de Potássio (KCl)", pct: 60 },
-  s: { nome: "Enxofre Elementar", pct: 90 },
+  s: { nome: "Superfosfato Simples", pct: 12 },
 };
 function buildFertInputs() {
   const linhasNutriente = [
