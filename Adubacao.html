@@ -946,11 +946,16 @@ function render(out, s) {
 // calculada de cara - o preço fica em branco (varia demais por região/época pra ter
 // padrão) e o custo só aparece quando ele for informado. Nome e teor podem ser trocados
 // livremente pelo produto que o produtor realmente vai usar.
+// P2O5 e S usam o mesmo produto por padrão (Superfosfato Simples, ~18% P2O5 e ~12% S) -
+// o Simples já entrega uma quantidade relevante de enxofre junto com o fósforo, então
+// as duas linhas vêm com o mesmo nome de propósito: a lógica de "formulado" acima
+// entende que é uma única compra e cobra o custo uma vez só (dose = a maior das duas,
+// pra nunca faltar nenhum dos dois nutrientes).
 const ADUBO_PADRAO = {
   n: { nome: "Ureia", pct: 45 },
-  p: { nome: "Superfosfato Triplo", pct: 41 },
+  p: { nome: "Superfosfato Simples", pct: 18 },
   k: { nome: "Cloreto de Potássio (KCl)", pct: 60 },
-  s: { nome: "Enxofre Elementar", pct: 90 },
+  s: { nome: "Superfosfato Simples", pct: 12 },
 };
 function buildFertInputs() {
   const linhasNutriente = [
