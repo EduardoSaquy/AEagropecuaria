@@ -3161,7 +3161,11 @@ function comparativoMensal(){
   const meses = [];
   for(let m=0; m<=mesAtual; m++){
     const mesStr = `${ano}-${String(m+1).padStart(2,'0')}`;
-    const despesa = custoVariavelDoMes(mesStr) + fixosDoMes(mesStr);
+    // Só a despesa cadastrada entra no resultado financeiro do negócio --
+    // ração/pasto/reprodução é custo de manejo do dia a dia (serve pra saber
+    // o custo por animal, não pro lucro/prejuízo da operação como um todo;
+    // o insumo que vira ração já é uma despesa quando é comprado).
+    const despesa = fixosDoMes(mesStr);
     const receita = receitaDoMes(mesStr);
     meses.push({mesStr, label: `${NOMES_MES[m]}/${ano}`, despesa, receita, resultado: receita-despesa});
   }
@@ -3276,7 +3280,9 @@ function dadosFinanceiro(){
   }, 0);
 
   const receitaMes = state.receitas.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+Number(r.valor||0),0);
-  const resultadoMes = receitaMes - totalMes;
+  // Resultado financeiro (lucro/prejuízo) usa só a despesa cadastrada, não o
+  // custo variável de ração/pasto/reprodução -- mesmo critério de comparativoMensal().
+  const resultadoMes = receitaMes - fixosMes;
   const margemAtualPct = receitaMes>0 ? (resultadoMes/receitaMes*100) : null;
 
   const arrobasMes = arrobasProduzidasFazendaNoMes(mes);
@@ -3452,7 +3458,7 @@ function PageResultadosResumo(){
   </div>
   <p class="hint" style="margin:10px 0 20px;">Acumulado de janeiro até o mês atual (${meses.length} mês${meses.length===1?'':'es'}), não só o mês corrente — o valor vai se consolidando conforme o ano avança.</p>
   ` : `<p class="hint" style="margin:10px 0 20px;">Cadastre a área da fazenda (aba Fazenda, só para Administrador/Proprietário) para ver o resultado por hectare aqui.</p>`}
-  ${DemonstrativoReceitaDespesa(d.totalMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
+  ${DemonstrativoReceitaDespesa(d.fixosMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
   ${PainelResultados(composicaoArea, 'area', 'Painel de resultados', 'Despesa do mês por área (Confinamento, Pasto e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.')}
