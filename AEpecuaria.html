@@ -2209,10 +2209,14 @@ function PageLotesGeral(){
 // registradas do lote -- cruza pesagens (evento, por lote) com
 // pesagensAnimais (peso individual dentro daquele evento), em ordem
 // cronológica.
-function historicoPesoAnimal(loteId, numeroAnimal){
+// pesagensAnimaisDoLote (opcional) já vem filtrado só pelas pesagens desse
+// lote -- evita varrer o state.pesagensAnimais inteiro (todos os lotes, todo
+// o histórico da fazenda) uma vez pra cada animal do lote.
+function historicoPesoAnimal(loteId, numeroAnimal, pesagensAnimaisDoLote){
+  const lista = pesagensAnimaisDoLote || state.pesagensAnimais;
   return pesagensDoLote(loteId)
     .map(p=>{
-      const pa = state.pesagensAnimais.find(x=>x.pesagemId===p.id && String(x.numeroAnimal)===String(numeroAnimal));
+      const pa = lista.find(x=>x.pesagemId===p.id && String(x.numeroAnimal)===String(numeroAnimal));
       return pa ? {data:p.data, pesoKg:Number(pa.pesoKg)} : null;
     })
     .filter(Boolean);
@@ -2263,8 +2267,10 @@ function PageLoteDetalhe(){
   const ehCria = loteTipo(lote)==='reproducao';
   const animais = [...state.animais.filter(a=>a.loteId===lote.id)].sort((a,b)=>String(a.numero).localeCompare(String(b.numero), undefined, {numeric:true}));
 
+  const pesagemIdsLote = new Set(pesagensDoLote(lote.id).map(p=>p.id));
+  const pesagensAnimaisDoLote = state.pesagensAnimais.filter(pa=>pesagemIdsLote.has(pa.pesagemId));
   const rows = animais.map(a=>{
-    const historico = historicoPesoAnimal(lote.id, a.numero);
+    const historico = historicoPesoAnimal(lote.id, a.numero, pesagensAnimaisDoLote);
     const ultima = historico[historico.length-1] || null;
     const gmd = gmdAnimal(historico);
     const reprod = (ehCria && a.sexo==='femea') ? situacaoReprodutivaVaca(lote.id, a.numero) : null;
@@ -5990,8 +5996,10 @@ function attachEvents(){
       } else if(type==='ajusteEstoque'){
         const ingredienteId = Number(editDraft.ingredienteId);
         const ing = getIng(ingredienteId);
+        const novoSaldoRaw = document.getElementById('f-novosaldo').value;
+        if(!validarObrigatorios([[novoSaldoRaw,'Novo saldo']])) return;
         const saldoAtual = saldoIngrediente(ingredienteId);
-        const novoSaldo = Number(document.getElementById('f-novosaldo').value)||0;
+        const novoSaldo = Number(novoSaldoRaw)||0;
         const diferenca = novoSaldo - saldoAtual;
         if(diferenca!==0 && ing){
           const row = movimentoToRow({
