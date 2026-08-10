@@ -756,6 +756,7 @@ const state = {
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
   pesagemExpandidaId: null,
+  listasExpandidas: {}, // {[listId]: true} -- listas de lançamentos que o usuário expandiu além de "só hoje"
   loteDetalheId: null,
   loteDetalheOrigem: null,
   search: '',
@@ -2321,9 +2322,11 @@ function PageVendasGeral(){
   const vendas = [...state.vendas].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
   const totalAnimais = vendas.reduce((acc,v)=>acc+Number(v.quantidade||0),0);
   const totalValor = vendas.reduce((acc,v)=>acc+valorVenda(v),0);
+  const rv = listaVisivelHoje('vendas', vendas);
   return `
   <div class="toolbar">
-    <span class="hint">${vendas.length} venda(s) registrada(s)</span>
+    <span class="hint">${vendas.length} venda(s) registrada(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('vendas', rv)}
     ${podeCriar ? `<button class="btn btn-primary btn-sm" data-fab-action="venda">+ Nova venda</button>` : ''}
   </div>
   <div class="stat-row">
@@ -2331,11 +2334,11 @@ function PageVendasGeral(){
     <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(totalValor)}</div></div>
   </div>
   <div class="card">
-    ${vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Pasto ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : `
+    ${rv.itens.length===0 ? (vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Pasto ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : Empty('Nenhuma venda hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Tipo</th><th>Qtd. animais</th><th>Preço</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
-        ${vendas.map(v=>{
+        ${rv.itens.map(v=>{
           const lote = state.lotes.find(l=>l.id===v.loteId);
           const tipo = lote ? loteTipo(lote) : null;
           return `<tr>
@@ -2378,11 +2381,14 @@ function PageSaidaRacao(tipo){
     .filter(s=> !filtro.dietaId || String(s.dietaId)===String(filtro.dietaId))
     .sort((a,b)=> b.data.localeCompare(a.data));
   const temFiltro = !!(filtro.mes || filtro.loteId || filtro.dietaId);
-  const vazio = listaTipo.length>0
-    ? Empty('Nenhuma saída de ração com esse filtro','Tente outro mês, lote ou dieta.')
-    : (tipo==='reproducao'
+  const rv = temFiltro ? {itens:list, expandido:true, total:list.length, totalHoje:0} : listaVisivelHoje('racao-'+tipo, list);
+  const vazio = listaTipo.length===0
+    ? (tipo==='reproducao'
       ? Empty('Nenhuma saída de ração registrada','Registre a ração feita a partir de uma dieta para os lotes de Cria, para descontar o estoque automaticamente.')
-      : Empty('Nenhuma saída de ração registrada','Registre a ração feita a partir de uma dieta para descontar o estoque automaticamente.'));
+      : Empty('Nenhuma saída de ração registrada','Registre a ração feita a partir de uma dieta para descontar o estoque automaticamente.'))
+    : (temFiltro
+      ? Empty('Nenhuma saída de ração com esse filtro','Tente outro mês, lote ou dieta.')
+      : Empty('Nenhuma saída de ração hoje','Clique em "Ver todos" acima pra ver o histórico completo.'));
   return `
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:200px;">
@@ -2405,16 +2411,17 @@ function PageSaidaRacao(tipo){
     </div>
   </div>
   <div class="toolbar">
-    <span class="hint">${list.length} saída(s) registrada(s)${temFiltro ? ' (filtrado)' : ''}</span>
+    <span class="hint">${list.length} saída(s) registrada(s)${temFiltro ? ' (filtrado)' : (rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`)}</span>
+    ${temFiltro ? '' : botaoToggleLista('racao-'+tipo, rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? vazio : `
+    ${rv.itens.length===0 ? vazio : `
     <table>
       <thead><tr>
         <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th>Lançado em</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(s=>{
+        ${rv.itens.map(s=>{
           const dieta = state.dietas.find(d=>d.id===s.dietaId);
           const lote = state.lotes.find(l=>l.id===s.loteId);
           const custo = dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0;
@@ -2450,18 +2457,20 @@ function PageCocho(){
   const list = [...state.leiturasCocho]
     .filter(c=>{ const lote = state.lotes.find(l=>l.id===c.loteId); return lote && loteTipo(lote)==='confinamento'; })
     .sort((a,b)=> b.data.localeCompare(a.data));
+  const rv = listaVisivelHoje('cocho', list);
   return `
   <div class="toolbar">
-    <span class="hint">${list.length} leitura(s) registrada(s)</span>
+    <span class="hint">${list.length} leitura(s) registrada(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('cocho', rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma leitura de cocho registrada','Registre diariamente a avaliação de sobra no cocho de cada curral.') : `
+    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhuma leitura de cocho registrada','Registre diariamente a avaliação de sobra no cocho de cada curral.') : Empty('Nenhuma leitura hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
         <th>Data</th><th>Curral</th><th>Leitura</th><th>Observação</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(c=>{
+        ${rv.itens.map(c=>{
           const lote = state.lotes.find(l=>l.id===c.loteId);
           const n = NOTAS_COCHO[c.nota] || {label:c.nota, pill:'pill-cat'};
           return `<tr>
@@ -2505,9 +2514,15 @@ function PagePasto(){
     .filter(p=> !filtro.dietaId || String(p.dietaId)===String(filtro.dietaId))
     .sort((a,b)=> b.data.localeCompare(a.data));
   const temFiltro = !!(filtro.mes || filtro.loteId || filtro.dietaId);
-  const vazio = listaTipo.length>0
-    ? Empty('Nenhuma saída de ração (Pasto) com esse filtro','Tente outro mês, lote ou dieta.')
-    : Empty('Nenhuma saída de ração (Pasto) registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.');
+  // Só colapsa pra "só hoje" quando não tem filtro ativo -- se a pessoa já
+  // filtrou por mês/lote/dieta, ela está procurando algo específico, não
+  // faz sentido esconder atrás de "Ver todos".
+  const rv = temFiltro ? {itens:list, expandido:true, total:list.length, totalHoje:0} : listaVisivelHoje('pasto', list);
+  const vazio = listaTipo.length===0
+    ? Empty('Nenhuma saída de ração (Pasto) registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.')
+    : (temFiltro
+      ? Empty('Nenhuma saída de ração (Pasto) com esse filtro','Tente outro mês, lote ou dieta.')
+      : Empty('Nenhuma saída de ração (Pasto) hoje','Clique em "Ver todos" acima pra ver o histórico completo.'));
   return `
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:200px;">
@@ -2530,16 +2545,17 @@ function PagePasto(){
     </div>
   </div>
   <div class="toolbar">
-    <span class="hint">${list.length} saída(s) de ração (Pasto) registrada(s)${temFiltro ? ' (filtrado)' : ''}</span>
+    <span class="hint">${list.length} saída(s) de ração (Pasto) registrada(s)${temFiltro ? ' (filtrado)' : (rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`)}</span>
+    ${temFiltro ? '' : botaoToggleLista('pasto', rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? vazio : `
+    ${rv.itens.length===0 ? vazio : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(p=>{
+        ${rv.itens.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
           const dieta = state.dietas.find(d=>d.id===p.dietaId);
           return `<tr>
@@ -2619,21 +2635,23 @@ function PageReproducao(){
   const list = state.reproducao
     .filter(r=>{ const lote = state.lotes.find(l=>l.id===r.loteId); return lote && loteTipo(lote)==='reproducao'; })
     .sort((a,b)=> b.data.localeCompare(a.data));
+  const rv = listaVisivelHoje('inseminacao', list);
   return `
   <p class="eyebrow" style="margin:0 0 10px;">Resumo por lote</p>
   ${PainelResumoInseminacao(lotesReprod)}
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
   <div class="toolbar">
-    <span class="hint">${list.length} inseminação(ões) registrada(s)</span>
+    <span class="hint">${list.length} inseminação(ões) registrada(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('inseminacao', rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma inseminação registrada','Registre as inseminações feitas em cada vaca, com a raça do touro e o custo do protocolo.') : `
+    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhuma inseminação registrada','Registre as inseminações feitas em cada vaca, com a raça do touro e o custo do protocolo.') : Empty('Nenhuma inseminação hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Nº da vaca</th><th>Raça do touro</th><th>Inseminação</th><th>Custo do protocolo</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(r=>{
+        ${rv.itens.map(r=>{
           const lote = state.lotes.find(l=>l.id===r.loteId);
           return `<tr>
             <td class="mono">${r.data.split('-').reverse().join('/')}</td>
@@ -2691,21 +2709,23 @@ function PageDiagnosticoGestacional(){
   const list = state.diagnosticos
     .filter(d=>{ const lote = state.lotes.find(l=>l.id===d.loteId); return lote && loteTipo(lote)==='reproducao'; })
     .sort((a,b)=> b.data.localeCompare(a.data));
+  const rv = listaVisivelHoje('diagnostico', list);
   return `
   <p class="eyebrow" style="margin:0 0 10px;">Resumo por lote</p>
   ${PainelResumoDiagnostico(lotesReprod)}
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
   <div class="toolbar">
-    <span class="hint">${list.length} diagnóstico(s) registrado(s)</span>
+    <span class="hint">${list.length} diagnóstico(s) registrado(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('diagnostico', rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum diagnóstico gestacional registrado','Registre se a vaca inseminada ficou prenha ou vazia, com a previsão de parto quando prenha.') : `
+    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhum diagnóstico gestacional registrado','Registre se a vaca inseminada ficou prenha ou vazia, com a previsão de parto quando prenha.') : Empty('Nenhum diagnóstico hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Nº da vaca</th><th>Resultado</th><th>Previsão de parto</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(d=>{
+        ${rv.itens.map(d=>{
           const lote = state.lotes.find(l=>l.id===d.loteId);
           return `<tr>
             <td class="mono">${d.data.split('-').reverse().join('/')}</td>
@@ -2764,21 +2784,23 @@ function PagePartos(){
   const list = state.partos
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteElegivelParaParto(lote); })
     .sort((a,b)=> b.data.localeCompare(a.data));
+  const rv = listaVisivelHoje('parto', list);
   return `
   <p class="eyebrow" style="margin:0 0 10px;">Resumo por lote</p>
   ${PainelResumoPartos(lotesElegiveis)}
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
   <div class="toolbar">
-    <span class="hint">${list.length} parto(s) registrado(s)</span>
+    <span class="hint">${list.length} parto(s) registrado(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('parto', rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum parto registrado','Registre os partos por lote, com o número da mãe e o sexo do bezerro.') : `
+    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhum parto registrado','Registre os partos por lote, com o número da mãe e o sexo do bezerro.') : Empty('Nenhum parto hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(p=>{
+        ${rv.itens.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
           return `<tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
@@ -2832,21 +2854,23 @@ function PageDesmama(){
     .map(d=>({d, custo: custoBezerroDesmama(d, custosPorLoteList)}))
     .filter(x=>x.custo)
     .sort((a,b)=> b.d.data.localeCompare(a.d.data));
+  const rv = listaVisivelHoje('desmama', list, x=>x.d.data);
   return `
   <p class="eyebrow" style="margin:0 0 10px;">Resumo por lote</p>
   ${PainelResumoDesmama(lotesElegiveis)}
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
   <div class="toolbar">
-    <span class="hint">${list.length} desmama(s) registrada(s)</span>
+    <span class="hint">${list.length} desmama(s) registrada(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('desmama', rv)}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro, vinculando ao parto correspondente — precisa de um parto lançado antes.') : `
+    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro, vinculando ao parto correspondente — precisa de um parto lançado antes.') : Empty('Nenhuma desmama hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Nº da mãe</th><th>Sexo</th><th>Raça</th><th>Peso</th><th>Dias até a desmama</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${list.map(({d,custo})=>`
+        ${rv.itens.map(({d,custo})=>`
           <tr>
             <td class="mono">${d.data.split('-').reverse().join('/')}</td>
             <td>${custo.lote?esc(custo.lote.nome):'—'}</td>
@@ -2921,18 +2945,23 @@ function PagePesagem(tipo){
     const lote = state.lotes.find(l=>l.id===p.loteId);
     return lote && loteTipo(lote)===tipo;
   }).sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+  const rv = listaVisivelHoje('pesagem-'+tipo, pesagensTipo);
 
   return `
   <p class="eyebrow" style="margin:0 0 10px;">Painel de resultado dos lotes</p>
   ${PainelResultadoLotes(lotesTipo)}
 
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
+  <div class="toolbar">
+    <span class="hint">${pesagensTipo.length} pesagem(ns) registrada(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    ${botaoToggleLista('pesagem-'+tipo, rv)}
+  </div>
   <div class="card">
-    ${pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote com data, peso médio e uma observação opcional.') : `
+    ${rv.itens.length===0 ? (pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote com data, peso médio e uma observação opcional.') : Empty('Nenhuma pesagem hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Animais pesados</th><th>Observação</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
-        ${pesagensTipo.map(p=>{
+        ${rv.itens.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
           const historico = lote ? pesagensDoLote(lote.id) : [];
           const idx = historico.findIndex(h=>h.id===p.id);
@@ -2973,6 +3002,30 @@ function custoSaidaRacao(s){
 }
 function hojeStr(){ return new Date().toISOString().slice(0,10); }
 function mesAtualStr(){ return new Date().toISOString().slice(0,7); }
+
+// Colapsa uma lista de lançamentos pra mostrar só os de hoje por padrão --
+// evita rolar uma lista longa só pra ver o que foi lançado agora. listId
+// identifica a lista (uma chave fixa por aba) pra lembrar se o usuário já
+// expandiu ela. dataField é o nome do campo de data em cada item (a
+// maioria usa "data"; alguns registros de investimento usam o mesmo nome).
+function listaVisivelHoje(listId, listaCompleta, dataAcessor){
+  const getData = typeof dataAcessor==='function' ? dataAcessor : (x=>x[dataAcessor||'data']);
+  const expandido = !!state.listasExpandidas[listId];
+  const hoje = hojeStr();
+  const listaHoje = listaCompleta.filter(x=>getData(x)===hoje);
+  return {
+    itens: expandido ? listaCompleta : listaHoje,
+    expandido,
+    totalHoje: listaHoje.length,
+    total: listaCompleta.length,
+  };
+}
+// Botão "Ver todos (N)" / "Mostrar só hoje" -- some quando não há nada pra
+// alternar (lista vazia).
+function botaoToggleLista(listId, r){
+  if(r.total===0) return '';
+  return `<button class="btn-ghost btn-sm" data-toggle-lista="${listId}">${r.expandido ? 'Mostrar só hoje' : `Ver todos (${fmtInt(r.total)})`}</button>`;
+}
 
 /* paleta categórica validada (fixa, nunca ciclada) */
 const SERIES_COLORS = ['#2a78d6','#008300','#e87ba4','#eda100','#1baf7a','#eb6834','#4a3aa7','#e34948'];
@@ -5746,6 +5799,13 @@ function attachEvents(){
     el.onclick = ()=>{
       const id = Number(el.dataset.togglePesagemAnimais);
       state.pesagemExpandidaId = state.pesagemExpandidaId===id ? null : id;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-toggle-lista]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = el.dataset.toggleLista;
+      state.listasExpandidas[id] = !state.listasExpandidas[id];
       render();
     };
   });
