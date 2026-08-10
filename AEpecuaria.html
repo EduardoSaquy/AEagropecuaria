@@ -826,14 +826,11 @@ function render(){
         ${state.page==='loteDetalhe' ? PageLoteDetalhe() : ''}
         ${state.page==='vendasGeral' ? PageVendasGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
-        ${state.page==='animaisConfinamento' ? PageAnimais('confinamento') : ''}
         ${state.page==='racao' ? PageSaidaRacao('confinamento') : ''}
         ${state.page==='cocho' ? PageCocho() : ''}
         ${state.page==='lotesPasto' ? PageLotes('pasto') : ''}
-        ${state.page==='animaisPasto' ? PageAnimais('pasto') : ''}
         ${state.page==='pasto' ? PagePasto() : ''}
         ${state.page==='lotesReproducao' ? PageLotes('reproducao') : ''}
-        ${state.page==='animaisReproducao' ? PageAnimais('reproducao') : ''}
         ${state.page==='racaoCria' ? PageSaidaRacao('reproducao') : ''}
         ${state.page==='reproducaoGeral' ? PageReproducaoGeral() : ''}
         ${state.page==='pesagemConfinamento' ? PagePesagem('confinamento') : ''}
@@ -1443,20 +1440,17 @@ const GROUPS = {
   ]},
   confinamento: {label:'Confinamento', icon:iconLote(), pages:[
     {key:'lotes', label:'Lotes'},
-    {key:'animaisConfinamento', label:'Animais'},
     {key:'racao', label:'Saída de Ração'},
     {key:'cocho', label:'Leitura de Cocho'},
     {key:'pesagemConfinamento', label:'Pesagem'},
   ]},
   pasto: {label:'Pasto', icon:iconPasto(), pages:[
     {key:'lotesPasto', label:'Lotes'},
-    {key:'animaisPasto', label:'Animais'},
     {key:'pasto', label:'Saída de Ração'},
     {key:'pesagemPasto', label:'Pesagem'},
   ]},
   reproducao: {label:'Cria', icon:iconReproducao(), pages:[
     {key:'lotesReproducao', label:'Lotes'},
-    {key:'animaisReproducao', label:'Animais'},
     {key:'racaoCria', label:'Saída de Ração'},
     {key:'reproducaoGeral', label:'Reprodução'},
     {key:'pesagemReproducao', label:'Pesagem'},
@@ -1567,14 +1561,11 @@ function Header(){
     lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
     vendasGeral:{eyebrow:'Movimentação', title:'Vendas', desc:'Todas as vendas de animais de Confinamento, Pasto e Cria juntas numa lista só (abate por @, venda por animal ou por kg) — cada uma desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
-    animaisConfinamento:{eyebrow:'Confinamento', title:'Animais', desc:'Composição do lote por número de animal — cadastro gradual, não precisa numerar o lote inteiro de uma vez.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
     lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
-    animaisPasto:{eyebrow:'Pasto', title:'Animais', desc:'Composição do lote por número de animal — cadastro gradual, não precisa numerar o lote inteiro de uma vez.'},
     pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
-    animaisReproducao:{eyebrow:'Cria', title:'Animais', desc:'Composição do lote por número de animal — cadastro gradual, não precisa numerar o lote inteiro de uma vez.'},
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducaoGeral:{eyebrow:'Cria', title:'Reprodução', desc:'Inseminação, diagnóstico gestacional, partos e desmama dos lotes de Cria.'},
     pesagemConfinamento:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Confinamento, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
@@ -1589,7 +1580,7 @@ function Header(){
     resultadosReceitas:{eyebrow:'Financeiro', title:'Receitas', desc:'Lance a venda de animais e outras receitas da operação, por data e lote.'},
     fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Cadastro das fazendas da operação — a soma dos hectares de todas é usada para calcular o resultado financeiro por hectare.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
-    loteDetalhe:{eyebrow:'Lote', title:'Animais do Lote', desc:'Histórico de cada animal numerado do lote — última pesagem, ganho médio diário e, em Cria, a situação reprodutiva.'},
+    loteDetalhe:{eyebrow:'Lote', title:'Animais do Lote', desc:'Cadastro e histórico de cada animal numerado do lote — última pesagem, ganho médio diário, situação reprodutiva (em Cria) e edição do número/sexo/raça.'},
   };
   const t = titles[state.page];
   return `
@@ -2123,50 +2114,6 @@ function PageLotes(tipo){
   </div>`;
 }
 
-/* ===================== PÁGINA: ANIMAIS (COMPOSIÇÃO DO LOTE) ===================== */
-function PageAnimais(tipo){
-  const lotesTipo = state.lotes.filter(l=>loteTipo(l)===tipo && !l.dataFim);
-  const totalAnimaisLote = lotesTipo.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
-  const animaisTipo = state.animais.filter(a=>{ const l=state.lotes.find(x=>x.id===a.loteId); return l && loteTipo(l)===tipo; });
-  const list = [...animaisTipo].sort((a,b)=>{
-    const nomeA = state.lotes.find(l=>l.id===a.loteId)?.nome || '';
-    const nomeB = state.lotes.find(l=>l.id===b.loteId)?.nome || '';
-    return nomeA.localeCompare(nomeB) || String(a.numero).localeCompare(String(b.numero));
-  });
-  return `
-  <div class="stat-row" style="margin-bottom:14px;">
-    <div class="stat-card"><div class="stat-label">Animais numerados</div><div class="stat-value">${fmtInt(animaisTipo.length)}</div></div>
-    <div class="stat-card"><div class="stat-label">Total de animais nos lotes</div><div class="stat-value">${fmtInt(totalAnimaisLote)}</div></div>
-  </div>
-  <p class="hint" style="margin:-6px 0 14px;">Cadastro gradual — conforme você numera os animais (na Nova entrada de animais, na Nova inseminação ou pesando animal por animal), esse número vai subindo. Não precisa numerar o lote inteiro de uma vez.</p>
-  <div class="toolbar">
-    <span class="hint">${list.length} animal(is) cadastrado(s)</span>
-  </div>
-  <div class="card">
-    ${list.length===0 ? Empty('Nenhum animal numerado ainda','Cadastre o número dos animais aos poucos — na Nova entrada de animais, na Nova inseminação ou pesando animal por animal (Pesagem).') : `
-    <table>
-      <thead><tr><th>Número</th><th>Lote</th><th>Sexo</th><th>Raça</th><th></th></tr></thead>
-      <tbody>
-        ${list.map(a=>{
-          const lote = state.lotes.find(l=>l.id===a.loteId);
-          return `<tr>
-            <td class="mono"><strong>${esc(a.numero)}</strong></td>
-            <td>${lote?esc(lote.nome):'—'}</td>
-            <td>${SEXO_BEZERRO_LABEL[a.sexo]||'<span class="hint">— não informado —</span>'}</td>
-            <td>${RACA_TOURO_LABEL[a.raca]||'<span class="hint">— não informado —</span>'}</td>
-            <td style="display:flex; gap:6px;">
-              ${temPermissao(TIPO_MODULO[tipo],'editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-animal="${a.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-animal="${a.id}">Excluir</button>` : ''}
-              ` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
-}
-
 /* ===================== PÁGINA: LOTES (ESTOQUE DE ANIMAIS) ===================== */
 const DESTINO_LOTE_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
 function PageLotesGeral(){
@@ -2281,6 +2228,7 @@ function PageLoteDetalhe(){
     return `<div class="toolbar">${voltarBtn}</div><div class="card">${Empty('Lote não encontrado','Esse lote pode ter sido excluído.')}</div>`;
   }
   const ehCria = loteTipo(lote)==='reproducao';
+  const podeEditarAnimal = temPermissao(TIPO_MODULO[loteTipo(lote)],'editar');
   const animais = [...state.animais.filter(a=>a.loteId===lote.id)].sort((a,b)=>String(a.numero).localeCompare(String(b.numero), undefined, {numeric:true}));
 
   const pesagemIdsLote = new Set(pesagensDoLote(lote.id).map(p=>p.id));
@@ -2304,6 +2252,7 @@ function PageLoteDetalhe(){
       <thead><tr>
         <th>Número</th><th>Sexo</th><th>Raça</th><th>Última pesagem</th><th>GMD</th>
         ${ehCria?'<th>Situação reprodutiva</th><th>Última inseminação</th>':''}
+        ${podeEditarAnimal?'<th></th>':''}
       </tr></thead>
       <tbody>
         ${rows.map(r=>`
@@ -2316,6 +2265,12 @@ function PageLoteDetalhe(){
             ${ehCria ? `
             <td><span class="${r.reprod ? 'pill '+(r.reprod.status==='vazia'||r.reprod.status==='sem-diagnostico'?'pill-cat':'pill-ok') : 'hint'}">${r.reprod ? r.reprod.detalheStatus : '—'}</span></td>
             <td class="mono">${r.reprod && r.reprod.ultimaInseminacao ? `${QUAL_INSEMINACAO_LABEL[r.reprod.ultimaInseminacao.qualInseminacao]||'—'} em ${r.reprod.ultimaInseminacao.data.split('-').reverse().join('/')}` : '—'}</td>
+            ` : ''}
+            ${podeEditarAnimal ? `
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-edit-animal="${r.a.id}">Editar</button>
+              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-animal="${r.a.id}">Excluir</button>` : ''}
+            </td>
             ` : ''}
           </tr>
         `).join('')}
@@ -4671,7 +4626,7 @@ function ModalLote(){
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
         <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
-        <p class="hint">Se já souber os números desses animais, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos, só quem você for numerando agora (aba Animais).</p>` : ''}
+        <p class="hint">Se já souber os números desses animais, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos, só quem você for numerando agora (clique no lote depois pra ver e completar aos poucos).</p>` : ''}
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
         ` : `
@@ -5656,7 +5611,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-lote]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e lançamentos de reprodução desse lote também são apagados junto. Animais numerados desse lote não são apagados, mas ficam sem lote até você reatribuir (aba Animais).')) return;
+      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e lançamentos de reprodução desse lote também são apagados junto. Animais numerados desse lote não são apagados, mas ficam sem lote associado.')) return;
       const id = Number(el.dataset.delLote);
       await db.from('lotes').delete().eq('id', id);
       await loadAll();
