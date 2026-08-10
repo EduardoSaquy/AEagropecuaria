@@ -6404,6 +6404,13 @@ function attachEvents(){
           }
           error = resultado.error;
         }
+        // Mesmo gancho da inseminação (upsertAnimal best-effort) -- a vaca
+        // diagnosticada entra (ou é movida) na composição do lote, já como
+        // fêmea, mesmo que nunca tenha passado por uma inseminação lançada.
+        if(!error){
+          const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea'});
+          if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
+        }
       } else if(type==='parto'){
         const dataPartoVal = document.getElementById('f-data').value;
         const numeroMaeVal = document.getElementById('f-numeromae').value;
@@ -6424,6 +6431,13 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
+        }
+        // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
+        // -- a mãe entra (ou é movida) na composição do lote, já como fêmea,
+        // mesmo que o parto seja o primeiro lançamento dela no sistema.
+        if(!error){
+          const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea'});
+          if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
         }
       } else if(type==='desmama'){
         const dataDesmamaVal = document.getElementById('f-data').value;
