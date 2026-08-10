@@ -1823,6 +1823,7 @@ function PageEstoque(){
   const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
   const alertas = rows.filter(r=>r.baixo).length;
   const verValor = souAdmin();
+  const podeAjustar = temPermissao('insumos','editar');
 
   const buscaMov = state.searchMovimentos.toLowerCase();
   const mesesMovDisponiveis = [...new Set(state.movimentos.map(m=>m.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
@@ -1842,7 +1843,7 @@ function PageEstoque(){
   <div class="card" style="margin-bottom:22px;">
     <table>
       <thead><tr>
-        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th>${verValor?'<th>Valor</th>':''}<th>Status</th>
+        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th>${verValor?'<th>Valor</th>':''}<th>Status</th>${podeAjustar?'<th></th>':''}
       </tr></thead>
       <tbody>
         ${rows.map(r=>`
@@ -1853,6 +1854,7 @@ function PageEstoque(){
             <td class="mono">${fmtInt(r.i.estoqueMin)} ${r.i.unidade}</td>
             ${verValor?`<td class="mono">R$ ${fmt(r.valor)}</td>`:''}
             <td>${r.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
+            ${podeAjustar?`<td><button class="btn-ghost btn-sm" data-ajustar-estoque="${r.i.id}">Ajustar</button></td>`:''}
           </tr>
         `).join('')}
       </tbody>
@@ -4075,6 +4077,7 @@ function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" f
 function Modal(){
   if(state.modal.type==='ingrediente') return ModalIngrediente();
   if(state.modal.type==='movimento') return ModalMovimento();
+  if(state.modal.type==='ajusteEstoque') return ModalAjusteEstoque();
   if(state.modal.type==='dieta') return ModalDieta();
   if(state.modal.type==='producaoRacao') return ModalProducaoRacao();
   if(state.modal.type==='lote') return ModalLote();
@@ -4179,6 +4182,31 @@ function ModalMovimento(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="movimento">${d._editId?'Salvar alterações':'Registrar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalAjusteEstoque(){
+  const d = editDraft;
+  const ing = getIng(d.ingredienteId);
+  const saldoAtual = ing ? saldoIngrediente(ing.id) : 0;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Ajustar estoque</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Ingrediente</label><input value="${ing?esc(ing.nome):''}" disabled/></div>
+        <div class="field-row">
+          <div class="field"><label>Saldo atual (${ing?.unidade||'kg'})</label><input value="${fmtInt(saldoAtual)}" disabled/></div>
+          <div class="field"><label>Data do ajuste</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field"><label>Novo saldo (${ing?.unidade||'kg'})</label><input id="f-novosaldo" type="number" step="0.1" value="${d.novoSaldo}"/></div>
+        <p class="hint">Informe o saldo real desse insumo (depois de uma contagem física, por exemplo). O app registra automaticamente uma entrada ou saída de ajuste pra fechar a diferença com o que estava calculado, sem mexer no preço do ingrediente.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="ajusteEstoque">Salvar ajuste</button>
       </div>
     </div>
   </div>`;
@@ -5237,6 +5265,15 @@ function attachEvents(){
       await loadAll();
     };
   });
+  document.querySelectorAll('[data-ajustar-estoque]').forEach(el=>{
+    el.onclick = ()=>{
+      const ing = getIng(Number(el.dataset.ajustarEstoque));
+      if(!ing) return;
+      editDraft = {ingredienteId: ing.id, novoSaldo: saldoIngrediente(ing.id), data: new Date().toISOString().slice(0,10)};
+      state.modal = {type:'ajusteEstoque'};
+      render();
+    };
+  });
   document.querySelectorAll('[data-del-diet]').forEach(el=>{
     el.onclick = async ()=>{
       if(!confirm('Excluir esta dieta? Essa ação não pode ser desfeita.')) return;
@@ -5829,6 +5866,22 @@ function attachEvents(){
               await db.from('ingredientes').update({preco_kg: precoPonderado}).eq('id', campos.ingredienteId);
             }
           }
+        }
+      } else if(type==='ajusteEstoque'){
+        const ingredienteId = Number(editDraft.ingredienteId);
+        const ing = getIng(ingredienteId);
+        const saldoAtual = saldoIngrediente(ingredienteId);
+        const novoSaldo = Number(document.getElementById('f-novosaldo').value)||0;
+        const diferenca = novoSaldo - saldoAtual;
+        if(diferenca!==0 && ing){
+          const row = movimentoToRow({
+            data: document.getElementById('f-data').value,
+            ingredienteId,
+            tipo: diferenca>0 ? 'entrada' : 'saida',
+            quantidade: Math.abs(diferenca),
+            precoKg: null,
+          });
+          ({error} = await db.from('movimentos').insert(row));
         }
       } else if(type==='dieta'){
         const campos = {
