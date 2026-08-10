@@ -195,6 +195,8 @@
   .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
   .btn-danger-ghost:hover{background:var(--alerta-bg); border-color:var(--alerta);}
   .btn-sm{padding:6px 12px; font-size:12.5px;}
+  .link-nome{background:none; border:none; padding:0; margin:0; font:inherit; font-weight:600; color:var(--verde-escuro); cursor:pointer; text-align:left;}
+  .link-nome:hover{color:var(--verde-medio); text-decoration:underline;}
 
   .card{
     background:var(--branco);
@@ -754,6 +756,8 @@ const state = {
   modal: null, // {type:'ingrediente'|'movimento'|'dieta'|'lote'|'saidaRacao'|'cocho'|'pasto'|'custoFixo'|'investimento'|'usuario'|'permissoes', data: {...}}
   openDietId: null,
   pesagemExpandidaId: null,
+  loteDetalheId: null,
+  loteDetalheOrigem: null,
   search: '',
   searchDespesas: '',
   searchMovimentos: '',
@@ -818,6 +822,7 @@ function render(){
         ${state.page==='dietas' ? PageDietas() : ''}
         ${state.page==='estoqueRacao' ? PageEstoqueRacao() : ''}
         ${state.page==='lotesGeral' ? PageLotesGeral() : ''}
+        ${state.page==='loteDetalhe' ? PageLoteDetalhe() : ''}
         ${state.page==='vendasGeral' ? PageVendasGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
         ${state.page==='animaisConfinamento' ? PageAnimais('confinamento') : ''}
@@ -1570,6 +1575,7 @@ function Header(){
     resultadosReceitas:{eyebrow:'Financeiro', title:'Receitas', desc:'Lance a venda de animais e outras receitas da operação, por data e lote.'},
     fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Cadastro das fazendas da operação — a soma dos hectares de todas é usada para calcular o resultado financeiro por hectare.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
+    loteDetalhe:{eyebrow:'Lote', title:'Animais do Lote', desc:'Histórico de cada animal numerado do lote — última pesagem, ganho médio diário e, em Cria, a situação reprodutiva.'},
   };
   const t = titles[state.page];
   return `
@@ -2077,7 +2083,7 @@ function PageLotes(tipo){
           const dietaLote = state.dietas.find(x=>x.id===l.dietaId);
           return `
           <tr>
-            <td><strong>${esc(l.nome)}</strong></td>
+            <td><button class="link-nome" data-ver-lote="${l.id}">${esc(l.nome)}</button></td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
             ${mostraSexo?`<td>${SEXO_LOTE_LABEL[l.sexo] || '<span class="hint">— não informado —</span>'}</td>`:''}
             <td>${dietaLote ? esc(dietaLote.nome) : '<span class="hint">— nenhuma —</span>'}</td>
@@ -2178,7 +2184,7 @@ function PageLotesGeral(){
       <tbody>
         ${list.map(l=>`
           <tr>
-            <td><strong>${esc(l.nome)}</strong></td>
+            <td><button class="link-nome" data-ver-lote="${l.id}">${esc(l.nome)}</button></td>
             <td><span class="pill pill-cat">${DESTINO_LOTE_LABEL[l.destino]||l.destino||'—'}</span></td>
             <td>${SEXO_LOTE_LABEL[l.sexo] || '<span class="hint">— não informado —</span>'}</td>
             <td class="mono">${fmtInt(l.numeroAnimais)}</td>
@@ -2191,6 +2197,104 @@ function PageLotesGeral(){
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-lote="${l.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ===================== PÁGINA: DETALHE DO LOTE (ANIMAIS + HISTÓRICO) ===================== */
+// Histórico de pesagens de UM animal (pelo número), dentro das pesagens já
+// registradas do lote -- cruza pesagens (evento, por lote) com
+// pesagensAnimais (peso individual dentro daquele evento), em ordem
+// cronológica.
+function historicoPesoAnimal(loteId, numeroAnimal){
+  return pesagensDoLote(loteId)
+    .map(p=>{
+      const pa = state.pesagensAnimais.find(x=>x.pesagemId===p.id && String(x.numeroAnimal)===String(numeroAnimal));
+      return pa ? {data:p.data, pesoKg:Number(pa.pesoKg)} : null;
+    })
+    .filter(Boolean);
+}
+// GMD do animal: da primeira à última pesagem individual dele -- mesmo
+// critério de "ganho desde a primeira pesagem" já usado no painel do lote.
+function gmdAnimal(historico){
+  if(historico.length<2) return null;
+  const primeira = historico[0], ultima = historico[historico.length-1];
+  return gmdEntre(primeira.pesoKg, ultima.pesoKg, primeira.data, ultima.data);
+}
+// Situação reprodutiva de UMA vaca (fêmea de Cria): pega o diagnóstico mais
+// recente dela; se prenha, procura um parto registrado depois desse
+// diagnóstico (a cria já nasceu, mostra sexo e data reais) -- senão mostra
+// a previsão de parto do próprio diagnóstico.
+function situacaoReprodutivaVaca(loteId, numero){
+  const diagnosticos = state.diagnosticos.filter(d=>d.loteId===loteId && String(d.numeroVaca)===String(numero)).sort((a,b)=>a.data.localeCompare(b.data));
+  const inseminacoes = state.reproducao.filter(r=>r.loteId===loteId && String(r.numeroVaca)===String(numero)).sort((a,b)=>a.data.localeCompare(b.data));
+  const partos = state.partos.filter(p=>p.loteId===loteId && String(p.numeroMae)===String(numero)).sort((a,b)=>a.data.localeCompare(b.data));
+  const ultimoDiagnostico = diagnosticos[diagnosticos.length-1] || null;
+  const ultimaInseminacao = inseminacoes[inseminacoes.length-1] || null;
+  let status, detalheStatus;
+  if(!ultimoDiagnostico){
+    status = 'sem-diagnostico';
+    detalheStatus = 'Sem diagnóstico';
+  } else if(ultimoDiagnostico.resultado==='vazia'){
+    status = 'vazia';
+    detalheStatus = 'Vazia';
+  } else {
+    const partoDoCiclo = partos.find(p=>p.data>=ultimoDiagnostico.data);
+    if(partoDoCiclo){
+      status = 'pariu';
+      detalheStatus = `Prenha — pariu ${SEXO_BEZERRO_LABEL[partoDoCiclo.sexoBezerro]||''} em ${partoDoCiclo.data.split('-').reverse().join('/')}`;
+    } else {
+      status = 'prenha';
+      detalheStatus = `Prenha${ultimoDiagnostico.previsaoParto ? ' — previsão de parto ' + ultimoDiagnostico.previsaoParto.split('-').reverse().join('/') : ''}`;
+    }
+  }
+  return {ultimoDiagnostico, ultimaInseminacao, status, detalheStatus};
+}
+
+function PageLoteDetalhe(){
+  const lote = state.lotes.find(l=>l.id===state.loteDetalheId);
+  const voltarBtn = `<button class="btn btn-ghost btn-sm" data-voltar-lote-detalhe="1">← Voltar</button>`;
+  if(!lote){
+    return `<div class="toolbar">${voltarBtn}</div><div class="card">${Empty('Lote não encontrado','Esse lote pode ter sido excluído.')}</div>`;
+  }
+  const ehCria = loteTipo(lote)==='reproducao';
+  const animais = [...state.animais.filter(a=>a.loteId===lote.id)].sort((a,b)=>String(a.numero).localeCompare(String(b.numero), undefined, {numeric:true}));
+
+  const rows = animais.map(a=>{
+    const historico = historicoPesoAnimal(lote.id, a.numero);
+    const ultima = historico[historico.length-1] || null;
+    const gmd = gmdAnimal(historico);
+    const reprod = (ehCria && a.sexo==='femea') ? situacaoReprodutivaVaca(lote.id, a.numero) : null;
+    return {a, ultima, gmd, reprod};
+  });
+
+  return `
+  <div class="toolbar">
+    ${voltarBtn}
+    <span class="hint">${esc(lote.nome)} · ${DESTINO_LOTE_LABEL[lote.destino]||lote.destino||'—'} · ${fmtInt(lote.numeroAnimais)} animal(is) cadastrado(s) no lote</span>
+  </div>
+  <div class="card">
+    ${rows.length===0 ? Empty('Nenhum animal numerado nesse lote ainda', 'Cadastre o número dos animais aos poucos — na Nova entrada de animais, na Nova inseminação ou pesando animal por animal (Pesagem) — pra aparecerem aqui com o histórico.') : `
+    <table>
+      <thead><tr>
+        <th>Número</th><th>Sexo</th><th>Raça</th><th>Última pesagem</th><th>GMD</th>
+        ${ehCria?'<th>Situação reprodutiva</th><th>Última inseminação</th>':''}
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr>
+            <td class="mono"><strong>${esc(r.a.numero)}</strong></td>
+            <td>${SEXO_BEZERRO_LABEL[r.a.sexo]||'<span class="hint">—</span>'}</td>
+            <td>${RACA_TOURO_LABEL[r.a.raca]||'<span class="hint">—</span>'}</td>
+            <td class="mono">${r.ultima ? `${fmt(r.ultima.pesoKg,1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span>` : '—'}</td>
+            <td class="mono">${r.gmd!==null ? (r.gmd>=0?'+':'')+fmt(r.gmd,2)+' kg/dia' : '—'}</td>
+            ${ehCria ? `
+            <td><span class="${r.reprod ? 'pill '+(r.reprod.status==='vazia'||r.reprod.status==='sem-diagnostico'?'pill-cat':'pill-ok') : 'hint'}">${r.reprod ? r.reprod.detalheStatus : '—'}</span></td>
+            <td class="mono">${r.reprod && r.reprod.ultimaInseminacao ? `${QUAL_INSEMINACAO_LABEL[r.reprod.ultimaInseminacao.qualInseminacao]||'—'} em ${r.reprod.ultimaInseminacao.data.split('-').reverse().join('/')}` : '—'}</td>
+            ` : ''}
           </tr>
         `).join('')}
       </tbody>
@@ -5295,6 +5399,22 @@ function attachEvents(){
       const lote = state.lotes.find(l=>l.id===Number(el.dataset.editLote));
       editDraft = {...lote, dataFim: lote.dataFim||'', _editId: lote.id};
       state.modal = {type:'lote'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-ver-lote]').forEach(el=>{
+    el.onclick = ()=>{
+      state.loteDetalheId = Number(el.dataset.verLote);
+      state.loteDetalheOrigem = state.page;
+      state.page = 'loteDetalhe';
+      render();
+    };
+  });
+  document.querySelectorAll('[data-voltar-lote-detalhe]').forEach(el=>{
+    el.onclick = ()=>{
+      state.page = state.loteDetalheOrigem || 'lotesGeral';
+      state.loteDetalheId = null;
+      state.loteDetalheOrigem = null;
       render();
     };
   });
