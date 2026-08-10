@@ -1360,6 +1360,17 @@ function saldoIngrediente(id){
   });
   return saldo;
 }
+// Consumo médio diário de saída de UM ingrediente -- soma tudo que já saiu
+// (na mesma unidade do ingrediente) e divide pelos dias entre a primeira e
+// a última saída registrada. null quando nunca teve saída (nada pra tirar
+// média ainda).
+function consumoMedioDiario(id){
+  const saidas = state.movimentos.filter(m=>m.ingredienteId===id && m.tipo==='saida').sort((a,b)=>a.data.localeCompare(b.data));
+  if(saidas.length===0) return null;
+  const total = saidas.reduce((a,m)=>a+Number(m.quantidade||0),0);
+  const dias = diasEntreDatas(saidas[0].data, saidas[saidas.length-1].data);
+  return total/dias;
+}
 // Repete a média ponderada do zero sobre a lista de movimentações (em
 // ordem cronológica) de UM ingrediente — usado quando uma entrada existente
 // é corrigida, pra não deixar o valor errado de antes contaminando o preço
@@ -1825,7 +1836,8 @@ function PageEstoque(){
     const valor = qtdEmKg(saldo, i.unidade) * i.precoKg;
     const pctMin = i.estoqueMin>0 ? Math.min(saldo/(i.estoqueMin*2),1) : 1;
     const baixo = saldo < i.estoqueMin;
-    return {i, saldo, valor, pctMin, baixo};
+    const consumoDia = consumoMedioDiario(i.id);
+    return {i, saldo, valor, pctMin, baixo, consumoDia};
   });
   const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
   const alertas = rows.filter(r=>r.baixo).length;
@@ -1850,15 +1862,16 @@ function PageEstoque(){
   <div class="card" style="margin-bottom:22px;">
     <table>
       <thead><tr>
-        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th>${verValor?'<th>Valor</th>':''}<th>Status</th>${podeAjustar?'<th></th>':''}
+        <th>Nível</th><th>Ingrediente</th><th>Saldo</th><th>Mínimo</th><th>Consumo médio diário</th>${verValor?'<th>Valor</th>':''}<th>Status</th>${podeAjustar?'<th></th>':''}
       </tr></thead>
       <tbody>
         ${rows.map(r=>`
           <tr>
             <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${r.baixo?'alerta':''}" style="height:${Math.round(r.pctMin*100)}%"></div></div></div></td>
-            <td><strong>${esc(r.i.nome)}</strong></td>
+            <td><button class="link-nome" data-ver-movimentos-ingrediente="${r.i.id}">${esc(r.i.nome)}</button></td>
             <td class="mono">${fmtInt(r.saldo)} ${r.i.unidade}</td>
             <td class="mono">${fmtInt(r.i.estoqueMin)} ${r.i.unidade}</td>
+            <td class="mono">${r.consumoDia!==null ? `${fmt(r.consumoDia,1)} ${r.i.unidade}/dia` : '—'}</td>
             ${verValor?`<td class="mono">R$ ${fmt(r.valor)}</td>`:''}
             <td>${r.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
             ${podeAjustar?`<td><button class="btn-ghost btn-sm" data-ajustar-estoque="${r.i.id}">Ajustar</button></td>`:''}
@@ -1868,7 +1881,7 @@ function PageEstoque(){
     </table>
   </div>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Movimentações</p>
+  <p class="eyebrow" style="margin-bottom:10px;" id="movimentacoes-secao">Movimentações</p>
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:260px;">
       <input type="text" placeholder="Buscar por ingrediente..." value="${esc(state.searchMovimentos)}" data-search-movimentos="1"/>
@@ -5587,6 +5600,16 @@ function attachEvents(){
       editDraft = {ingredienteId: ing.id, novoSaldo: saldoIngrediente(ing.id), data: hojeStr()};
       state.modal = {type:'ajusteEstoque'};
       render();
+    };
+  });
+  document.querySelectorAll('[data-ver-movimentos-ingrediente]').forEach(el=>{
+    el.onclick = ()=>{
+      const ing = getIng(Number(el.dataset.verMovimentosIngrediente));
+      if(!ing) return;
+      state.searchMovimentos = ing.nome;
+      state.filtroMesMovimentos = '';
+      render();
+      document.getElementById('movimentacoes-secao')?.scrollIntoView({behavior:'smooth', block:'start'});
     };
   });
   document.querySelectorAll('[data-del-diet]').forEach(el=>{
