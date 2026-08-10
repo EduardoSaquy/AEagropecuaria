@@ -590,24 +590,63 @@ function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca
 function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg}; }
 function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', criadoPor:r.criado_por||''}; }
 function animalToRow(a){ return {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null}; }
+// Animal já cadastrado com esse número (em qualquer lote) -- número é único
+// na fazenda inteira, nunca pode haver dois animais com o mesmo número.
+function animalCadastrado(numero){
+  const numeroNorm = String(numero||'').trim();
+  if(!numeroNorm) return null;
+  return state.animais.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase()) || null;
+}
+// Raça já conhecida desse número, se ele já tiver cadastro -- usado pra
+// pré-preencher o campo de raça nos formulários que referenciam um animal
+// (Inseminação, Diagnóstico, Parto), sem obrigar redigitar o que já se sabe.
+function racaConhecida(numero){
+  const a = animalCadastrado(numero);
+  return a ? (a.raca||'') : '';
+}
+// Todo lançamento que referencia um número de animal (Inseminação,
+// Diagnóstico, Parto, Pesagem individual, Nova entrada de animais) precisa
+// ou já ter o animal cadastrado, ou informar sexo+raça ali mesmo -- não dá
+// pra criar um cadastro pela metade nem duplicar. Retorna null se pode
+// prosseguir, ou a mensagem de erro pra mostrar (e bloquear o lançamento
+// inteiro, não só o cadastro do animal).
+function validarAnimalNovo(numero, sexo, raca){
+  const numeroNorm = String(numero||'').trim();
+  if(!numeroNorm) return null; // sem número aqui -- quem valida isso é validarObrigatorios
+  if(animalCadastrado(numeroNorm)) return null; // já existe, upsertAnimal só atualiza
+  if(!sexo || !raca) return `O animal número ${numeroNorm} ainda não está cadastrado. Informe sexo e raça dele antes de lançar.`;
+  return null;
+}
 // Cadastra ou move um animal pro lote informado, por número -- número é
 // único na fazenda inteira, então se já existir (em qualquer lote) só
 // atualiza o lote (e sexo/raça, quando informados) em vez de duplicar.
 // Usado pelos ganchos em outros lançamentos (Nova entrada de animais,
 // Nova inseminação, Peso por animal) -- não existe cadastro direto de
 // animal, só edição de um que já foi criado por um desses ganchos.
-async function upsertAnimal(numero, loteId, extra){
+// criadosNestaLeva (opcional) é uma lista local passada pelo chamador
+// quando vários números são processados em série na MESMA operação (ex:
+// colar vários números de uma vez) -- sem isso, dois números iguais na
+// mesma leva criariam dois cadastros, porque state.animais só é atualizado
+// depois que TUDO termina e a tela recarrega (loadAll), não a cada
+// iteração do laço.
+async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return {error:null};
   extra = extra || {};
-  const existente = state.animais.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase());
+  const jaNestaLeva = criadosNestaLeva && criadosNestaLeva.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase());
+  const existente = jaNestaLeva || animalCadastrado(numeroNorm);
   const row = {numero: numeroNorm, lote_id: loteId};
   if(extra.sexo) row.sexo = extra.sexo;
   if(extra.raca) row.raca = extra.raca;
   if(existente){
     return await db.from('animais').update(row).eq('id', existente.id);
   }
-  return await db.from('animais').insert({...row, criado_por:autorAtual()});
+  if(!extra.sexo || !extra.raca){
+    return {error:{message:`O animal ${numeroNorm} ainda não está cadastrado -- informe sexo e raça antes de lançar.`}};
+  }
+  const res = await db.from('animais').insert({...row, criado_por:autorAtual()}).select().single();
+  if(!res.error && criadosNestaLeva) criadosNestaLeva.push({numero:numeroNorm, id:res.data?.id});
+  return res;
 }
 // "128, 129 130\n131" -> ['128','129','130','131'] -- aceita vírgula, espaço
 // ou linha como separador, pra não exigir um formato rígido de digitação.
@@ -4581,6 +4620,31 @@ function ModalProducaoRacao(){
 function ModalLote(){
   const d = editDraft;
   const modoNovo = !d._editId ? (d.modoEntrada||'novo')==='novo' : true;
+  const numerosAnimaisListaAtual = !d._editId ? parseNumerosAnimais(d.numerosAnimais||'') : [];
+  const algumAnimalNovoLote = numerosAnimaisListaAtual.some(n=>!animalCadastrado(n));
+  const loteExistenteAtualLote = !modoNovo ? state.lotes.find(l=>l.id==d.loteExistenteId) : null;
+  const sexoLoteAtualLote = modoNovo ? (d.sexo||'') : (loteExistenteAtualLote?.sexo||'');
+  const precisaSexoAnimalNovoLote = algumAnimalNovoLote && sexoLoteAtualLote!=='macho' && sexoLoteAtualLote!=='femea';
+  const camposAnimalNovoLote = algumAnimalNovoLote ? `
+        <div class="field-row">
+          ${precisaSexoAnimalNovoLote ? `<div class="field"><label>Sexo dos animais novos (obrigatório)</label>
+            <select id="f-sexoanimaisnovos">
+              <option value="" selected>— Selecione —</option>
+              <option value="macho">Machos</option>
+              <option value="femea">Fêmeas</option>
+            </select>
+          </div>` : ''}
+          <div class="field"><label>Raça dos animais novos (obrigatório)</label>
+            <select id="f-racaanimaisnovos">
+              <option value="" selected>— Selecione —</option>
+              <option value="angus">Angus</option>
+              <option value="nelore">Nelore</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:-6px;">Um ou mais números listados ainda não estão cadastrados — precisa informar ${precisaSexoAnimalNovoLote?'sexo e raça':'a raça'} deles pra numerar.</p>
+  ` : '';
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -4626,7 +4690,8 @@ function ModalLote(){
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
         <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
-        <p class="hint">Se já souber os números desses animais, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos, só quem você for numerando agora (clique no lote depois pra ver e completar aos poucos).</p>` : ''}
+        <p class="hint">Se já souber os números desses animais, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos, só quem você for numerando agora (clique no lote depois pra ver e completar aos poucos).</p>
+        ${camposAnimalNovoLote}` : ''}
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
         <p class="hint">Deixe a data de encerramento em branco enquanto o lote estiver ativo.</p>
         ` : `
@@ -4642,6 +4707,7 @@ function ModalLote(){
         <div class="field"><label>Data de entrada</label><input id="f-dataentrada" type="date" value="${d.dataEntrada}"/></div>
         <div class="field"><label>Números dos animais chegando (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
         <p class="hint">O número de animais soma no lote escolhido, e o peso médio do lote é recalculado por média ponderada (peso e quantidade de quem já estava + de quem está chegando). Se já souber os números, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos.</p>
+        ${camposAnimalNovoLote}
         `}
       </div>
       <div class="modal-foot">
@@ -4671,16 +4737,16 @@ function ModalAnimal(){
           </div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Sexo (opcional)</label>
+          <div class="field"><label>Sexo (obrigatório)</label>
             <select id="f-sexoanimal">
-              <option value="" ${!d.sexo?'selected':''}>— Não informado —</option>
+              <option value="" ${!d.sexo?'selected':''}>— Selecione —</option>
               <option value="macho" ${d.sexo==='macho'?'selected':''}>Macho</option>
               <option value="femea" ${d.sexo==='femea'?'selected':''}>Fêmea</option>
             </select>
           </div>
-          <div class="field"><label>Raça (opcional)</label>
+          <div class="field"><label>Raça (obrigatório)</label>
             <select id="f-racaanimal">
-              <option value="" ${!d.raca?'selected':''}>— Não informado —</option>
+              <option value="" ${!d.raca?'selected':''}>— Selecione —</option>
               <option value="angus" ${d.raca==='angus'?'selected':''}>Angus</option>
               <option value="nelore" ${d.raca==='nelore'?'selected':''}>Nelore</option>
               <option value="outro" ${d.raca==='outro'?'selected':''}>Outro</option>
@@ -4839,6 +4905,8 @@ function ModalPasto(){
 
 function ModalReproducaoCusto(){
   const d = editDraft;
+  const racaVacaAtual = d.racaVaca!==undefined ? d.racaVaca : racaConhecida(d.numeroVaca);
+  const vacaJaCadastrada = !!animalCadastrado(d.numeroVaca);
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -4853,7 +4921,17 @@ function ModalReproducaoCusto(){
           <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128"/></div>
         </div>
         <div class="field-row">
+          <div class="field"><label>Raça da vaca${vacaJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
+            <select id="f-racavaca">
+              <option value="" ${!racaVacaAtual?'selected':''}>— Selecione —</option>
+              <option value="angus" ${racaVacaAtual==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${racaVacaAtual==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${racaVacaAtual==='outro'?'selected':''}>Outro</option>
+            </select>
+          </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field-row">
           <div class="field"><label>Raça do touro (sêmen)</label>
             <select id="f-racatouro">
               <option value="" ${!d.racaTouro?'selected':''}>— Selecione —</option>
@@ -4862,8 +4940,6 @@ function ModalReproducaoCusto(){
               <option value="outro" ${d.racaTouro==='outro'?'selected':''}>Outro</option>
             </select>
           </div>
-        </div>
-        <div class="field-row">
           <div class="field"><label>Qual inseminação</label>
             <select id="f-qualinsem">
               <option value="1" ${d.qualInseminacao==='1'?'selected':''}>1ª</option>
@@ -4871,6 +4947,8 @@ function ModalReproducaoCusto(){
               <option value="3" ${d.qualInseminacao==='3'?'selected':''}>3ª</option>
             </select>
           </div>
+        </div>
+        <div class="field-row">
           <div class="field"><label>Custo do protocolo (R$)</label><input id="f-custoreproducao" type="number" step="0.01" value="${d.custo}"/></div>
         </div>
         <p class="hint">O custo entra no Financeiro como custo variável do lote de Cria escolhido.</p>
@@ -4885,6 +4963,8 @@ function ModalReproducaoCusto(){
 
 function ModalDiagnostico(){
   const d = editDraft;
+  const racaVacaAtual = d.racaVaca!==undefined ? d.racaVaca : racaConhecida(d.numeroVaca);
+  const vacaJaCadastrada = !!animalCadastrado(d.numeroVaca);
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -4899,15 +4979,25 @@ function ModalDiagnostico(){
           <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128"/></div>
         </div>
         <div class="field-row">
+          <div class="field"><label>Raça da vaca${vacaJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
+            <select id="f-racavaca">
+              <option value="" ${!racaVacaAtual?'selected':''}>— Selecione —</option>
+              <option value="angus" ${racaVacaAtual==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${racaVacaAtual==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${racaVacaAtual==='outro'?'selected':''}>Outro</option>
+            </select>
+          </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
+        </div>
+        <div class="field-row">
           <div class="field"><label>Resultado</label>
             <select id="f-resultadodg">
               <option value="prenha" ${d.resultado==='prenha'?'selected':''}>Prenha</option>
               <option value="vazia" ${d.resultado==='vazia'?'selected':''}>Vazia</option>
             </select>
           </div>
+          ${d.resultado==='prenha' ? `<div class="field"><label>Previsão de parto (opcional)</label><input id="f-previsaoparto" type="date" value="${d.previsaoParto||''}"/></div>` : '<div class="field"></div>'}
         </div>
-        ${d.resultado==='prenha' ? `<div class="field"><label>Previsão de parto (opcional)</label><input id="f-previsaoparto" type="date" value="${d.previsaoParto||''}"/></div>` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -4919,6 +5009,8 @@ function ModalDiagnostico(){
 
 function ModalParto(){
   const d = editDraft;
+  const racaMaeAtual = d.racaMae!==undefined ? d.racaMae : racaConhecida(d.numeroMae);
+  const maeJaCadastrada = !!animalCadastrado(d.numeroMae);
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -4934,6 +5026,16 @@ function ModalParto(){
         </div>
         <div class="field-row">
           <div class="field"><label>Número da mãe</label><input id="f-numeromae" value="${esc(d.numeroMae)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Raça da mãe${maeJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
+            <select id="f-racamae">
+              <option value="" ${!racaMaeAtual?'selected':''}>— Selecione —</option>
+              <option value="angus" ${racaMaeAtual==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${racaMaeAtual==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${racaMaeAtual==='outro'?'selected':''}>Outro</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
           <div class="field"><label>Sexo do bezerro</label>
             <select id="f-sexobezerro">
               <option value="macho" ${d.sexoBezerro==='macho'?'selected':''}>Macho</option>
@@ -5000,11 +5102,20 @@ function ModalDesmama(){
   </div>`;
 }
 
+// Sexo já resolvido pelo lote (Confinamento com sexo macho/fêmea definido)
+// -- só nesse caso dá pra saber o sexo de um animal novo sem perguntar.
+function sexoFixoDoLote(loteId){
+  const lote = state.lotes.find(l=>l.id==loteId);
+  return lote && (lote.sexo==='macho'||lote.sexo==='femea') ? lote.sexo : null;
+}
 function ModalPesagem(){
   const d = editDraft;
   const lotesTipo = state.lotes.filter(l=>loteTipo(l)===d.tipo);
   const entradas = d.entradasPesagem||[];
   const mediaCalculada = entradas.length>0 ? entradas.reduce((a,e)=>a+Number(e.pesoKg),0)/entradas.length : null;
+  const numeroAtual = (d.pesagemNumeroDraft||'').trim();
+  const animalNovoPesagem = numeroAtual && !animalCadastrado(numeroAtual);
+  const sexoLoteFixoPesagem = sexoFixoDoLote(d.loteId);
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -5021,9 +5132,29 @@ function ModalPesagem(){
         </div>
         ${!d._editId ? `
         <div class="field-row">
-          <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" value="${esc(numeroAtual)}" placeholder="Ex: 128"/></div>
           <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320"/></div>
         </div>
+        ${animalNovoPesagem ? `
+        <div class="field-row">
+          ${!sexoLoteFixoPesagem ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
+            <select id="f-sexopesado">
+              <option value="" selected>— Selecione —</option>
+              <option value="macho">Macho</option>
+              <option value="femea">Fêmea</option>
+            </select>
+          </div>` : ''}
+          <div class="field"><label>Raça (animal novo -- obrigatório)</label>
+            <select id="f-racapesado">
+              <option value="" selected>— Selecione —</option>
+              <option value="angus">Angus</option>
+              <option value="nelore">Nelore</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:-6px;">Animal ${esc(numeroAtual)} ainda não está cadastrado — precisa informar ${!sexoLoteFixoPesagem?'sexo e raça':'a raça'} pra numerar ele.</p>
+        ` : ''}
         <button type="button" class="btn btn-ghost btn-sm" data-add-pesagem-animal="1">+ Adicionar e ir pro próximo</button>
         ${entradas.length>0 ? `
         <table style="margin-top:12px;">
@@ -5031,7 +5162,7 @@ function ModalPesagem(){
           <tbody>
             ${entradas.map((en,idx)=>`
               <tr>
-                <td class="mono">${en.numero ? esc(en.numero) : '<span class="hint">— sem número —</span>'}</td>
+                <td class="mono">${en.numero ? esc(en.numero) : '<span class="hint">— sem número —</span>'}${en.raca?` <span class="hint">(novo · ${RACA_TOURO_LABEL[en.raca]})</span>`:''}</td>
                 <td class="mono">${fmt(Number(en.pesoKg),1)} kg</td>
                 <td><button type="button" class="btn-ghost btn-sm" data-del-pesagem-animal="${idx}">Remover</button></td>
               </tr>
@@ -6023,6 +6154,51 @@ function attachEvents(){
       editDraft.dietaId = '';
       render();
     };
+    const modoNovoAtual = !editDraft._editId ? (editDraft.modoEntrada||'novo')==='novo' : true;
+    const sexoLoteEl = document.getElementById('f-sexolote');
+    if(sexoLoteEl) sexoLoteEl.onchange = (e)=>{
+      editDraft.nome = document.getElementById('f-nome').value;
+      editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
+      editDraft.dataInicio = document.getElementById('f-datainicio').value;
+      editDraft.dataFim = document.getElementById('f-datafim').value;
+      const pesoEl0 = document.getElementById('f-pesoentrada');
+      if(pesoEl0) editDraft.pesoMedioEntrada = pesoEl0.value;
+      const numerosEl0 = document.getElementById('f-numerosanimais');
+      if(numerosEl0) editDraft.numerosAnimais = numerosEl0.value;
+      editDraft.sexo = e.target.value;
+      render();
+    };
+    const loteExistenteEl = document.getElementById('f-loteexistente');
+    if(loteExistenteEl) loteExistenteEl.onchange = (e)=>{
+      editDraft.qtdEntrada = document.getElementById('f-qtdentrada').value;
+      editDraft.dataEntrada = document.getElementById('f-dataentrada').value;
+      const pesoEl1 = document.getElementById('f-pesoentrada');
+      if(pesoEl1) editDraft.pesoMedioEntrada = pesoEl1.value;
+      const numerosEl1 = document.getElementById('f-numerosanimais');
+      if(numerosEl1) editDraft.numerosAnimais = numerosEl1.value;
+      editDraft.loteExistenteId = e.target.value;
+      render();
+    };
+    const numerosAnimaisEl = document.getElementById('f-numerosanimais');
+    if(numerosAnimaisEl) numerosAnimaisEl.onchange = (e)=>{
+      if(modoNovoAtual){
+        editDraft.nome = document.getElementById('f-nome').value;
+        editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
+        editDraft.dataInicio = document.getElementById('f-datainicio').value;
+        editDraft.dataFim = document.getElementById('f-datafim').value;
+        editDraft.sexo = document.getElementById('f-sexolote').value;
+        const pesoEl2 = document.getElementById('f-pesoentrada');
+        if(pesoEl2) editDraft.pesoMedioEntrada = pesoEl2.value;
+      } else {
+        editDraft.loteExistenteId = document.getElementById('f-loteexistente').value;
+        editDraft.qtdEntrada = document.getElementById('f-qtdentrada').value;
+        editDraft.dataEntrada = document.getElementById('f-dataentrada').value;
+        const pesoEl3 = document.getElementById('f-pesoentrada');
+        if(pesoEl3) editDraft.pesoMedioEntrada = pesoEl3.value;
+      }
+      editDraft.numerosAnimais = e.target.value;
+      render();
+    };
     // "Novo lote" x "Lote já existente" -- só existe na criação (não no
     // editar), pra decidir se essa entrada de animais vira um lote novo ou
     // soma na quantidade (com peso recalculado por média ponderada) de um
@@ -6055,9 +6231,48 @@ function attachEvents(){
     if(resultadoDgEl) resultadoDgEl.onchange = (e)=>{
       editDraft.numeroVaca = document.getElementById('f-numvaca').value;
       editDraft.data = document.getElementById('f-data').value;
+      editDraft.racaVaca = document.getElementById('f-racavaca')?.value;
       const previsaoEl = document.getElementById('f-previsaoparto');
       if(previsaoEl) editDraft.previsaoParto = previsaoEl.value;
       editDraft.resultado = e.target.value;
+      render();
+    };
+    // Trocar o número da vaca atualiza a raça pro que já se conhece dela
+    // (ou limpa, se for um número novo) -- evita ficar com a raça da vaca
+    // anterior grudada no campo.
+    const numVacaDgEl = document.getElementById('f-numvaca');
+    if(numVacaDgEl) numVacaDgEl.onchange = (e)=>{
+      editDraft.numeroVaca = e.target.value;
+      editDraft.data = document.getElementById('f-data').value;
+      const previsaoEl = document.getElementById('f-previsaoparto');
+      if(previsaoEl) editDraft.previsaoParto = previsaoEl.value;
+      editDraft.resultado = document.getElementById('f-resultadodg').value;
+      editDraft.racaVaca = racaConhecida(e.target.value);
+      render();
+    };
+  }
+  if(state.modal && state.modal.type==='reproducaoCusto'){
+    // Mesma lógica do Diagnóstico -- trocar o número da vaca atualiza a
+    // raça pra que já se conhece dela (ou limpa, se for um número novo).
+    const numVacaInsemEl = document.getElementById('f-numvaca');
+    if(numVacaInsemEl) numVacaInsemEl.onchange = (e)=>{
+      editDraft.numeroVaca = e.target.value;
+      editDraft.data = document.getElementById('f-data').value;
+      editDraft.racaTouro = document.getElementById('f-racatouro').value;
+      editDraft.qualInseminacao = document.getElementById('f-qualinsem').value;
+      editDraft.custo = document.getElementById('f-custoreproducao').value;
+      editDraft.racaVaca = racaConhecida(e.target.value);
+      render();
+    };
+  }
+  if(state.modal && state.modal.type==='parto'){
+    // Mesma lógica -- trocar o número da mãe atualiza a raça conhecida dela.
+    const numMaeEl = document.getElementById('f-numeromae');
+    if(numMaeEl) numMaeEl.onchange = (e)=>{
+      editDraft.numeroMae = e.target.value;
+      editDraft.data = document.getElementById('f-data').value;
+      editDraft.sexoBezerro = document.getElementById('f-sexobezerro').value;
+      editDraft.racaMae = racaConhecida(e.target.value);
       render();
     };
   }
@@ -6082,6 +6297,13 @@ function attachEvents(){
     };
   }
   if(state.modal && state.modal.type==='pesagem' && !editDraft._editId){
+    const numPesadoEl = document.getElementById('f-numeropesado');
+    if(numPesadoEl) numPesadoEl.onchange = (e)=>{
+      editDraft.pesagemNumeroDraft = e.target.value;
+      render();
+      const numEl2 = document.getElementById('f-numeropesado');
+      if(numEl2) numEl2.focus();
+    };
     const addPesagemAnimalBtn = document.querySelector('[data-add-pesagem-animal]');
     if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = ()=>{
       const numEl = document.getElementById('f-numeropesado');
@@ -6089,10 +6311,21 @@ function attachEvents(){
       const numero = (numEl.value||'').trim();
       const peso = pesoEl.value;
       if(!peso || Number(peso)<=0){ alert('Informe um peso maior que zero.'); return; }
-      editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
+      const loteIdAtual = Number(document.getElementById('f-lotepesagem').value);
+      let sexoNovo = '', racaNovo = '';
+      if(numero && !animalCadastrado(numero)){
+        const sexoFixo = sexoFixoDoLote(loteIdAtual);
+        const sexoEl = document.getElementById('f-sexopesado');
+        sexoNovo = sexoFixo || (sexoEl ? sexoEl.value : '');
+        racaNovo = document.getElementById('f-racapesado')?.value || '';
+        const erroAnimalPesagem = validarAnimalNovo(numero, sexoNovo, racaNovo);
+        if(erroAnimalPesagem){ alert(erroAnimalPesagem); return; }
+      }
+      editDraft.loteId = loteIdAtual;
       editDraft.data = document.getElementById('f-datapesagem').value;
       editDraft.observacao = document.getElementById('f-obspesagem').value;
-      editDraft.entradasPesagem = [...(editDraft.entradasPesagem||[]), {numero, pesoKg: Number(peso)}];
+      editDraft.entradasPesagem = [...(editDraft.entradasPesagem||[]), {numero, pesoKg: Number(peso), sexo:sexoNovo||undefined, raca:racaNovo||undefined}];
+      editDraft.pesagemNumeroDraft = '';
       render();
       const numEl2 = document.getElementById('f-numeropesado');
       if(numEl2) numEl2.focus();
@@ -6237,12 +6470,36 @@ function attachEvents(){
         const modoEntradaEl = document.getElementById('f-modoentrada');
         const modoEntrada = modoEntradaEl ? modoEntradaEl.value : 'novo';
         const numerosAnimaisLista = parseNumerosAnimais(document.getElementById('f-numerosanimais')?.value);
+        const sexoNovosVal = document.getElementById('f-sexoanimaisnovos')?.value || '';
+        const racaNovosVal = document.getElementById('f-racaanimaisnovos')?.value || '';
+        if(numerosAnimaisLista.length>0){
+          const loteAlvoParaValidar = modoEntrada==='existente'
+            ? state.lotes.find(l=>l.id===Number(document.getElementById('f-loteexistente')?.value))
+            : null;
+          const sexoLoteParaValidar = modoEntrada==='existente' ? (loteAlvoParaValidar?.sexo||'') : (document.getElementById('f-sexolote')?.value||'');
+          for(const numero of numerosAnimaisLista){
+            const sexoParaEsse = (sexoLoteParaValidar==='macho'||sexoLoteParaValidar==='femea') ? sexoLoteParaValidar : sexoNovosVal;
+            const erroAnimalLote = validarAnimalNovo(numero, sexoParaEsse, racaNovosVal);
+            if(erroAnimalLote){ alert(erroAnimalLote); return; }
+          }
+        }
         // Registra (ou move) cada número listado pra composição do lote --
         // usa o sexo do próprio lote como padrão do animal, quando o lote
-        // tem um sexo definido (não misto).
+        // tem um sexo definido (não misto); senão usa o sexo informado pros
+        // animais novos. A validação acima já garante que animal novo tem
+        // sexo e raça antes de chegar aqui.
         async function registrarNumerosAnimais(loteIdDestino, sexoLote){
+          const criadosNestaLeva = [];
           for(const numero of numerosAnimaisLista){
-            const res = await upsertAnimal(numero, loteIdDestino, (sexoLote==='macho'||sexoLote==='femea')?{sexo:sexoLote}:{});
+            const numeroNorm = String(numero).trim().toLowerCase();
+            const ehNovo = !animalCadastrado(numero) && !criadosNestaLeva.find(a=>a.numero.toLowerCase()===numeroNorm);
+            const sexoParaEsse = (sexoLote==='macho'||sexoLote==='femea') ? sexoLote : (ehNovo ? sexoNovosVal : undefined);
+            // Raça informada aqui só se aplica a quem está sendo numerado
+            // agora — não sobrescreve a raça de um animal que já existia e
+            // só está sendo movido de lote.
+            const extra = {sexo: sexoParaEsse||undefined};
+            if(ehNovo) extra.raca = racaNovosVal||undefined;
+            const res = await upsertAnimal(numero, loteIdDestino, extra, criadosNestaLeva);
             if(res.error) return res.error;
           }
           return null;
@@ -6316,9 +6573,14 @@ function attachEvents(){
       } else if(type==='animal'){
         const numeroAnimalVal = document.getElementById('f-numeroanimal').value.trim();
         const loteAnimalVal = document.getElementById('f-loteanimal').value;
-        if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote']])) return;
         const sexoAnimalVal = document.getElementById('f-sexoanimal').value;
         const racaAnimalVal = document.getElementById('f-racaanimal').value;
+        if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote'],[sexoAnimalVal,'Sexo'],[racaAnimalVal,'Raça']])) return;
+        const animalComEsseNumero = animalCadastrado(numeroAnimalVal);
+        if(animalComEsseNumero && animalComEsseNumero.id!==editDraft._editId){
+          alert(`Já existe outro animal cadastrado com o número ${numeroAnimalVal}. Escolha um número diferente.`);
+          return;
+        }
         ({error} = await db.from('animais').update(animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal})).eq('id', editDraft._editId));
       } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaIdVal = document.getElementById('f-dieta').value;
@@ -6545,11 +6807,16 @@ function attachEvents(){
       } else if(type==='reproducaoCusto'){
         const dataReprodVal = document.getElementById('f-data').value;
         const numVacaVal = document.getElementById('f-numvaca').value;
+        const racaVacaVal = document.getElementById('f-racavaca').value;
         const racaTouroVal = document.getElementById('f-racatouro').value;
         const qualInsemVal = document.getElementById('f-qualinsem').value;
         const custoVal = document.getElementById('f-custoreproducao').value;
         if(!validarObrigatorios([[dataReprodVal,'Data'],[numVacaVal,'Número da vaca'],[racaTouroVal,'Raça do touro'],[custoVal,'Custo do protocolo']])) return;
         if(Number(custoVal)<=0){ alert('O custo precisa ser maior que zero.'); return; }
+        // Vaca ainda não cadastrada -- não dá pra lançar sem a raça dela
+        // (sexo já é sempre fêmea, isso o próprio lançamento já garante).
+        const erroAnimalVaca = validarAnimalNovo(numVacaVal, 'femea', racaVacaVal);
+        if(erroAnimalVaca){ alert(erroAnimalVaca); return; }
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
           data: dataReprodVal,
@@ -6573,16 +6840,21 @@ function attachEvents(){
         // é sempre fêmea, então já preenche o sexo automaticamente. Não
         // bloqueia o save (best-effort, mesmo motivo do gancho de entrada
         // de animais) -- senão, uma falha aqui deixaria a inseminação
-        // "salva mas com erro na tela", e salvar de novo duplicaria.
+        // "salva mas com erro na tela", e salvar de novo duplicaria. A
+        // validação acima já garante que, se for animal novo, raça veio
+        // preenchida -- então esse upsert nunca falha por falta de dado.
         if(!error){
-          const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea'});
+          const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea', raca:racaVacaVal||undefined});
           if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
         }
       } else if(type==='diagnosticoGestacional'){
         const dataDgVal = document.getElementById('f-data').value;
         const numVacaDgVal = document.getElementById('f-numvaca').value;
+        const racaVacaDgVal = document.getElementById('f-racavaca').value;
         const resultadoVal = document.getElementById('f-resultadodg').value;
         if(!validarObrigatorios([[dataDgVal,'Data'],[numVacaDgVal,'Número da vaca'],[resultadoVal,'Resultado']])) return;
+        const erroAnimalVacaDg = validarAnimalNovo(numVacaDgVal, 'femea', racaVacaDgVal);
+        if(erroAnimalVacaDg){ alert(erroAnimalVacaDg); return; }
         const previsaoPartoEl = document.getElementById('f-previsaoparto');
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
@@ -6605,14 +6877,18 @@ function attachEvents(){
         // Mesmo gancho da inseminação (upsertAnimal best-effort) -- a vaca
         // diagnosticada entra (ou é movida) na composição do lote, já como
         // fêmea, mesmo que nunca tenha passado por uma inseminação lançada.
+        // A validação acima já garante raça quando é animal novo.
         if(!error){
-          const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea'});
+          const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea', raca:racaVacaDgVal||undefined});
           if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
         }
       } else if(type==='parto'){
         const dataPartoVal = document.getElementById('f-data').value;
         const numeroMaeVal = document.getElementById('f-numeromae').value;
+        const racaMaeVal = document.getElementById('f-racamae').value;
         if(!validarObrigatorios([[dataPartoVal,'Data'],[numeroMaeVal,'Número da mãe']])) return;
+        const erroAnimalMae = validarAnimalNovo(numeroMaeVal, 'femea', racaMaeVal);
+        if(erroAnimalMae){ alert(erroAnimalMae); return; }
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
           data: dataPartoVal,
@@ -6632,9 +6908,10 @@ function attachEvents(){
         }
         // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
         // -- a mãe entra (ou é movida) na composição do lote, já como fêmea,
-        // mesmo que o parto seja o primeiro lançamento dela no sistema.
+        // mesmo que o parto seja o primeiro lançamento dela no sistema. A
+        // validação acima já garante raça quando é animal novo.
         if(!error){
-          const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea'});
+          const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea', raca:racaMaeVal||undefined});
           if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
         }
       } else if(type==='desmama'){
@@ -6690,9 +6967,10 @@ function attachEvents(){
               // O upsert do cadastro de animal, aqui sim, é só um efeito
               // colateral (best-effort) -- não desfaz a pesagem (que já
               // está correta e completa) se uma dessas atualizações falhar.
+              const criadosNestaLeva = [];
               for(const en of entradasPesagem){
                 if(!en.numero) continue;
-                const resAnimal = await upsertAnimal(en.numero, loteIdPesagemVal, sexoLotePesagem?{sexo:sexoLotePesagem}:{});
+                const resAnimal = await upsertAnimal(en.numero, loteIdPesagemVal, {sexo: en.sexo||sexoLotePesagem||undefined, raca: en.raca||undefined}, criadosNestaLeva);
                 if(resAnimal.error){ alert('A pesagem foi salva, mas não deu pra atualizar o cadastro de um dos animais: ' + resAnimal.error.message); break; }
               }
             }

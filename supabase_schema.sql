@@ -1130,6 +1130,20 @@ create policy "excluir animais" on animais for delete using (
 );
 
 -- ===================================================================
+-- MIGRAÇÃO: Unicidade de número de animal sem diferenciar maiúscula/
+-- minúscula
+-- A coluna "numero" já tinha "unique", mas isso só bloqueia duplicata
+-- byte-a-byte -- "128" e "128 " (espaço) ou "ABC" e "abc" passavam como
+-- diferentes pro banco, mesmo o app tratando os dois como o mesmo animal.
+-- Esse índice fecha essa brecha (inclusive em duas gravações simultâneas,
+-- que a checagem só em JavaScript não pega).
+-- Se der erro de duplicata ao rodar, tem número repetido (só variando
+-- maiúscula/minúscula ou espaço) já cadastrado -- rode a consulta de
+-- diagnóstico antes pra achar e corrigir esses casos primeiro.
+-- ===================================================================
+create unique index if not exists animais_numero_ci_unique on animais (lower(trim(numero)));
+
+-- ===================================================================
 -- MIGRAÇÃO: Pesagem por animal
 -- A Pesagem ganha um segundo modo (escolhido na hora do lançamento):
 -- além da média direta (como já era), dá pra lançar peso + número de
