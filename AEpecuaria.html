@@ -570,8 +570,8 @@ const db = supabase.createClient(
 
 function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor, unidade:r.unidade, ms:r.ms, pb:r.pb, ndt:r.ndt, precoKg:r.preco_kg, estoqueMin:r.estoque_min, obs:r.obs||''}; }
 function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
-function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg}; }
-function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade, preco_kg:m.precoKg||null}; }
+function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg, ajuste:!!r.ajuste}; }
+function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade, preco_kg:m.precoKg||null, ajuste:!!m.ajuste}; }
 function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0, consumoDireto:!!r.consumo_direto}; }
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento', estoque_min_pronta:d.estoqueMinPronta||0, consumo_direto:!!d.consumoDireto}; }
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino, dietaId:r.dieta_id, sexo:r.sexo||''}; }
@@ -1363,9 +1363,11 @@ function saldoIngrediente(id){
 // Consumo médio diário de saída de UM ingrediente -- soma tudo que já saiu
 // (na mesma unidade do ingrediente) e divide pelos dias entre a primeira e
 // a última saída registrada. null quando nunca teve saída (nada pra tirar
-// média ainda).
+// média ainda). Não conta as saídas geradas por um "Ajustar estoque" --
+// aquilo é correção de erro de lançamento/contagem física, não consumo real,
+// e contar junto infla a média sem motivo.
 function consumoMedioDiario(id){
-  const saidas = state.movimentos.filter(m=>m.ingredienteId===id && m.tipo==='saida').sort((a,b)=>a.data.localeCompare(b.data));
+  const saidas = state.movimentos.filter(m=>m.ingredienteId===id && m.tipo==='saida' && !m.ajuste).sort((a,b)=>a.data.localeCompare(b.data));
   if(saidas.length===0) return null;
   const total = saidas.reduce((a,m)=>a+Number(m.quantidade||0),0);
   const dias = diasEntreDatas(saidas[0].data, saidas[saidas.length-1].data);
@@ -1903,7 +1905,7 @@ function PageEstoque(){
           return `<tr>
             <td class="mono">${m.data.split('-').reverse().join('/')}</td>
             <td>${ing?esc(ing.nome):'—'}</td>
-            <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}</td>
+            <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}${m.ajuste ? ' <span class="pill pill-cat">Ajuste</span>' : ''}</td>
             <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('insumos','editar') ? `
@@ -6188,6 +6190,11 @@ function attachEvents(){
           tipo: tipoMov,
           quantidade: Number(document.getElementById('f-qtd').value)||0,
           precoKg: (tipoMov==='entrada' && precoEntradaEl && precoEntradaEl.value) ? Number(precoEntradaEl.value) : null,
+          // Editar uma movimentação existente (inclusive uma gerada por
+          // "Ajustar estoque") preserva a marca de ajuste -- não tem campo
+          // no formulário pra trocar isso, e uma "Nova movimentação" lançada
+          // por aqui nunca é ajuste (editDraft.ajuste vem undefined = false).
+          ajuste: !!editDraft.ajuste,
         };
         const row = movimentoToRow(campos);
         if(editDraft._editId){
@@ -6243,6 +6250,7 @@ function attachEvents(){
             tipo: diferenca>0 ? 'entrada' : 'saida',
             quantidade: Math.abs(diferenca),
             precoKg: null,
+            ajuste: true,
           });
           ({error} = await db.from('movimentos').insert(row));
         }
