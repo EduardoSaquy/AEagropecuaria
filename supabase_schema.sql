@@ -1205,3 +1205,17 @@ update dietas set consumo_direto = true where tipo = 'confinamento';
 -- ===================================================================
 alter table custos_fixos add column if not exists fornecedor text;
 alter table investimentos add column if not exists fornecedor text;
+
+-- ===================================================================
+-- MIGRAÇÃO: Marca de ajuste em Movimentações de estoque
+-- O botão "Ajustar" (tela de Estoque) corrige o saldo de um ingrediente
+-- lançando uma entrada/saída de diferença -- mas isso não é consumo
+-- real, é correção de erro de contagem/lançamento. Sem distinguir,
+-- essas correções entravam junto no cálculo de "consumo médio diário",
+-- inflando a média. Agora toda movimentação tem uma marca "ajuste"
+-- (default false); só as geradas pelo botão Ajustar vêm true, e o
+-- cálculo de consumo médio passa a ignorá-las.
+-- Pode rodar a qualquer momento -- lançamentos existentes ficam com
+-- ajuste=false (tratados como consumo real, comportamento de antes).
+-- ===================================================================
+alter table movimentos add column if not exists ajuste boolean not null default false;
