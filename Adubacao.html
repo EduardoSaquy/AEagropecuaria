@@ -1476,14 +1476,24 @@ function rodarOtimizador() {
     return;
   }
 
+  // Nutriente sem nenhum insumo cadastrado que o forneça não entra na conta (fica de
+  // fora do resultado, avisado à parte) - em vez de travar o cálculo inteiro só porque
+  // faltou cadastrar, por exemplo, um micronutriente que a pessoa não pretende comprar.
+  const nutrientesCobriveis = nutrientesAlvo.filter(nut => insumosAtivos.some(i => (i.garantias[nut] || 0) > 0));
+  const nutrientesSemFonte = nutrientesAlvo.filter(nut => !nutrientesCobriveis.includes(nut));
+
   const c = insumosAtivos.map(i => i.preco / 1000); // custo por kg de produto
-  const A = nutrientesAlvo.map(nut => insumosAtivos.map(i => (i.garantias[nut] || 0) / 100));
-  const b = nutrientesAlvo.map(nut => necessidade[nut]);
+  const A = nutrientesCobriveis.map(nut => insumosAtivos.map(i => (i.garantias[nut] || 0) / 100));
+  const b = nutrientesCobriveis.map(nut => necessidade[nut]);
   const r = resolverLP(c, A, b);
 
+  const avisoSemFonte = nutrientesSemFonte.length > 0
+    ? `<div class="warn-box" style="margin-top:10px;">Sem insumo cadastrado que forneça: <b>${nutrientesSemFonte.join(", ")}</b> — ficaram de fora da conta abaixo (nem entram como custo, nem são cobertos). Cadastre um insumo com essa garantia se quiser incluir.</div>`
+    : "";
+
   if (!r.viavel) {
-    const faltando = (r.infactivelLinhas || []).map(idx => nutrientesAlvo[idx]).join(", ") || "um ou mais nutrientes";
-    wrap.innerHTML = `<div class="warn-box" style="margin-top:10px;">Não foi possível cobrir tudo com os insumos cadastrados — falta uma fonte de: <b>${faltando}</b>. Cadastre um insumo que forneça isso, ou ajuste as garantias.</div>`;
+    const faltando = (r.infactivelLinhas || []).map(idx => nutrientesCobriveis[idx]).join(", ") || "um ou mais nutrientes";
+    wrap.innerHTML = avisoSemFonte + `<div class="warn-box" style="margin-top:10px;">Não foi possível cobrir tudo com os insumos cadastrados — falta preço/garantia suficiente pra: <b>${faltando}</b>. Ajuste as garantias ou o preço, ou cadastre outro insumo.</div>`;
     return;
   }
 
@@ -1493,8 +1503,8 @@ function rodarOtimizador() {
       <tr><th>Insumo</th><th style="text-align:right">Dose (kg/ha)</th><th style="text-align:right">Custo/ha</th></tr>
       ${linhas.map(l => `<tr><td>${esc(l.ins.nome)}</td><td class="num">${fmt(l.dose, 1)}</td><td class="num">${fmtMoney(l.dose * l.ins.preco / 1000)}</td></tr>`).join("")}
     </table>`;
-  wrap.innerHTML = `
-    <div class="info-box" style="margin-top:10px;">Combinação de menor custo encontrada, cobrindo ${nutrientesAlvo.join(", ")}.</div>
+  wrap.innerHTML = avisoSemFonte + `
+    <div class="info-box" style="margin-top:10px;">Combinação de menor custo encontrada, cobrindo ${nutrientesCobriveis.join(", ") || "nenhum nutriente (nada cadastrado cobre a necessidade)"}.</div>
     ${tabela}
     <div class="rel-custo" style="margin-top:8px;">Custo total: ${fmtMoney(r.custo)}/ha · ${fmtMoney(r.custo * s.area)} na área (${fmt(s.area, 1)} ha)</div>`;
 }
