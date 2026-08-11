@@ -109,6 +109,23 @@ input:focus, select:focus{outline:none; border-color:var(--verde-medio);}
 .seg button:last-child{border-right:none;}
 .seg button.on{background:var(--verde-escuro); color:var(--branco);}
 
+.btn-ghost-full{
+  font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; padding:9px 6px; border-radius:9px;
+  border:1.5px solid var(--verde-medio); background:var(--branco); color:var(--verde-escuro); cursor:pointer; width:100%;
+}
+.btn-ghost-full:active{background:var(--verde-claro);}
+.btn-danger-full{
+  font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; padding:9px 6px; border-radius:9px;
+  border:1.5px solid var(--alerta); background:var(--branco); color:var(--alerta); cursor:pointer; width:100%;
+}
+.btn-danger-full:active{background:var(--alerta-bg);}
+.btn-danger-full:disabled{opacity:0.5; cursor:not-allowed;}
+.btn-primary-full{
+  font-family:'Inter',sans-serif; font-size:13px; font-weight:700; padding:11px 6px; border-radius:9px;
+  border:none; background:var(--verde-escuro); color:var(--branco); cursor:pointer; width:100%;
+}
+.btn-primary-full:active{background:#25401f;}
+
 .section-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--verde-medio); font-weight:700; margin:18px 0 8px 2px;}
 .section-label:first-child{margin-top:0;}
 
@@ -165,6 +182,29 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 @media (min-width:760px){ footer{max-width:880px;} }
 @media (min-width:1040px){ footer{max-width:1180px;} }
 @media (min-width:1400px){ footer{max-width:1360px;} }
+
+/* ---------- RELATÓRIO EM PDF (impressão) ---------- */
+/* Gerado sob demanda em #relatorioImpressao e impresso via window.print() - evita
+   depender de uma biblioteca de PDF; o navegador (Salvar como PDF na caixa de
+   impressão) já resolve isso, e o conteúdo usa as mesmas contas do restante do app. */
+#relatorioImpressao{display:none;}
+.rel-capa{margin-bottom:18px;}
+.rel-capa h1{font-family:'Fraunces',serif; font-size:24px; color:var(--verde-escuro); margin:0 0 6px 0;}
+.rel-capa p{font-size:12.5px; color:var(--cinza); margin:0;}
+.rel-table{width:100%; border-collapse:collapse; font-size:12px; margin-top:4px;}
+.rel-table th{text-align:right; font-size:11px; color:var(--verde-escuro); font-weight:700; padding:6px 8px; border-bottom:1.5px solid var(--cinza-claro); white-space:nowrap;}
+.rel-table th:first-child{text-align:left;}
+.rel-table td{padding:6px 8px; border-bottom:1px solid var(--cinza-claro); text-align:right; white-space:nowrap;}
+.rel-table td.num{font-family:'IBM Plex Mono',monospace;}
+.rel-linha-label{text-align:left !important; font-weight:600; color:var(--grafite);}
+.rel-linha-secao{text-align:left !important; font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--verde-medio); font-weight:700; padding-top:14px !important; border-bottom:none !important;}
+
+@media print{
+  @page{ size: landscape; }
+  body > *:not(#relatorioImpressao){display:none !important;}
+  #relatorioImpressao{display:block !important;}
+  body{background:var(--branco); padding:0;}
+}
 </style>
 </head>
 <body>
@@ -183,6 +223,25 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 <section id="tab-calc" class="tab-panel active">
 <div class="layout-grid">
 <div class="col-inputs">
+
+  <div class="card card-pad">
+    <div class="section-label">Amostras</div>
+    <div class="card-sub" style="margin-bottom:10px;">Uma fazenda geralmente tem mais de uma amostra de solo (por talhão/gleba) — cada uma guarda seus próprios dados e recomendação. Troque de amostra no seletor abaixo; nada se perde ao trocar.</div>
+    <div class="field">
+      <label>Amostra selecionada</label>
+      <select id="amostraSelect"></select>
+    </div>
+    <div class="field">
+      <label>Nome da amostra</label>
+      <input type="text" id="amostraNome" placeholder="ex.: Talhão 3">
+    </div>
+    <div class="row2">
+      <button type="button" class="btn-ghost-full" id="btnAmostraNova">+ Nova amostra</button>
+      <button type="button" class="btn-ghost-full" id="btnAmostraDuplicar">⧉ Duplicar</button>
+    </div>
+    <button type="button" class="btn-danger-full" id="btnAmostraExcluir" style="margin-top:8px;">🗑 Excluir esta amostra</button>
+    <button type="button" class="btn-primary-full" id="btnRelatorioPdf" style="margin-top:14px;">📄 Gerar relatório PDF (todas as amostras)</button>
+  </div>
 
   <div class="card card-pad">
     <div class="section-label">Cultura e Produtividade</div>
@@ -372,6 +431,8 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
   Metodologia completa na aba Manual Técnico.
 </footer>
 
+<div id="relatorioImpressao"></div>
+
 <script>
 /* ============================================================
    AE ADUBAÇÃO — motor de cálculo (porta fiel do modelo validado
@@ -490,6 +551,11 @@ function num(id) {
 }
 function rawval(id) {
   return document.getElementById(id).value;
+}
+function esc(str) {
+  const d = document.createElement("div");
+  d.textContent = str == null ? "" : String(str);
+  return d.innerHTML;
 }
 
 /* ---------------- ENGINE PRINCIPAL ---------------- */
@@ -795,41 +861,50 @@ function unitKey(unitLabel) {
   return "gdm3";
 }
 
-function readState() {
-  const cultura = document.getElementById("cultura").value;
-  const sistemaProducao = document.querySelector("#segSistema button.on").dataset.val;
-  const inoculacao = document.querySelector("#segInoculacao button.on").dataset.val;
-  const creditoN = document.querySelector("#segCreditoN button.on").dataset.val;
+// Sem argumento: lê o formulário na tela (uso normal, recalc() a cada digitação).
+// Com um snapshot (ver snapshotForm()): calcula o resultado de qualquer amostra
+// guardada sem precisar aplicá-la no formulário antes - usado no relatório em PDF,
+// que soma o resultado de todas as amostras de uma vez.
+function readState(snap) {
+  const g = id => (snap ? snap[id] : document.getElementById(id).value);
+  const gSeg = id => (snap ? snap[id] : document.querySelector("#" + id + " button.on").dataset.val);
+  const gNum = id => { const v = parseFloat(g(id)); return isNaN(v) ? 0 : v; };
+  const gRaw = id => { const v = g(id); return v === undefined || v === null ? "" : v; };
 
-  const uK = unitKey(document.getElementById("u_k").value);
-  const uCa = unitKey(document.getElementById("u_ca").value);
-  const uMg = unitKey(document.getElementById("u_mg").value);
-  const uAl = unitKey(document.getElementById("u_al").value);
-  const uHal = unitKey(document.getElementById("u_hal").value);
-  const uMo = unitKey(document.getElementById("u_mo").value);
+  const cultura = g("cultura");
+  const sistemaProducao = gSeg("segSistema");
+  const inoculacao = gSeg("segInoculacao");
+  const creditoN = gSeg("segCreditoN");
 
-  const v2raw = rawval("v2Override");
-  const mSubRaw = rawval("mSub");
-  const caSubRaw = rawval("caSub");
+  const uK = unitKey(g("u_k"));
+  const uCa = unitKey(g("u_ca"));
+  const uMg = unitKey(g("u_mg"));
+  const uAl = unitKey(g("u_al"));
+  const uHal = unitKey(g("u_hal"));
+  const uMo = unitKey(g("u_mo"));
+
+  const v2raw = gRaw("v2Override");
+  const mSubRaw = gRaw("mSub");
+  const caSubRaw = gRaw("caSub");
 
   return {
     cultura, sistemaProducao, inoculacao, creditoN,
-    produtividade: num("produtividade"), area: num("area"), estado: document.getElementById("estado").value,
-    argila: num("argila"), prnt: num("prnt") || 80,
+    produtividade: gNum("produtividade"), area: gNum("area"), estado: g("estado"),
+    argila: gNum("argila"), prnt: gNum("prnt") || 80,
     v2Override: v2raw === "" ? null : parseFloat(v2raw),
-    effN: num("effN") || 60, effS: num("effS") || 60,
+    effN: gNum("effN") || 60, effS: gNum("effS") || 60,
     mSub: mSubRaw === "" ? null : parseFloat(mSubRaw),
     caSub: caSubRaw === "" ? null : parseFloat(caSubRaw),
-    ph: num("q_ph"),
-    mo: convMO(num("q_mo"), uMo),
-    p: num("q_p"),
-    k: convCation(num("q_k"), uK, 39.1),
-    ca: convCation(num("q_ca"), uCa, 20),
-    mg: convCation(num("q_mg"), uMg, 12.15),
-    al: convCation(num("q_al"), uAl, 9),
-    hal: convHAl(num("q_hal"), uHal),
-    s: num("q_s"), b: num("q_b"), cu: num("q_cu"), fe: num("q_fe"), mn: num("q_mn"), zn: num("q_zn"),
-    moMicro: num("q_moMicro"), na: num("q_na"),
+    ph: gNum("q_ph"),
+    mo: convMO(gNum("q_mo"), uMo),
+    p: gNum("q_p"),
+    k: convCation(gNum("q_k"), uK, 39.1),
+    ca: convCation(gNum("q_ca"), uCa, 20),
+    mg: convCation(gNum("q_mg"), uMg, 12.15),
+    al: convCation(gNum("q_al"), uAl, 9),
+    hal: convHAl(gNum("q_hal"), uHal),
+    s: gNum("q_s"), b: gNum("q_b"), cu: gNum("q_cu"), fe: gNum("q_fe"), mn: gNum("q_mn"), zn: gNum("q_zn"),
+    moMicro: gNum("q_moMicro"), na: gNum("q_na"),
   };
 }
 
@@ -991,8 +1066,8 @@ function buildFertInputs() {
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
 }
 
-function readFertInputs() {
-  const g = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+function readFertInputs(snap) {
+  const g = (id) => { if (snap) return snap[id] || ""; const el = document.getElementById(id); return el ? el.value : ""; };
   return {
     n: { nome: g("fert_n_nome"), pct: g("fert_n_pct"), preco: g("fert_n_preco") },
     p: { nome: g("fert_p_nome"), pct: g("fert_p_pct"), preco: g("fert_p_preco") },
@@ -1003,7 +1078,157 @@ function readFertInputs() {
   };
 }
 
+/* ===================== AMOSTRAS (várias análises da mesma fazenda) ===================== */
+// Uma fazenda normalmente manda mais de uma amostra de solo pro laboratório (uma por
+// talhão/gleba) - cada amostra guarda sua própria cópia de todos os campos do
+// formulário (cultura, análise química, mistura de fertilizantes etc.). Trocar de
+// amostra salva o formulário atual nela antes de carregar os dados da escolhida, então
+// nada se perde ao alternar. Fica só na memória da aba, mesma política de não salvar
+// entre sessões do resto do app.
+const FORM_FIELD_IDS = [
+  "cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub",
+  "q_ph", "q_mo", "u_mo", "q_p", "q_k", "u_k", "q_ca", "u_ca", "q_mg", "u_mg", "q_al", "u_al", "q_hal", "u_hal",
+  "q_s", "q_b", "q_cu", "q_fe", "q_mn", "q_zn", "q_moMicro", "q_na",
+  "fert_n_nome", "fert_n_pct", "fert_n_preco", "fert_p_nome", "fert_p_pct", "fert_p_preco",
+  "fert_k_nome", "fert_k_pct", "fert_k_preco", "fert_s_nome", "fert_s_pct", "fert_s_preco",
+  "fert_calcario_preco", "fert_gesso_preco",
+];
+const FORM_SEG_IDS = ["segSistema", "segInoculacao", "segCreditoN"];
+
+function snapshotForm() {
+  const snap = {};
+  FORM_FIELD_IDS.forEach(id => { const el = document.getElementById(id); if (el) snap[id] = el.value; });
+  FORM_SEG_IDS.forEach(id => {
+    const btn = document.querySelector("#" + id + " button.on");
+    snap[id] = btn ? btn.dataset.val : null;
+  });
+  return snap;
+}
+
+function applyFormSnapshot(snap) {
+  FORM_FIELD_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && snap[id] !== undefined) el.value = snap[id];
+  });
+  FORM_SEG_IDS.forEach(id => {
+    if (!snap[id]) return;
+    const wrap = document.getElementById(id);
+    wrap.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.val === snap[id]));
+  });
+}
+
+let amostras = [];
+let amostraAtual = 0;
+let amostraSeq = 1;
+let DEFAULT_FORM = null;
+
+function amostraAtualObj() { return amostras[amostraAtual]; }
+
+function renderAmostraSelect() {
+  const sel = document.getElementById("amostraSelect");
+  sel.innerHTML = amostras.map((a, i) => `<option value="${i}" ${i === amostraAtual ? "selected" : ""}>${esc(a.nome)}</option>`).join("");
+  document.getElementById("amostraNome").value = amostraAtualObj().nome;
+  const btnExcluir = document.getElementById("btnAmostraExcluir");
+  btnExcluir.disabled = amostras.length <= 1;
+  btnExcluir.style.opacity = amostras.length <= 1 ? "0.5" : "1";
+}
+
+function trocarAmostra(indice) {
+  amostras[amostraAtual].form = snapshotForm();
+  amostraAtual = indice;
+  applyFormSnapshot(amostraAtualObj().form);
+  renderAmostraSelect();
+  recalc();
+}
+
+function novaAmostra(form, nome) {
+  amostraSeq += 1;
+  amostras.push({ nome: nome || ("Amostra " + amostraSeq), form });
+  trocarAmostra(amostras.length - 1);
+}
+
+function initAmostras() {
+  DEFAULT_FORM = snapshotForm();
+  amostras = [{ nome: "Amostra 1", form: Object.assign({}, DEFAULT_FORM) }];
+  amostraAtual = 0;
+  renderAmostraSelect();
+
+  document.getElementById("amostraSelect").addEventListener("change", e => trocarAmostra(parseInt(e.target.value, 10)));
+  document.getElementById("amostraNome").addEventListener("input", e => {
+    amostraAtualObj().nome = e.target.value || "Amostra";
+    const opt = document.querySelector(`#amostraSelect option[value="${amostraAtual}"]`);
+    if (opt) opt.textContent = amostraAtualObj().nome;
+  });
+  document.getElementById("btnAmostraNova").addEventListener("click", () => {
+    novaAmostra(Object.assign({}, DEFAULT_FORM));
+  });
+  document.getElementById("btnAmostraDuplicar").addEventListener("click", () => {
+    novaAmostra(snapshotForm(), amostraAtualObj().nome + " (cópia)");
+  });
+  document.getElementById("btnAmostraExcluir").addEventListener("click", () => {
+    if (amostras.length <= 1) return;
+    if (!confirm(`Excluir a amostra "${amostraAtualObj().nome}"? Essa ação não pode ser desfeita.`)) return;
+    amostras.splice(amostraAtual, 1);
+    amostraAtual = Math.max(0, amostraAtual - 1);
+    applyFormSnapshot(amostraAtualObj().form);
+    renderAmostraSelect();
+    recalc();
+  });
+
+  document.getElementById("btnRelatorioPdf").addEventListener("click", gerarRelatorioPdf);
+}
+
+/* ===================== RELATÓRIO EM PDF (todas as amostras) ===================== */
+// Usa a função de impressão do navegador (Salvar como PDF na caixa de impressão) em
+// vez de uma biblioteca de PDF - sem dependência externa, e o texto/números impressos
+// vêm das mesmas contas (computeAll) que o restante do app usa, sem duplicar lógica.
+// Tabela cruzada: uma linha por nutriente/corretivo, uma coluna por amostra - pensado
+// pra comparar vários talhões da mesma fazenda (geralmente a mesma cultura) lado a
+// lado, sem repetir "Nutriente" a cada amostra.
+function relatorioTabelaHtml(dados) {
+  const linha = (label, get, dec) => `<tr><td class="rel-linha-label">${label}</td>${dados.map(d => `<td class="num">${fmt(get(d), dec)}</td>`).join("")}</tr>`;
+  const linhaTexto = (label, get) => `<tr><td class="rel-linha-label">${label}</td>${dados.map(d => `<td>${get(d)}</td>`).join("")}</tr>`;
+
+  return `
+  <table class="rel-table rel-table-pivot">
+    <tr><th>Amostra</th>${dados.map(d => `<th>${esc(d.nome)}</th>`).join("")}</tr>
+    ${linhaTexto("Cultura", d => esc(d.s.cultura))}
+    ${linhaTexto("Produtividade meta", d => fmt(d.s.produtividade, 1) + " " + CROP_DB[d.s.cultura].unidade)}
+    ${linha("Área (ha)", d => d.s.area, 1)}
+    <tr><td class="rel-linha-secao" colspan="${dados.length + 1}">Necessidade de nutrientes (kg/ha)</td></tr>
+    ${linha("Nitrogênio (N)", d => d.out.adubacao.N, 1)}
+    ${linha("Fósforo (P2O5)", d => d.out.adubacao.P2O5, 1)}
+    ${linha("Potássio (K2O)", d => d.out.adubacao.K2O, 1)}
+    ${linha("Enxofre (S)", d => d.out.adubacao.S, 1)}
+    ${linha("Zinco (Zn)", d => d.out.adubacao.Zn, 1)}
+    ${linha("Boro (B)", d => d.out.adubacao.B, 1)}
+    ${linha("Cobre (Cu)", d => d.out.adubacao.Cu, 1)}
+    ${linha("Manganês (Mn)", d => d.out.adubacao.Mn, 1)}
+    ${linha("Molibdênio (Mo)", d => d.out.adubacao.Mo, 1)}
+    <tr><td class="rel-linha-secao" colspan="${dados.length + 1}">Corretivos</td></tr>
+    ${linha("Calcário (t/ha)", d => d.out.calagem.ncFinal, 2)}
+    ${linhaTexto("Gesso (kg/ha)", d => d.out.gessagem.recomendaGesso ? fmt(d.out.gessagem.doseGesso, 0) : "-")}
+  </table>`;
+}
+
+function gerarRelatorioPdf() {
+  amostraAtualObj().form = snapshotForm();
+  const dados = amostras.map(a => {
+    const s = readState(a.form);
+    const out = computeAll(s, readFertInputs(a.form));
+    return { nome: a.nome, s, out };
+  });
+  document.getElementById("relatorioImpressao").innerHTML = `
+    <div class="rel-capa">
+      <h1>Relatório de Adubação</h1>
+      <p>${amostras.length} amostra${amostras.length > 1 ? "s" : ""} · gerado em ${new Date().toLocaleDateString("pt-BR")} pelo app Adubação (AE) · não substitui a responsabilidade técnica de um(a) Engenheiro(a) Agrônomo(a) para emissão de receituário agronômico</p>
+    </div>
+    ${relatorioTabelaHtml(dados)}`;
+  window.print();
+}
+
 function recalc() {
+  if (amostras.length) amostraAtualObj().form = snapshotForm();
   const s = readState();
   const out = computeAll(s, readFertInputs());
   render(out, s);
@@ -1032,6 +1257,7 @@ function init() {
 
   buildQuimFields();
   buildFertInputs();
+  initAmostras();
 
   ["cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
