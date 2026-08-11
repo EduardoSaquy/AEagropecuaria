@@ -2315,7 +2315,10 @@ function PageManejoAtivo(){
   const acoesAtivas = m.acoes;
   const numeroAtual = (m.numeroAtualDraft||'').trim();
   const animalNovo = numeroAtual && !animalCadastrado(numeroAtual);
-  const sexoLoteFixo = sexoFixoDoLote(m.loteId);
+  // O sexo fixo (quando o lote não é misto) tem que ser do lote onde o
+  // animal VAI FICAR -- se o manejo move de lote, é o destino que manda,
+  // não o lote de origem que está sendo manejado agora.
+  const sexoLoteFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
   const lote = state.lotes.find(l=>l.id===m.loteId);
   const partosDisponiveis = acoesAtivas.includes('desmama') ? partosSemDesmama(m.loteId) : [];
   return `
@@ -6720,31 +6723,37 @@ function attachEvents(){
     };
     const iniciarBtn = document.querySelector('[data-iniciar-manejo]');
     if(iniciarBtn) iniciarBtn.onclick = async ()=>{
-      const loteId = Number(document.getElementById('f-lotemanejo').value);
-      const data = document.getElementById('f-datamanejo').value;
-      const mudaLote = document.getElementById('f-mudalotemanejo').value==='sim';
-      const loteDestinoId = mudaLote ? Number(document.getElementById('f-lotedestinomanejo').value) : null;
-      const vacinacao = document.getElementById('f-vacinacaomanejo').checked;
-      const vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
-      const acoes = editDraft.acoes;
-      if(!data){ alert('Informe a data do manejo.'); return; }
-      if(acoes.length===0){ alert('Marque ao menos uma ação pra esse manejo.'); return; }
-      if(mudaLote && !loteDestinoId){ alert('Selecione o lote de destino.'); return; }
-      const res = await db.from('manejos').insert(manejoToRow({data, loteId, loteDestinoId, acoes, vacinacao, vermifugacao, status:'aberto', totalAnimais:0})).select().single();
-      if(res.error){ alert('Não foi possível iniciar o manejo: ' + res.error.message); return; }
-      let pesagemId = null;
-      if(acoes.includes('pesagem')){
-        const resPesagem = await db.from('pesagens').insert(pesagemToRow({data, loteId, pesoMedioKg:0, observacao:'Lançado via Manejo', manejoId: res.data.id})).select().single();
-        if(resPesagem.error){ alert('Manejo iniciado, mas não deu pra preparar a pesagem: ' + resPesagem.error.message); }
-        else pesagemId = resPesagem.data.id;
+      if(iniciarBtn.disabled) return;
+      iniciarBtn.disabled = true;
+      try{
+        const loteId = Number(document.getElementById('f-lotemanejo').value);
+        const data = document.getElementById('f-datamanejo').value;
+        const mudaLote = document.getElementById('f-mudalotemanejo').value==='sim';
+        const loteDestinoId = mudaLote ? Number(document.getElementById('f-lotedestinomanejo').value) : null;
+        const vacinacao = document.getElementById('f-vacinacaomanejo').checked;
+        const vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
+        const acoes = editDraft.acoes;
+        if(!data){ alert('Informe a data do manejo.'); return; }
+        if(acoes.length===0){ alert('Marque ao menos uma ação pra esse manejo.'); return; }
+        if(mudaLote && !loteDestinoId){ alert('Selecione o lote de destino.'); return; }
+        const res = await db.from('manejos').insert(manejoToRow({data, loteId, loteDestinoId, acoes, vacinacao, vermifugacao, status:'aberto', totalAnimais:0})).select().single();
+        if(res.error){ alert('Não foi possível iniciar o manejo: ' + res.error.message); return; }
+        let pesagemId = null;
+        if(acoes.includes('pesagem')){
+          const resPesagem = await db.from('pesagens').insert(pesagemToRow({data, loteId, pesoMedioKg:0, observacao:'Lançado via Manejo', manejoId: res.data.id})).select().single();
+          if(resPesagem.error){ alert('Manejo iniciado, mas não deu pra preparar a pesagem: ' + resPesagem.error.message); }
+          else pesagemId = resPesagem.data.id;
+        }
+        const lote = state.lotes.find(l=>l.id===loteId);
+        state.manejoAtivo = {
+          id: res.data.id, loteId, loteNome: lote?.nome||'', loteDestinoId, acoes, vacinacao, vermifugacao, data,
+          pesagemId, numeroAtualDraft:'', animaisFeitos:[],
+        };
+        editDraft = null;
+        render();
+      } finally {
+        iniciarBtn.disabled = false;
       }
-      const lote = state.lotes.find(l=>l.id===loteId);
-      state.manejoAtivo = {
-        id: res.data.id, loteId, loteNome: lote?.nome||'', loteDestinoId, acoes, vacinacao, vermifugacao, data,
-        pesagemId, numeroAtualDraft:'', animaisFeitos:[],
-      };
-      editDraft = null;
-      render();
     };
   }
 
@@ -6757,7 +6766,20 @@ function attachEvents(){
       if(numManejoEl2) numManejoEl2.focus();
     };
     const salvarAnimalManejoBtn = document.querySelector('[data-salvar-animal-manejo]');
+    // Trava contra duplo-clique/duplo-toque -- essa tela é a que mais se
+    // repete no app inteiro (uma vez por animal, numa sessão que pode
+    // passar de 50 toques), com conexão ruim no curral tornando bem mais
+    // provável um segundo toque antes da tela reagir ao primeiro.
     if(salvarAnimalManejoBtn) salvarAnimalManejoBtn.onclick = async ()=>{
+      if(salvarAnimalManejoBtn.disabled) return;
+      salvarAnimalManejoBtn.disabled = true;
+      try{
+        await salvarAnimalManejo();
+      } finally {
+        salvarAnimalManejoBtn.disabled = false;
+      }
+    };
+    async function salvarAnimalManejo(){
       const m = state.manejoAtivo;
       const acoesAtivas = m.acoes;
       const numEl = document.getElementById('f-numanimalmanejo');
@@ -6767,7 +6789,9 @@ function attachEvents(){
       let sexoNovo = '', racaNovo = '';
       const eraNovo = numero && !animalCadastrado(numero);
       if(eraNovo){
-        const sexoFixo = sexoFixoDoLote(m.loteId);
+        // Mesmo raciocínio do template: o sexo fixo é do lote de destino
+        // (quando o manejo move de lote), não do lote sendo manejado.
+        const sexoFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
         const sexoEl = document.getElementById('f-sexomanejo');
         sexoNovo = sexoFixo || (sexoEl ? sexoEl.value : '');
         racaNovo = document.getElementById('f-racamanejo')?.value || '';
@@ -6829,6 +6853,11 @@ function attachEvents(){
       if(acoesAtivas.includes('desmama')){
         const resDesmManejo = await db.from('desmamas').insert(desmamaToRow({partoId:partoIdVal, data:m.data, raca:racaDesmamaVal, pesoKg:Number(pesoDesmamaVal), manejoId:m.id}));
         if(resDesmManejo.error){ alert('Não foi possível salvar a desmama: ' + resDesmManejo.error.message); return; }
+        // Sem isso, o mesmo parto continuaria aparecendo como "disponível"
+        // no seletor pro próximo animal desse mesmo manejo (partosSemDesmama
+        // só enxerga o que já veio do loadAll -- e aqui não tem loadAll no
+        // meio da sequência), deixando desmamar o mesmo bezerro duas vezes.
+        state.desmamas.push({id:`temp_${partoIdVal}_${Date.now()}`, partoId:partoIdVal, data:m.data, raca:racaDesmamaVal, pesoKg:Number(pesoDesmamaVal), criadoPor:autorAtual()||'', manejoId:m.id});
         registro.pesoDesmama = Number(pesoDesmamaVal);
       }
       m.animaisFeitos.push(registro);
@@ -6836,7 +6865,7 @@ function attachEvents(){
       render();
       const numEl2 = document.getElementById('f-numanimalmanejo');
       if(numEl2) numEl2.focus();
-    };
+    }
     const finalizarManejoBtn = document.querySelector('[data-finalizar-manejo]');
     if(finalizarManejoBtn) finalizarManejoBtn.onclick = async ()=>{
       const m = state.manejoAtivo;
