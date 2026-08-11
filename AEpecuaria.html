@@ -6872,6 +6872,22 @@ function attachEvents(){
       if(m.animaisFeitos.length===0 && !confirm('Nenhum animal foi lançado nesse manejo ainda. Finalizar mesmo assim?')) return;
       const {error: erroFinalizarManejo} = await db.from('manejos').update({status:'finalizado', total_animais:m.animaisFeitos.length}).eq('id', m.id);
       if(erroFinalizarManejo){ alert('Não foi possível finalizar o manejo: ' + erroFinalizarManejo.message); return; }
+      // Mudança de lote: desconta do lote de origem e soma no destino o
+      // número de animais realmente numerados (e portanto movidos de
+      // verdade, via upsertAnimal) nessa sessão -- sem número, o
+      // lançamento não move nenhum cadastro específico, então não conta
+      // aqui (senão a contagem desandaria pra quem pesa sem numerar).
+      if(m.loteDestinoId){
+        const numerosMovidos = new Set(m.animaisFeitos.filter(a=>a.numero).map(a=>a.numero));
+        const qtdMovida = numerosMovidos.size;
+        if(qtdMovida>0){
+          const loteOrigemManejo = state.lotes.find(l=>l.id===m.loteId);
+          const loteDestinoManejo = state.lotes.find(l=>l.id===m.loteDestinoId);
+          const erroOrigem = (await db.from('lotes').update({numero_animais: Math.max(0, Number(loteOrigemManejo?.numeroAnimais||0)-qtdMovida)}).eq('id', m.loteId)).error;
+          const erroDestino = (await db.from('lotes').update({numero_animais: Number(loteDestinoManejo?.numeroAnimais||0)+qtdMovida}).eq('id', m.loteDestinoId)).error;
+          if(erroOrigem || erroDestino) alert('O manejo foi finalizado, mas não deu pra ajustar o número de animais dos lotes: ' + (erroOrigem||erroDestino).message);
+        }
+      }
       state.manejoAtivo = null;
       await loadAll();
     };
