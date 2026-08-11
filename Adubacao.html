@@ -125,11 +125,32 @@ input:focus, select:focus{outline:none; border-color:var(--verde-medio);}
   border:none; background:var(--verde-escuro); color:var(--branco); cursor:pointer; width:100%;
 }
 .btn-primary-full:active{background:#25401f;}
-.btn-link{
-  font-family:'Inter',sans-serif; font-size:12px; font-weight:600; color:var(--verde-medio);
-  background:none; border:none; cursor:pointer; padding:2px 4px;
+
+/* Tabelas editáveis célula a célula (Insumos, Aplicações) - sem abrir painel
+   separado: clica na célula, digita, o valor já grava e recalcula, como planilha. */
+.spread-row td{padding:4px 6px; vertical-align:middle;}
+.spread-row-garantias td{padding:2px 6px 10px 6px; border-bottom:1px solid var(--cinza-claro); background:var(--cinza-bg);}
+.cell-input{
+  width:100%; border:1.5px solid transparent; background:transparent; padding:7px 8px; border-radius:7px;
+  font-family:'Inter',sans-serif; font-size:13.5px; color:var(--grafite);
 }
-.btn-link-danger{color:var(--alerta);}
+.cell-input:hover{border-color:var(--cinza-claro); background:var(--branco);}
+.cell-input:focus{outline:none; border-color:var(--verde-medio); background:var(--branco);}
+.cell-input.num{text-align:right; font-family:'IBM Plex Mono',monospace;}
+.row-remove{
+  background:none; border:none; color:var(--cinza); font-size:14px; cursor:pointer; padding:6px 8px;
+  border-radius:6px; line-height:1;
+}
+.row-remove:hover{color:var(--alerta); background:var(--alerta-bg);}
+.garantias-strip{display:flex; flex-wrap:wrap; gap:8px 10px; padding:8px 2px 2px 2px;}
+.garantias-strip .gcell{display:flex; flex-direction:column; gap:2px; width:58px;}
+.garantias-strip .gcell label{font-size:9.5px; color:var(--cinza); text-transform:uppercase; letter-spacing:0.3px; padding-left:2px;}
+.garantias-strip .cell-input{padding:5px 6px; font-size:12.5px;}
+
+/* Barra de progresso visual (quanto do nutriente o solo já cobre) na tabela de Necessidade */
+.nutri-bar-wrap{display:flex; flex-direction:column; align-items:flex-end; gap:3px; min-width:70px;}
+.nutri-bar{width:100%; height:5px; background:var(--cinza-claro); border-radius:3px; overflow:hidden;}
+.nutri-bar-fill{height:100%; border-radius:3px; transition:width .3s ease;}
 
 .section-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--verde-medio); font-weight:700; margin:18px 0 8px 2px;}
 .section-label:first-child{margin-top:0;}
@@ -151,7 +172,7 @@ th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0
 td{padding:9px 8px; border-bottom:1px solid var(--cinza-claro); vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 td.num{text-align:right; font-family:'IBM Plex Mono',monospace; white-space:nowrap;}
-td.falta{text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--verde-escuro); white-space:nowrap;}
+.falta{text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--verde-escuro); white-space:nowrap;}
 .tbl-input{
   width:100%; font-family:'Inter',sans-serif; font-size:16px; padding:9px 6px; border-radius:6px;
   border:1.5px solid var(--cinza-claro); background:var(--cinza-bg); color:var(--grafite);
@@ -404,18 +425,16 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 
   <div class="card card-pad">
     <div class="card-title">🧾 Aplicações Já Decididas</div>
-    <div class="card-sub" style="margin-bottom:6px;">O que você já vai aplicar por conta própria (estoque, orgânico próprio, preferência etc.) — escolhe do catálogo de insumos ou digita um produto avulso na hora. Isso abate da necessidade calculada antes do Otimizador rodar.</div>
+    <div class="card-sub" style="margin-bottom:6px;">O que você já vai aplicar por conta própria (estoque, orgânico próprio, preferência etc.) — toque em qualquer célula pra editar direto, sem abrir tela nenhuma. Preencha a partir do catálogo ou digite um produto avulso. Isso abate da necessidade calculada antes do Otimizador rodar.</div>
     <div style="overflow-x:auto;"><table id="tabelaAplicacoes"></table></div>
     <button type="button" class="btn-ghost-full" id="btnNovaAplicacao" style="margin-top:8px;">+ Adicionar aplicação</button>
-    <div id="aplicacaoEditor"></div>
   </div>
 
   <div class="card card-pad">
     <div class="card-title">🧮 Otimizador de Insumos (catálogo)</div>
-    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias — o app já calcula sozinho a combinação de menor custo que cobre o que ainda falta (necessidade já descontando as Aplicações Já Decididas acima) e soma no Custo Total, sem precisar clicar em nada. O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
+    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias, editando direto na tabela — o app já calcula sozinho a combinação de menor custo que cobre o que ainda falta (necessidade já descontando as Aplicações Já Decididas acima) e soma no Custo Total, ao vivo. O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
     <div style="overflow-x:auto;"><table id="tabelaInsumos"></table></div>
     <button type="button" class="btn-ghost-full" id="btnNovoInsumo" style="margin-top:8px;">+ Adicionar insumo</button>
-    <div id="insumoEditor"></div>
     <div id="otimizadorResultado"></div>
   </div>
 
@@ -952,9 +971,13 @@ function render(out, s) {
     `<th style="text-align:right">Necessidade</th><th style="text-align:right">Falta</th></tr>` +
     compRows.map(([nome, solo, classe, need]) => {
       const falta = Math.max(0, need - solo);
+      const pctCoberto = need > 0.001 ? Math.max(0, Math.min(100, ((need - falta) / need) * 100)) : 100;
+      const corBarra = pctCoberto >= 99.9 ? "var(--bom)" : pctCoberto >= 50 ? "var(--ambar)" : "var(--alerta)";
       return `<tr><td>${nome}</td><td class="num">${fmt(solo, 1)}</td>` +
         `<td><span class="pill ${pillClass(classe)}">${classe}</span></td>` +
-        `<td class="num">${fmt(need, 1)}</td><td class="falta">${fmt(falta, 1)}</td></tr>`;
+        `<td class="num">${fmt(need, 1)}</td>` +
+        `<td><div class="nutri-bar-wrap"><span class="falta">${fmt(falta, 1)}</span>` +
+        `<div class="nutri-bar" title="${fmt(pctCoberto, 0)}% já coberto pelo solo"><div class="nutri-bar-fill" style="width:${pctCoberto}%; background:${corBarra};"></div></div></div></td></tr>`;
     }).join("");
   const nutrientesAbatidos = NUTRIENTES_LP.filter(nut => (ad.suprimoManual[nut] || 0) > 0.001);
   document.getElementById("nDoseInfo").innerHTML =
@@ -1239,85 +1262,67 @@ function novoInsumoObj() {
   return { id: "ins_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), nome: "", tipo: "Fertilizante", preco: 0, prnt: 80, garantias: {} };
 }
 
+// Tabela editável célula a célula (sem abrir painel/Salvar/Cancelar) - cada campo
+// grava direto no objeto e recalcula ao digitar, como uma planilha. A faixa de
+// garantias fica sempre visível embaixo do nome/tipo/preço, não escondida atrás de
+// um clique.
 function renderTabelaInsumos() {
   const tbl = document.getElementById("tabelaInsumos");
   if (catalogoInsumos.length === 0) {
-    tbl.innerHTML = `<tr><td class="rel-hint" style="padding:8px 4px;">Nenhum insumo cadastrado ainda.</td></tr>`;
-  } else {
-    tbl.innerHTML = `<tr><th>Insumo</th><th>Tipo</th><th style="text-align:right">Preço R$/t</th><th></th></tr>` +
-      catalogoInsumos.map(ins => `
-        <tr>
-          <td>${esc(ins.nome) || "(sem nome)"}</td>
-          <td>${esc(ins.tipo)}</td>
-          <td class="num">${fmt(ins.preco, 2)}</td>
-          <td style="white-space:nowrap; text-align:right;">
-            <button type="button" class="btn-link" data-editar-insumo="${ins.id}">Editar</button>
-            <button type="button" class="btn-link btn-link-danger" data-excluir-insumo="${ins.id}">Excluir</button>
-          </td>
-        </tr>`).join("");
+    tbl.innerHTML = `<tr><td class="rel-hint" style="padding:10px 4px;">Nenhum insumo cadastrado ainda — clique em "+ Adicionar insumo" abaixo.</td></tr>`;
+    return;
   }
-  tbl.querySelectorAll("[data-editar-insumo]").forEach(b => b.addEventListener("click", () => abrirEditorInsumo(b.dataset.editarInsumo)));
-  tbl.querySelectorAll("[data-excluir-insumo]").forEach(b => b.addEventListener("click", () => excluirInsumo(b.dataset.excluirInsumo)));
-}
-
-function abrirEditorInsumo(id) {
-  const ins = id === "novo" ? novoInsumoObj() : catalogoInsumos.find(i => i.id === id);
-  if (!ins) return;
-  const wrap = document.getElementById("insumoEditor");
-  wrap.innerHTML = `
-    <div style="background:var(--cinza-bg); border-radius:9px; padding:12px; margin-top:10px;">
-      <div class="field"><label>Nome</label><input type="text" id="ie_nome" value="${esc(ins.nome)}" placeholder="ex.: MAP, Composto de cama de frango"></div>
-      <div class="row2">
-        <div class="field"><label>Tipo</label>
-          <select id="ie_tipo">${TIPOS_INSUMO.map(t => `<option ${t === ins.tipo ? "selected" : ""}>${t}</option>`).join("")}</select>
+  const linha = ins => `
+    <tr class="spread-row" data-insumo-row="${ins.id}">
+      <td><input class="cell-input" data-insumo="${ins.id}" data-field="nome" value="${esc(ins.nome)}" placeholder="nome do insumo"></td>
+      <td><select class="cell-input" data-insumo="${ins.id}" data-field="tipo">${TIPOS_INSUMO.map(t => `<option ${t === ins.tipo ? "selected" : ""}>${t}</option>`).join("")}</select></td>
+      <td><input class="cell-input num" data-insumo="${ins.id}" data-field="preco" type="number" step="10" value="${ins.preco || ""}" placeholder="R$/t"></td>
+      <td style="text-align:right;"><button type="button" class="row-remove" data-remover-insumo="${ins.id}" title="Excluir">✕</button></td>
+    </tr>
+    <tr class="spread-row-garantias">
+      <td colspan="4">
+        <div class="garantias-strip">
+          ${ins.tipo === "Calcário" ? `<div class="gcell"><label>PRNT %</label><input class="cell-input num" data-insumo="${ins.id}" data-field="prnt" type="number" step="1" value="${ins.prnt || ""}"></div>` : ""}
+          ${NUTRIENTES_GARANTIA.map(k => `<div class="gcell"><label>${k}</label><input class="cell-input num" data-insumo="${ins.id}" data-field="garantia_${k}" type="number" step="0.1" value="${ins.garantias[k] || ""}" placeholder="0"></div>`).join("")}
         </div>
-        <div class="field"><label>Preço (R$/t)</label><input type="number" id="ie_preco" value="${ins.preco || ""}" step="10"></div>
-      </div>
-      <div class="field" id="ie_prnt_wrap" style="display:${ins.tipo === "Calcário" ? "block" : "none"};">
-        <label>PRNT (%) <span class="hint">só calcário</span></label><input type="number" id="ie_prnt" value="${ins.prnt || 80}" step="1">
-      </div>
-      <div class="section-label" style="margin-top:8px;">Garantias (% na embalagem)</div>
-      <div class="diag-grid" style="grid-template-columns:repeat(3,1fr);">
-        ${NUTRIENTES_GARANTIA.map(k => `
-          <div class="field" style="margin-bottom:2px;"><label style="font-size:11px;">${k}</label>
-            <input type="number" id="ie_g_${k}" value="${ins.garantias[k] || ""}" step="0.1" placeholder="0"></div>`).join("")}
-      </div>
-      <div class="row2" style="margin-top:10px;">
-        <button type="button" class="btn-primary-full" id="btnSalvarInsumo">Salvar</button>
-        <button type="button" class="btn-ghost-full" id="btnCancelarInsumo">Cancelar</button>
-      </div>
-    </div>`;
-  document.getElementById("ie_tipo").addEventListener("change", e => {
-    document.getElementById("ie_prnt_wrap").style.display = e.target.value === "Calcário" ? "block" : "none";
-  });
-  document.getElementById("btnSalvarInsumo").addEventListener("click", () => salvarInsumoEditor(ins.id));
-  document.getElementById("btnCancelarInsumo").addEventListener("click", fecharEditorInsumo);
+      </td>
+    </tr>`;
+  tbl.innerHTML = `<tr><th>Insumo</th><th>Tipo</th><th style="text-align:right">Preço R$/t</th><th></th></tr>` + catalogoInsumos.map(linha).join("");
 }
-function fecharEditorInsumo() { document.getElementById("insumoEditor").innerHTML = ""; }
 
-function salvarInsumoEditor(id) {
-  const novo = {
-    id,
-    nome: document.getElementById("ie_nome").value.trim() || "Insumo sem nome",
-    tipo: document.getElementById("ie_tipo").value,
-    preco: parseFloat(document.getElementById("ie_preco").value) || 0,
-    prnt: parseFloat(document.getElementById("ie_prnt").value) || 80,
-    garantias: {},
-  };
-  NUTRIENTES_GARANTIA.forEach(k => { novo.garantias[k] = parseFloat(document.getElementById("ie_g_" + k).value) || 0; });
-  const idx = catalogoInsumos.findIndex(i => i.id === id);
-  if (idx >= 0) catalogoInsumos[idx] = novo; else catalogoInsumos.push(novo);
-  salvarCatalogo();
-  fecharEditorInsumo();
-  renderTabelaInsumos();
-  recalc();
-}
-function excluirInsumo(id) {
-  if (!confirm("Excluir este insumo do catálogo?")) return;
-  catalogoInsumos = catalogoInsumos.filter(i => i.id !== id);
-  salvarCatalogo();
-  renderTabelaInsumos();
-  recalc();
+function wireInsumoTableEvents() {
+  const tbl = document.getElementById("tabelaInsumos");
+  tbl.addEventListener("input", e => {
+    const id = e.target.dataset.insumo;
+    if (!id) return;
+    const ins = catalogoInsumos.find(i => i.id === id);
+    if (!ins) return;
+    const field = e.target.dataset.field;
+    if (field === "nome") ins.nome = e.target.value;
+    else if (field === "preco") ins.preco = parseFloat(e.target.value) || 0;
+    else if (field === "prnt") ins.prnt = parseFloat(e.target.value) || 80;
+    else if (field && field.startsWith("garantia_")) ins.garantias[field.slice(9)] = parseFloat(e.target.value) || 0;
+    salvarCatalogo();
+    recalc();
+  });
+  tbl.addEventListener("change", e => {
+    if (e.target.dataset.field !== "tipo") return;
+    const ins = catalogoInsumos.find(i => i.id === e.target.dataset.insumo);
+    if (!ins) return;
+    ins.tipo = e.target.value;
+    salvarCatalogo();
+    renderTabelaInsumos(); // troca de tipo muda se o PRNT aparece - só esse caso reconstrói a tabela
+    recalc();
+  });
+  tbl.addEventListener("click", e => {
+    const removerId = e.target.dataset.removerInsumo;
+    if (!removerId) return;
+    if (!confirm("Excluir este insumo do catálogo?")) return;
+    catalogoInsumos = catalogoInsumos.filter(i => i.id !== removerId);
+    salvarCatalogo();
+    renderTabelaInsumos();
+    recalc();
+  });
 }
 
 // Roda automaticamente a cada recalc() (não depende mais de botão) - o resultado
@@ -1390,7 +1395,15 @@ function atualizarCustoTotal(out, s, custoOtimizador) {
 function initOtimizador() {
   carregarCatalogo();
   renderTabelaInsumos();
-  document.getElementById("btnNovoInsumo").addEventListener("click", () => abrirEditorInsumo("novo"));
+  wireInsumoTableEvents();
+  document.getElementById("btnNovoInsumo").addEventListener("click", () => {
+    const novo = novoInsumoObj();
+    catalogoInsumos.push(novo);
+    salvarCatalogo();
+    renderTabelaInsumos();
+    const input = document.querySelector(`[data-insumo="${novo.id}"][data-field="nome"]`);
+    if (input) input.focus();
+  });
 }
 
 /* ===================== APLICAÇÕES JÁ DECIDIDAS ===================== */
@@ -1403,104 +1416,78 @@ function renderTabelaAplicacoes() {
   const aplic = (amostraAtualObj() && amostraAtualObj().aplicacoes) || [];
   const tbl = document.getElementById("tabelaAplicacoes");
   if (aplic.length === 0) {
-    tbl.innerHTML = `<tr><td class="rel-hint" style="padding:8px 4px;">Nenhuma aplicação lançada ainda.</td></tr>`;
-  } else {
-    tbl.innerHTML = `<tr><th>Insumo</th><th style="text-align:right">Dose (kg/ha)</th><th style="text-align:right">Custo/ha</th><th></th></tr>` +
-      aplic.map((ap, i) => `
-        <tr>
-          <td>${esc(ap.nome)}</td>
-          <td class="num">${fmt(ap.dose, 1)}</td>
-          <td class="num">${ap.preco > 0 ? fmtMoney(ap.dose * ap.preco / 1000) : "-"}</td>
-          <td style="text-align:right; white-space:nowrap;"><button type="button" class="btn-link btn-link-danger" data-remover-aplicacao="${i}">Remover</button></td>
-        </tr>`).join("");
+    tbl.innerHTML = `<tr><td class="rel-hint" style="padding:10px 4px;">Nenhuma aplicação lançada ainda — clique em "+ Adicionar aplicação" abaixo.</td></tr>`;
+    return;
   }
-  tbl.querySelectorAll("[data-remover-aplicacao]").forEach(b => b.addEventListener("click", () => {
-    amostraAtualObj().aplicacoes.splice(parseInt(b.dataset.removerAplicacao, 10), 1);
+  const catalogoOpcoes = catalogoInsumos.filter(i => i.tipo === "Fertilizante" || i.tipo === "Composto Orgânico");
+  const linha = (ap, i) => `
+    <tr class="spread-row" data-aplicacao-row="${i}">
+      <td><input class="cell-input" data-aplicacao="${i}" data-field="nome" value="${esc(ap.nome)}" placeholder="nome"></td>
+      <td><input class="cell-input num" data-aplicacao="${i}" data-field="dose" type="number" step="1" value="${ap.dose || ""}" placeholder="kg/ha"></td>
+      <td><input class="cell-input num" data-aplicacao="${i}" data-field="preco" type="number" step="10" value="${ap.preco || ""}" placeholder="R$/t"></td>
+      <td class="num" data-custo-aplicacao="${i}">${ap.preco > 0 ? fmtMoney((ap.dose || 0) * ap.preco / 1000) : "-"}</td>
+      <td style="text-align:right;"><button type="button" class="row-remove" data-remover-aplicacao="${i}" title="Excluir">✕</button></td>
+    </tr>
+    <tr class="spread-row-garantias">
+      <td colspan="5">
+        ${catalogoOpcoes.length ? `<div class="field" style="margin-bottom:8px; max-width:280px;"><label style="font-size:11px;">Preencher a partir do catálogo</label>
+          <select data-preencher-catalogo="${i}"><option value="">— escolher um insumo cadastrado —</option>${catalogoOpcoes.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join("")}</select></div>` : ""}
+        <div class="garantias-strip">
+          ${NUTRIENTES_LP.map(k => `<div class="gcell"><label>${k}</label><input class="cell-input num" data-aplicacao="${i}" data-field="garantia_${k}" type="number" step="0.1" value="${(ap.garantias && ap.garantias[k]) || ""}" placeholder="0"></div>`).join("")}
+        </div>
+      </td>
+    </tr>`;
+  tbl.innerHTML = `<tr><th>Insumo</th><th style="text-align:right">Dose (kg/ha)</th><th style="text-align:right">Preço R$/t</th><th style="text-align:right">Custo/ha</th><th></th></tr>` + aplic.map(linha).join("");
+}
+
+function wireAplicacoesTableEvents() {
+  const tbl = document.getElementById("tabelaAplicacoes");
+  tbl.addEventListener("input", e => {
+    const idx = e.target.dataset.aplicacao;
+    if (idx === undefined) return;
+    const ap = amostraAtualObj().aplicacoes[idx];
+    if (!ap) return;
+    const field = e.target.dataset.field;
+    if (field === "nome") { ap.nome = e.target.value; return; }
+    if (field === "dose") ap.dose = parseFloat(e.target.value) || 0;
+    else if (field === "preco") ap.preco = parseFloat(e.target.value) || 0;
+    else if (field && field.startsWith("garantia_")) { ap.garantias = ap.garantias || {}; ap.garantias[field.slice(9)] = parseFloat(e.target.value) || 0; }
+    const custoCell = tbl.querySelector(`[data-custo-aplicacao="${idx}"]`);
+    if (custoCell) custoCell.textContent = ap.preco > 0 ? fmtMoney((ap.dose || 0) * ap.preco / 1000) : "-";
+    recalc();
+  });
+  tbl.addEventListener("change", e => {
+    const idx = e.target.dataset.preencherCatalogo;
+    if (idx === undefined) return;
+    const ins = catalogoInsumos.find(i => i.id === e.target.value);
+    if (!ins) return;
+    const ap = amostraAtualObj().aplicacoes[idx];
+    ap.nome = ins.nome;
+    ap.garantias = Object.assign({}, ins.garantias);
+    if (!ap.preco) ap.preco = ins.preco || 0;
+    renderTabelaAplicacoes(); // troca vários campos de uma vez, precisa reconstruir a linha
+    recalc();
+  });
+  tbl.addEventListener("click", e => {
+    const idx = e.target.dataset.removerAplicacao;
+    if (idx === undefined) return;
+    amostraAtualObj().aplicacoes.splice(parseInt(idx, 10), 1);
     renderTabelaAplicacoes();
     recalc();
-  }));
-}
-
-function abrirEditorAplicacao() {
-  const insumosEscolhiveis = catalogoInsumos.filter(i => i.tipo === "Fertilizante" || i.tipo === "Composto Orgânico");
-  const wrap = document.getElementById("aplicacaoEditor");
-  wrap.innerHTML = `
-    <div style="background:var(--cinza-bg); border-radius:9px; padding:12px; margin-top:10px;">
-      <div class="seg" id="ap_origem">
-        <button type="button" data-val="catalogo" class="${insumosEscolhiveis.length ? "on" : ""}">Do catálogo</button>
-        <button type="button" data-val="avulso" class="${insumosEscolhiveis.length ? "" : "on"}">Avulso</button>
-      </div>
-      <div class="field" id="ap_catalogo_wrap" style="margin-top:10px; display:${insumosEscolhiveis.length ? "block" : "none"};">
-        <label>Insumo</label>
-        <select id="ap_insumo_id">${insumosEscolhiveis.map(i => `<option value="${i.id}">${esc(i.nome)}</option>`).join("") || `<option value="">Nenhum insumo cadastrado no catálogo</option>`}</select>
-      </div>
-      <div id="ap_avulso_wrap" style="display:${insumosEscolhiveis.length ? "none" : "block"};">
-        <div class="field" style="margin-top:10px;"><label>Nome</label><input type="text" id="ap_nome" placeholder="ex.: Esterco de galinha"></div>
-        <div class="section-label" style="margin-top:6px;">Garantias (%)</div>
-        <div class="diag-grid" style="grid-template-columns:repeat(3,1fr);">
-          ${NUTRIENTES_LP.map(k => `<div class="field" style="margin-bottom:2px;"><label style="font-size:11px;">${k}</label><input type="number" id="ap_g_${k}" step="0.1" placeholder="0"></div>`).join("")}
-        </div>
-      </div>
-      <div class="row2" style="margin-top:10px;">
-        <div class="field"><label>Dose (kg/ha)</label><input type="number" id="ap_dose" step="1"></div>
-        <div class="field"><label>Preço (R$/t) <span class="hint">opcional</span></label><input type="number" id="ap_preco" step="10"></div>
-      </div>
-      <div class="row2" style="margin-top:10px;">
-        <button type="button" class="btn-primary-full" id="btnSalvarAplicacao">Adicionar</button>
-        <button type="button" class="btn-ghost-full" id="btnCancelarAplicacao">Cancelar</button>
-      </div>
-    </div>`;
-
-  const segOrigem = document.getElementById("ap_origem");
-  segOrigem.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
-    segOrigem.querySelectorAll("button").forEach(b => b.classList.remove("on"));
-    btn.classList.add("on");
-    const ehCatalogo = btn.dataset.val === "catalogo";
-    document.getElementById("ap_catalogo_wrap").style.display = ehCatalogo ? "block" : "none";
-    document.getElementById("ap_avulso_wrap").style.display = ehCatalogo ? "none" : "block";
-  }));
-  const selInsumo = document.getElementById("ap_insumo_id");
-  if (selInsumo) selInsumo.addEventListener("change", () => {
-    const ins = insumosEscolhiveis.find(i => i.id === selInsumo.value);
-    if (ins) document.getElementById("ap_preco").value = ins.preco || "";
   });
-  if (insumosEscolhiveis.length && selInsumo) document.getElementById("ap_preco").value = insumosEscolhiveis[0].preco || "";
-
-  document.getElementById("btnSalvarAplicacao").addEventListener("click", salvarAplicacao);
-  document.getElementById("btnCancelarAplicacao").addEventListener("click", fecharEditorAplicacao);
-}
-function fecharEditorAplicacao() { document.getElementById("aplicacaoEditor").innerHTML = ""; }
-
-function salvarAplicacao() {
-  const origem = document.querySelector("#ap_origem button.on").dataset.val;
-  const dose = parseFloat(document.getElementById("ap_dose").value) || 0;
-  const precoInput = parseFloat(document.getElementById("ap_preco").value) || 0;
-  if (dose <= 0) { alert("Informe a dose (kg/ha) da aplicação."); return; }
-
-  let nome, garantias, preco = precoInput;
-  if (origem === "catalogo") {
-    const insumosEscolhiveis = catalogoInsumos.filter(i => i.tipo === "Fertilizante" || i.tipo === "Composto Orgânico");
-    const ins = insumosEscolhiveis.find(i => i.id === document.getElementById("ap_insumo_id").value);
-    if (!ins) { alert("Cadastre um insumo no catálogo primeiro, ou escolha \"Avulso\"."); return; }
-    nome = ins.nome;
-    garantias = ins.garantias;
-    if (!preco) preco = ins.preco || 0;
-  } else {
-    nome = document.getElementById("ap_nome").value.trim() || "Insumo sem nome";
-    garantias = {};
-    NUTRIENTES_LP.forEach(k => { garantias[k] = parseFloat(document.getElementById("ap_g_" + k).value) || 0; });
-  }
-
-  amostraAtualObj().aplicacoes = amostraAtualObj().aplicacoes || [];
-  amostraAtualObj().aplicacoes.push({ nome, garantias, preco, dose });
-  fecharEditorAplicacao();
-  renderTabelaAplicacoes();
-  recalc();
 }
 
 function initAplicacoes() {
   renderTabelaAplicacoes();
-  document.getElementById("btnNovaAplicacao").addEventListener("click", abrirEditorAplicacao);
+  wireAplicacoesTableEvents();
+  document.getElementById("btnNovaAplicacao").addEventListener("click", () => {
+    amostraAtualObj().aplicacoes = amostraAtualObj().aplicacoes || [];
+    amostraAtualObj().aplicacoes.push({ nome: "", garantias: {}, preco: 0, dose: 0 });
+    const idx = amostraAtualObj().aplicacoes.length - 1;
+    renderTabelaAplicacoes();
+    const input = document.querySelector(`[data-aplicacao="${idx}"][data-field="nome"]`);
+    if (input) input.focus();
+  });
 }
 
 function recalc() {
