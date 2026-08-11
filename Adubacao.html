@@ -1051,23 +1051,43 @@ function render(out, s) {
 // calculada de cara - o preço fica em branco (varia demais por região/época pra ter
 // padrão) e o custo só aparece quando ele for informado. Nome e teor podem ser trocados
 // livremente pelo produto que o produtor realmente vai usar.
-// P2O5 e S usam o mesmo produto por padrão (Superfosfato Simples, ~18% P2O5 e ~12% S) -
-// o Simples já entrega uma quantidade relevante de enxofre junto com o fósforo, então
-// as duas linhas vêm com o mesmo nome de propósito: a lógica de "formulado" acima
-// entende que é uma única compra e cobra o custo uma vez só (dose = a maior das duas,
-// pra nunca faltar nenhum dos dois nutrientes).
+// O padrão de enxofre depende da cultura (ver defaultSParaCultura): na cana o gesso já
+// costuma ser a fonte de S (e de quebra entrega Ca), então não sugere produto - só o
+// crédito de S do gesso (computeAll) entra na conta, e a linha fica em branco pra
+// preencher manualmente se sobrar necessidade. Nas demais culturas sugere Enxofre
+// Pastilhado (90%), fonte pronta (sulfato), sem depender de oxidação no solo como o
+// enxofre elementar bruto.
 const ADUBO_PADRAO = {
   n: { nome: "Ureia", pct: 45 },
   p: { nome: "Superfosfato Simples", pct: 18 },
   k: { nome: "Cloreto de Potássio (KCl)", pct: 60 },
-  s: { nome: "Superfosfato Simples", pct: 12 },
 };
+const S_PADRAO_NAO_CANA = { nome: "Enxofre Pastilhado", pct: 90 };
+function defaultSParaCultura(cultura) {
+  return cultura === "Cana-de-açúcar" ? { nome: "", pct: "" } : S_PADRAO_NAO_CANA;
+}
+// Só troca o padrão de S ao mudar de cultura se o campo ainda estiver com um valor
+// que o próprio app sugeriu (ou vazio) - nunca sobrescreve um produto que o usuário
+// digitou por conta própria.
+function ehSPadraoOuVazio(nome) {
+  const n = (nome || "").trim();
+  return n === "" || n === S_PADRAO_NAO_CANA.nome;
+}
+function atualizarSPadraoPorCultura() {
+  const nomeEl = document.getElementById("fert_s_nome");
+  const pctEl = document.getElementById("fert_s_pct");
+  if (!ehSPadraoOuVazio(nomeEl.value)) return;
+  const padrao = defaultSParaCultura(document.getElementById("cultura").value);
+  nomeEl.value = padrao.nome;
+  pctEl.value = padrao.pct;
+}
 function buildFertInputs() {
   const linhasNutriente = [
     ["n", "N"], ["p", "P2O5"], ["k", "K2O"], ["s", "S"],
   ];
+  const padraoS = defaultSParaCultura(document.getElementById("cultura").value);
   const linhaTabela = (id, label, temTeor) => {
-    const padrao = ADUBO_PADRAO[id];
+    const padrao = id === "s" ? padraoS : ADUBO_PADRAO[id];
     return `
     <tr>
       <td>${label}</td>
@@ -1089,6 +1109,8 @@ function buildFertInputs() {
    "fert_k_nome", "fert_k_pct", "fert_k_preco", "fert_s_nome", "fert_s_pct", "fert_s_preco",
    "fert_calcario_preco", "fert_gesso_preco"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
+
+  document.getElementById("cultura").addEventListener("change", () => { atualizarSPadraoPorCultura(); recalc(); });
 }
 
 function readFertInputs(snap) {
