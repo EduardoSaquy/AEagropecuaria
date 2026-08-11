@@ -125,6 +125,11 @@ input:focus, select:focus{outline:none; border-color:var(--verde-medio);}
   border:none; background:var(--verde-escuro); color:var(--branco); cursor:pointer; width:100%;
 }
 .btn-primary-full:active{background:#25401f;}
+.btn-link{
+  font-family:'Inter',sans-serif; font-size:12px; font-weight:600; color:var(--verde-medio);
+  background:none; border:none; cursor:pointer; padding:2px 4px;
+}
+.btn-link-danger{color:var(--alerta);}
 
 .section-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--verde-medio); font-weight:700; margin:18px 0 8px 2px;}
 .section-label:first-child{margin-top:0;}
@@ -241,31 +246,6 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     </div>
     <button type="button" class="btn-danger-full" id="btnAmostraExcluir" style="margin-top:8px;">🗑 Excluir esta amostra</button>
     <button type="button" class="btn-primary-full" id="btnRelatorioPdf" style="margin-top:14px;">📄 Gerar relatório PDF (todas as amostras)</button>
-  </div>
-
-  <div class="card card-pad">
-    <div class="section-label">Leitura automática do laudo (IA)</div>
-    <div class="card-sub" style="margin-bottom:10px;">Tire uma foto ou importe o arquivo do laudo de solo (mesmo com várias amostras juntas) e a IA preenche os campos pra você — confira os valores antes de usar a recomendação. Usa a API da Anthropic (Claude) com sua própria chave, salva só neste navegador; cada leitura tem um custo pequeno e precisa de internet.</div>
-    <details style="margin-bottom:10px;">
-      <summary style="cursor:pointer; font-size:12.5px; color:var(--verde-medio); font-weight:600;">Chave de API (Anthropic)</summary>
-      <div style="padding-top:10px;">
-        <div class="field">
-          <label>Chave de API</label>
-          <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
-          <span class="hint">Sua chave fica salva só no armazenamento deste navegador — nunca é enviada pra ninguém além da Anthropic. Ela fica visível nas requisições feitas por este site (normal em apps sem servidor); não use uma chave compartilhada com outros sistemas.</span>
-        </div>
-        <button type="button" class="btn-ghost-full" id="btnSalvarApiKey">Salvar chave</button>
-        <div class="note" id="apiKeyStatus"></div>
-      </div>
-    </details>
-    <input type="file" id="inputFotoLaudo" accept="image/*" capture="environment" style="display:none">
-    <input type="file" id="inputArquivoLaudo" accept="image/*,application/pdf" style="display:none">
-    <div class="row2">
-      <button type="button" class="btn-ghost-full" id="btnTirarFoto">📷 Tirar foto</button>
-      <button type="button" class="btn-ghost-full" id="btnImportarArquivo">📁 Importar arquivo</button>
-    </div>
-    <div class="note" id="leituraStatus"></div>
-    <div id="leituraPreview"></div>
   </div>
 
   <div class="card card-pad">
@@ -430,6 +410,16 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     <div class="card-sub" style="margin-bottom:6px;">Já sugerimos um adubo comum e o teor (%) dele pra cada nutriente, com a dose calculada — troque pelo produto que você realmente vai usar se for outro. Preço fica em branco (sem padrão) até você preencher. Formulado com mais de um nutriente (ex.: NPK)? Repita o mesmo nome nas linhas que ele cobre — o custo é contado uma única vez.</div>
     <div style="overflow-x:auto;"><table id="tabelaMistura"></table></div>
     <div class="note" id="custoFertResumo" style="margin-top:6px; font-weight:600;"></div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="card-title">🧮 Otimizador de Insumos (catálogo)</div>
+    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias — o app calcula a combinação de menor custo que cobre a necessidade de nutrientes desta amostra. O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
+    <div style="overflow-x:auto;"><table id="tabelaInsumos"></table></div>
+    <button type="button" class="btn-ghost-full" id="btnNovoInsumo" style="margin-top:8px;">+ Adicionar insumo</button>
+    <div id="insumoEditor"></div>
+    <button type="button" class="btn-primary-full" id="btnOtimizar" style="margin-top:14px;">⚙️ Calcular melhor combinação</button>
+    <div id="otimizadorResultado"></div>
   </div>
 
   <div class="cost-total">
@@ -816,14 +806,17 @@ const MANUAL_TECNICO_HTML = `
 <p class="manual-p">Sem banco de dados pré-carregado: você digita o nome (referência), o teor (%) do nutriente-alvo na embalagem e o preço (R$/t) do produto que vai usar de fato - a dose (kg/ha) é a necessidade dividida pelo teor, e o custo é a dose vezes o preço. Isso reflete o que muda por região e por safra sem impor uma composição/preço padrão.</p>
 <p class="manual-p"><b>Formulados com mais de um nutriente (ex.: NPK 08-20-20):</b> digitando o mesmo nome de adubo em mais de uma linha (N, P2O5, K2O e/ou S), o app entende que é a mesma compra física. A dose aplicada passa a ser a maior entre as exigidas por cada nutriente que esse produto contém (o nutriente mais exigente dita quanto produto comprar), e o custo é lançado uma única vez - nas demais linhas do mesmo produto aparece "↑ mesmo adubo" no lugar do custo, para deixar claro que ele já foi contado. Os nutrientes menos exigentes tendem a ficar com sobra (dose aplicada maior do que a estritamente necessária para eles); isso é esperado ao usar um formulado pronto e não é contabilizado como custo extra.</p>
 
-<div class="manual-h">6. Limitações conhecidas</div>
+<div class="manual-h">6. Otimizador de Insumos (catálogo)</div>
+<p class="manual-p">Cadastro opcional de insumos (fertilizante, composto orgânico) com preço (R$/t) e garantia (%) de cada nutriente na embalagem, salvo neste navegador entre visitas (diferente das amostras, que não são salvas). O botão "Calcular melhor combinação" monta um problema de programação linear - minimizar o custo total (Σ preço × dose) sujeito a, para cada nutriente com necessidade > 0, a soma do que cada insumo fornece (garantia% × dose) cobrir pelo menos a necessidade calculada (a mesma da tabela Solo × Necessidade × Falta, já com o abatimento do gesso quando aplicável) - e resolve com o método simplex (duas fases), implementado neste app sem biblioteca externa. Diferente da Mistura de Fertilizantes (uma linha por nutriente, um produto por linha), o otimizador pode combinar vários insumos multi-nutrientes ao mesmo tempo e indica quando os insumos cadastrados não são suficientes pra cobrir algum nutriente. Calcário e Gesso não entram nessa otimização - a dose deles é definida pelas fórmulas de Calagem/Gessagem, não por custo-benefício de nutriente. Confiança: Alta (o cálculo é uma otimização exata dado o que foi cadastrado); depende inteiramente da precisão das garantias e preços digitados.</p>
+
+<div class="manual-h">7. Limitações conhecidas</div>
 <p class="manual-p">• Classes de pH, V%, saturação de Al e parte dos micronutrientes (Cu, Mn, Fe, Mo) são valores consolidados na literatura agronômica brasileira, não reverificados contra o texto integral do Boletim 100 nesta versão.<br>
 • Coeficientes de exportação de Soja e Milho têm variação relatada entre fontes (até 2x em alguns casos de K em altas produtividades).<br>
 • Culturas simplificadas (Sorgo, Feijão, Cana, Panicum, Brachiaria) usam coeficientes estimados por analogia, sem curva de resposta própria.<br>
 • A gessagem idealmente usa amostra de 20-40cm; sem essa amostra, usa a camada informada como aproximação.<br>
 • Esta calculadora não substitui a responsabilidade técnica de um(a) Engenheiro(a) Agrônomo(a) para receituário agronômico.</p>
 
-<div class="manual-h">7. Referências</div>
+<div class="manual-h">8. Referências</div>
 <p class="manual-ref">RAIJ, B. van et al. Recomendações de Adubação e Calagem para o Estado de São Paulo. Boletim 100, IAC, 1997.</p>
 <p class="manual-ref">SOUSA, D.M.G.; LOBATO, E. Cerrado: Correção do Solo e Adubação. Embrapa Cerrados, 2004.</p>
 <p class="manual-ref">SOUSA, D.M.G.; LOBATO, E. Uso de Gesso Agrícola nos Solos do Cerrado. Circular Técnica 32, Embrapa Cerrados.</p>
@@ -1274,213 +1267,243 @@ function gerarRelatorioPdf() {
   window.print();
 }
 
-/* ===================== LEITURA AUTOMÁTICA DO LAUDO (IA) ===================== */
-// Chama a API da Anthropic (Claude) direto do navegador, com a chave que o próprio
-// usuário cadastra (fica só no localStorage deste navegador - nunca no código nem
-// em servidor nenhum, porque este app não tem servidor). Isso expõe a chave nas
-// requisições de rede feitas pelo site, que é a única forma de um app 100% estático
-// (sem backend) chamar uma API paga direto - por isso o aviso na tela pra não usar
-// uma chave compartilhada com outros sistemas.
-const IA_MODEL = "claude-sonnet-4-5"; // modelo com leitura de imagem/PDF; troque aqui se a Anthropic descontinuar
-const IA_STORAGE_KEY = "adubacao_ia_key";
+/* ===================== SIMPLEX (duas fases) ===================== */
+// Resolve: minimizar c·x sujeito a A·x >= b (todo b[i] > 0), x >= 0. Usado pelo
+// Otimizador de Insumos pra achar a combinação de menor custo que cobre a
+// necessidade de cada nutriente. Implementado do zero (sem biblioteca externa) -
+// tableau denso, viável pro tamanho do problema aqui (poucas dezenas de
+// insumos/nutrientes). Fase 1 acha um ponto viável (ou aponta o que não dá pra
+// cobrir); fase 2 minimiza o custo de verdade a partir dali.
+const SIMPLEX_EPS = 1e-7;
+function resolverLP(c, A, b) {
+  const n = c.length;
+  const m = A.length;
+  if (m === 0) return { viavel: true, x: new Array(n).fill(0), custo: 0 };
 
-function getApiKey() { return localStorage.getItem(IA_STORAGE_KEY) || ""; }
-function setApiKey(k) {
-  if (k) localStorage.setItem(IA_STORAGE_KEY, k);
-  else localStorage.removeItem(IA_STORAGE_KEY);
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-    reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
-    reader.readAsDataURL(file);
-  });
-}
-
-const PROMPT_LEITURA_LAUDO = `Você está lendo um laudo de análise de solo agrícola brasileiro (foto ou PDF). Ele pode ter uma ou várias amostras (colunas ou blocos separados, geralmente identificados por talhão/gleba/número da amostra).
-
-Extraia TODAS as amostras encontradas. Para cada uma, use os valores exatamente como aparecem no laudo (não converta unidades). Responda SOMENTE com um JSON válido, sem texto antes ou depois, sem marcação markdown (sem \`\`\`), exatamente neste formato:
-
-{"amostras": [
-  {
-    "nome": "identificação da amostra como aparece no laudo (ex: talhão, número) ou null se não houver",
-    "ph": number|null,
-    "mo": number|null, "moUnit": "g/dm³"|"%",
-    "p": number|null,
-    "k": number|null, "kUnit": "mmolc/dm³"|"cmolc/dm³"|"mg/dm³",
-    "ca": number|null, "caUnit": "mmolc/dm³"|"cmolc/dm³"|"mg/dm³",
-    "mg": number|null, "mgUnit": "mmolc/dm³"|"cmolc/dm³"|"mg/dm³",
-    "al": number|null, "alUnit": "mmolc/dm³"|"cmolc/dm³"|"mg/dm³",
-    "hal": number|null, "halUnit": "mmolc/dm³"|"cmolc/dm³",
-    "s": number|null,
-    "b": number|null,
-    "cu": number|null,
-    "fe": number|null,
-    "mn": number|null,
-    "zn": number|null,
-    "moMicro": number|null,
-    "na": number|null
+  const totalCols = n + m + m + 1; // x (n) + surplus (m) + artificial (m) + RHS
+  const rhsCol = totalCols - 1;
+  const tableau = [];
+  for (let i = 0; i < m; i++) {
+    const row = new Array(totalCols).fill(0);
+    for (let j = 0; j < n; j++) row[j] = A[i][j];
+    row[n + i] = -1;
+    row[n + m + i] = 1;
+    row[rhsCol] = b[i];
+    tableau.push(row);
   }
-]}
+  const basis = [];
+  for (let i = 0; i < m; i++) basis.push(n + m + i);
 
-Campos em mg/dm³ (sem unidade pra escolher): p, s, b, cu, fe, mn, zn, moMicro, na. "moMicro" é Molibdênio (micronutriente) - não confundir com "mo" (Matéria Orgânica). pH é em CaCl2; se o laudo só tiver pH em água (H2O), use esse valor mesmo assim. Se algum valor não aparecer no laudo, use null - nunca invente número.`;
-
-async function chamarIaLaudo(file) {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("Cadastre sua chave de API da Anthropic primeiro (abaixo).");
-
-  const base64 = await fileToBase64(file);
-  const isPdf = file.type === "application/pdf";
-  const contentBlock = isPdf
-    ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-    : { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } };
-
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: IA_MODEL,
-      max_tokens: 4096,
-      messages: [{ role: "user", content: [contentBlock, { type: "text", text: PROMPT_LEITURA_LAUDO }] }],
-    }),
-  });
-
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => "");
-    let msg = `A IA recusou a leitura (HTTP ${resp.status}).`;
-    if (resp.status === 401) msg = "Chave de API inválida ou sem permissão - confira a chave cadastrada.";
-    else if (resp.status === 429) msg = "Limite de uso da API atingido - tente de novo em instantes.";
-    throw new Error(msg + (errBody ? " " + errBody.slice(0, 200) : ""));
+  function pivotar(linhaPivo, colPivo) {
+    const pv = tableau[linhaPivo][colPivo];
+    for (let j = 0; j < totalCols; j++) tableau[linhaPivo][j] /= pv;
+    for (let i = 0; i < m; i++) {
+      if (i === linhaPivo) continue;
+      const f = tableau[i][colPivo];
+      if (Math.abs(f) < SIMPLEX_EPS) continue;
+      for (let j = 0; j < totalCols; j++) tableau[i][j] -= f * tableau[linhaPivo][j];
+    }
   }
-  const data = await resp.json();
-  const texto = (data.content || []).map(b => b.text || "").join("").trim();
-  const limpo = texto.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-  let parsed;
-  try { parsed = JSON.parse(limpo); }
-  catch (e) { throw new Error("A IA respondeu num formato inesperado. Tente outra foto (mais nítida/bem enquadrada) ou preencha manualmente."); }
-  if (!parsed || !Array.isArray(parsed.amostras) || parsed.amostras.length === 0) {
-    throw new Error("Não encontrei nenhuma amostra legível nessa imagem/arquivo.");
+
+  function rodar(custoLinha) {
+    for (let iter = 0; iter < 500; iter++) {
+      const zLinha = new Array(totalCols).fill(0);
+      for (let j = 0; j < totalCols; j++) {
+        let z = 0;
+        for (let i = 0; i < m; i++) z += custoLinha[basis[i]] * tableau[i][j];
+        zLinha[j] = (j < rhsCol ? custoLinha[j] : 0) - z;
+      }
+      let colPivo = -1, melhor = -SIMPLEX_EPS;
+      for (let j = 0; j < rhsCol; j++) if (zLinha[j] < melhor) { melhor = zLinha[j]; colPivo = j; }
+      if (colPivo === -1) return true;
+
+      let linhaPivo = -1, melhorRazao = Infinity;
+      for (let i = 0; i < m; i++) {
+        if (tableau[i][colPivo] > SIMPLEX_EPS) {
+          const razao = tableau[i][rhsCol] / tableau[i][colPivo];
+          if (razao < melhorRazao - SIMPLEX_EPS) { melhorRazao = razao; linhaPivo = i; }
+        }
+      }
+      if (linhaPivo === -1) return "ilimitado";
+      pivotar(linhaPivo, colPivo);
+      basis[linhaPivo] = colPivo;
+    }
+    return "iteracoes";
   }
-  return parsed.amostras;
+
+  const custoFase1 = new Array(totalCols - 1).fill(0);
+  for (let i = 0; i < m; i++) custoFase1[n + m + i] = 1;
+  const r1 = rodar(custoFase1);
+
+  let somaArtificiais = 0;
+  for (let i = 0; i < m; i++) if (basis[i] >= n + m) somaArtificiais += tableau[i][rhsCol];
+  if (r1 !== true || somaArtificiais > 1e-5) {
+    const linhasProblema = [];
+    for (let i = 0; i < m; i++) if (basis[i] >= n + m && tableau[i][rhsCol] > 1e-5) linhasProblema.push(i);
+    return { viavel: false, infactivelLinhas: linhasProblema };
+  }
+
+  const custoFase2 = new Array(totalCols - 1).fill(0);
+  for (let j = 0; j < n; j++) custoFase2[j] = c[j];
+  for (let i = 0; i < m; i++) custoFase2[n + m + i] = 1e9; // bloqueia artificiais na fase 2
+
+  const r2 = rodar(custoFase2);
+  if (r2 !== true) return { viavel: false, infactivelLinhas: [] };
+
+  const x = new Array(n).fill(0);
+  for (let i = 0; i < m; i++) if (basis[i] < n) x[basis[i]] = tableau[i][rhsCol];
+  let custo = 0;
+  for (let j = 0; j < n; j++) custo += c[j] * x[j];
+  return { viavel: true, x, custo };
 }
 
-const UNIDADES_VALIDAS_LEITURA = {
-  moUnit: ["g/dm³", "%"],
-  kUnit: ["mmolc/dm³", "cmolc/dm³", "mg/dm³"],
-  caUnit: ["mmolc/dm³", "cmolc/dm³", "mg/dm³"],
-  mgUnit: ["mmolc/dm³", "cmolc/dm³", "mg/dm³"],
-  alUnit: ["mmolc/dm³", "cmolc/dm³", "mg/dm³"],
-  halUnit: ["mmolc/dm³", "cmolc/dm³"],
-};
-function unidadeValidaLeitura(campo, valor) {
-  const opcoes = UNIDADES_VALIDAS_LEITURA[campo];
-  return opcoes && opcoes.includes(valor) ? valor : null;
+/* ===================== CATÁLOGO DE INSUMOS + OTIMIZADOR ===================== */
+// Catálogo de insumos (fertilizantes, compostos orgânicos, calcário, gesso) com
+// preço e garantias - diferente das amostras, fica salvo no navegador entre
+// visitas (localStorage), porque cadastrar de novo toda vez seria repetitivo.
+const INSUMOS_STORAGE_KEY = "adubacao_insumos_catalogo_v1";
+const TIPOS_INSUMO = ["Fertilizante", "Composto Orgânico", "Calcário", "Gesso"];
+const NUTRIENTES_GARANTIA = ["N", "P2O5", "K2O", "S", "Ca", "Mg", "Zn", "B", "Cu", "Mn", "Mo"];
+const NUTRIENTES_LP = ["N", "P2O5", "K2O", "S", "Zn", "B", "Cu", "Mn", "Mo"];
+
+let catalogoInsumos = [];
+function carregarCatalogo() {
+  try { catalogoInsumos = JSON.parse(localStorage.getItem(INSUMOS_STORAGE_KEY)) || []; }
+  catch (e) { catalogoInsumos = []; }
+}
+function salvarCatalogo() { localStorage.setItem(INSUMOS_STORAGE_KEY, JSON.stringify(catalogoInsumos)); }
+
+function novoInsumoObj() {
+  return { id: "ins_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), nome: "", tipo: "Fertilizante", preco: 0, prnt: 80, garantias: {} };
 }
 
-// Monta um snapshot de formulário (ver snapshotForm()) a partir do que a IA leu,
-// começando dos valores padrão e só sobrescrevendo os campos que vieram preenchidos.
-function formFromExtracao(ex) {
-  const f = Object.assign({}, DEFAULT_FORM);
-  const setNum = (key, val) => { if (typeof val === "number" && isFinite(val)) f[key] = String(val); };
-  setNum("q_ph", ex.ph);
-  setNum("q_mo", ex.mo); const moU = unidadeValidaLeitura("moUnit", ex.moUnit); if (moU) f.u_mo = moU;
-  setNum("q_p", ex.p);
-  setNum("q_k", ex.k); const kU = unidadeValidaLeitura("kUnit", ex.kUnit); if (kU) f.u_k = kU;
-  setNum("q_ca", ex.ca); const caU = unidadeValidaLeitura("caUnit", ex.caUnit); if (caU) f.u_ca = caU;
-  setNum("q_mg", ex.mg); const mgU = unidadeValidaLeitura("mgUnit", ex.mgUnit); if (mgU) f.u_mg = mgU;
-  setNum("q_al", ex.al); const alU = unidadeValidaLeitura("alUnit", ex.alUnit); if (alU) f.u_al = alU;
-  setNum("q_hal", ex.hal); const halU = unidadeValidaLeitura("halUnit", ex.halUnit); if (halU) f.u_hal = halU;
-  setNum("q_s", ex.s);
-  setNum("q_b", ex.b);
-  setNum("q_cu", ex.cu);
-  setNum("q_fe", ex.fe);
-  setNum("q_mn", ex.mn);
-  setNum("q_zn", ex.zn);
-  setNum("q_moMicro", ex.moMicro);
-  setNum("q_na", ex.na);
-  return f;
+function renderTabelaInsumos() {
+  const tbl = document.getElementById("tabelaInsumos");
+  if (catalogoInsumos.length === 0) {
+    tbl.innerHTML = `<tr><td class="rel-hint" style="padding:8px 4px;">Nenhum insumo cadastrado ainda.</td></tr>`;
+  } else {
+    tbl.innerHTML = `<tr><th>Insumo</th><th>Tipo</th><th style="text-align:right">Preço R$/t</th><th></th></tr>` +
+      catalogoInsumos.map(ins => `
+        <tr>
+          <td>${esc(ins.nome) || "(sem nome)"}</td>
+          <td>${esc(ins.tipo)}</td>
+          <td class="num">${fmt(ins.preco, 2)}</td>
+          <td style="white-space:nowrap; text-align:right;">
+            <button type="button" class="btn-link" data-editar-insumo="${ins.id}">Editar</button>
+            <button type="button" class="btn-link btn-link-danger" data-excluir-insumo="${ins.id}">Excluir</button>
+          </td>
+        </tr>`).join("");
+  }
+  tbl.querySelectorAll("[data-editar-insumo]").forEach(b => b.addEventListener("click", () => abrirEditorInsumo(b.dataset.editarInsumo)));
+  tbl.querySelectorAll("[data-excluir-insumo]").forEach(b => b.addEventListener("click", () => excluirInsumo(b.dataset.excluirInsumo)));
 }
 
-let leituraPendente = null; // amostras extraídas aguardando confirmação do usuário
-
-function renderLeituraPreview() {
-  const wrap = document.getElementById("leituraPreview");
-  if (!leituraPendente) { wrap.innerHTML = ""; return; }
-  const linhas = leituraPendente.map((ex, i) => `
-    <tr>
-      <td>${esc(ex.nome || ("Amostra " + (i + 1)))}</td>
-      <td class="num">${ex.ph ?? "-"}</td>
-      <td class="num">${ex.p ?? "-"}</td>
-      <td class="num">${ex.k ?? "-"}${ex.k != null && ex.kUnit ? " " + ex.kUnit : ""}</td>
-      <td class="num">${ex.ca ?? "-"}${ex.ca != null && ex.caUnit ? " " + ex.caUnit : ""}</td>
-      <td class="num">${ex.mg ?? "-"}${ex.mg != null && ex.mgUnit ? " " + ex.mgUnit : ""}</td>
-      <td class="num">${ex.al ?? "-"}${ex.al != null && ex.alUnit ? " " + ex.alUnit : ""}</td>
-    </tr>`).join("");
+function abrirEditorInsumo(id) {
+  const ins = id === "novo" ? novoInsumoObj() : catalogoInsumos.find(i => i.id === id);
+  if (!ins) return;
+  const wrap = document.getElementById("insumoEditor");
   wrap.innerHTML = `
-    <div class="info-box">Encontrei ${leituraPendente.length} amostra${leituraPendente.length > 1 ? "s" : ""}. Confira antes de aplicar — a leitura por IA pode errar algum número, principalmente em fotos tortas/tremidas.</div>
-    <div style="overflow-x:auto;"><table>
-      <tr><th>Amostra</th><th style="text-align:right">pH</th><th style="text-align:right">P</th><th style="text-align:right">K</th><th style="text-align:right">Ca</th><th style="text-align:right">Mg</th><th style="text-align:right">Al</th></tr>
-      ${linhas}
-    </table></div>
-    <div class="row2" style="margin-top:10px;">
-      <button type="button" class="btn-primary-full" id="btnAplicarLeitura">Aplicar e criar ${leituraPendente.length > 1 ? "amostras" : "amostra"}</button>
-      <button type="button" class="btn-ghost-full" id="btnCancelarLeitura">Cancelar</button>
+    <div style="background:var(--cinza-bg); border-radius:9px; padding:12px; margin-top:10px;">
+      <div class="field"><label>Nome</label><input type="text" id="ie_nome" value="${esc(ins.nome)}" placeholder="ex.: MAP, Composto de cama de frango"></div>
+      <div class="row2">
+        <div class="field"><label>Tipo</label>
+          <select id="ie_tipo">${TIPOS_INSUMO.map(t => `<option ${t === ins.tipo ? "selected" : ""}>${t}</option>`).join("")}</select>
+        </div>
+        <div class="field"><label>Preço (R$/t)</label><input type="number" id="ie_preco" value="${ins.preco || ""}" step="10"></div>
+      </div>
+      <div class="field" id="ie_prnt_wrap" style="display:${ins.tipo === "Calcário" ? "block" : "none"};">
+        <label>PRNT (%) <span class="hint">só calcário</span></label><input type="number" id="ie_prnt" value="${ins.prnt || 80}" step="1">
+      </div>
+      <div class="section-label" style="margin-top:8px;">Garantias (% na embalagem)</div>
+      <div class="diag-grid" style="grid-template-columns:repeat(3,1fr);">
+        ${NUTRIENTES_GARANTIA.map(k => `
+          <div class="field" style="margin-bottom:2px;"><label style="font-size:11px;">${k}</label>
+            <input type="number" id="ie_g_${k}" value="${ins.garantias[k] || ""}" step="0.1" placeholder="0"></div>`).join("")}
+      </div>
+      <div class="row2" style="margin-top:10px;">
+        <button type="button" class="btn-primary-full" id="btnSalvarInsumo">Salvar</button>
+        <button type="button" class="btn-ghost-full" id="btnCancelarInsumo">Cancelar</button>
+      </div>
     </div>`;
-  document.getElementById("btnAplicarLeitura").addEventListener("click", aplicarLeituraPendente);
-  document.getElementById("btnCancelarLeitura").addEventListener("click", () => { leituraPendente = null; renderLeituraPreview(); });
-}
-
-function aplicarLeituraPendente() {
-  if (!leituraPendente) return;
-  leituraPendente.forEach(ex => novaAmostra(formFromExtracao(ex), ex.nome || null));
-  leituraPendente = null;
-  renderLeituraPreview();
-  document.getElementById("leituraStatus").textContent = "Amostras aplicadas — confira todos os valores no formulário antes de usar a recomendação.";
-}
-
-async function processarArquivoLaudo(file) {
-  if (!file) return;
-  const status = document.getElementById("leituraStatus");
-  const btnFoto = document.getElementById("btnTirarFoto");
-  const btnArquivo = document.getElementById("btnImportarArquivo");
-  status.textContent = "Lendo o laudo com IA... isso pode levar alguns segundos.";
-  btnFoto.disabled = true; btnArquivo.disabled = true;
-  try {
-    leituraPendente = await chamarIaLaudo(file);
-    status.textContent = "";
-    renderLeituraPreview();
-  } catch (e) {
-    status.textContent = "Erro: " + e.message;
-  } finally {
-    btnFoto.disabled = false; btnArquivo.disabled = false;
-  }
-}
-
-function initLeituraIa() {
-  const keyInput = document.getElementById("apiKeyInput");
-  const keyStatus = document.getElementById("apiKeyStatus");
-  const chaveAtual = getApiKey();
-  keyStatus.textContent = chaveAtual ? "Chave salva neste navegador (final " + chaveAtual.slice(-4) + ")." : "Nenhuma chave salva ainda.";
-
-  document.getElementById("btnSalvarApiKey").addEventListener("click", () => {
-    const v = keyInput.value.trim();
-    if (!v) { setApiKey(null); keyStatus.textContent = "Chave removida."; return; }
-    setApiKey(v);
-    keyInput.value = "";
-    keyStatus.textContent = "Chave salva neste navegador (final " + v.slice(-4) + ").";
+  document.getElementById("ie_tipo").addEventListener("change", e => {
+    document.getElementById("ie_prnt_wrap").style.display = e.target.value === "Calcário" ? "block" : "none";
   });
+  document.getElementById("btnSalvarInsumo").addEventListener("click", () => salvarInsumoEditor(ins.id));
+  document.getElementById("btnCancelarInsumo").addEventListener("click", fecharEditorInsumo);
+}
+function fecharEditorInsumo() { document.getElementById("insumoEditor").innerHTML = ""; }
 
-  document.getElementById("btnTirarFoto").addEventListener("click", () => document.getElementById("inputFotoLaudo").click());
-  document.getElementById("btnImportarArquivo").addEventListener("click", () => document.getElementById("inputArquivoLaudo").click());
-  document.getElementById("inputFotoLaudo").addEventListener("change", e => { processarArquivoLaudo(e.target.files[0]); e.target.value = ""; });
-  document.getElementById("inputArquivoLaudo").addEventListener("change", e => { processarArquivoLaudo(e.target.files[0]); e.target.value = ""; });
+function salvarInsumoEditor(id) {
+  const novo = {
+    id,
+    nome: document.getElementById("ie_nome").value.trim() || "Insumo sem nome",
+    tipo: document.getElementById("ie_tipo").value,
+    preco: parseFloat(document.getElementById("ie_preco").value) || 0,
+    prnt: parseFloat(document.getElementById("ie_prnt").value) || 80,
+    garantias: {},
+  };
+  NUTRIENTES_GARANTIA.forEach(k => { novo.garantias[k] = parseFloat(document.getElementById("ie_g_" + k).value) || 0; });
+  const idx = catalogoInsumos.findIndex(i => i.id === id);
+  if (idx >= 0) catalogoInsumos[idx] = novo; else catalogoInsumos.push(novo);
+  salvarCatalogo();
+  fecharEditorInsumo();
+  renderTabelaInsumos();
+}
+function excluirInsumo(id) {
+  if (!confirm("Excluir este insumo do catálogo?")) return;
+  catalogoInsumos = catalogoInsumos.filter(i => i.id !== id);
+  salvarCatalogo();
+  renderTabelaInsumos();
+}
+
+function rodarOtimizador() {
+  const s = readState();
+  const out = computeAll(s, readFertInputs());
+  const necessidade = {
+    N: out.adubacao.N, P2O5: out.adubacao.P2O5, K2O: out.adubacao.K2O, S: out.adubacao.S,
+    Zn: out.adubacao.Zn, B: out.adubacao.B, Cu: out.adubacao.Cu, Mn: out.adubacao.Mn, Mo: out.adubacao.Mo,
+  };
+  const insumosAtivos = catalogoInsumos.filter(i => i.tipo === "Fertilizante" || i.tipo === "Composto Orgânico");
+  const nutrientesAlvo = NUTRIENTES_LP.filter(k => necessidade[k] > 0.001);
+  const wrap = document.getElementById("otimizadorResultado");
+
+  if (nutrientesAlvo.length === 0) {
+    wrap.innerHTML = `<div class="info-box" style="margin-top:10px;">Nenhum nutriente com necessidade nesta amostra — nada pra otimizar.</div>`;
+    return;
+  }
+  if (insumosAtivos.length === 0) {
+    wrap.innerHTML = `<div class="warn-box" style="margin-top:10px;">Cadastre pelo menos um Fertilizante ou Composto Orgânico no catálogo pra calcular.</div>`;
+    return;
+  }
+
+  const c = insumosAtivos.map(i => i.preco / 1000); // custo por kg de produto
+  const A = nutrientesAlvo.map(nut => insumosAtivos.map(i => (i.garantias[nut] || 0) / 100));
+  const b = nutrientesAlvo.map(nut => necessidade[nut]);
+  const r = resolverLP(c, A, b);
+
+  if (!r.viavel) {
+    const faltando = (r.infactivelLinhas || []).map(idx => nutrientesAlvo[idx]).join(", ") || "um ou mais nutrientes";
+    wrap.innerHTML = `<div class="warn-box" style="margin-top:10px;">Não foi possível cobrir tudo com os insumos cadastrados — falta uma fonte de: <b>${faltando}</b>. Cadastre um insumo que forneça isso, ou ajuste as garantias.</div>`;
+    return;
+  }
+
+  const linhas = insumosAtivos.map((ins, idx) => ({ ins, dose: r.x[idx] })).filter(l => l.dose > 0.01);
+  const tabela = linhas.length === 0 ? `<div class="note">Necessidade já atendida sem precisar de nenhum insumo (0 kg/ha).</div>` : `
+    <table style="margin-top:10px;">
+      <tr><th>Insumo</th><th style="text-align:right">Dose (kg/ha)</th><th style="text-align:right">Custo/ha</th></tr>
+      ${linhas.map(l => `<tr><td>${esc(l.ins.nome)}</td><td class="num">${fmt(l.dose, 1)}</td><td class="num">${fmtMoney(l.dose * l.ins.preco / 1000)}</td></tr>`).join("")}
+    </table>`;
+  wrap.innerHTML = `
+    <div class="info-box" style="margin-top:10px;">Combinação de menor custo encontrada, cobrindo ${nutrientesAlvo.join(", ")}.</div>
+    ${tabela}
+    <div class="rel-custo" style="margin-top:8px;">Custo total: ${fmtMoney(r.custo)}/ha · ${fmtMoney(r.custo * s.area)} na área (${fmt(s.area, 1)} ha)</div>`;
+}
+
+function initOtimizador() {
+  carregarCatalogo();
+  renderTabelaInsumos();
+  document.getElementById("btnNovoInsumo").addEventListener("click", () => abrirEditorInsumo("novo"));
+  document.getElementById("btnOtimizar").addEventListener("click", rodarOtimizador);
 }
 
 function recalc() {
@@ -1514,7 +1537,7 @@ function init() {
   buildQuimFields();
   buildFertInputs();
   initAmostras();
-  initLeituraIa();
+  initOtimizador();
 
   ["cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
