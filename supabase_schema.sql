@@ -1233,3 +1233,71 @@ alter table investimentos add column if not exists fornecedor text;
 -- ajuste=false (tratados como consumo real, comportamento de antes).
 -- ===================================================================
 alter table movimentos add column if not exists ajuste boolean not null default false;
+
+-- ===================================================================
+-- MIGRAÇÃO: Manejo (sequência guiada por lote -- pesagem + reprodução)
+-- A aba Manejo lança pesagem/inseminação/protocolo/diagnóstico/desmama
+-- de um lote inteiro numa sequência guiada (bate o número do animal,
+-- lança, vai pro próximo). Cada sessão vira um registro em "manejos" --
+-- o que foi feito, se teve vacinação/vermifugação (marca do manejo
+-- inteiro, não por animal) -- e cada lançamento individual feito
+-- durante a sessão fica ligado a ela por manejo_id, pra reconstruir a
+-- planilha por animal no histórico.
+-- Protocolo de inseminação (aplicação do protocolo, antes da IA em si,
+-- em outro dia) não tinha tabela própria -- ganha uma só pra registrar
+-- quem recebeu, já que não é a mesma coisa que "Nova inseminação"
+-- (reproducao_custos, que já embute o custo do touro/protocolo).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create table if not exists manejos (
+  id bigint generated always as identity primary key,
+  data date not null,
+  lote_id bigint references lotes(id) on delete set null,
+  lote_destino_id bigint references lotes(id) on delete set null,
+  acoes text[] not null default '{}',
+  vacinacao boolean not null default false,
+  vermifugacao boolean not null default false,
+  status text not null default 'aberto' check (status in ('aberto','finalizado')),
+  total_animais integer not null default 0,
+  criado_por text,
+  criado_em timestamptz default now()
+);
+
+alter table manejos enable row level security;
+
+create policy "select manejos" on manejos for select using (
+  tem_permissao('confinamento','visualizar') or tem_permissao('pasto','visualizar') or tem_permissao('cria','visualizar')
+);
+create policy "inserir manejos" on manejos for insert with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "atualizar manejos" on manejos for update using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+) with check (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+create policy "excluir manejos" on manejos for delete using (
+  tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+
+alter table pesagens add column if not exists manejo_id bigint references manejos(id) on delete set null;
+alter table reproducao_custos add column if not exists manejo_id bigint references manejos(id) on delete set null;
+alter table diagnosticos_gestacionais add column if not exists manejo_id bigint references manejos(id) on delete set null;
+alter table desmamas add column if not exists manejo_id bigint references manejos(id) on delete set null;
+
+create table if not exists protocolos_inseminacao (
+  id bigint generated always as identity primary key,
+  manejo_id bigint references manejos(id) on delete cascade,
+  lote_id bigint references lotes(id) on delete set null,
+  numero_animal text,
+  data date not null,
+  criado_por text,
+  criado_em timestamptz default now()
+);
+
+alter table protocolos_inseminacao enable row level security;
+
+create policy "select protocolos_inseminacao" on protocolos_inseminacao for select using (tem_permissao('cria','visualizar'));
+create policy "inserir protocolos_inseminacao" on protocolos_inseminacao for insert with check (tem_permissao('cria','editar'));
+create policy "atualizar protocolos_inseminacao" on protocolos_inseminacao for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
+create policy "excluir protocolos_inseminacao" on protocolos_inseminacao for delete using (tem_permissao('cria','editar'));
