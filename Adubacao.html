@@ -12,6 +12,7 @@
 <style>
 :root{
   --verde-escuro:#2F5233;
+  --verde-escuro2:#1F3D24;
   --verde-medio:#5B8C51;
   --verde-claro:#D7EAD1;
   --terra:#8B5E34;
@@ -20,6 +21,7 @@
   --cinza:#6B7568;
   --cinza-claro:#DDE4D8;
   --cinza-bg:#F3F6F1;
+  --bg-page:#F6F2E8;
   --branco:#FFFFFF;
   --alerta:#B23B2E;
   --alerta-bg:#F7E7E2;
@@ -27,13 +29,19 @@
   --ambar-bg:#F5E9D7;
   --bom:#2F7D3A;
   --bom-bg:#E4F0E0;
-  --radius:12px;
-  --shadow:0 1px 2px rgba(23,61,44,0.06), 0 6px 16px rgba(23,61,44,0.08);
+  --cat-solo:#3E7CB1;
+  --cat-indices:#6B7568;
+  --cat-calcario:#7C7C86;
+  --cat-gesso:#4E7FA6;
+  --cat-aplicacoes:#B23B2E;
+  --cat-otimizador:#5B8C51;
+  --radius:16px;
+  --shadow:0 1px 2px rgba(23,61,44,0.06), 0 10px 24px rgba(23,61,44,0.10);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0; padding:0;}
 body{
-  font-family:'Inter',sans-serif; background:var(--cinza-bg); color:var(--grafite);
+  font-family:'Inter',sans-serif; background:var(--bg-page); color:var(--grafite);
   -webkit-font-smoothing:antialiased; padding-bottom:40px;
 }
 h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
@@ -42,20 +50,24 @@ a{color:var(--verde-escuro);}
 
 /* ---------- TOP BAR ---------- */
 .topbar{
-  position:sticky; top:0; z-index:20; background:var(--verde-escuro); color:var(--branco);
-  padding:14px 16px 0 16px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
+  position:sticky; top:0; z-index:20; color:var(--branco);
+  background:linear-gradient(135deg, var(--verde-escuro) 0%, var(--verde-escuro2) 100%);
+  padding:16px 16px 14px 16px; box-shadow:0 4px 18px rgba(20,40,20,0.22);
 }
-.brand{display:flex; align-items:center; gap:8px; font-family:'Fraunces',serif; font-weight:700; font-size:19px; padding-bottom:12px; max-width:560px; margin:0 auto;}
-.brand .leaf{font-size:22px;}
-.tabs{display:flex; gap:4px; max-width:560px; margin:0 auto;}
+.brand{display:flex; align-items:center; gap:10px; font-family:'Fraunces',serif; font-weight:700; font-size:21px; padding-bottom:14px; max-width:560px; margin:0 auto;}
+.brand .leaf{
+  font-size:19px; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,0.14); border-radius:10px; flex:none;
+}
+.tabs{display:flex; gap:2px; max-width:560px; margin:0 auto; background:rgba(0,0,0,0.16); padding:4px; border-radius:999px;}
 @media (min-width:760px){ .brand, .tabs{max-width:880px;} }
-@media (min-width:1040px){ .brand, .tabs{max-width:1180px;} .tabs{gap:8px;} .tab-btn{flex:none; padding:10px 22px;} }
+@media (min-width:1040px){ .brand, .tabs{max-width:1180px;} .tab-btn{flex:none; padding:9px 26px;} }
 @media (min-width:1400px){ .brand, .tabs{max-width:1360px;} }
 .tab-btn{
-  flex:1; background:none; border:none; color:rgba(255,255,255,0.68); font-family:'Inter',sans-serif;
-  font-weight:600; font-size:14px; padding:10px 6px; cursor:pointer; border-bottom:3px solid transparent;
+  flex:1; background:none; border:none; color:rgba(255,255,255,0.72); font-family:'Inter',sans-serif;
+  font-weight:600; font-size:13.5px; padding:9px 6px; cursor:pointer; border-radius:999px; transition:background .15s, color .15s;
 }
-.tab-btn.active{color:var(--branco); border-bottom-color:var(--verde-claro);}
+.tab-btn.active{color:var(--verde-escuro); background:var(--branco);}
 
 /* ---------- LAYOUT ---------- */
 main{max-width:560px; margin:0 auto; padding:14px 14px 0 14px;}
@@ -154,6 +166,23 @@ input:focus, select:focus{outline:none; border-color:var(--verde-medio);}
 
 .section-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--verde-medio); font-weight:700; margin:18px 0 8px 2px;}
 .section-label:first-child{margin-top:0;}
+
+/* Faixa de indicadores fixa no topo dos resultados - fica visível ao rolar,
+   pra nunca perder de vista o custo total enquanto edita insumos lá embaixo. */
+.kpi-strip{
+  position:sticky; top:127px; z-index:10; display:flex; gap:6px; background:var(--branco);
+  border:1px solid var(--cinza-claro); border-radius:999px; padding:6px; box-shadow:var(--shadow);
+  margin-bottom:14px; overflow-x:auto;
+}
+.kpi-item{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  padding:6px 8px; border-radius:999px; min-width:78px;
+}
+.kpi-item .kpi-label{font-size:9.5px; text-transform:uppercase; letter-spacing:0.4px; color:var(--cinza); font-weight:700;}
+.kpi-item .kpi-value{font-family:'IBM Plex Mono',monospace; font-size:13.5px; font-weight:600; color:var(--grafite); white-space:nowrap;}
+.kpi-item.kpi-total{background:var(--verde-escuro); flex:1.3;}
+.kpi-item.kpi-total .kpi-label{color:rgba(255,255,255,0.75);}
+.kpi-item.kpi-total .kpi-value{color:var(--branco); font-size:15px;}
 
 .pill{display:inline-block; font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap;}
 .pill-baixo{background:var(--alerta-bg); color:var(--alerta);}
@@ -384,19 +413,25 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
   <!-- ===================== RESULTADOS ===================== -->
   <div class="section-label" style="margin-top:0;">Resultado</div>
 
-  <div class="card card-pad">
+  <div class="kpi-strip" id="kpiStrip">
+    <div class="kpi-item"><span class="kpi-label">Calcário</span><span class="kpi-value" id="kpiCalcario">-</span></div>
+    <div class="kpi-item"><span class="kpi-label">Gesso</span><span class="kpi-value" id="kpiGesso">-</span></div>
+    <div class="kpi-item kpi-total"><span class="kpi-label">Custo/ha</span><span class="kpi-value" id="kpiCustoHa">-</span></div>
+  </div>
+
+  <div class="card card-pad" style="border-left:4px solid var(--cat-solo);">
     <div class="card-title">🧪 Solo × Necessidade × Falta</div>
     <div class="card-sub" style="margin-bottom:6px;">Tudo em kg/ha, pra comparar direto: o que o solo já tem, o que a cultura precisa para essa produtividade, e o que falta.</div>
     <div style="overflow-x:auto;"><table id="tabelaNutrientes"></table></div>
     <div class="note" id="nDoseInfo"></div>
   </div>
 
-  <div class="card card-pad">
+  <div class="card card-pad" style="border-left:4px solid var(--cat-indices);">
     <div class="card-title">🔍 Índices do Solo</div>
     <div class="diag-grid" id="indicesGrid"></div>
   </div>
 
-  <div class="card card-pad">
+  <div class="card card-pad" style="border-left:4px solid var(--cat-calcario);">
     <div class="card-title">🪨 Calagem</div>
     <div class="big-result">
       <div class="value" id="calDose">-</div>
@@ -420,7 +455,7 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     </details>
   </div>
 
-  <div class="card card-pad">
+  <div class="card card-pad" style="border-left:4px solid var(--cat-gesso);">
     <div class="card-title">🌾 Gessagem</div>
     <div id="gessoRecomenda" style="margin-bottom:8px;"></div>
     <table>
@@ -431,14 +466,14 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     </table>
   </div>
 
-  <div class="card card-pad">
+  <div class="card card-pad" style="border-left:4px solid var(--cat-aplicacoes);">
     <div class="card-title">🧾 Aplicações Já Decididas</div>
     <div class="card-sub" style="margin-bottom:6px;">O que você já vai aplicar por conta própria (estoque, orgânico próprio, preferência etc.) — toque em qualquer célula pra editar direto, sem abrir tela nenhuma. Preencha a partir do catálogo ou digite um produto avulso. Isso abate da necessidade calculada antes do Otimizador rodar.</div>
     <div style="overflow-x:auto;"><table id="tabelaAplicacoes"></table></div>
     <button type="button" class="btn-ghost-full" id="btnNovaAplicacao" style="margin-top:8px;">+ Adicionar aplicação</button>
   </div>
 
-  <div class="card card-pad">
+  <div class="card card-pad" style="border-left:4px solid var(--cat-otimizador);">
     <div class="card-title">🧮 Otimizador de Insumos (catálogo)</div>
     <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias, editando direto na tabela — o app já calcula sozinho a combinação de menor custo que cobre o que ainda falta (necessidade já descontando as Aplicações Já Decididas acima) e soma no Custo Total, ao vivo. O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
     <div style="overflow-x:auto;"><table id="tabelaInsumos"></table></div>
@@ -946,6 +981,8 @@ function render(out, s) {
   ).join("");
 
   // Calagem
+  const kpiCal = document.getElementById("kpiCalcario");
+  if (kpiCal) kpiCal.textContent = fmt(out.calagem.ncFinal, 2) + " t/ha";
   document.getElementById("calDose").textContent = fmt(out.calagem.ncFinal, 2);
   document.getElementById("calMetodo").innerHTML = `Método: <b>${out.calagem.metodoEscolhido}</b> · V2 alvo ${fmt(out.calagem.v2,0)}%`;
   document.getElementById("calTotal").textContent = fmt(out.calagem.ncTotal, 1) + " t";
@@ -959,6 +996,8 @@ function render(out, s) {
   gr.innerHTML = out.gessagem.recomendaGesso
     ? `<span class="pill pill-medio">Recomendado</span>`
     : `<span class="pill pill-bom">Não recomendado</span>`;
+  const kpiGes = document.getElementById("kpiGesso");
+  if (kpiGes) kpiGes.textContent = fmt(out.gessagem.doseGesso, 0) + " kg/ha";
   document.getElementById("gessoDose").textContent = fmt(out.gessagem.doseGesso, 0) + " kg/ha";
   document.getElementById("gessoTotal").textContent = fmt(out.gessagem.doseTotal, 1) + " t";
 
@@ -1418,6 +1457,8 @@ function atualizarCustoTotal(out, s, custoOtimizador) {
   }
   valueEl.dataset.totalAnterior = String(total);
   document.getElementById("custoArea").textContent = `Total da área: ${fmtMoney(total * s.area)}`;
+  const kpiTotal = document.getElementById("kpiCustoHa");
+  if (kpiTotal) kpiTotal.textContent = fmtMoney(total);
 
   const partes = [
     { nome: "Calcário", valor: out.custos.custoCalcario, cor: tipoCor("Calcário") },
