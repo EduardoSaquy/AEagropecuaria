@@ -198,6 +198,23 @@
   .link-nome{background:none; border:none; padding:0; margin:0; font:inherit; font-weight:600; color:var(--verde-escuro); cursor:pointer; text-align:left;}
   .link-nome:hover{color:var(--verde-medio); text-decoration:underline;}
 
+  .cadastro-opcoes{display:grid; grid-template-columns:repeat(2,1fr); gap:16px;}
+  @media (max-width:640px){.cadastro-opcoes{grid-template-columns:1fr;}}
+  .cadastro-opcao{
+    display:flex; flex-direction:column; align-items:flex-start; gap:12px;
+    text-align:left; background:var(--branco); border:1px solid var(--cinza-claro);
+    border-radius:var(--radius); box-shadow:var(--shadow); padding:30px 26px;
+    cursor:pointer; font-family:inherit; transition:border-color .15s, transform .15s;
+    min-height:100px;
+  }
+  .cadastro-opcao:hover{border-color:var(--verde-medio); transform:translateY(-2px);}
+  .cadastro-opcao-icone{
+    display:flex; align-items:center; justify-content:center; width:58px; height:58px;
+    border-radius:50%; background:var(--verde-claro); color:var(--verde-escuro); flex-shrink:0;
+  }
+  .cadastro-opcao-titulo{font-size:19px; font-weight:700; color:var(--verde-escuro);}
+  .cadastro-opcao-desc{font-size:14.5px; color:var(--cinza); line-height:1.55;}
+
   .card{
     background:var(--branco);
     border-radius:var(--radius);
@@ -311,7 +328,8 @@
   .modal-close{background:none;border:none;cursor:pointer;color:var(--cinza);font-size:20px; line-height:1;}
   .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
   .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
-  .field{display:flex; flex-direction:column; gap:5px;}
+  .field{display:flex; flex-direction:column; gap:5px; min-width:0;}
+  .field select, .field input:not([type="checkbox"]):not([type="radio"]){min-width:0; width:100%;}
   .field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   label{font-size:12px; font-weight:600; color:var(--grafite);}
   input, select, textarea{
@@ -862,6 +880,7 @@ function render(){
         ${state.page==='dietas' ? PageDietas() : ''}
         ${state.page==='estoqueRacao' ? PageEstoqueRacao() : ''}
         ${state.page==='lotesGeral' ? PageLotesGeral() : ''}
+        ${state.page==='cadastroInicio' ? PageCadastroInicio() : ''}
         ${state.page==='loteDetalhe' ? PageLoteDetalhe() : ''}
         ${state.page==='vendasGeral' ? PageVendasGeral() : ''}
         ${state.page==='lotes' ? PageLotes('confinamento') : ''}
@@ -943,8 +962,9 @@ function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.pap
 function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 /// Acesso "de cargo" (não pela tabela de permissões por módulo) à aba Lotes
 // (visão geral) e a criar lote direto por lá. Colaborador ainda consegue
-// lançar entrada de animais (novo lote ou somar num existente) pela aba do
-// próprio módulo (Confinamento/Pasto/Cria) -- ver uso de podeEditarAcao('lote').
+// lançar entrada de animais (novo lote ou somar num existente) pela aba
+// Cadastro, desde que tenha permissão de editar em algum módulo (ver
+// grupoVisivel('cadastro')).
 function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
@@ -969,6 +989,7 @@ function grupoVisivel(key){
   if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
   if(key==='fazenda') return souAdmin();
   if(key==='vendas') return temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
+  if(key==='cadastro') return podeCriarLote() || podeEditarAcao('lote');
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 // Algumas páginas dentro de um grupo visível são mais sensíveis que o resto
@@ -1459,6 +1480,7 @@ function estoqueRacaoPronta(dietaId){
 // usada pra "Cria" nos gráficos de área, Vendas = couro, Financeiro = ouro).
 // Módulos sem entrada aqui usam o verde padrão da marca.
 const NAV_ICON_COLORS = {
+  cadastro: '#4A90D9',
   confinamento: '#4A90D9',
   pasto: '#8BC34A',
   reproducao: '#E0819F',
@@ -1466,6 +1488,9 @@ const NAV_ICON_COLORS = {
   financeiro: '#C9862B',
 };
 const GROUPS = {
+  cadastro: {label:'Cadastro', icon:iconCadastro(), pages:[
+    {key:'cadastroInicio', label:'Cadastro'},
+  ]},
   insumos: {label:'Insumos', icon:iconLeaf(), pages:[
     {key:'estoque', label:'Estoque'},
     {key:'ingredientes', label:'Ingredientes'},
@@ -1588,6 +1613,9 @@ function iconReproducao(){ return `<svg width="16" height="16" viewBox="0 0 24 2
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
+function iconCadastro(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`; }
+function iconAnimalGrande(){ return `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4c-1 .3-1.5 1.3-1 2.3"/><path d="M16 4c1 .3 1.5 1.3 1 2.3"/><path d="M3.5 9c0-1.2 1-2 2-1.5.5.2.8.6 1 1"/><path d="M20.5 9c0-1.2-1-2-2-1.5-.5.2-.8.6-1 1"/><path d="M5.5 9.5c0-3 2.7-5 6.5-5s6.5 2 6.5 5c0 2-1 3-1 5 0 2.8-2.3 4.5-5.5 4.5s-5.5-1.7-5.5-4.5c0-2-1-3-1-5Z"/><circle cx="9.7" cy="10.2" r=".7" fill="currentColor" stroke="none"/><circle cx="14.3" cy="10.2" r=".7" fill="currentColor" stroke="none"/><path d="M10.3 13.2c.5.5 1.9.5 2.4 0"/></svg>`; }
+function iconLoteGrande(){ return `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 3l9 7"/><path d="M5 10v10.5h14V10"/><path d="M9.5 20.5v-6.5h5v6.5"/><path d="M5 20.5h14"/></svg>`; }
 function iconVenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M4 7h16"/><path d="M6 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M18 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M12 15v6"/><path d="M8 21h8"/></svg>`; }
 
 /* ===================== HEADER ===================== */
@@ -1598,6 +1626,7 @@ function Header(){
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
     estoqueRacao:{eyebrow:'Produto acabado', title:'Estoque de Ração', desc:'Registre a produção (mistura) de ração de cada dieta e acompanhe o saldo já pronto, com alerta de estoque baixo.'},
     lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
+    cadastroInicio:{eyebrow:'Início', title:'Cadastro', desc:'Registre novos lotes ou numere novos animais — de qualquer módulo, num lugar só.'},
     vendasGeral:{eyebrow:'Movimentação', title:'Vendas', desc:'Todas as vendas de animais de Confinamento, Pasto e Cria juntas numa lista só (abate por @, venda por animal ou por kg) — cada uma desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
@@ -1661,6 +1690,14 @@ function openNewModal(type){
       loteExistenteId:'', qtdEntrada:'', dataEntrada:hojeStr(),
     };
     state.modal = {type:'lote'};
+  } else if(type==='animal'){
+    const lotesAtivos = state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
+    if(lotesAtivos.length===0){
+      alert('Cadastre ao menos um lote (aba Cadastro) antes de numerar um animal.');
+      return false;
+    }
+    editDraft = {numero:'', loteId: lotesAtivos[0].id, sexo:'', raca:''};
+    state.modal = {type:'animal'};
   } else if(type==='saidaRacao'){
     const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
     if(state.dietas.length===0 || lotesConf.length===0){
@@ -1782,7 +1819,6 @@ function FabMenu(){
     {type:'movimento', label:'Nova movimentação de estoque'},
     {type:'dieta', label:'Nova dieta'},
     {type:'producaoRacao', label:'Nova produção de ração'},
-    {type:'lote', label:'Nova entrada de animais'},
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
     {type:'pasto', label:'Nova saída de ração (Pasto)'},
@@ -1801,11 +1837,6 @@ function FabMenu(){
   ].filter(a=>{
     if(a.type==='venda') return currentGroupKey()==='vendas' && (podeRegistrarVenda('confinamento') || podeRegistrarVenda('pasto') || podeRegistrarVenda('reproducao'));
     const nestaAba = (ACAO_MODULOS[a.type]||[]).includes(MODULOS_GROUP[currentGroupKey()]);
-    // Consultor/Administrador/Proprietário sempre podem lançar entrada de
-    // animais; Colaborador também pode, desde que tenha permissão de editar
-    // no módulo daquela aba -- só não pode editar um lote já cadastrado
-    // diretamente (botão Editar na lista, sem relação com essa ação).
-    if(a.type==='lote') return nestaAba && (podeCriarLote() || podeEditarAcao('lote'));
     return nestaAba && podeEditarAcao(a.type);
   });
   if(actions.length===0) return '';
@@ -2155,6 +2186,23 @@ function PageLotes(tipo){
 
 /* ===================== PÁGINA: LOTES (ESTOQUE DE ANIMAIS) ===================== */
 const DESTINO_LOTE_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
+function PageCadastroInicio(){
+  return `
+  <div class="cadastro-opcoes">
+    <button type="button" class="cadastro-opcao" data-fab-action="lote">
+      <span class="cadastro-opcao-icone">${iconLoteGrande()}</span>
+      <span class="cadastro-opcao-titulo">Lotes</span>
+      <span class="cadastro-opcao-desc">Criar um lote novo ou somar animais chegando num lote que já existe (Confinamento, Pasto ou Cria).</span>
+    </button>
+    <button type="button" class="cadastro-opcao" data-fab-action="animal">
+      <span class="cadastro-opcao-icone">${iconAnimalGrande()}</span>
+      <span class="cadastro-opcao-titulo">Animais</span>
+      <span class="cadastro-opcao-desc">Numerar um animal novo direto num lote que já existe, sem passar pela entrada em lote.</span>
+    </button>
+  </div>
+  <p class="hint" style="margin-top:16px;">Depois de cadastrado, o número do animal continua editável a qualquer momento na tela de Detalhe do Lote.</p>
+  `;
+}
 function PageLotesGeral(){
   const list = [...state.lotes].sort((a,b)=> (b.dataInicio||'').localeCompare(a.dataInicio||''));
   // Só conta lote ativo (sem data de encerramento) -- mesmo critério já usado
@@ -4723,16 +4771,22 @@ function ModalLote(){
 // animal que já existe (corrigir número, trocar lote/sexo/raça).
 function ModalAnimal(){
   const d = editDraft;
+  // Só lista lote de módulo que essa pessoa pode editar (cargo com acesso
+  // livre -- admin/proprietário/consultor -- vê todos) -- sem isso, dava
+  // pra criar/mover um animal pra um lote de um módulo sem permissão
+  // nenhuma, já que esse modal agora também é aberto direto da aba
+  // Cadastro (não só de dentro do Detalhe de um lote específico).
+  const lotesElegiveisAnimal = state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar animal</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar animal':'Cadastrar animal'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
           <div class="field"><label>Número do animal</label><input id="f-numeroanimal" value="${esc(d.numero)}" placeholder="Ex: 128"/></div>
           <div class="field"><label>Lote</label>
             <select id="f-loteanimal">
-              ${state.lotes.filter(l=>!l.dataFim).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
+              ${lotesElegiveisAnimal.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
             </select>
           </div>
         </div>
@@ -4756,7 +4810,7 @@ function ModalAnimal(){
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="animal">Salvar alterações</button>
+        <button class="btn btn-primary" data-save="animal">${d._editId?'Salvar alterações':'Cadastrar animal'}</button>
       </div>
     </div>
   </div>`;
@@ -6578,10 +6632,15 @@ function attachEvents(){
         if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote'],[sexoAnimalVal,'Sexo'],[racaAnimalVal,'Raça']])) return;
         const animalComEsseNumero = animalCadastrado(numeroAnimalVal);
         if(animalComEsseNumero && animalComEsseNumero.id!==editDraft._editId){
-          alert(`Já existe outro animal cadastrado com o número ${numeroAnimalVal}. Escolha um número diferente.`);
+          alert(`Já existe um animal cadastrado com o número ${numeroAnimalVal}. Escolha um número diferente.`);
           return;
         }
-        ({error} = await db.from('animais').update(animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal})).eq('id', editDraft._editId));
+        const rowAnimal = animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal});
+        if(editDraft._editId){
+          ({error} = await db.from('animais').update(rowAnimal).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('animais').insert({...rowAnimal, criado_por:autorAtual()}));
+        }
       } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaIdVal = document.getElementById('f-dieta').value;
         const dietaId = Number(dietaIdVal);
