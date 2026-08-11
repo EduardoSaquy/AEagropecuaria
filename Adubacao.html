@@ -412,11 +412,10 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 
   <div class="card card-pad">
     <div class="card-title">🧮 Otimizador de Insumos (catálogo)</div>
-    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias — o app calcula a combinação de menor custo que cobre o que ainda falta (necessidade já descontando as Aplicações Já Decididas acima). O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
+    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias — o app já calcula sozinho a combinação de menor custo que cobre o que ainda falta (necessidade já descontando as Aplicações Já Decididas acima) e soma no Custo Total, sem precisar clicar em nada. O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
     <div style="overflow-x:auto;"><table id="tabelaInsumos"></table></div>
     <button type="button" class="btn-ghost-full" id="btnNovoInsumo" style="margin-top:8px;">+ Adicionar insumo</button>
     <div id="insumoEditor"></div>
-    <button type="button" class="btn-primary-full" id="btnOtimizar" style="margin-top:14px;">⚙️ Calcular melhor combinação</button>
     <div id="otimizadorResultado"></div>
   </div>
 
@@ -1311,17 +1310,21 @@ function salvarInsumoEditor(id) {
   salvarCatalogo();
   fecharEditorInsumo();
   renderTabelaInsumos();
+  recalc();
 }
 function excluirInsumo(id) {
   if (!confirm("Excluir este insumo do catálogo?")) return;
   catalogoInsumos = catalogoInsumos.filter(i => i.id !== id);
   salvarCatalogo();
   renderTabelaInsumos();
+  recalc();
 }
 
-function rodarOtimizador() {
-  const s = readState();
-  const out = computeAll(s, amostraAtualObj().aplicacoes || []);
+// Roda automaticamente a cada recalc() (não depende mais de botão) - o resultado
+// (quando viável) entra na soma do Custo Total lá embaixo, junto com Calcário, Gesso
+// e Aplicações Já Decididas, pra nunca ficar um total "R$ 0,00" descolado do que o
+// otimizador encontrou.
+function rodarOtimizador(out, s) {
   const necessidade = {
     N: out.adubacao.N, P2O5: out.adubacao.P2O5, K2O: out.adubacao.K2O, S: out.adubacao.S,
     Zn: out.adubacao.Zn, B: out.adubacao.B, Cu: out.adubacao.Cu, Mn: out.adubacao.Mn, Mo: out.adubacao.Mo,
@@ -1332,10 +1335,12 @@ function rodarOtimizador() {
 
   if (nutrientesAlvo.length === 0) {
     wrap.innerHTML = `<div class="info-box" style="margin-top:10px;">Nenhum nutriente com necessidade nesta amostra — nada pra otimizar.</div>`;
+    atualizarCustoTotal(out, s, 0);
     return;
   }
   if (insumosAtivos.length === 0) {
-    wrap.innerHTML = `<div class="warn-box" style="margin-top:10px;">Cadastre pelo menos um Fertilizante ou Composto Orgânico no catálogo pra calcular.</div>`;
+    wrap.innerHTML = `<div class="warn-box" style="margin-top:10px;">Cadastre pelo menos um Fertilizante ou Composto Orgânico no catálogo pra calcular a melhor combinação pro que falta.</div>`;
+    atualizarCustoTotal(out, s, 0);
     return;
   }
 
@@ -1357,6 +1362,7 @@ function rodarOtimizador() {
   if (!r.viavel) {
     const faltando = (r.infactivelLinhas || []).map(idx => nutrientesCobriveis[idx]).join(", ") || "um ou mais nutrientes";
     wrap.innerHTML = avisoSemFonte + `<div class="warn-box" style="margin-top:10px;">Não foi possível cobrir tudo com os insumos cadastrados — falta preço/garantia suficiente pra: <b>${faltando}</b>. Ajuste as garantias ou o preço, ou cadastre outro insumo.</div>`;
+    atualizarCustoTotal(out, s, 0);
     return;
   }
 
@@ -1367,16 +1373,24 @@ function rodarOtimizador() {
       ${linhas.map(l => `<tr><td>${esc(l.ins.nome)}</td><td class="num">${fmt(l.dose, 1)}</td><td class="num">${fmtMoney(l.dose * l.ins.preco / 1000)}</td></tr>`).join("")}
     </table>`;
   wrap.innerHTML = avisoSemFonte + `
-    <div class="info-box" style="margin-top:10px;">Combinação de menor custo encontrada, cobrindo ${nutrientesCobriveis.join(", ") || "nenhum nutriente (nada cadastrado cobre a necessidade)"}.</div>
+    <div class="info-box" style="margin-top:10px;">Combinação de menor custo encontrada, cobrindo ${nutrientesCobriveis.join(", ") || "nenhum nutriente (nada cadastrado cobre a necessidade)"}. Já somada ao Custo Total, no fim da página.</div>
     ${tabela}
-    <div class="rel-custo" style="margin-top:8px;">Custo total: ${fmtMoney(r.custo)}/ha · ${fmtMoney(r.custo * s.area)} na área (${fmt(s.area, 1)} ha)</div>`;
+    <div class="rel-custo" style="margin-top:8px;">Subtotal do otimizador: ${fmtMoney(r.custo)}/ha · ${fmtMoney(r.custo * s.area)} na área (${fmt(s.area, 1)} ha)</div>`;
+  atualizarCustoTotal(out, s, r.custo);
+}
+
+// Custo Total = Calcário + Gesso + Aplicações Já Decididas (out.custos) + o que o
+// Otimizador encontrou pra cobrir o restante (0 se não há catálogo/necessidade/solução).
+function atualizarCustoTotal(out, s, custoOtimizador) {
+  const total = out.custos.custoTotalHa + custoOtimizador;
+  document.getElementById("custoHa").textContent = fmtMoney(total);
+  document.getElementById("custoArea").textContent = `Total da área: ${fmtMoney(total * s.area)}`;
 }
 
 function initOtimizador() {
   carregarCatalogo();
   renderTabelaInsumos();
   document.getElementById("btnNovoInsumo").addEventListener("click", () => abrirEditorInsumo("novo"));
-  document.getElementById("btnOtimizar").addEventListener("click", rodarOtimizador);
 }
 
 /* ===================== APLICAÇÕES JÁ DECIDIDAS ===================== */
@@ -1494,6 +1508,7 @@ function recalc() {
   const s = readState();
   const out = computeAll(s, (amostras.length && amostraAtualObj().aplicacoes) || []);
   render(out, s);
+  if (amostras.length) rodarOtimizador(out, s);
   document.getElementById("unidProdLabel").textContent = CROP_DB[s.cultura].unidade;
   document.getElementById("classeTexturalOut").textContent = "Textura: " + textureClass(s.argila) +
     (s.argila < 15 ? " (< 15% argila)" : s.argila <= 35 ? " (15-35% argila)" : " (> 35% argila)");
