@@ -188,24 +188,19 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
    depender de uma biblioteca de PDF; o navegador (Salvar como PDF na caixa de
    impressão) já resolve isso, e o conteúdo usa as mesmas contas do restante do app. */
 #relatorioImpressao{display:none;}
-.rel-capa{margin-bottom:22px;}
+.rel-capa{margin-bottom:18px;}
 .rel-capa h1{font-family:'Fraunces',serif; font-size:24px; color:var(--verde-escuro); margin:0 0 6px 0;}
 .rel-capa p{font-size:12.5px; color:var(--cinza); margin:0;}
-.rel-amostra{margin-bottom:26px; padding-bottom:20px; border-bottom:1.5px solid var(--cinza-claro); page-break-inside:avoid;}
-.rel-amostra:not(:last-child){page-break-after:always;}
-.rel-head{margin-bottom:10px;}
-.rel-titulo{font-family:'Fraunces',serif; font-size:19px; font-weight:700; color:var(--verde-escuro);}
-.rel-sub{font-size:11.5px; color:var(--cinza);}
-.rel-secao-titulo{font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--verde-medio); font-weight:700; margin:14px 0 6px 0;}
-.rel-meta{display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12.5px; color:var(--grafite);}
 .rel-table{width:100%; border-collapse:collapse; font-size:12px; margin-top:4px;}
-.rel-table th{text-align:left; font-size:10px; text-transform:uppercase; color:var(--cinza); padding:5px 6px; border-bottom:1.5px solid var(--cinza-claro);}
-.rel-table td{padding:6px; border-bottom:1px solid var(--cinza-claro);}
-.rel-table td.num{text-align:right; font-family:'IBM Plex Mono',monospace;}
-.rel-hint{color:var(--cinza); font-size:11.5px;}
-.rel-custo{margin-top:10px; font-weight:700; color:var(--verde-escuro); font-size:13.5px;}
+.rel-table th{text-align:right; font-size:11px; color:var(--verde-escuro); font-weight:700; padding:6px 8px; border-bottom:1.5px solid var(--cinza-claro); white-space:nowrap;}
+.rel-table th:first-child{text-align:left;}
+.rel-table td{padding:6px 8px; border-bottom:1px solid var(--cinza-claro); text-align:right; white-space:nowrap;}
+.rel-table td.num{font-family:'IBM Plex Mono',monospace;}
+.rel-linha-label{text-align:left !important; font-weight:600; color:var(--grafite);}
+.rel-linha-secao{text-align:left !important; font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--verde-medio); font-weight:700; padding-top:14px !important; border-bottom:none !important;}
 
 @media print{
+  @page{ size: landscape; }
   body > *:not(#relatorioImpressao){display:none !important;}
   #relatorioImpressao{display:block !important;}
   body{background:var(--branco); padding:0;}
@@ -1187,50 +1182,48 @@ function initAmostras() {
 // Usa a função de impressão do navegador (Salvar como PDF na caixa de impressão) em
 // vez de uma biblioteca de PDF - sem dependência externa, e o texto/números impressos
 // vêm das mesmas contas (computeAll) que o restante do app usa, sem duplicar lógica.
-function relatorioAmostraHtml(nome, s, out) {
-  const ad = out.adubacao;
-  const necessidadeRows = [
-    ["Nitrogênio (N)", ad.N], ["Fósforo (P2O5)", ad.P2O5], ["Potássio (K2O)", ad.K2O], ["Enxofre (S)", ad.S],
-    ["Zinco (Zn)", ad.Zn], ["Boro (B)", ad.B], ["Cobre (Cu)", ad.Cu], ["Manganês (Mn)", ad.Mn], ["Molibdênio (Mo)", ad.Mo],
-  ];
-  const tabelaNecessidade = `
-    <table class="rel-table">
-      <tr><th>Nutriente</th><th style="text-align:right">Necessidade (kg/ha)</th></tr>
-      ${necessidadeRows.map(([n, need]) => `<tr><td>${n}</td><td class="num">${fmt(need, 1)}</td></tr>`).join("")}
-      <tr><td>Calcário</td><td class="num">${fmt(out.calagem.ncFinal, 2)} t/ha</td></tr>
-      <tr><td>Gesso</td><td class="num">${out.gessagem.recomendaGesso ? fmt(out.gessagem.doseGesso, 0) + " kg/ha" : "Não recomendado"}</td></tr>
-    </table>`;
+// Tabela cruzada: uma linha por nutriente/corretivo, uma coluna por amostra - pensado
+// pra comparar vários talhões da mesma fazenda (geralmente a mesma cultura) lado a
+// lado, sem repetir "Nutriente" a cada amostra.
+function relatorioTabelaHtml(dados) {
+  const linha = (label, get, dec) => `<tr><td class="rel-linha-label">${label}</td>${dados.map(d => `<td class="num">${fmt(get(d), dec)}</td>`).join("")}</tr>`;
+  const linhaTexto = (label, get) => `<tr><td class="rel-linha-label">${label}</td>${dados.map(d => `<td>${get(d)}</td>`).join("")}</tr>`;
 
   return `
-  <section class="rel-amostra">
-    <div class="rel-head">
-      <div class="rel-titulo">${esc(nome)}</div>
-      <div class="rel-sub">Relatório de Adubação · ${new Date().toLocaleDateString("pt-BR")}</div>
-    </div>
-    <div class="rel-meta">
-      <span><b>Cultura:</b> ${esc(s.cultura)}</span>
-      <span><b>Produtividade meta:</b> ${fmt(s.produtividade, 1)} ${CROP_DB[s.cultura].unidade}</span>
-      <span><b>Área:</b> ${fmt(s.area, 1)} ha</span>
-    </div>
-
-    <div class="rel-secao-titulo">Necessidade de nutrientes e corretivos</div>
-    ${tabelaNecessidade}
-  </section>`;
+  <table class="rel-table rel-table-pivot">
+    <tr><th>Amostra</th>${dados.map(d => `<th>${esc(d.nome)}</th>`).join("")}</tr>
+    ${linhaTexto("Cultura", d => esc(d.s.cultura))}
+    ${linhaTexto("Produtividade meta", d => fmt(d.s.produtividade, 1) + " " + CROP_DB[d.s.cultura].unidade)}
+    ${linha("Área (ha)", d => d.s.area, 1)}
+    <tr><td class="rel-linha-secao" colspan="${dados.length + 1}">Necessidade de nutrientes (kg/ha)</td></tr>
+    ${linha("Nitrogênio (N)", d => d.out.adubacao.N, 1)}
+    ${linha("Fósforo (P2O5)", d => d.out.adubacao.P2O5, 1)}
+    ${linha("Potássio (K2O)", d => d.out.adubacao.K2O, 1)}
+    ${linha("Enxofre (S)", d => d.out.adubacao.S, 1)}
+    ${linha("Zinco (Zn)", d => d.out.adubacao.Zn, 1)}
+    ${linha("Boro (B)", d => d.out.adubacao.B, 1)}
+    ${linha("Cobre (Cu)", d => d.out.adubacao.Cu, 1)}
+    ${linha("Manganês (Mn)", d => d.out.adubacao.Mn, 1)}
+    ${linha("Molibdênio (Mo)", d => d.out.adubacao.Mo, 1)}
+    <tr><td class="rel-linha-secao" colspan="${dados.length + 1}">Corretivos</td></tr>
+    ${linha("Calcário (t/ha)", d => d.out.calagem.ncFinal, 2)}
+    ${linhaTexto("Gesso (kg/ha)", d => d.out.gessagem.recomendaGesso ? fmt(d.out.gessagem.doseGesso, 0) : "-")}
+  </table>`;
 }
 
 function gerarRelatorioPdf() {
   amostraAtualObj().form = snapshotForm();
-  const blocos = amostras.map(a => {
+  const dados = amostras.map(a => {
     const s = readState(a.form);
     const out = computeAll(s, readFertInputs(a.form));
-    return relatorioAmostraHtml(a.nome, s, out);
-  }).join("");
+    return { nome: a.nome, s, out };
+  });
   document.getElementById("relatorioImpressao").innerHTML = `
     <div class="rel-capa">
       <h1>Relatório de Adubação</h1>
       <p>${amostras.length} amostra${amostras.length > 1 ? "s" : ""} · gerado em ${new Date().toLocaleDateString("pt-BR")} pelo app Adubação (AE) · não substitui a responsabilidade técnica de um(a) Engenheiro(a) Agrônomo(a) para emissão de receituário agronômico</p>
     </div>
-    ${blocos}`;
+    ${relatorioTabelaHtml(dados)}`;
   window.print();
 }
 
