@@ -1188,41 +1188,17 @@ function initAmostras() {
 // vez de uma biblioteca de PDF - sem dependência externa, e o texto/números impressos
 // vêm das mesmas contas (computeAll) que o restante do app usa, sem duplicar lógica.
 function relatorioAmostraHtml(nome, s, out) {
-  const ad = out.adubacao, sk = out.soloKgHa, mi = out.mistura;
-  const compRows = [
-    ["Fósforo (P2O5)", sk.P2O5, out.classes.P, ad.P2O5],
-    ["Potássio (K2O)", sk.K2O, out.classes.K, ad.K2O],
-    ["Enxofre (S)", sk.S, out.classes.S, ad.S],
-    ["Zinco (Zn)", sk.Zn, out.classes.Zn, ad.Zn],
-    ["Boro (B)", sk.B, out.classes.B, ad.B],
-    ["Cobre (Cu)", sk.Cu, out.classes.Cu, ad.Cu],
-    ["Manganês (Mn)", sk.Mn, out.classes.Mn, ad.Mn],
-    ["Molibdênio (Mo)", sk.Mo, out.classes.Mo, ad.Mo],
+  const ad = out.adubacao;
+  const necessidadeRows = [
+    ["Nitrogênio (N)", ad.N], ["Fósforo (P2O5)", ad.P2O5], ["Potássio (K2O)", ad.K2O], ["Enxofre (S)", ad.S],
+    ["Zinco (Zn)", ad.Zn], ["Boro (B)", ad.B], ["Cobre (Cu)", ad.Cu], ["Manganês (Mn)", ad.Mn], ["Molibdênio (Mo)", ad.Mo],
   ];
   const tabelaNecessidade = `
     <table class="rel-table">
-      <tr><th>Nutriente</th><th style="text-align:right">Solo (kg/ha)</th><th>Classe</th><th style="text-align:right">Necessidade</th><th style="text-align:right">Falta</th></tr>
-      <tr><td>Nitrogênio (N)</td><td class="num">-</td><td>-</td><td class="num">${fmt(ad.N, 1)}</td><td class="num">${fmt(ad.N, 1)}</td></tr>
-      ${compRows.map(([n, solo, classe, need]) => {
-        const falta = Math.max(0, need - solo);
-        return `<tr><td>${n}</td><td class="num">${fmt(solo, 1)}</td><td>${classe}</td><td class="num">${fmt(need, 1)}</td><td class="num">${fmt(falta, 1)}</td></tr>`;
-      }).join("")}
-    </table>`;
-
-  const linhaMistura = (label, r) => {
-    if (!r || r.doseAplicada <= 0) return `<tr><td>${label}</td><td colspan="4" class="rel-hint">Sem necessidade / sem produto informado.</td></tr>`;
-    const custoTxt = r.compartilhado && !r.principal ? "mesmo adubo acima" : (r.custo > 0 ? fmtMoney(r.custo) : "-");
-    return `<tr><td>${label}</td><td>${esc(r.nome) || "-"}</td><td class="num">${r.pct ? fmt(r.pct, 1) + "%" : "-"}</td><td class="num">${fmt(r.doseAplicada, 1)} kg/ha</td><td class="num">${custoTxt}</td></tr>`;
-  };
-  const tabelaMistura = `
-    <table class="rel-table">
-      <tr><th>Nutriente</th><th>Adubo</th><th>Teor</th><th style="text-align:right">Dose</th><th style="text-align:right">Custo/ha</th></tr>
-      ${linhaMistura("N", mi.rN)}
-      ${linhaMistura("P2O5", mi.rP)}
-      ${linhaMistura("K2O", mi.rK)}
-      ${linhaMistura("S", mi.rS)}
-      <tr><td>Calcário</td><td colspan="2">-</td><td class="num">${fmt(out.calagem.ncFinal, 2)} t/ha</td><td class="num">${mi.custoCalcario > 0 ? fmtMoney(mi.custoCalcario) : "-"}</td></tr>
-      <tr><td>Gesso</td><td colspan="2">${out.gessagem.recomendaGesso ? "Recomendado" : "Não recomendado"}</td><td class="num">${fmt(out.gessagem.doseGesso, 0)} kg/ha</td><td class="num">${mi.custoGesso > 0 ? fmtMoney(mi.custoGesso) : "-"}</td></tr>
+      <tr><th>Nutriente</th><th style="text-align:right">Necessidade (kg/ha)</th></tr>
+      ${necessidadeRows.map(([n, need]) => `<tr><td>${n}</td><td class="num">${fmt(need, 1)}</td></tr>`).join("")}
+      <tr><td>Calcário</td><td class="num">${fmt(out.calagem.ncFinal, 2)} t/ha</td></tr>
+      <tr><td>Gesso</td><td class="num">${out.gessagem.recomendaGesso ? fmt(out.gessagem.doseGesso, 0) + " kg/ha" : "Não recomendado"}</td></tr>
     </table>`;
 
   return `
@@ -1235,32 +1211,10 @@ function relatorioAmostraHtml(nome, s, out) {
       <span><b>Cultura:</b> ${esc(s.cultura)}</span>
       <span><b>Produtividade meta:</b> ${fmt(s.produtividade, 1)} ${CROP_DB[s.cultura].unidade}</span>
       <span><b>Área:</b> ${fmt(s.area, 1)} ha</span>
-      <span><b>UF:</b> ${esc(s.estado)}</span>
-      <span><b>Sistema:</b> ${esc(s.sistemaProducao)}</span>
-      <span><b>Textura:</b> ${textureClass(s.argila)}</span>
     </div>
 
-    <div class="rel-secao-titulo">Índices do solo</div>
-    <div class="rel-meta">
-      <span><b>pH:</b> ${out.classes.pH}</span>
-      <span><b>M.O.:</b> ${out.classes.MO}</span>
-      <span><b>V%:</b> ${fmt(out.vPct, 1)}% (${out.classes.V})</span>
-      <span><b>m% (Al):</b> ${fmt(out.mPct, 1)}% (${out.classes.m})</span>
-    </div>
-
-    <div class="rel-secao-titulo">Calagem e gessagem</div>
-    <div class="rel-meta">
-      <span><b>Calcário:</b> ${fmt(out.calagem.ncFinal, 2)} t/ha (${fmt(out.calagem.ncTotal, 1)} t na área) · ${out.calagem.metodoEscolhido}</span>
-      <span><b>Gesso:</b> ${out.gessagem.recomendaGesso ? fmt(out.gessagem.doseGesso, 0) + " kg/ha (" + fmt(out.gessagem.doseTotal, 1) + " t na área)" : "Não recomendado"}</span>
-    </div>
-
-    <div class="rel-secao-titulo">Solo × Necessidade × Falta (kg/ha)</div>
+    <div class="rel-secao-titulo">Necessidade de nutrientes e corretivos</div>
     ${tabelaNecessidade}
-
-    <div class="rel-secao-titulo">Mistura de fertilizantes sugerida</div>
-    ${tabelaMistura}
-
-    <div class="rel-custo">Custo total: ${fmtMoney(mi.custoTotalHa)}/ha · ${fmtMoney(mi.custoTotalArea)} na área (${fmt(s.area, 1)} ha)</div>
   </section>`;
 }
 
