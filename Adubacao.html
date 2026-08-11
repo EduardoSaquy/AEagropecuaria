@@ -152,18 +152,11 @@ td{padding:9px 8px; border-bottom:1px solid var(--cinza-claro); vertical-align:m
 tr:last-child td{border-bottom:none;}
 td.num{text-align:right; font-family:'IBM Plex Mono',monospace; white-space:nowrap;}
 td.falta{text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--verde-escuro); white-space:nowrap;}
-/* Tabelas com input clicável (Mistura) precisam de largura própria em vez de 100%:
-   com width:100%, o layout automático da tabela espreme as células de input bem
-   abaixo do que o CSS pede pra caber na tela do celular (texto digitado ficava
-   cortado/ilegível). width:auto + min-width:100% deixa a tabela crescer pelo
-   conteúdo real e usar o scroll horizontal do wrapper quando não couber. */
-#tabelaMistura{table-layout:fixed; width:100%; min-width:554px;}
 .tbl-input{
   width:100%; font-family:'Inter',sans-serif; font-size:16px; padding:9px 6px; border-radius:6px;
   border:1.5px solid var(--cinza-claro); background:var(--cinza-bg); color:var(--grafite);
 }
 .tbl-input:focus{outline:none; border-color:var(--verde-medio); background:var(--branco);}
-.tbl-shared{font-style:italic; color:var(--cinza); font-size:11.5px; font-family:'Inter',sans-serif; font-weight:600;}
 
 .big-result{text-align:center; padding:6px 0 2px 0;}
 .big-result .value{font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:600; color:var(--verde-escuro);}
@@ -384,6 +377,8 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     <table>
       <tr><td>Total para a área</td><td class="num" id="calTotal">-</td></tr>
       <tr><td>Parcelamento</td><td class="num" id="calParcelamento">-</td></tr>
+      <tr><td>Preço (R$/t)</td><td class="num"><input type="number" class="tbl-input" id="calcario_preco" placeholder="R$/t" step="10" style="width:100px;"></td></tr>
+      <tr><td>Custo</td><td class="num" id="calcarioCusto">-</td></tr>
     </table>
     <details style="margin-top:8px;">
       <summary style="cursor:pointer; font-size:12.5px; color:var(--verde-medio); font-weight:600;">Ver os métodos calculados</summary>
@@ -402,19 +397,22 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
     <table>
       <tr><td>Dose de gesso</td><td class="num" id="gessoDose">-</td></tr>
       <tr><td>Total para a área</td><td class="num" id="gessoTotal">-</td></tr>
+      <tr><td>Preço (R$/t)</td><td class="num"><input type="number" class="tbl-input" id="gesso_preco" placeholder="R$/t" step="10" style="width:100px;"></td></tr>
+      <tr><td>Custo</td><td class="num" id="gessoCusto">-</td></tr>
     </table>
   </div>
 
   <div class="card card-pad">
-    <div class="card-title">🛒 Mistura de Fertilizantes</div>
-    <div class="card-sub" style="margin-bottom:6px;">Já sugerimos um adubo comum e o teor (%) dele pra cada nutriente, com a dose calculada — troque pelo produto que você realmente vai usar se for outro. Preço fica em branco (sem padrão) até você preencher. Formulado com mais de um nutriente (ex.: NPK)? Repita o mesmo nome nas linhas que ele cobre — o custo é contado uma única vez.</div>
-    <div style="overflow-x:auto;"><table id="tabelaMistura"></table></div>
-    <div class="note" id="custoFertResumo" style="margin-top:6px; font-weight:600;"></div>
+    <div class="card-title">🧾 Aplicações Já Decididas</div>
+    <div class="card-sub" style="margin-bottom:6px;">O que você já vai aplicar por conta própria (estoque, orgânico próprio, preferência etc.) — escolhe do catálogo de insumos ou digita um produto avulso na hora. Isso abate da necessidade calculada antes do Otimizador rodar.</div>
+    <div style="overflow-x:auto;"><table id="tabelaAplicacoes"></table></div>
+    <button type="button" class="btn-ghost-full" id="btnNovaAplicacao" style="margin-top:8px;">+ Adicionar aplicação</button>
+    <div id="aplicacaoEditor"></div>
   </div>
 
   <div class="card card-pad">
     <div class="card-title">🧮 Otimizador de Insumos (catálogo)</div>
-    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias — o app calcula a combinação de menor custo que cobre a necessidade de nutrientes desta amostra. O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
+    <div class="card-sub" style="margin-bottom:6px;">Cadastre os insumos que você tem acesso (adubos, compostos orgânicos) com preço e garantias — o app calcula a combinação de menor custo que cobre o que ainda falta (necessidade já descontando as Aplicações Já Decididas acima). O catálogo fica salvo neste navegador entre visitas (as amostras continuam sem salvar).</div>
     <div style="overflow-x:auto;"><table id="tabelaInsumos"></table></div>
     <button type="button" class="btn-ghost-full" id="btnNovoInsumo" style="margin-top:8px;">+ Adicionar insumo</button>
     <div id="insumoEditor"></div>
@@ -666,23 +664,21 @@ function computeAll(state, selection) {
   const effP = EFICIENCIA[textura].p;
   const effK = EFICIENCIA[textura].k;
 
-  let nDose;
+  let nDoseBruta;
   if (s.cultura === "Soja") {
-    nDose = s.inoculacao === "Sim" ? 0 : (yieldTHa * crop.exp.N) / (s.effN / 100);
+    nDoseBruta = s.inoculacao === "Sim" ? 0 : (yieldTHa * crop.exp.N) / (s.effN / 100);
   } else {
     const nExport = yieldTHa * crop.exp.N;
-    nDose = Math.max(0, nExport / (s.effN / 100) - (s.creditoN === "Sim" ? 25 : 0));
+    nDoseBruta = Math.max(0, nExport / (s.effN / 100) - (s.creditoN === "Sim" ? 25 : 0));
   }
 
   const pExport = yieldTHa * crop.exp.P2O5;
   const pManut = pExport / effP;
   const pFator = FATOR_CLASSE[classeP] || 1;
-  const pDose = pManut * pFator;
 
   const kExport = yieldTHa * crop.exp.K2O;
   const kManut = kExport / effK;
   const kFator = FATOR_CLASSE[classeK] || 1;
-  const kDose = kManut * kFator;
 
   const sExport = yieldTHa * crop.exp.S;
   const sManut = sExport / (s.effS / 100);
@@ -690,88 +686,49 @@ function computeAll(state, selection) {
   const sBruto = sManut * sFator;
   // Gesso agrícola (CaSO4·2H2O) tem ~15% de S (ver out.gessagem.sSuprido) - quando a
   // gessagem é recomendada, esse S já entra no solo junto com o gesso, então abate da
-  // necessidade antes de sugerir adubo à base de enxofre (nunca fica negativo).
+  // necessidade antes de contar como falta (nunca fica negativo).
   const sSupridoGesso = out.gessagem.recomendaGesso ? out.gessagem.sSuprido : 0;
-  const sDose = Math.max(0, sBruto - sSupridoGesso);
 
-  const znDose = MICRO_DOSE.Zn[classeZn] || 0;
-  const bDose = MICRO_DOSE.B[classeB] || 0;
-  const cuDose = MICRO_DOSE.Cu[classeCu] || 0;
-  const mnDose = MICRO_DOSE.Mn[classeMn] || 0;
-  const moDose = MICRO_DOSE.Mo[classeMo] || 0;
+  const znBruto = MICRO_DOSE.Zn[classeZn] || 0;
+  const bBruto = MICRO_DOSE.B[classeB] || 0;
+  const cuBruto = MICRO_DOSE.Cu[classeCu] || 0;
+  const mnBruto = MICRO_DOSE.Mn[classeMn] || 0;
+  const moBruto = MICRO_DOSE.Mo[classeMo] || 0;
+
+  // -- Aplicações Já Decididas: o que a pessoa já vai aplicar por conta própria (do
+  // catálogo de insumos ou digitado avulso) também abate a necessidade, do mesmo
+  // jeito que o gesso abate o enxofre - o Otimizador de Insumos, mais abaixo, só
+  // precisa resolver o que sobrar depois desse abatimento.
+  const aplicacoes = selection || [];
+  const suprimoManual = {};
+  NUTRIENTES_LP.forEach(nut => {
+    suprimoManual[nut] = aplicacoes.reduce((soma, ap) => soma + (ap.dose || 0) * ((ap.garantias && ap.garantias[nut] || 0) / 100), 0);
+  });
+  const custoAplicacoes = aplicacoes.reduce((soma, ap) => soma + (ap.preco > 0 ? (ap.dose || 0) * ap.preco / 1000 : 0), 0);
+
+  const nDose = Math.max(0, nDoseBruta - suprimoManual.N);
+  const pDose = Math.max(0, pManut * pFator - suprimoManual.P2O5);
+  const kDose = Math.max(0, kManut * kFator - suprimoManual.K2O);
+  const sDose = Math.max(0, sBruto - sSupridoGesso - suprimoManual.S);
+  const znDose = Math.max(0, znBruto - suprimoManual.Zn);
+  const bDose = Math.max(0, bBruto - suprimoManual.B);
+  const cuDose = Math.max(0, cuBruto - suprimoManual.Cu);
+  const mnDose = Math.max(0, mnBruto - suprimoManual.Mn);
+  const moDose = Math.max(0, moBruto - suprimoManual.Mo);
 
   out.adubacao = {
     yieldTHa, textura, effP, effK,
     N: nDose, P2O5: pDose, K2O: kDose, S: sDose, Zn: znDose, B: bDose, Cu: cuDose, Mn: mnDose, Mo: moDose,
-    sBruto, sSupridoGesso,
+    sBruto, sSupridoGesso, suprimoManual,
     caExport: yieldTHa * crop.exp.Ca, mgExport: yieldTHa * crop.exp.Mg,
     fonteCurta: crop.fonteCurta, confiancaCurta: crop.confiancaCurta,
   };
 
-  // -- mistura de fertilizantes: doses/custo a partir do que o usuário digitar --
-  // (sem banco de dados pré-carregado: o usuário informa nome/teor/preço do produto
-  // que ele realmente vai usar - dose = necessidade / (teor%/100); custo = dose x preço).
-  // Formulados com mais de um nutriente (ex.: NPK 08-20-20): se o MESMO nome de adubo
-  // for digitado em mais de uma linha, entende-se que é uma única compra - a dose
-  // aplicada passa a ser a maior entre as exigidas por cada nutriente que ele contém
-  // (o nutriente mais exigente dita a dose do produto), e o custo é cobrado uma única
-  // vez, evitando contar o mesmo saco de adubo duas ou três vezes.
-  const need = { N: nDose, P2O5: pDose, K2O: kDose, S: sDose, Zn: znDose, B: bDose, Cu: cuDose, Mn: mnDose, Mo: moDose };
-  const sel = selection || {};
-
-  function itemBruto(slot, needVal) {
-    const nome = ((slot && slot.nome) || "").trim();
-    const pct = parseFloat(slot && slot.pct) || 0;
-    const preco = parseFloat(slot && slot.preco) || 0;
-    const dose = pct > 0 ? needVal / (pct / 100) : 0;
-    return { nome, pct, preco, dose };
-  }
-
-  const itens = {
-    N: itemBruto(sel.n, need.N), P2O5: itemBruto(sel.p, need.P2O5),
-    K2O: itemBruto(sel.k, need.K2O), S: itemBruto(sel.s, need.S),
-  };
-
-  // agrupa linhas com o mesmo nome de adubo (case-insensitive), só considerando
-  // linhas com dose > 0 (teor preenchido) - nomes em branco nunca se agrupam
-  const grupos = {};
-  Object.entries(itens).forEach(([chaveNutriente, it]) => {
-    const chaveNome = it.nome.toLowerCase();
-    if (!chaveNome || it.dose <= 0) return;
-    (grupos[chaveNome] = grupos[chaveNome] || []).push(chaveNutriente);
-  });
-
-  const mist = {};
-  Object.entries(itens).forEach(([chaveNutriente, it]) => {
-    mist[chaveNutriente] = {
-      ...it, doseAplicada: it.dose, custo: (it.dose * it.preco) / 1000,
-      compartilhado: false, principal: true, suprido: it.dose * (it.pct / 100),
-    };
-  });
-  Object.values(grupos).forEach(chaves => {
-    if (chaves.length < 2) return; // nome usado numa única linha: nada a mudar
-    const doseAplicada = Math.max(...chaves.map(k => itens[k].dose));
-    const precoGrupo = chaves.map(k => itens[k].preco).find(p => p > 0) || 0;
-    chaves.forEach((k, idx) => {
-      mist[k].doseAplicada = doseAplicada;
-      mist[k].compartilhado = true;
-      mist[k].principal = idx === 0;
-      mist[k].custo = idx === 0 ? (doseAplicada * precoGrupo) / 1000 : 0;
-      mist[k].suprido = doseAplicada * (itens[k].pct / 100);
-    });
-  });
-
-  const rN = mist.N, rP = mist.P2O5, rK = mist.K2O, rS = mist.S;
-  const custoFertHa = rN.custo + rP.custo + rK.custo + rS.custo;
-
-  const precoCalcario = parseFloat(sel.calcario && sel.calcario.preco) || 0;
-  const precoGesso = parseFloat(sel.gesso && sel.gesso.preco) || 0;
-  const custoCalcario = out.calagem.ncFinal * precoCalcario;
-  const custoGesso = (out.gessagem.doseGesso / 1000) * precoGesso;
-  const custoTotalHa = custoFertHa + custoCalcario + custoGesso;
-
-  out.mistura = {
-    rN, rP, rK, rS, custoFertHa, custoCalcario, custoGesso,
+  const custoCalcario = out.calagem.ncFinal * (s.calcarioPreco || 0);
+  const custoGesso = (out.gessagem.doseGesso / 1000) * (s.gessoPreco || 0);
+  const custoTotalHa = custoCalcario + custoGesso + custoAplicacoes;
+  out.custos = {
+    custoCalcario, custoGesso, custoAplicacoes,
     custoTotalHa, custoTotalArea: custoTotalHa * s.area,
   };
 
@@ -802,12 +759,11 @@ const MANUAL_TECNICO_HTML = `
 <p class="manual-p"><b>Micronutrientes:</b> dose fixa por classe (Zn e B confirmados em referência secundária do Boletim 100; Cu, Mn e Mo são estimativas de uso corrente — Confiança Baixa).</p>
 <p class="manual-p"><b>Enxofre e gessagem:</b> gesso agrícola (CaSO₄·2H₂O) tem ~15% de S. Quando a gessagem é recomendada, esse S é abatido da necessidade calculada para o Enxofre antes de sugerir adubo (nunca fica negativo) — evita recomendar enxofre em dobro quando o gesso já supre parte dele. Confiança: Média (teor de S do gesso varia por origem/pureza, 12-18% é a faixa usual).</p>
 
-<div class="manual-h">5. Mistura de fertilizantes</div>
-<p class="manual-p">Sem banco de dados pré-carregado: você digita o nome (referência), o teor (%) do nutriente-alvo na embalagem e o preço (R$/t) do produto que vai usar de fato - a dose (kg/ha) é a necessidade dividida pelo teor, e o custo é a dose vezes o preço. Isso reflete o que muda por região e por safra sem impor uma composição/preço padrão.</p>
-<p class="manual-p"><b>Formulados com mais de um nutriente (ex.: NPK 08-20-20):</b> digitando o mesmo nome de adubo em mais de uma linha (N, P2O5, K2O e/ou S), o app entende que é a mesma compra física. A dose aplicada passa a ser a maior entre as exigidas por cada nutriente que esse produto contém (o nutriente mais exigente dita quanto produto comprar), e o custo é lançado uma única vez - nas demais linhas do mesmo produto aparece "↑ mesmo adubo" no lugar do custo, para deixar claro que ele já foi contado. Os nutrientes menos exigentes tendem a ficar com sobra (dose aplicada maior do que a estritamente necessária para eles); isso é esperado ao usar um formulado pronto e não é contabilizado como custo extra.</p>
+<div class="manual-h">5. Aplicações Já Decididas</div>
+<p class="manual-p">Espaço pra registrar o que você já vai aplicar por conta própria (estoque, composto orgânico da propriedade, preferência etc.), independente de custo-benefício: escolhe um insumo do catálogo (reaproveita nome/garantias/preço já cadastrados) ou digita um produto avulso na hora (nome, garantias %, dose e preço opcional, sem precisar cadastrar no catálogo). Cada aplicação abate da necessidade calculada (kg/ha de N, P2O5, K2O, S e micronutrientes) antes de qualquer outra conta - mesmo mecanismo já usado pelo gesso abatendo o Enxofre, generalizado pra qualquer nutriente e qualquer insumo. Se as aplicações já cobrirem tudo, a necessidade daquele nutriente cai pra zero. O preço (quando informado) entra direto no Custo Total, junto com Calcário e Gesso.</p>
 
 <div class="manual-h">6. Otimizador de Insumos (catálogo)</div>
-<p class="manual-p">Cadastro opcional de insumos (fertilizante, composto orgânico) com preço (R$/t) e garantia (%) de cada nutriente na embalagem, salvo neste navegador entre visitas (diferente das amostras, que não são salvas). O botão "Calcular melhor combinação" monta um problema de programação linear - minimizar o custo total (Σ preço × dose) sujeito a, para cada nutriente com necessidade > 0, a soma do que cada insumo fornece (garantia% × dose) cobrir pelo menos a necessidade calculada (a mesma da tabela Solo × Necessidade × Falta, já com o abatimento do gesso quando aplicável) - e resolve com o método simplex (duas fases), implementado neste app sem biblioteca externa. Diferente da Mistura de Fertilizantes (uma linha por nutriente, um produto por linha), o otimizador pode combinar vários insumos multi-nutrientes ao mesmo tempo e indica quando os insumos cadastrados não são suficientes pra cobrir algum nutriente. Calcário e Gesso não entram nessa otimização - a dose deles é definida pelas fórmulas de Calagem/Gessagem, não por custo-benefício de nutriente. Confiança: Alta (o cálculo é uma otimização exata dado o que foi cadastrado); depende inteiramente da precisão das garantias e preços digitados.</p>
+<p class="manual-p">Cadastro opcional de insumos (fertilizante, composto orgânico) com preço (R$/t) e garantia (%) de cada nutriente na embalagem, salvo neste navegador entre visitas (diferente das amostras, que não são salvas). O botão "Calcular melhor combinação" monta um problema de programação linear - minimizar o custo total (Σ preço × dose) sujeito a, para cada nutriente com necessidade > 0, a soma do que cada insumo fornece (garantia% × dose) cobrir pelo menos a necessidade calculada (a mesma da tabela Solo × Necessidade × Falta, já com o abatimento do gesso e das Aplicações Já Decididas) - e resolve com o método simplex (duas fases), implementado neste app sem biblioteca externa. O otimizador pode combinar vários insumos multi-nutrientes ao mesmo tempo e indica quando os insumos cadastrados não são suficientes pra cobrir algum nutriente, sem travar o resultado dos demais. Calcário e Gesso não entram nessa otimização - a dose deles é definida pelas fórmulas de Calagem/Gessagem, não por custo-benefício de nutriente; o preço de cada um se informa direto nos cartões de Calagem e Gessagem. Confiança: Alta (o cálculo é uma otimização exata dado o que foi cadastrado); depende inteiramente da precisão das garantias e preços digitados.</p>
 
 <div class="manual-h">7. Limitações conhecidas</div>
 <p class="manual-p">• Classes de pH, V%, saturação de Al e parte dos micronutrientes (Cu, Mn, Fe, Mo) são valores consolidados na literatura agronômica brasileira, não reverificados contra o texto integral do Boletim 100 nesta versão.<br>
@@ -923,6 +879,7 @@ function readState(snap) {
     hal: convHAl(gNum("q_hal"), uHal),
     s: gNum("q_s"), b: gNum("q_b"), cu: gNum("q_cu"), fe: gNum("q_fe"), mn: gNum("q_mn"), zn: gNum("q_zn"),
     moMicro: gNum("q_moMicro"), na: gNum("q_na"),
+    calcarioPreco: gNum("calcario_preco"), gessoPreco: gNum("gesso_preco"),
   };
 }
 
@@ -1000,128 +957,34 @@ function render(out, s) {
         `<td><span class="pill ${pillClass(classe)}">${classe}</span></td>` +
         `<td class="num">${fmt(need, 1)}</td><td class="falta">${fmt(falta, 1)}</td></tr>`;
     }).join("");
+  const nutrientesAbatidos = NUTRIENTES_LP.filter(nut => (ad.suprimoManual[nut] || 0) > 0.001);
   document.getElementById("nDoseInfo").innerHTML =
     `Nitrogênio (N): <b>${fmt(ad.N, 2)} kg/ha</b> de necessidade — sem teor de solo comparável nesta análise (ver Manual Técnico). ` +
     `Cálcio e Magnésio são corrigidos via Calagem/Gessagem, não por adubação direta. ` +
     (ad.sSupridoGesso > 0
-      ? `Enxofre (S): a necessidade bruta seria <b>${fmt(ad.sBruto, 1)} kg/ha</b>, mas o gesso recomendado (Gessagem, abaixo) já fornece ~${fmt(ad.sSupridoGesso, 1)} kg/ha de S — por isso a necessidade líquida de adubo com enxofre caiu para ${fmt(ad.S, 1)} kg/ha. `
+      ? `Enxofre (S): o gesso recomendado (Gessagem, abaixo) já fornece ~${fmt(ad.sSupridoGesso, 1)} kg/ha de S, abatido antes do valor acima. `
+      : ``) +
+    (nutrientesAbatidos.length > 0
+      ? `As Aplicações Já Decididas também já foram abatidas dos valores de Necessidade acima (${nutrientesAbatidos.map(n => n + ": " + fmt(ad.suprimoManual[n], 1) + " kg/ha").join(", ")}). `
       : ``) +
     `A coluna "Solo" converte o teor do laudo para kg/ha assumindo camada de 0-20cm (comparação de referência; ` +
     `a dose em "Necessidade" já considera eficiência de aproveitamento e não é uma subtração simples). ` +
     `<span class="pill ${confPill(ad.confiancaCurta)}">Confiança da necessidade: ${ad.confiancaCurta}</span> ${ad.fonteCurta}`;
 
-  // Mistura - dose/custo a partir do que o usuário digitou na tabela
-  const mi = out.mistura;
-  const setRow = (id, r) => {
-    const doseEl = document.getElementById("dose_" + id);
-    const custoEl = document.getElementById("custo_" + id);
-    if (doseEl) doseEl.textContent = r.doseAplicada > 0 ? fmt(r.doseAplicada, 1) : "-";
-    if (custoEl) {
-      if (r.doseAplicada <= 0) custoEl.innerHTML = "-";
-      else if (r.compartilhado && !r.principal) custoEl.innerHTML = `<span class="tbl-shared">↑ mesmo adubo</span>`;
-      else if (r.custo <= 0) custoEl.innerHTML = "-";
-      else custoEl.innerHTML = fmtMoney(r.custo);
-    }
-  };
-  setRow("n", mi.rN); setRow("p", mi.rP); setRow("k", mi.rK); setRow("s", mi.rS);
-  const doseCal = document.getElementById("dose_calcario");
-  if (doseCal) doseCal.textContent = fmt(out.calagem.ncFinal, 2) + " t";
-  const custoCal = document.getElementById("custo_calcario");
-  if (custoCal) custoCal.textContent = mi.custoCalcario > 0 ? fmtMoney(mi.custoCalcario) : "-";
-  const doseGes = document.getElementById("dose_gesso");
-  if (doseGes) doseGes.textContent = fmt(out.gessagem.doseGesso, 0) + " kg";
-  const custoGes = document.getElementById("custo_gesso");
-  if (custoGes) custoGes.textContent = mi.custoGesso > 0 ? fmtMoney(mi.custoGesso) : "-";
+  const custoCalEl = document.getElementById("calcarioCusto");
+  if (custoCalEl) custoCalEl.textContent = out.custos.custoCalcario > 0 ? fmtMoney(out.custos.custoCalcario) : "-";
+  const custoGesEl = document.getElementById("gessoCusto");
+  if (custoGesEl) custoGesEl.textContent = out.custos.custoGesso > 0 ? fmtMoney(out.custos.custoGesso) : "-";
 
-  document.getElementById("custoFertResumo").textContent = `Subtotal fertilizantes: ${fmtMoney(mi.custoFertHa)}/ha`;
-  document.getElementById("custoHa").textContent = fmtMoney(mi.custoTotalHa);
-  document.getElementById("custoArea").textContent = `Total da área: ${fmtMoney(mi.custoTotalArea)}`;
-}
-
-/* ---------------- Mistura: tabela clicável, com sugestão de adubo padrão ---------------- */
-// Cada linha = um produto (nome de referência, teor % do nutriente-alvo na embalagem,
-// e preço R$/t). O nome e o teor já vêm com um adubo comum de mercado, pra dose sair
-// calculada de cara - o preço fica em branco (varia demais por região/época pra ter
-// padrão) e o custo só aparece quando ele for informado. Nome e teor podem ser trocados
-// livremente pelo produto que o produtor realmente vai usar.
-// O padrão de enxofre depende da cultura (ver defaultSParaCultura): na cana o gesso já
-// costuma ser a fonte de S (e de quebra entrega Ca), então não sugere produto - só o
-// crédito de S do gesso (computeAll) entra na conta, e a linha fica em branco pra
-// preencher manualmente se sobrar necessidade. Nas demais culturas sugere Enxofre
-// Pastilhado (90%), fonte pronta (sulfato), sem depender de oxidação no solo como o
-// enxofre elementar bruto.
-const ADUBO_PADRAO = {
-  n: { nome: "Ureia", pct: 45 },
-  p: { nome: "Superfosfato Simples", pct: 18 },
-  k: { nome: "Cloreto de Potássio (KCl)", pct: 60 },
-};
-const S_PADRAO_NAO_CANA = { nome: "Enxofre Pastilhado", pct: 90 };
-function defaultSParaCultura(cultura) {
-  return cultura === "Cana-de-açúcar" ? { nome: "", pct: "" } : S_PADRAO_NAO_CANA;
-}
-// Só troca o padrão de S ao mudar de cultura se o campo ainda estiver com um valor
-// que o próprio app sugeriu (ou vazio) - nunca sobrescreve um produto que o usuário
-// digitou por conta própria.
-function ehSPadraoOuVazio(nome) {
-  const n = (nome || "").trim();
-  return n === "" || n === S_PADRAO_NAO_CANA.nome;
-}
-function atualizarSPadraoPorCultura() {
-  const nomeEl = document.getElementById("fert_s_nome");
-  const pctEl = document.getElementById("fert_s_pct");
-  if (!ehSPadraoOuVazio(nomeEl.value)) return;
-  const padrao = defaultSParaCultura(document.getElementById("cultura").value);
-  nomeEl.value = padrao.nome;
-  pctEl.value = padrao.pct;
-}
-function buildFertInputs() {
-  const linhasNutriente = [
-    ["n", "N"], ["p", "P2O5"], ["k", "K2O"], ["s", "S"],
-  ];
-  const padraoS = defaultSParaCultura(document.getElementById("cultura").value);
-  const linhaTabela = (id, label, temTeor) => {
-    const padrao = id === "s" ? padraoS : ADUBO_PADRAO[id];
-    return `
-    <tr>
-      <td>${label}</td>
-      <td><input type="text" class="tbl-input" id="fert_${id}_nome" placeholder="adubo" value="${padrao ? padrao.nome : ""}"></td>
-      ${temTeor ? `<td><input type="number" class="tbl-input" id="fert_${id}_pct" placeholder="%" step="0.1" value="${padrao ? padrao.pct : ""}"></td>` : `<td>-</td>`}
-      <td><input type="number" class="tbl-input" id="fert_${id}_preco" placeholder="R$/t" step="10"></td>
-      <td class="num" id="dose_${id}">-</td>
-      <td class="num" id="custo_${id}">-</td>
-    </tr>`;
-  };
-  document.getElementById("tabelaMistura").innerHTML =
-    `<colgroup><col style="width:68px"><col style="width:136px"><col style="width:78px"><col style="width:84px"><col style="width:76px"><col style="width:112px"></colgroup>` +
-    `<tr><th>Nutriente</th><th>Adubo</th><th>Teor %</th><th>Preço</th><th style="text-align:right">Dose</th><th style="text-align:right">Custo/ha</th></tr>` +
-    linhasNutriente.map(([id, label]) => linhaTabela(id, label, true)).join("") +
-    linhaTabela("calcario", "Calcário", false) +
-    linhaTabela("gesso", "Gesso", false);
-
-  ["fert_n_nome", "fert_n_pct", "fert_n_preco", "fert_p_nome", "fert_p_pct", "fert_p_preco",
-   "fert_k_nome", "fert_k_pct", "fert_k_preco", "fert_s_nome", "fert_s_pct", "fert_s_preco",
-   "fert_calcario_preco", "fert_gesso_preco"]
-    .forEach(id => document.getElementById(id).addEventListener("input", recalc));
-
-  document.getElementById("cultura").addEventListener("change", () => { atualizarSPadraoPorCultura(); recalc(); });
-}
-
-function readFertInputs(snap) {
-  const g = (id) => { if (snap) return snap[id] || ""; const el = document.getElementById(id); return el ? el.value : ""; };
-  return {
-    n: { nome: g("fert_n_nome"), pct: g("fert_n_pct"), preco: g("fert_n_preco") },
-    p: { nome: g("fert_p_nome"), pct: g("fert_p_pct"), preco: g("fert_p_preco") },
-    k: { nome: g("fert_k_nome"), pct: g("fert_k_pct"), preco: g("fert_k_preco") },
-    s: { nome: g("fert_s_nome"), pct: g("fert_s_pct"), preco: g("fert_s_preco") },
-    calcario: { preco: g("fert_calcario_preco") },
-    gesso: { preco: g("fert_gesso_preco") },
-  };
+  document.getElementById("custoHa").textContent = fmtMoney(out.custos.custoTotalHa);
+  document.getElementById("custoArea").textContent = `Total da área: ${fmtMoney(out.custos.custoTotalArea)}`;
 }
 
 /* ===================== AMOSTRAS (várias análises da mesma fazenda) ===================== */
 // Uma fazenda normalmente manda mais de uma amostra de solo pro laboratório (uma por
 // talhão/gleba) - cada amostra guarda sua própria cópia de todos os campos do
-// formulário (cultura, análise química, mistura de fertilizantes etc.). Trocar de
+// formulário (cultura, análise química, preço de calcário/gesso etc.), além da lista
+// de Aplicações Já Decididas (guardada à parte, em amostra.aplicacoes). Trocar de
 // amostra salva o formulário atual nela antes de carregar os dados da escolhida, então
 // nada se perde ao alternar. Fica só na memória da aba, mesma política de não salvar
 // entre sessões do resto do app.
@@ -1129,9 +992,7 @@ const FORM_FIELD_IDS = [
   "cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub",
   "q_ph", "q_mo", "u_mo", "q_p", "q_k", "u_k", "q_ca", "u_ca", "q_mg", "u_mg", "q_al", "u_al", "q_hal", "u_hal",
   "q_s", "q_b", "q_cu", "q_fe", "q_mn", "q_zn", "q_moMicro", "q_na",
-  "fert_n_nome", "fert_n_pct", "fert_n_preco", "fert_p_nome", "fert_p_pct", "fert_p_preco",
-  "fert_k_nome", "fert_k_pct", "fert_k_preco", "fert_s_nome", "fert_s_pct", "fert_s_preco",
-  "fert_calcario_preco", "fert_gesso_preco",
+  "calcario_preco", "gesso_preco",
 ];
 const FORM_SEG_IDS = ["segSistema", "segInoculacao", "segCreditoN"];
 
@@ -1178,18 +1039,19 @@ function trocarAmostra(indice) {
   amostraAtual = indice;
   applyFormSnapshot(amostraAtualObj().form);
   renderAmostraSelect();
+  renderTabelaAplicacoes();
   recalc();
 }
 
-function novaAmostra(form, nome) {
+function novaAmostra(form, nome, aplicacoes) {
   amostraSeq += 1;
-  amostras.push({ nome: nome || ("Amostra " + amostraSeq), form });
+  amostras.push({ nome: nome || ("Amostra " + amostraSeq), form, aplicacoes: aplicacoes || [] });
   trocarAmostra(amostras.length - 1);
 }
 
 function initAmostras() {
   DEFAULT_FORM = snapshotForm();
-  amostras = [{ nome: "Amostra 1", form: Object.assign({}, DEFAULT_FORM) }];
+  amostras = [{ nome: "Amostra 1", form: Object.assign({}, DEFAULT_FORM), aplicacoes: [] }];
   amostraAtual = 0;
   renderAmostraSelect();
 
@@ -1203,7 +1065,7 @@ function initAmostras() {
     novaAmostra(Object.assign({}, DEFAULT_FORM));
   });
   document.getElementById("btnAmostraDuplicar").addEventListener("click", () => {
-    novaAmostra(snapshotForm(), amostraAtualObj().nome + " (cópia)");
+    novaAmostra(snapshotForm(), amostraAtualObj().nome + " (cópia)", JSON.parse(JSON.stringify(amostraAtualObj().aplicacoes || [])));
   });
   document.getElementById("btnAmostraExcluir").addEventListener("click", () => {
     if (amostras.length <= 1) return;
@@ -1212,6 +1074,7 @@ function initAmostras() {
     amostraAtual = Math.max(0, amostraAtual - 1);
     applyFormSnapshot(amostraAtualObj().form);
     renderAmostraSelect();
+    renderTabelaAplicacoes();
     recalc();
   });
 
@@ -1255,7 +1118,7 @@ function gerarRelatorioPdf() {
   amostraAtualObj().form = snapshotForm();
   const dados = amostras.map(a => {
     const s = readState(a.form);
-    const out = computeAll(s, readFertInputs(a.form));
+    const out = computeAll(s, a.aplicacoes || []);
     return { nome: a.nome, s, out };
   });
   document.getElementById("relatorioImpressao").innerHTML = `
@@ -1458,7 +1321,7 @@ function excluirInsumo(id) {
 
 function rodarOtimizador() {
   const s = readState();
-  const out = computeAll(s, readFertInputs());
+  const out = computeAll(s, amostraAtualObj().aplicacoes || []);
   const necessidade = {
     N: out.adubacao.N, P2O5: out.adubacao.P2O5, K2O: out.adubacao.K2O, S: out.adubacao.S,
     Zn: out.adubacao.Zn, B: out.adubacao.B, Cu: out.adubacao.Cu, Mn: out.adubacao.Mn, Mo: out.adubacao.Mo,
@@ -1516,10 +1379,120 @@ function initOtimizador() {
   document.getElementById("btnOtimizar").addEventListener("click", rodarOtimizador);
 }
 
+/* ===================== APLICAÇÕES JÁ DECIDIDAS ===================== */
+// O que a pessoa já vai aplicar por conta própria (estoque, orgânico próprio,
+// preferência etc.), escolhido do catálogo de insumos ou digitado avulso na hora
+// (sem precisar cadastrar no catálogo primeiro). Fica guardado por amostra
+// (amostra.aplicacoes), igual aos outros dados da amostra - não é salvo entre
+// sessões. Cada aplicação abate a necessidade calculada (ver computeAll).
+function renderTabelaAplicacoes() {
+  const aplic = (amostraAtualObj() && amostraAtualObj().aplicacoes) || [];
+  const tbl = document.getElementById("tabelaAplicacoes");
+  if (aplic.length === 0) {
+    tbl.innerHTML = `<tr><td class="rel-hint" style="padding:8px 4px;">Nenhuma aplicação lançada ainda.</td></tr>`;
+  } else {
+    tbl.innerHTML = `<tr><th>Insumo</th><th style="text-align:right">Dose (kg/ha)</th><th style="text-align:right">Custo/ha</th><th></th></tr>` +
+      aplic.map((ap, i) => `
+        <tr>
+          <td>${esc(ap.nome)}</td>
+          <td class="num">${fmt(ap.dose, 1)}</td>
+          <td class="num">${ap.preco > 0 ? fmtMoney(ap.dose * ap.preco / 1000) : "-"}</td>
+          <td style="text-align:right; white-space:nowrap;"><button type="button" class="btn-link btn-link-danger" data-remover-aplicacao="${i}">Remover</button></td>
+        </tr>`).join("");
+  }
+  tbl.querySelectorAll("[data-remover-aplicacao]").forEach(b => b.addEventListener("click", () => {
+    amostraAtualObj().aplicacoes.splice(parseInt(b.dataset.removerAplicacao, 10), 1);
+    renderTabelaAplicacoes();
+    recalc();
+  }));
+}
+
+function abrirEditorAplicacao() {
+  const insumosEscolhiveis = catalogoInsumos.filter(i => i.tipo === "Fertilizante" || i.tipo === "Composto Orgânico");
+  const wrap = document.getElementById("aplicacaoEditor");
+  wrap.innerHTML = `
+    <div style="background:var(--cinza-bg); border-radius:9px; padding:12px; margin-top:10px;">
+      <div class="seg" id="ap_origem">
+        <button type="button" data-val="catalogo" class="${insumosEscolhiveis.length ? "on" : ""}">Do catálogo</button>
+        <button type="button" data-val="avulso" class="${insumosEscolhiveis.length ? "" : "on"}">Avulso</button>
+      </div>
+      <div class="field" id="ap_catalogo_wrap" style="margin-top:10px; display:${insumosEscolhiveis.length ? "block" : "none"};">
+        <label>Insumo</label>
+        <select id="ap_insumo_id">${insumosEscolhiveis.map(i => `<option value="${i.id}">${esc(i.nome)}</option>`).join("") || `<option value="">Nenhum insumo cadastrado no catálogo</option>`}</select>
+      </div>
+      <div id="ap_avulso_wrap" style="display:${insumosEscolhiveis.length ? "none" : "block"};">
+        <div class="field" style="margin-top:10px;"><label>Nome</label><input type="text" id="ap_nome" placeholder="ex.: Esterco de galinha"></div>
+        <div class="section-label" style="margin-top:6px;">Garantias (%)</div>
+        <div class="diag-grid" style="grid-template-columns:repeat(3,1fr);">
+          ${NUTRIENTES_LP.map(k => `<div class="field" style="margin-bottom:2px;"><label style="font-size:11px;">${k}</label><input type="number" id="ap_g_${k}" step="0.1" placeholder="0"></div>`).join("")}
+        </div>
+      </div>
+      <div class="row2" style="margin-top:10px;">
+        <div class="field"><label>Dose (kg/ha)</label><input type="number" id="ap_dose" step="1"></div>
+        <div class="field"><label>Preço (R$/t) <span class="hint">opcional</span></label><input type="number" id="ap_preco" step="10"></div>
+      </div>
+      <div class="row2" style="margin-top:10px;">
+        <button type="button" class="btn-primary-full" id="btnSalvarAplicacao">Adicionar</button>
+        <button type="button" class="btn-ghost-full" id="btnCancelarAplicacao">Cancelar</button>
+      </div>
+    </div>`;
+
+  const segOrigem = document.getElementById("ap_origem");
+  segOrigem.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
+    segOrigem.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+    btn.classList.add("on");
+    const ehCatalogo = btn.dataset.val === "catalogo";
+    document.getElementById("ap_catalogo_wrap").style.display = ehCatalogo ? "block" : "none";
+    document.getElementById("ap_avulso_wrap").style.display = ehCatalogo ? "none" : "block";
+  }));
+  const selInsumo = document.getElementById("ap_insumo_id");
+  if (selInsumo) selInsumo.addEventListener("change", () => {
+    const ins = insumosEscolhiveis.find(i => i.id === selInsumo.value);
+    if (ins) document.getElementById("ap_preco").value = ins.preco || "";
+  });
+  if (insumosEscolhiveis.length && selInsumo) document.getElementById("ap_preco").value = insumosEscolhiveis[0].preco || "";
+
+  document.getElementById("btnSalvarAplicacao").addEventListener("click", salvarAplicacao);
+  document.getElementById("btnCancelarAplicacao").addEventListener("click", fecharEditorAplicacao);
+}
+function fecharEditorAplicacao() { document.getElementById("aplicacaoEditor").innerHTML = ""; }
+
+function salvarAplicacao() {
+  const origem = document.querySelector("#ap_origem button.on").dataset.val;
+  const dose = parseFloat(document.getElementById("ap_dose").value) || 0;
+  const precoInput = parseFloat(document.getElementById("ap_preco").value) || 0;
+  if (dose <= 0) { alert("Informe a dose (kg/ha) da aplicação."); return; }
+
+  let nome, garantias, preco = precoInput;
+  if (origem === "catalogo") {
+    const insumosEscolhiveis = catalogoInsumos.filter(i => i.tipo === "Fertilizante" || i.tipo === "Composto Orgânico");
+    const ins = insumosEscolhiveis.find(i => i.id === document.getElementById("ap_insumo_id").value);
+    if (!ins) { alert("Cadastre um insumo no catálogo primeiro, ou escolha \"Avulso\"."); return; }
+    nome = ins.nome;
+    garantias = ins.garantias;
+    if (!preco) preco = ins.preco || 0;
+  } else {
+    nome = document.getElementById("ap_nome").value.trim() || "Insumo sem nome";
+    garantias = {};
+    NUTRIENTES_LP.forEach(k => { garantias[k] = parseFloat(document.getElementById("ap_g_" + k).value) || 0; });
+  }
+
+  amostraAtualObj().aplicacoes = amostraAtualObj().aplicacoes || [];
+  amostraAtualObj().aplicacoes.push({ nome, garantias, preco, dose });
+  fecharEditorAplicacao();
+  renderTabelaAplicacoes();
+  recalc();
+}
+
+function initAplicacoes() {
+  renderTabelaAplicacoes();
+  document.getElementById("btnNovaAplicacao").addEventListener("click", abrirEditorAplicacao);
+}
+
 function recalc() {
   if (amostras.length) amostraAtualObj().form = snapshotForm();
   const s = readState();
-  const out = computeAll(s, readFertInputs());
+  const out = computeAll(s, (amostras.length && amostraAtualObj().aplicacoes) || []);
   render(out, s);
   document.getElementById("unidProdLabel").textContent = CROP_DB[s.cultura].unidade;
   document.getElementById("classeTexturalOut").textContent = "Textura: " + textureClass(s.argila) +
@@ -1545,11 +1518,11 @@ function init() {
   estadoSel.innerHTML = UFS.map(uf => `<option ${uf === "GO" ? "selected" : ""}>${uf}</option>`).join("");
 
   buildQuimFields();
-  buildFertInputs();
   initAmostras();
   initOtimizador();
+  initAplicacoes();
 
-  ["cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub"]
+  ["cultura", "produtividade", "area", "estado", "argila", "prnt", "v2Override", "effN", "effS", "mSub", "caSub", "calcario_preco", "gesso_preco"]
     .forEach(id => document.getElementById(id).addEventListener("input", recalc));
   QUIM_FIELDS.forEach(f => {
     document.getElementById("q_" + f.id).addEventListener("input", recalc);
