@@ -997,9 +997,10 @@ function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 // Cadastro, desde que tenha permissão de editar em algum módulo (ver
 // grupoVisivel('cadastro')).
 function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
-// Consultor formula dieta e precisa saber/lançar o preço do insumo pra isso,
-// mas não deve ver o financeiro geral da fazenda (valor total em estoque,
-// custo por curral, movimentações em R$ etc.) -- só o preço do insumo em si.
+// Consultor formula dieta e precisa saber/lançar preço de insumo, custo de
+// dieta/ração/pasto e valor em estoque pra isso -- mas não deve ver o
+// financeiro geral da fazenda (custo por curral, receitas/despesas,
+// investimentos etc.), que continua só admin/proprietário via souAdmin().
 function podeVerPrecoInsumo(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
@@ -2007,7 +2008,7 @@ function PageEstoque(){
   });
   const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
   const alertas = rows.filter(r=>r.baixo).length;
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   const podeAjustar = temPermissao('insumos','editar');
 
   const buscaMov = state.searchMovimentos.toLowerCase();
@@ -2104,7 +2105,7 @@ function composicaoIncompleta(dietaId){
 }
 
 function PageDietas(){
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   if(state.dietas.length===0){
     return `<div class="card">${Empty('Nenhuma dieta formulada','Crie uma dieta combinando ingredientes cadastrados.')}</div>`;
   }
@@ -2784,7 +2785,7 @@ function PageVendasGeral(){
 
 /* ===================== PÁGINA: SAÍDA DE RAÇÃO ===================== */
 function PageSaidaRacao(tipo){
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   const filtro = state.filtrosSaidaRacao[tipo] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.saidasRacao
     .filter(s=>{ const lote = state.lotes.find(l=>l.id===s.loteId); return lote && loteTipo(lote)===tipo; });
@@ -2917,7 +2918,7 @@ function custoPasto(p){
   return dieta ? calcDieta(dieta).custoKg * p.quantidade : 0;
 }
 function PagePasto(){
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   const filtro = state.filtrosSaidaRacao['pasto'] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.pasto
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; });
