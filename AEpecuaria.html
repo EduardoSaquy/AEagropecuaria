@@ -852,7 +852,7 @@ const state = {
   filtroMesDespesas: '',
   filtroMesReceitas: '',
   filtroMesMovimentos: '',
-  movGruposExpandidos: {}, // {[tipo:ingredienteId:mes]: true} -- grupos de movimentação (Saídas/Entradas) que o usuário expandiu pra ver o diário
+  movGruposExpandidos: {}, // {[tipo:ingredienteId]: true} -- grupos de movimentação (Saídas/Entradas) que o usuário expandiu pra ver o histórico completo daquele insumo
   filtrosSaidaRacao: {}, // {[tipo]: {mes, loteId, dietaId}} -- um filtro por aba (Confinamento/Cria), pra não misturar
   subAbaReproducao: 'inseminacao', // 'inseminacao'|'diagnostico'|'parto' -- sub-abas dentro de Reprodução (Cria)
   fabOpen: false,
@@ -881,6 +881,11 @@ let ultimaPaginaRenderizada = null;
 function render(){
   const root = document.getElementById('root');
   const scrollY = window.scrollY;
+  // No desktop quem rola é a .main interna (overflow-y:auto), não a janela
+  // -- só no mobile (≤760px) o .app vira overflow:visible e a janela passa
+  // a rolar. Guardamos os dois; o innerHTML troca a .main inteira, então
+  // depois do render precisamos reencontrar a NOVA .main e restaurar nela.
+  const mainScrollTop = document.querySelector('.main')?.scrollTop || 0;
   const mesmaPagina = ultimaPaginaRenderizada === state.page;
 
   if(!state.authChecked){
@@ -974,9 +979,12 @@ function render(){
   attachEvents();
   ultimaPaginaRenderizada = state.page;
   // Mesma página (ex: expandiu um grupo, abriu um modal) -- restaura o
-  // scroll exatamente onde estava. Página diferente (navegação de verdade) --
-  // sobe pro topo, como se espera ao abrir uma tela nova.
+  // scroll exatamente onde estava, tanto na janela (mobile) quanto na nova
+  // .main (desktop). Página diferente (navegação de verdade) -- sobe pro
+  // topo nos dois, como se espera ao abrir uma tela nova.
   window.scrollTo(0, mesmaPagina ? scrollY : 0);
+  const novaMain = document.querySelector('.main');
+  if(novaMain) novaMain.scrollTop = mesmaPagina ? mainScrollTop : 0;
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
