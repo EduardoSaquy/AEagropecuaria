@@ -4192,6 +4192,23 @@ function custosDiariosPorLote(){
     return totalPesoArea>0 ? fixoDaAreaNoPeriodo*(pesoLote/totalPesoArea) : 0;
   }
 
+  // Janela do custo VARIÁVEL médio/dia (ração+pasto+cria) -- cada atividade
+  // tem um ciclo bem diferente, então cada uma tem sua própria janela (o
+  // custo fixo acima continua só do mês corrente, isso não muda):
+  // Confinamento é um ciclo curto (60-120 dias) -- soma desde a entrada do
+  // lote, sem limite de mês. Pasto e Cria ficam meses a anos -- soma desde
+  // 1º de janeiro do ano corrente (ou desde a entrada, se entrou depois),
+  // resetando a cada ano novo pra não arrastar custo de anos passados.
+  const inicioAnoStr = d.mes.slice(0,4)+'-01-01';
+  function inicioJanelaVariavel(lote){
+    if(loteTipo(lote)==='confinamento') return lote.dataInicio || inicioMesStr;
+    return (lote.dataInicio && lote.dataInicio>inicioAnoStr) ? lote.dataInicio : inicioAnoStr;
+  }
+  function diasJanelaVariavel(lote){
+    const inicio = inicioJanelaVariavel(lote);
+    return Math.max(1, Math.round((new Date(d.hoje+'T00:00:00') - new Date(inicio+'T00:00:00'))/86400000) + 1);
+  }
+
   const custosMesPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
@@ -4205,21 +4222,25 @@ function custosDiariosPorLote(){
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
   }).sort((a,b)=> b.total-a.total);
 
-  // Média diária do mês (não "só hoje"): ração/pasto/cria não são lançados
-  // todo santo dia (ex: ração feita a cada 3-4 dias) — mostrar só o valor de
-  // hoje deixava a maioria dos currais com R$ 0,00 mesmo tendo gasto normal
-  // recente. Em vez disso, pega o total já lançado no mês (custosMesPorLote,
-  // acima) e divide pelos dias já passados do mês (1 até hoje) — dá a média
-  // diária real até agora, sem os "buracos" dos dias sem lançamento.
-  const custosPorLote = custosMesPorLote.map(r=>{
-    const dias = diasAtivosNoMes(r.lote);
-    const racao = r.racao/dias;
-    const pasto = r.pasto/dias;
-    const reproducao = r.reproducao/dias;
-    const fixoAlocado = fixoLoteAlocado(r.lote, fixoAreaMes[loteTipo(r.lote)]/30);
+  // Média diária real (não "só hoje" nem "só esse mês"): ração/pasto/cria
+  // não são lançados todo santo dia -- mostrar só o valor de hoje ou só o
+  // total do mês corrente deixava a conta furada ou reiniciando toda hora.
+  // Cada lote soma o que já gastou na SUA janela (definida acima -- desde
+  // a entrada pro Confinamento, desde o ano corrente pro Pasto/Cria) e
+  // divide pelos dias dessa mesma janela.
+  const custosPorLote = lotesAtivos.map(l=>{
+    const inicioJanela = inicioJanelaVariavel(l);
+    const racaoTotal = state.saidasRacao.filter(s=>s.data>=inicioJanela && s.data<=d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pastoTotal = state.pasto.filter(p=>p.data>=inicioJanela && p.data<=d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const reproducaoTotal = state.reproducao.filter(r=>r.data>=inicioJanela && r.data<=d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
+    const dias = diasJanelaVariavel(l);
+    const racao = racaoTotal/dias;
+    const pasto = pastoTotal/dias;
+    const reproducao = reproducaoTotal/dias;
+    const fixoAlocado = fixoLoteAlocado(l, fixoAreaMes[loteTipo(l)]/30);
     const total = racao + pasto + reproducao + fixoAlocado;
-    const porAnimal = r.lote.numeroAnimais>0 ? total/r.lote.numeroAnimais : 0;
-    return {lote:r.lote, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
+    const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   // Mesmos dados de custosMesPorLote, só que somados por área (Confinamento/
@@ -4399,7 +4420,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. Um lote que começou no meio do mês divide só pelos dias que ele já existe, não pelos dias do mês inteiro. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção de animais × dias que cada um já existe no mês — mesmo critério do total do mês, abaixo.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia), e cada atividade tem sua própria janela de tempo, pelo ciclo bem diferente de cada uma: no <strong>Confinamento</strong> (ciclo curto) soma tudo que já foi gasto desde a <strong>entrada do lote</strong>, sem resetar por mês; no <strong>Pasto</strong> e na <strong>Cria</strong> (ciclo de meses a anos) soma desde <strong>1º de janeiro do ano corrente</strong> (ou desde a entrada, se entrou depois), resetando a cada ano novo. O custo fixo continua sendo só do mês corrente (mensal ÷ 30), rateado entre os currais na proporção de animais × dias que cada um já existe no mês — isso não mudou.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
