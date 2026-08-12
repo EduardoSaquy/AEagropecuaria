@@ -852,6 +852,7 @@ const state = {
   filtroMesDespesas: '',
   filtroMesReceitas: '',
   filtroMesMovimentos: '',
+  movGruposExpandidos: {}, // {[tipo:ingredienteId:mes]: true} -- grupos de movimentação (Saídas/Entradas) que o usuário expandiu pra ver o diário
   filtrosSaidaRacao: {}, // {[tipo]: {mes, loteId, dietaId}} -- um filtro por aba (Confinamento/Cria), pra não misturar
   subAbaReproducao: 'inseminacao', // 'inseminacao'|'diagnostico'|'parto' -- sub-abas dentro de Reprodução (Cria)
   fabOpen: false,
@@ -1930,6 +1931,55 @@ function PageIngredientes(){
 }
 
 /* ===================== PÁGINA: ESTOQUE ===================== */
+// Agrupa movimentações (entrada/saída) por insumo+mês, pra não listar todo
+// lançamento diário direto na tela -- cada grupo mostra só o total do mês,
+// e expande pro diário quando o usuário clica.
+function agruparMovimentos(rows, tipo){
+  const porGrupo = {};
+  rows.filter(m=>m.tipo===tipo).forEach(m=>{
+    const mes = m.data.slice(0,7);
+    const key = `${tipo}:${m.ingredienteId}:${mes}`;
+    if(!porGrupo[key]) porGrupo[key] = {key, ingredienteId:m.ingredienteId, mes, total:0, itens:[]};
+    porGrupo[key].total += m.quantidade;
+    porGrupo[key].itens.push(m);
+  });
+  return Object.values(porGrupo).sort((a,b)=> b.mes.localeCompare(a.mes) || (getIng(a.ingredienteId)?.nome||'').localeCompare(getIng(b.ingredienteId)?.nome||''));
+}
+function TabelaMovimentosAgrupados(grupos, tipo){
+  if(grupos.length===0) return Empty(`Nenhuma ${tipo==='saida'?'saída':'entrada'} registrada`, `Registre ${tipo==='saida'?'saídas':'entradas'} de insumos.`);
+  return `
+  <table>
+    <thead><tr><th></th><th>Insumo</th><th>Mês</th><th>Total</th><th>Lançamentos</th></tr></thead>
+    <tbody>
+      ${grupos.map(g=>{
+        const ing = getIng(g.ingredienteId);
+        const aberto = !!state.movGruposExpandidos[g.key];
+        return `
+        <tr class="mov-grupo-row" data-toggle-mov-grupo="${g.key}" style="cursor:pointer;">
+          <td class="mono" style="width:20px;"><svg class="chev ${aberto?'open':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></td>
+          <td><strong>${ing?esc(ing.nome):'—'}</strong></td>
+          <td>${mesLabel(g.mes)}</td>
+          <td class="mono">${fmtInt(g.total)} ${ing?ing.unidade:''}</td>
+          <td class="mono">${g.itens.length}</td>
+        </tr>
+        ${aberto ? g.itens.slice().sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id).map(m=>`
+        <tr class="mov-item-row">
+          <td></td>
+          <td class="mono">${m.data.split('-').reverse().join('/')}</td>
+          <td>${m.ajuste ? '<span class="pill pill-cat">Ajuste</span>' : ''}</td>
+          <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
+          <td style="display:flex; gap:6px;">
+            ${temPermissao('insumos','editar') ? `
+            <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
+            ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>` : ''}
+            ` : ''}
+          </td>
+        </tr>`).join('') : ''}
+        `;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
 function PageEstoque(){
   const rows = state.ingredientes.map(i=>{
     const saldo = saldoIngrediente(i.id);
@@ -1946,10 +1996,11 @@ function PageEstoque(){
 
   const buscaMov = state.searchMovimentos.toLowerCase();
   const mesesMovDisponiveis = [...new Set(state.movimentos.map(m=>m.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
-  const movRows = [...state.movimentos]
+  const movFiltradas = state.movimentos
     .filter(m=>{ const ing = getIng(m.ingredienteId); return !buscaMov || (ing && ing.nome.toLowerCase().includes(buscaMov)); })
-    .filter(m=> !state.filtroMesMovimentos || m.data.startsWith(state.filtroMesMovimentos))
-    .sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+    .filter(m=> !state.filtroMesMovimentos || m.data.startsWith(state.filtroMesMovimentos));
+  const gruposSaida = agruparMovimentos(movFiltradas, 'saida');
+  const gruposEntrada = agruparMovimentos(movFiltradas, 'entrada');
 
   return `
   <div class="stat-row">
@@ -1993,28 +2044,14 @@ function PageEstoque(){
       </select>
     </div>
   </div>
+  <p class="eyebrow" style="margin-bottom:10px;">Saídas <span class="hint" style="font-weight:400;">— total por insumo/mês, clique pra ver o diário</span></p>
+  <div class="card" style="margin-bottom:22px;">
+    ${TabelaMovimentosAgrupados(gruposSaida, 'saida')}
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Entradas <span class="hint" style="font-weight:400;">— total por insumo/mês, clique pra ver o diário</span></p>
   <div class="card">
-    ${movRows.length===0 ? Empty(state.movimentos.length===0 ? 'Nenhuma movimentação' : 'Nenhuma movimentação com esse filtro', state.movimentos.length===0 ? 'Registre entradas e saídas de insumos.' : 'Tente outro ingrediente ou mês.') : `
-    <table>
-      <thead><tr><th>Data</th><th>Ingrediente</th><th>Tipo</th><th>Quantidade</th><th></th></tr></thead>
-      <tbody>
-        ${movRows.map(m=>{
-          const ing = getIng(m.ingredienteId);
-          return `<tr>
-            <td class="mono">${m.data.split('-').reverse().join('/')}</td>
-            <td>${ing?esc(ing.nome):'—'}</td>
-            <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}${m.ajuste ? ' <span class="pill pill-cat">Ajuste</span>' : ''}</td>
-            <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
-            <td style="display:flex; gap:6px;">
-              ${temPermissao('insumos','editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>` : ''}
-              ` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`}
+    ${TabelaMovimentosAgrupados(gruposEntrada, 'entrada')}
   </div>`;
 }
 
@@ -6080,8 +6117,20 @@ function attachEvents(){
       if(!ing) return;
       state.searchMovimentos = ing.nome;
       state.filtroMesMovimentos = '';
+      const meses = new Set(state.movimentos.filter(m=>m.ingredienteId===ing.id).map(m=>m.data.slice(0,7)));
+      meses.forEach(mes=>{
+        state.movGruposExpandidos[`saida:${ing.id}:${mes}`] = true;
+        state.movGruposExpandidos[`entrada:${ing.id}:${mes}`] = true;
+      });
       render();
       document.getElementById('movimentacoes-secao')?.scrollIntoView({behavior:'smooth', block:'start'});
+    };
+  });
+  document.querySelectorAll('[data-toggle-mov-grupo]').forEach(el=>{
+    el.onclick = ()=>{
+      const key = el.dataset.toggleMovGrupo;
+      state.movGruposExpandidos[key] = !state.movGruposExpandidos[key];
+      render();
     };
   });
   document.querySelectorAll('[data-del-diet]').forEach(el=>{
