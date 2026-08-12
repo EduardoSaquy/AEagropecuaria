@@ -1385,15 +1385,27 @@ async function executarInsertLancamento(type, campos){
   }
   if(type==='reproducaoCusto'){
     const {error} = await db.from('reproducao_custos').insert({...reproducaoCustoToRow(campos), criado_por:autorAtual()});
-    return {error};
+    if(error) return {error};
+    // A vaca inseminada entra (ou é movida) na composição do lote -- é
+    // sempre fêmea. Best-effort (não bloqueia nem contamina o erro
+    // retornado, senão um reenfileiramento por falha de rede duplicaria o
+    // lançamento). Roda AQUI (não só no caminho de salvamento imediato) pra
+    // também acontecer quando isso for sincronizado depois da fila offline
+    // -- senão a vaca nunca era cadastrada nesse caso.
+    const resAnimal = await upsertAnimal(campos.numeroVaca, campos.loteId, {sexo:'femea', raca:campos.racaVaca||undefined});
+    return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='diagnosticoGestacional'){
     const {error} = await db.from('diagnosticos_gestacionais').insert({...diagnosticoToRow(campos), criado_por:autorAtual()});
-    return {error};
+    if(error) return {error};
+    const resAnimal = await upsertAnimal(campos.numeroVaca, campos.loteId, {sexo:'femea', raca:campos.racaVaca||undefined});
+    return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='parto'){
     const {error} = await db.from('partos').insert({...partoToRow(campos), criado_por:autorAtual()});
-    return {error};
+    if(error) return {error};
+    const resAnimal = await upsertAnimal(campos.numeroMae, campos.loteId, {sexo:'femea', raca:campos.racaMae||undefined});
+    return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='desmama'){
     const {error} = await db.from('desmamas').insert({...desmamaToRow(campos), criado_por:autorAtual()});
@@ -1441,6 +1453,10 @@ async function tentarSincronizarFila(){
   sincronizandoFila = true;
   const pendentes = [...filaInicial];
   const falhasReais = [];
+  // queueIds que realmente terminaram de processar (sucesso ou falha real) --
+  // usado no final pra remover só esses da fila, sem sobrescrever com um
+  // snapshot velho (ver comentário abaixo).
+  const processados = new Set();
   let algumSucesso = false;
   let i = 0;
   while(i < pendentes.length){
@@ -1453,15 +1469,25 @@ async function tentarSincronizarFila(){
     }
     if(!resultado.error){
       pendentes.splice(i,1);
+      processados.add(item.queueId);
       algumSucesso = true;
     } else if(pareceErroDeRede(resultado.error)){
       break; // ainda sem sinal — para por aqui, mantém esse e os seguintes na fila
     } else {
       falhasReais.push(item.label);
       pendentes.splice(i,1); // erro real do servidor: não adianta insistir
+      processados.add(item.queueId);
     }
   }
-  salvarFilaOffline(pendentes);
+  // Não escreve "pendentes" direto -- ele vem do snapshot tirado ANTES dos
+  // awaits acima, então não sabe de nenhum lançamento novo que tenha sido
+  // enfileirado nesse meio tempo (enfileirarLancamento faz sua própria
+  // leitura+escrita, que rodaria intercalada com essa sincronização). Relê
+  // o estado atual da fila e só tira dali quem realmente terminou de
+  // processar, preservando qualquer item novo que tenha entrado.
+  const filaAtual = lerFilaOffline();
+  const filaFinal = filaAtual.filter(item => !processados.has(item.queueId));
+  salvarFilaOffline(filaFinal);
   sincronizandoFila = false;
   if(algumSucesso) await loadAll(); else render();
   if(falhasReais.length>0){
@@ -3852,8 +3878,13 @@ function precoArrobaAtual(sexo){
 
 const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+// Mesmo filtro de racaoLoteTipo que dadosFinanceiro() usa pro mês --
+// saidasRacao só conta pra Confinamento/Cria (Pasto tem seu próprio custo
+// via state.pasto). Sem esse filtro, um lote que mudou de destino pra Pasto
+// depois de já ter saídas de ração lançadas fazia o total do ano (que soma
+// custoVariavelDoMes de cada mês) não bater com o total do mês corrente.
 function custoVariavelDoMes(mesStr){
-  const racao = state.saidasRacao.filter(s=>s.data.startsWith(mesStr)).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racao = state.saidasRacao.filter(s=>s.data.startsWith(mesStr) && (racaoLoteTipo(s)==='confinamento' || racaoLoteTipo(s)==='reproducao')).reduce((a,s)=>a+custoSaidaRacao(s),0);
   const pasto = state.pasto.filter(p=>p.data.startsWith(mesStr)).reduce((a,p)=>a+custoPasto(p),0);
   const reproducao = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
   return racao + pasto + reproducao;
@@ -7549,12 +7580,23 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataReprodVal,
           numeroVaca: numVacaVal,
+          racaVaca: racaVacaVal,
           racaTouro: racaTouroVal,
           qualInseminacao: qualInsemVal,
           custo: Number(custoVal),
         };
         if(editDraft._editId){
           ({error} = await db.from('reproducao_custos').update(reproducaoCustoToRow(campos)).eq('id', editDraft._editId));
+          // A vaca inseminada entra (ou é movida) na composição do lote --
+          // é sempre fêmea. Não bloqueia o save (best-effort, mesmo motivo
+          // do gancho de entrada de animais). No caminho de criação isso já
+          // roda dentro de executarInsertLancamento (também no caso de
+          // sincronizar depois de ficar offline); aqui é só o caminho de
+          // edição, que não passa por lá.
+          if(!error){
+            const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea', raca:racaVacaVal||undefined});
+            if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -7563,17 +7605,7 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
-        }
-        // A vaca inseminada entra (ou é movida) na composição do lote --
-        // é sempre fêmea, então já preenche o sexo automaticamente. Não
-        // bloqueia o save (best-effort, mesmo motivo do gancho de entrada
-        // de animais) -- senão, uma falha aqui deixaria a inseminação
-        // "salva mas com erro na tela", e salvar de novo duplicaria. A
-        // validação acima já garante que, se for animal novo, raça veio
-        // preenchida -- então esse upsert nunca falha por falta de dado.
-        if(!error){
-          const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea', raca:racaVacaVal||undefined});
-          if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
+          if(!error && resultado.avisoAnimal) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resultado.avisoAnimal);
         }
       } else if(type==='diagnosticoGestacional'){
         const dataDgVal = document.getElementById('f-data').value;
@@ -7588,11 +7620,18 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataDgVal,
           numeroVaca: numVacaDgVal,
+          racaVaca: racaVacaDgVal,
           resultado: resultadoVal,
           previsaoParto: previsaoPartoEl ? previsaoPartoEl.value : '',
         };
         if(editDraft._editId){
           ({error} = await db.from('diagnosticos_gestacionais').update(diagnosticoToRow(campos)).eq('id', editDraft._editId));
+          // Mesmo gancho da inseminação (upsertAnimal best-effort) -- só o
+          // caminho de edição, que não passa por executarInsertLancamento.
+          if(!error){
+            const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea', raca:racaVacaDgVal||undefined});
+            if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -7601,14 +7640,7 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
-        }
-        // Mesmo gancho da inseminação (upsertAnimal best-effort) -- a vaca
-        // diagnosticada entra (ou é movida) na composição do lote, já como
-        // fêmea, mesmo que nunca tenha passado por uma inseminação lançada.
-        // A validação acima já garante raça quando é animal novo.
-        if(!error){
-          const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea', raca:racaVacaDgVal||undefined});
-          if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
+          if(!error && resultado.avisoAnimal) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resultado.avisoAnimal);
         }
       } else if(type==='parto'){
         const dataPartoVal = document.getElementById('f-data').value;
@@ -7621,10 +7653,17 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataPartoVal,
           numeroMae: numeroMaeVal,
+          racaMae: racaMaeVal,
           sexoBezerro: document.getElementById('f-sexobezerro').value,
         };
         if(editDraft._editId){
           ({error} = await db.from('partos').update(partoToRow(campos)).eq('id', editDraft._editId));
+          // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
+          // -- só o caminho de edição, que não passa por executarInsertLancamento.
+          if(!error){
+            const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea', raca:racaMaeVal||undefined});
+            if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -7633,14 +7672,7 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
-        }
-        // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
-        // -- a mãe entra (ou é movida) na composição do lote, já como fêmea,
-        // mesmo que o parto seja o primeiro lançamento dela no sistema. A
-        // validação acima já garante raça quando é animal novo.
-        if(!error){
-          const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea', raca:racaMaeVal||undefined});
-          if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
+          if(!error && resultado.avisoAnimal) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resultado.avisoAnimal);
         }
       } else if(type==='desmama'){
         const dataDesmamaVal = document.getElementById('f-data').value;
