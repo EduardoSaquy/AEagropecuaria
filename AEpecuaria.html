@@ -1545,7 +1545,12 @@ function saldoIngrediente(id){
 // e contar junto infla a média sem motivo.
 function consumoMedioDiario(id){
   const saidas = state.movimentos.filter(m=>m.ingredienteId===id && m.tipo==='saida' && !m.ajuste).sort((a,b)=>a.data.localeCompare(b.data));
-  if(saidas.length===0) return null;
+  // Com só 1 saída não dá pra calcular uma média por dia de verdade --
+  // diasEntreDatas(mesma data, mesma data) clampa em 1, e a conta acaba
+  // mostrando a quantidade INTEIRA daquela única saída como se fosse o
+  // consumo "por dia", inflando a estimativa (ex: uma saída de 5.000kg
+  // aparecia como "5.000 kg/dia").
+  if(saidas.length<2) return null;
   const total = saidas.reduce((a,m)=>a+Number(m.quantidade||0),0);
   const dias = diasEntreDatas(saidas[0].data, saidas[saidas.length-1].data);
   return total/dias;
@@ -7176,20 +7181,43 @@ function attachEvents(){
         const row = movimentoToRow(campos);
         if(editDraft._editId){
           ({error} = await db.from('movimentos').update(row).eq('id', editDraft._editId));
-          // Corrigir uma entrada (quantidade ou preço errados) precisa
-          // refletir no preço médio do ingrediente — recalcula do zero,
-          // repetindo a média ponderada sobre TODAS as movimentações dele em
-          // ordem cronológica (não só "empurra" o preço de novo, senão o
-          // valor de antes da correção continua contaminando o preço atual).
+          // Corrigir uma entrada (quantidade, preço ou o PRÓPRIO ingrediente
+          // errados) precisa refletir no preço médio do ingrediente --
+          // recalcula do zero, repetindo a média ponderada sobre TODAS as
+          // movimentações dele em ordem cronológica (não só "empurra" o
+          // preço de novo, senão o valor de antes da correção continua
+          // contaminando o preço atual).
           if(!error){
+            // editDraft.ingredienteId nunca é reescrito por um onchange do
+            // campo "Ingrediente" (só f-tipo tem um) -- continua com o valor
+            // ORIGINAL da movimentação até aqui, então dá pra comparar com o
+            // que está no formulário agora pra saber se o ingrediente mudou.
+            const ingredienteIdAntigo = editDraft.ingredienteId;
+            const movEditada = {...campos, id:editDraft._editId};
             const ing = getIng(campos.ingredienteId);
             if(ing){
+              // state.movimentos (em memória) ainda lista essa linha sob o
+              // ingrediente ANTIGO -- filtra ela fora de lá e soma a versão
+              // editada (já no ingrediente novo) manualmente, senão a troca
+              // de ingrediente nunca entra na conta do ingrediente novo.
               const movsIngrediente = state.movimentos
-                .filter(m=>m.ingredienteId===campos.ingredienteId)
-                .map(m=> m.id===editDraft._editId ? {...m, tipo:campos.tipo, quantidade:campos.quantidade, precoKg:campos.precoKg, data:campos.data} : m);
+                .filter(m=>m.ingredienteId===campos.ingredienteId && m.id!==editDraft._editId)
+                .concat([movEditada]);
               const precoRecalc = recomputarPrecoIngrediente(movsIngrediente, ing.unidade);
               if(precoRecalc!=null && precoRecalc!==Number(ing.precoKg)){
                 await db.from('ingredientes').update({preco_kg: precoRecalc}).eq('id', campos.ingredienteId);
+              }
+            }
+            // Ingrediente trocado -- o ANTIGO também precisa recalcular,
+            // agora SEM essa movimentação (que não é mais dele).
+            if(ingredienteIdAntigo && ingredienteIdAntigo!==campos.ingredienteId){
+              const ingAntigo = getIng(ingredienteIdAntigo);
+              if(ingAntigo){
+                const movsIngredienteAntigo = state.movimentos.filter(m=>m.ingredienteId===ingredienteIdAntigo && m.id!==editDraft._editId);
+                const precoRecalcAntigo = recomputarPrecoIngrediente(movsIngredienteAntigo, ingAntigo.unidade);
+                if(precoRecalcAntigo!=null && precoRecalcAntigo!==Number(ingAntigo.precoKg)){
+                  await db.from('ingredientes').update({preco_kg: precoRecalcAntigo}).eq('id', ingredienteIdAntigo);
+                }
               }
             }
           }
