@@ -997,6 +997,10 @@ function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 // Cadastro, desde que tenha permissão de editar em algum módulo (ver
 // grupoVisivel('cadastro')).
 function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
+// Consultor formula dieta e precisa saber/lançar o preço do insumo pra isso,
+// mas não deve ver o financeiro geral da fazenda (valor total em estoque,
+// custo por curral, movimentações em R$ etc.) -- só o preço do insumo em si.
+function podeVerPrecoInsumo(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -1891,7 +1895,7 @@ function FabMenu(){
 /* ===================== PÁGINA: INGREDIENTES ===================== */
 function PageIngredientes(){
   const list = state.ingredientes.filter(i=> i.nome.toLowerCase().includes(state.search.toLowerCase()) );
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   return `
   <div class="toolbar">
     <div class="search">
@@ -4859,7 +4863,7 @@ function Modal(){
 
 function ModalIngrediente(){
   const d = editDraft;
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
