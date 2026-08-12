@@ -852,6 +852,7 @@ const state = {
   filtroMesDespesas: '',
   filtroMesReceitas: '',
   filtroMesMovimentos: '',
+  movGruposExpandidos: {}, // {[tipo:ingredienteId:mes]: true} -- grupos de movimentação (Saídas/Entradas) que o usuário expandiu pra ver o diário
   filtrosSaidaRacao: {}, // {[tipo]: {mes, loteId, dietaId}} -- um filtro por aba (Confinamento/Cria), pra não misturar
   subAbaReproducao: 'inseminacao', // 'inseminacao'|'diagnostico'|'parto' -- sub-abas dentro de Reprodução (Cria)
   fabOpen: false,
@@ -996,6 +997,11 @@ function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 // Cadastro, desde que tenha permissão de editar em algum módulo (ver
 // grupoVisivel('cadastro')).
 function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
+// Consultor formula dieta e precisa saber/lançar preço de insumo, custo de
+// dieta/ração/pasto e valor em estoque pra isso -- mas não deve ver o
+// financeiro geral da fazenda (custo por curral, receitas/despesas,
+// investimentos etc.), que continua só admin/proprietário via souAdmin().
+function podeVerPrecoInsumo(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -1890,7 +1896,7 @@ function FabMenu(){
 /* ===================== PÁGINA: INGREDIENTES ===================== */
 function PageIngredientes(){
   const list = state.ingredientes.filter(i=> i.nome.toLowerCase().includes(state.search.toLowerCase()) );
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   return `
   <div class="toolbar">
     <div class="search">
@@ -1930,6 +1936,67 @@ function PageIngredientes(){
 }
 
 /* ===================== PÁGINA: ESTOQUE ===================== */
+// Agrupa movimentações (entrada/saída) por insumo+mês, pra não listar todo
+// lançamento diário direto na tela -- cada grupo mostra só o total do mês,
+// e expande pro diário quando o usuário clica.
+function agruparMovimentos(rows, tipo){
+  const porGrupo = {};
+  rows.filter(m=>m.tipo===tipo).forEach(m=>{
+    const mes = m.data.slice(0,7);
+    const key = `${tipo}:${m.ingredienteId}:${mes}`;
+    const ing = getIng(m.ingredienteId);
+    // Entrada guarda o preço realmente pago naquela compra (se informado);
+    // saída não tem preço próprio (nunca é pedido no formulário), então usa
+    // o preço médio atual do ingrediente como aproximação -- igual ao resto
+    // da tela (valor em estoque, custo de dieta etc).
+    const precoUnit = (tipo==='entrada' && m.precoKg) ? m.precoKg : (ing?.precoKg||0);
+    const valor = qtdEmKg(m.quantidade, ing?.unidade) * precoUnit;
+    if(!porGrupo[key]) porGrupo[key] = {key, ingredienteId:m.ingredienteId, mes, total:0, valorTotal:0, itens:[]};
+    porGrupo[key].total += m.quantidade;
+    porGrupo[key].valorTotal += valor;
+    porGrupo[key].itens.push({...m, precoUnit, valor});
+  });
+  return Object.values(porGrupo).sort((a,b)=> b.mes.localeCompare(a.mes) || (getIng(a.ingredienteId)?.nome||'').localeCompare(getIng(b.ingredienteId)?.nome||''));
+}
+function TabelaMovimentosAgrupados(grupos, tipo, verValor){
+  if(grupos.length===0) return Empty(`Nenhuma ${tipo==='saida'?'saída':'entrada'} registrada`, `Registre ${tipo==='saida'?'saídas':'entradas'} de insumos.`);
+  return `
+  <table>
+    <thead><tr><th></th><th>Insumo</th><th>Mês</th><th>Total</th>${verValor?'<th>R$/kg</th><th>Valor</th>':''}<th>Lançamentos</th></tr></thead>
+    <tbody>
+      ${grupos.map(g=>{
+        const ing = getIng(g.ingredienteId);
+        const aberto = !!state.movGruposExpandidos[g.key];
+        const totalKg = qtdEmKg(g.total, ing?.unidade);
+        const precoMedio = totalKg>0 ? g.valorTotal/totalKg : 0;
+        return `
+        <tr class="mov-grupo-row" data-toggle-mov-grupo="${g.key}" style="cursor:pointer;">
+          <td class="mono" style="width:20px;"><svg class="chev ${aberto?'open':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></td>
+          <td><strong>${ing?esc(ing.nome):'—'}</strong></td>
+          <td>${mesLabel(g.mes)}</td>
+          <td class="mono">${fmtInt(g.total)} ${ing?ing.unidade:''}</td>
+          ${verValor?`<td class="mono">R$ ${fmt(precoMedio,2)}</td><td class="mono">R$ ${fmt(g.valorTotal)}</td>`:''}
+          <td class="mono">${g.itens.length}</td>
+        </tr>
+        ${aberto ? g.itens.slice().sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id).map(m=>`
+        <tr class="mov-item-row">
+          <td></td>
+          <td class="mono">${m.data.split('-').reverse().join('/')}</td>
+          <td>${m.ajuste ? '<span class="pill pill-cat">Ajuste</span>' : ''}</td>
+          <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
+          ${verValor?`<td class="mono">R$ ${fmt(m.precoUnit,2)}</td><td class="mono">R$ ${fmt(m.valor)}</td>`:''}
+          <td style="display:flex; gap:6px;">
+            ${temPermissao('insumos','editar') ? `
+            <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
+            ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>` : ''}
+            ` : ''}
+          </td>
+        </tr>`).join('') : ''}
+        `;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
 function PageEstoque(){
   const rows = state.ingredientes.map(i=>{
     const saldo = saldoIngrediente(i.id);
@@ -1941,15 +2008,16 @@ function PageEstoque(){
   });
   const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
   const alertas = rows.filter(r=>r.baixo).length;
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   const podeAjustar = temPermissao('insumos','editar');
 
   const buscaMov = state.searchMovimentos.toLowerCase();
   const mesesMovDisponiveis = [...new Set(state.movimentos.map(m=>m.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
-  const movRows = [...state.movimentos]
+  const movFiltradas = state.movimentos
     .filter(m=>{ const ing = getIng(m.ingredienteId); return !buscaMov || (ing && ing.nome.toLowerCase().includes(buscaMov)); })
-    .filter(m=> !state.filtroMesMovimentos || m.data.startsWith(state.filtroMesMovimentos))
-    .sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+    .filter(m=> !state.filtroMesMovimentos || m.data.startsWith(state.filtroMesMovimentos));
+  const gruposSaida = agruparMovimentos(movFiltradas, 'saida');
+  const gruposEntrada = agruparMovimentos(movFiltradas, 'entrada');
 
   return `
   <div class="stat-row">
@@ -1993,28 +2061,14 @@ function PageEstoque(){
       </select>
     </div>
   </div>
+  <p class="eyebrow" style="margin-bottom:10px;">Saídas <span class="hint" style="font-weight:400;">— total por insumo/mês, clique pra ver o diário</span></p>
+  <div class="card" style="margin-bottom:22px;">
+    ${TabelaMovimentosAgrupados(gruposSaida, 'saida', verValor)}
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Entradas <span class="hint" style="font-weight:400;">— total por insumo/mês, clique pra ver o diário</span></p>
   <div class="card">
-    ${movRows.length===0 ? Empty(state.movimentos.length===0 ? 'Nenhuma movimentação' : 'Nenhuma movimentação com esse filtro', state.movimentos.length===0 ? 'Registre entradas e saídas de insumos.' : 'Tente outro ingrediente ou mês.') : `
-    <table>
-      <thead><tr><th>Data</th><th>Ingrediente</th><th>Tipo</th><th>Quantidade</th><th></th></tr></thead>
-      <tbody>
-        ${movRows.map(m=>{
-          const ing = getIng(m.ingredienteId);
-          return `<tr>
-            <td class="mono">${m.data.split('-').reverse().join('/')}</td>
-            <td>${ing?esc(ing.nome):'—'}</td>
-            <td>${m.tipo==='entrada' ? '<span class="pill pill-ok">Entrada</span>' : '<span class="pill pill-cat">Saída</span>'}${m.ajuste ? ' <span class="pill pill-cat">Ajuste</span>' : ''}</td>
-            <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
-            <td style="display:flex; gap:6px;">
-              ${temPermissao('insumos','editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>` : ''}
-              ` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`}
+    ${TabelaMovimentosAgrupados(gruposEntrada, 'entrada', verValor)}
   </div>`;
 }
 
@@ -2051,7 +2105,7 @@ function composicaoIncompleta(dietaId){
 }
 
 function PageDietas(){
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   if(state.dietas.length===0){
     return `<div class="card">${Empty('Nenhuma dieta formulada','Crie uma dieta combinando ingredientes cadastrados.')}</div>`;
   }
@@ -2731,7 +2785,7 @@ function PageVendasGeral(){
 
 /* ===================== PÁGINA: SAÍDA DE RAÇÃO ===================== */
 function PageSaidaRacao(tipo){
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   const filtro = state.filtrosSaidaRacao[tipo] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.saidasRacao
     .filter(s=>{ const lote = state.lotes.find(l=>l.id===s.loteId); return lote && loteTipo(lote)===tipo; });
@@ -2864,7 +2918,7 @@ function custoPasto(p){
   return dieta ? calcDieta(dieta).custoKg * p.quantidade : 0;
 }
 function PagePasto(){
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   const filtro = state.filtrosSaidaRacao['pasto'] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.pasto
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; });
@@ -4192,6 +4246,23 @@ function custosDiariosPorLote(){
     return totalPesoArea>0 ? fixoDaAreaNoPeriodo*(pesoLote/totalPesoArea) : 0;
   }
 
+  // Janela do custo VARIÁVEL médio/dia (ração+pasto+cria) -- cada atividade
+  // tem um ciclo bem diferente, então cada uma tem sua própria janela (o
+  // custo fixo acima continua só do mês corrente, isso não muda):
+  // Confinamento é um ciclo curto (60-120 dias) -- soma desde a entrada do
+  // lote, sem limite de mês. Pasto e Cria ficam meses a anos -- soma desde
+  // 1º de janeiro do ano corrente (ou desde a entrada, se entrou depois),
+  // resetando a cada ano novo pra não arrastar custo de anos passados.
+  const inicioAnoStr = d.mes.slice(0,4)+'-01-01';
+  function inicioJanelaVariavel(lote){
+    if(loteTipo(lote)==='confinamento') return lote.dataInicio || inicioMesStr;
+    return (lote.dataInicio && lote.dataInicio>inicioAnoStr) ? lote.dataInicio : inicioAnoStr;
+  }
+  function diasJanelaVariavel(lote){
+    const inicio = inicioJanelaVariavel(lote);
+    return Math.max(1, Math.round((new Date(d.hoje+'T00:00:00') - new Date(inicio+'T00:00:00'))/86400000) + 1);
+  }
+
   const custosMesPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
@@ -4205,21 +4276,25 @@ function custosDiariosPorLote(){
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
   }).sort((a,b)=> b.total-a.total);
 
-  // Média diária do mês (não "só hoje"): ração/pasto/cria não são lançados
-  // todo santo dia (ex: ração feita a cada 3-4 dias) — mostrar só o valor de
-  // hoje deixava a maioria dos currais com R$ 0,00 mesmo tendo gasto normal
-  // recente. Em vez disso, pega o total já lançado no mês (custosMesPorLote,
-  // acima) e divide pelos dias já passados do mês (1 até hoje) — dá a média
-  // diária real até agora, sem os "buracos" dos dias sem lançamento.
-  const custosPorLote = custosMesPorLote.map(r=>{
-    const dias = diasAtivosNoMes(r.lote);
-    const racao = r.racao/dias;
-    const pasto = r.pasto/dias;
-    const reproducao = r.reproducao/dias;
-    const fixoAlocado = fixoLoteAlocado(r.lote, fixoAreaMes[loteTipo(r.lote)]/30);
+  // Média diária real (não "só hoje" nem "só esse mês"): ração/pasto/cria
+  // não são lançados todo santo dia -- mostrar só o valor de hoje ou só o
+  // total do mês corrente deixava a conta furada ou reiniciando toda hora.
+  // Cada lote soma o que já gastou na SUA janela (definida acima -- desde
+  // a entrada pro Confinamento, desde o ano corrente pro Pasto/Cria) e
+  // divide pelos dias dessa mesma janela.
+  const custosPorLote = lotesAtivos.map(l=>{
+    const inicioJanela = inicioJanelaVariavel(l);
+    const racaoTotal = state.saidasRacao.filter(s=>s.data>=inicioJanela && s.data<=d.hoje && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pastoTotal = state.pasto.filter(p=>p.data>=inicioJanela && p.data<=d.hoje && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
+    const reproducaoTotal = state.reproducao.filter(r=>r.data>=inicioJanela && r.data<=d.hoje && r.loteId===l.id).reduce((a,r)=>a+custoReproducao(r),0);
+    const dias = diasJanelaVariavel(l);
+    const racao = racaoTotal/dias;
+    const pasto = pastoTotal/dias;
+    const reproducao = reproducaoTotal/dias;
+    const fixoAlocado = fixoLoteAlocado(l, fixoAreaMes[loteTipo(l)]/30);
     const total = racao + pasto + reproducao + fixoAlocado;
-    const porAnimal = r.lote.numeroAnimais>0 ? total/r.lote.numeroAnimais : 0;
-    return {lote:r.lote, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
+    const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
   }).sort((a,b)=> b.total-a.total);
 
   // Mesmos dados de custosMesPorLote, só que somados por área (Confinamento/
@@ -4380,7 +4455,7 @@ function PageFinanceiroCurral(){
   const {custosMesPorLote, custosPorLote, custoPorAreaMes} = custosDiariosPorLote();
 
   return `
-  <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral no mês (ração + pasto + cria + fatia do custo fixo)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
     ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo médio diário de cada um aqui.') : `
     <table>
@@ -4399,7 +4474,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia) — é o total já gasto no mês até agora dividido pelos dias já passados, pra dar uma média diária real em vez de mostrar R$ 0,00 nos dias sem lançamento. Um lote que começou no meio do mês divide só pelos dias que ele já existe, não pelos dias do mês inteiro. O custo fixo mensal é diluído por dia (mensal ÷ 30) e depois rateado entre os currais na proporção de animais × dias que cada um já existe no mês — mesmo critério do total do mês, abaixo.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia), e cada atividade tem sua própria janela de tempo, pelo ciclo bem diferente de cada uma: no <strong>Confinamento</strong> (ciclo curto) soma tudo que já foi gasto desde a <strong>entrada do lote</strong>, sem resetar por mês; no <strong>Pasto</strong> e na <strong>Cria</strong> (ciclo de meses a anos) soma desde <strong>1º de janeiro do ano corrente</strong> (ou desde a entrada, se entrou depois), resetando a cada ano novo. O custo fixo continua sendo só do mês corrente (mensal ÷ 30), rateado entre os currais na proporção de animais × dias que cada um já existe no mês — isso não mudou.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
@@ -4789,7 +4864,7 @@ function Modal(){
 
 function ModalIngrediente(){
   const d = editDraft;
-  const verValor = souAdmin();
+  const verValor = podeVerPrecoInsumo();
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -6059,8 +6134,20 @@ function attachEvents(){
       if(!ing) return;
       state.searchMovimentos = ing.nome;
       state.filtroMesMovimentos = '';
+      const meses = new Set(state.movimentos.filter(m=>m.ingredienteId===ing.id).map(m=>m.data.slice(0,7)));
+      meses.forEach(mes=>{
+        state.movGruposExpandidos[`saida:${ing.id}:${mes}`] = true;
+        state.movGruposExpandidos[`entrada:${ing.id}:${mes}`] = true;
+      });
       render();
       document.getElementById('movimentacoes-secao')?.scrollIntoView({behavior:'smooth', block:'start'});
+    };
+  });
+  document.querySelectorAll('[data-toggle-mov-grupo]').forEach(el=>{
+    el.onclick = ()=>{
+      const key = el.dataset.toggleMovGrupo;
+      state.movGruposExpandidos[key] = !state.movGruposExpandidos[key];
+      render();
     };
   });
   document.querySelectorAll('[data-del-diet]').forEach(el=>{
