@@ -2916,13 +2916,13 @@ function PageSaidaRacao(tipo){
     <div class="field" style="max-width:220px;">
       <select data-filtro-lote-racao="${tipo}">
         <option value="">Todos os lotes</option>
-        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${l.nome}</option>`).join('')}
+        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
       </select>
     </div>
     <div class="field" style="max-width:220px;">
       <select data-filtro-dieta-racao="${tipo}">
         <option value="">Todas as dietas</option>
-        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${d.nome}</option>`).join('')}
+        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${esc(d.nome)}</option>`).join('')}
       </select>
     </div>
   </div>
@@ -3050,13 +3050,13 @@ function PagePasto(){
     <div class="field" style="max-width:220px;">
       <select data-filtro-lote-racao="pasto">
         <option value="">Todos os lotes</option>
-        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${l.nome}</option>`).join('')}
+        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
       </select>
     </div>
     <div class="field" style="max-width:220px;">
       <select data-filtro-dieta-racao="pasto">
         <option value="">Todas as dietas</option>
-        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${d.nome}</option>`).join('')}
+        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${esc(d.nome)}</option>`).join('')}
       </select>
     </div>
   </div>
@@ -4905,7 +4905,7 @@ function PageFazenda(){
       <tbody>
         ${state.fazendas.map(f=>`
           <tr>
-            <td><strong>${f.nome}</strong></td>
+            <td><strong>${esc(f.nome)}</strong></td>
             <td class="mono">${fmtInt(f.hectares)} ha</td>
             <td style="display:flex; gap:6px;">
               ${souAdmin() ? `
@@ -4927,7 +4927,7 @@ function ModalFazenda(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar fazenda':'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${d.nome}" placeholder="Ex: Fazenda Santa Alice"/></div>
+        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${esc(d.nome)}" placeholder="Ex: Fazenda Santa Alice"/></div>
         <div class="field"><label>Hectares</label><input id="f-hectaresfazenda" type="number" step="1" value="${d.hectares}"/></div>
       </div>
       <div class="modal-foot">
@@ -5759,7 +5759,7 @@ function ModalVenda(){
       <div class="modal-body">
         <div class="field"><label>Lote</label>
           <select id="f-lotevenda">
-            ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
+            ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
@@ -7957,7 +7957,11 @@ function attachEvents(){
       const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
       if(row) row.classList.add('hover');
       if(tooltip){
-        tooltip.innerHTML = `<div class="v">R$ ${el.dataset.tipValor}</div><div class="l">${el.dataset.tipNome} · ${el.dataset.tipPct}%</div>`;
+        // dataset.* decodifica entidades HTML na leitura -- mesmo o atributo
+        // tendo sido escrito com esc(), reinjetar direto aqui desfaria esse
+        // escape (um nome de centro de custo tipo "<img onerror=...>"
+        // executaria no hover). Escapa de novo antes de virar innerHTML.
+        tooltip.innerHTML = `<div class="v">R$ ${esc(el.dataset.tipValor)}</div><div class="l">${esc(el.dataset.tipNome)} · ${esc(el.dataset.tipPct)}%</div>`;
         tooltip.style.display = 'block';
       }
     });
