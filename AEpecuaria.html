@@ -852,7 +852,7 @@ const state = {
   filtroMesDespesas: '',
   filtroMesReceitas: '',
   filtroMesMovimentos: '',
-  movGruposExpandidos: {}, // {[tipo:ingredienteId:mes]: true} -- grupos de movimentação (Saídas/Entradas) que o usuário expandiu pra ver o diário
+  movGruposExpandidos: {}, // {[tipo:ingredienteId]: true} -- grupos de movimentação (Saídas/Entradas) que o usuário expandiu pra ver o histórico completo daquele insumo
   filtrosSaidaRacao: {}, // {[tipo]: {mes, loteId, dietaId}} -- um filtro por aba (Confinamento/Cria), pra não misturar
   subAbaReproducao: 'inseminacao', // 'inseminacao'|'diagnostico'|'parto' -- sub-abas dentro de Reprodução (Cria)
   fabOpen: false,
@@ -881,6 +881,11 @@ let ultimaPaginaRenderizada = null;
 function render(){
   const root = document.getElementById('root');
   const scrollY = window.scrollY;
+  // No desktop quem rola é a .main interna (overflow-y:auto), não a janela
+  // -- só no mobile (≤760px) o .app vira overflow:visible e a janela passa
+  // a rolar. Guardamos os dois; o innerHTML troca a .main inteira, então
+  // depois do render precisamos reencontrar a NOVA .main e restaurar nela.
+  const mainScrollTop = document.querySelector('.main')?.scrollTop || 0;
   const mesmaPagina = ultimaPaginaRenderizada === state.page;
 
   if(!state.authChecked){
@@ -974,9 +979,12 @@ function render(){
   attachEvents();
   ultimaPaginaRenderizada = state.page;
   // Mesma página (ex: expandiu um grupo, abriu um modal) -- restaura o
-  // scroll exatamente onde estava. Página diferente (navegação de verdade) --
-  // sobe pro topo, como se espera ao abrir uma tela nova.
+  // scroll exatamente onde estava, tanto na janela (mobile) quanto na nova
+  // .main (desktop). Página diferente (navegação de verdade) -- sobe pro
+  // topo nos dois, como se espera ao abrir uma tela nova.
   window.scrollTo(0, mesmaPagina ? scrollY : 0);
+  const novaMain = document.querySelector('.main');
+  if(novaMain) novaMain.scrollTop = mesmaPagina ? mainScrollTop : 0;
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
@@ -999,6 +1007,20 @@ const ACAO_MODULOS = {
   // ver o rateio "resultados"/margem continua exclusivo de Resultados.
   receita:['financeiro','resultados'], metaMargem:['resultados'], investimento:['resultados'],
 };
+// Dentro do Manejo, cada ação pertence a um módulo diferente -- entrar no
+// Manejo só pede editar em QUALQUER área (confinamento/pasto/cria), mas
+// isso não deveria liberar TODAS as ações pra todo mundo: um colaborador só
+// de Confinamento não devia conseguir marcar "Inseminação" (é de Cria), por
+// exemplo. Pesagem/Desmama seguem o tipo do lote selecionado (podem
+// acontecer em qualquer área); Protocolo/Inseminação/Diagnóstico são sempre
+// de reprodução, então sempre exigem Cria especificamente.
+function acaoManejoPermitida(acao, lote){
+  if(!lote) return false;
+  const moduloDoLote = TIPO_MODULO[loteTipo(lote)];
+  if(acao==='pesagem') return temPermissao(moduloDoLote,'editar');
+  if(acao==='desmama') return temPermissao('cria','editar') || temPermissao(moduloDoLote,'editar');
+  return temPermissao('cria','editar'); // protocoloIA, inseminacao, diagnostico
+}
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
@@ -1037,11 +1059,15 @@ function podeRegistrarVenda(tipo){
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
   if(key==='fazenda') return souAdmin();
-  if(key==='vendas') return temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
-  if(key==='cadastro') return podeCriarLote() || podeEditarAcao('lote');
-  if(key==='manejo') return temPermissao('confinamento','editar') || temPermissao('pasto','editar') || temPermissao('cria','editar');
+  // Cada regra de cargo abaixo (consultor, podeCriarLote, editar em alguma
+  // área) continua valendo como ATALHO adicional -- só o admin liberando a
+  // permissão explícita do módulo (tabela em Administração > Usuários) nunca
+  // tira acesso de quem já tinha por cargo.
+  if(key==='lotesGeral') return temPermissao('lotesGeral','visualizar') || souAdmin() || state.perfil?.papel==='consultor';
+  if(key==='vendas') return temPermissao('vendas','visualizar') || temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
+  if(key==='cadastro') return temPermissao('cadastro','visualizar') || podeCriarLote() || podeEditarAcao('lote');
+  if(key==='manejo') return temPermissao('manejo','visualizar') || temPermissao('confinamento','editar') || temPermissao('pasto','editar') || temPermissao('cria','editar');
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 // Algumas páginas dentro de um grupo visível são mais sensíveis que o resto
@@ -1355,27 +1381,49 @@ async function executarInsertLancamento(type, campos){
     const descricao = `${TIPO_VENDA_LABEL[campos.tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(campos.quantidade)} animais)`;
     const receitaRow = {data:campos.data, lote_id:campos.loteId, descricao, arrobas, valor:valorTotal, observacao:'', abate_id:vendaId};
     const {error:errReceita} = await db.from('receitas').insert(receitaRow);
-    if(errReceita) return {error:errReceita};
+    if(errReceita){
+      // Sem a receita, a venda fica pela metade -- desfaz o abate pra não
+      // duplicar tudo se isso for reenfileirado por falha de rede e tentado
+      // de novo depois (mesmo motivo do rollback em saidaRacao/producaoRacao).
+      await db.from('abates').delete().eq('id', vendaId);
+      return {error:errReceita};
+    }
     if(lote){
       const novoNumero = Math.max(0, Number(lote.numeroAnimais||0) - Number(campos.quantidade||0));
       const updLote = {numero_animais: novoNumero};
       if(novoNumero===0 && !lote.dataFim) updLote.data_fim = campos.data;
       const {error:errLote} = await db.from('lotes').update(updLote).eq('id', lote.id);
-      if(errLote) return {error:errLote};
+      if(errLote){
+        await db.from('receitas').delete().eq('abate_id', vendaId);
+        await db.from('abates').delete().eq('id', vendaId);
+        return {error:errLote};
+      }
     }
     return {error:null};
   }
   if(type==='reproducaoCusto'){
     const {error} = await db.from('reproducao_custos').insert({...reproducaoCustoToRow(campos), criado_por:autorAtual()});
-    return {error};
+    if(error) return {error};
+    // A vaca inseminada entra (ou é movida) na composição do lote -- é
+    // sempre fêmea. Best-effort (não bloqueia nem contamina o erro
+    // retornado, senão um reenfileiramento por falha de rede duplicaria o
+    // lançamento). Roda AQUI (não só no caminho de salvamento imediato) pra
+    // também acontecer quando isso for sincronizado depois da fila offline
+    // -- senão a vaca nunca era cadastrada nesse caso.
+    const resAnimal = await upsertAnimal(campos.numeroVaca, campos.loteId, {sexo:'femea', raca:campos.racaVaca||undefined});
+    return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='diagnosticoGestacional'){
     const {error} = await db.from('diagnosticos_gestacionais').insert({...diagnosticoToRow(campos), criado_por:autorAtual()});
-    return {error};
+    if(error) return {error};
+    const resAnimal = await upsertAnimal(campos.numeroVaca, campos.loteId, {sexo:'femea', raca:campos.racaVaca||undefined});
+    return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='parto'){
     const {error} = await db.from('partos').insert({...partoToRow(campos), criado_por:autorAtual()});
-    return {error};
+    if(error) return {error};
+    const resAnimal = await upsertAnimal(campos.numeroMae, campos.loteId, {sexo:'femea', raca:campos.racaMae||undefined});
+    return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='desmama'){
     const {error} = await db.from('desmamas').insert({...desmamaToRow(campos), criado_por:autorAtual()});
@@ -1423,6 +1471,10 @@ async function tentarSincronizarFila(){
   sincronizandoFila = true;
   const pendentes = [...filaInicial];
   const falhasReais = [];
+  // queueIds que realmente terminaram de processar (sucesso ou falha real) --
+  // usado no final pra remover só esses da fila, sem sobrescrever com um
+  // snapshot velho (ver comentário abaixo).
+  const processados = new Set();
   let algumSucesso = false;
   let i = 0;
   while(i < pendentes.length){
@@ -1435,15 +1487,25 @@ async function tentarSincronizarFila(){
     }
     if(!resultado.error){
       pendentes.splice(i,1);
+      processados.add(item.queueId);
       algumSucesso = true;
     } else if(pareceErroDeRede(resultado.error)){
       break; // ainda sem sinal — para por aqui, mantém esse e os seguintes na fila
     } else {
       falhasReais.push(item.label);
       pendentes.splice(i,1); // erro real do servidor: não adianta insistir
+      processados.add(item.queueId);
     }
   }
-  salvarFilaOffline(pendentes);
+  // Não escreve "pendentes" direto -- ele vem do snapshot tirado ANTES dos
+  // awaits acima, então não sabe de nenhum lançamento novo que tenha sido
+  // enfileirado nesse meio tempo (enfileirarLancamento faz sua própria
+  // leitura+escrita, que rodaria intercalada com essa sincronização). Relê
+  // o estado atual da fila e só tira dali quem realmente terminou de
+  // processar, preservando qualquer item novo que tenha entrado.
+  const filaAtual = lerFilaOffline();
+  const filaFinal = filaAtual.filter(item => !processados.has(item.queueId));
+  salvarFilaOffline(filaFinal);
   sincronizandoFila = false;
   if(algumSucesso) await loadAll(); else render();
   if(falhasReais.length>0){
@@ -1483,7 +1545,12 @@ function saldoIngrediente(id){
 // e contar junto infla a média sem motivo.
 function consumoMedioDiario(id){
   const saidas = state.movimentos.filter(m=>m.ingredienteId===id && m.tipo==='saida' && !m.ajuste).sort((a,b)=>a.data.localeCompare(b.data));
-  if(saidas.length===0) return null;
+  // Com só 1 saída não dá pra calcular uma média por dia de verdade --
+  // diasEntreDatas(mesma data, mesma data) clampa em 1, e a conta acaba
+  // mostrando a quantidade INTEIRA daquela única saída como se fosse o
+  // consumo "por dia", inflando a estimativa (ex: uma saída de 5.000kg
+  // aparecia como "5.000 kg/dia").
+  if(saidas.length<2) return null;
   const total = saidas.reduce((a,m)=>a+Number(m.quantidade||0),0);
   const dias = diasEntreDatas(saidas[0].data, saidas[saidas.length-1].data);
   return total/dias;
@@ -1746,7 +1813,11 @@ function openNewModal(type){
     state.modal = {type:'producaoRacao'};
   } else if(type==='lote'){
     const grupoAtual = currentGroupKey();
-    const destinoPadrao = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'cria' : 'confinamento';
+    const destinosPermitidosNovoLote = ['confinamento','pasto','cria'].filter(t=>podeCriarLote() || temPermissao(t,'editar'));
+    const destinoPreferido = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'cria' : 'confinamento';
+    // Usa o destino da aba atual como sugestão, mas só se essa pessoa tiver
+    // permissão nele -- senão cai no primeiro destino que ela realmente pode.
+    const destinoPadrao = destinosPermitidosNovoLote.includes(destinoPreferido) ? destinoPreferido : (destinosPermitidosNovoLote[0]||'confinamento');
     editDraft = {
       modoEntrada:'novo',
       nome:'', numeroAnimais:'', dataInicio:hojeStr(), dataFim:'', destino:destinoPadrao, sexo:'',
@@ -2316,6 +2387,11 @@ function PageManejoInicio(){
     editDraft = {loteId: lotesDisponiveis[0].id, data: hojeStr(), mudaLote:false, loteDestinoId:'', acoes:['pesagem'], vacinacao:false, vermifugacao:false, _manejoSetup:true};
   }
   const d = editDraft;
+  const loteSelecionadoManejo = state.lotes.find(l=>l.id===d.loteId);
+  // Se a pessoa não tem permissão pra alguma ação já marcada (ex: trocou de
+  // lote, ou o admin tirou a permissão de Cria depois de marcar), tira do
+  // rascunho -- não deixa uma ação sem permissão pendurada mesmo escondida.
+  d.acoes = d.acoes.filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo));
   const historico = [...state.manejos].sort((a,b)=>b.id-a.id);
   return `
   <div class="card card-pad" style="margin-bottom:18px;">
@@ -2344,12 +2420,11 @@ function PageManejoInicio(){
     <div class="field">
       <label>O que vai ser feito nesse manejo?</label>
       <div class="manejo-acoes-check">
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="pesagem" ${d.acoes.includes('pesagem')?'checked':''}/> Pesagem</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="protocoloIA" ${d.acoes.includes('protocoloIA')?'checked':''}/> Protocolo de inseminação</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="inseminacao" ${d.acoes.includes('inseminacao')?'checked':''}/> Inseminação</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="diagnostico" ${d.acoes.includes('diagnostico')?'checked':''}/> Diagnóstico gestacional</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="desmama" ${d.acoes.includes('desmama')?'checked':''}/> Desmama</label>
+        ${Object.keys(ACAO_MANEJO_LABEL).filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo)).map(acao=>`
+        <label class="manejo-check"><input type="checkbox" data-acao-manejo="${acao}" ${d.acoes.includes(acao)?'checked':''}/> ${ACAO_MANEJO_LABEL[acao]}</label>
+        `).join('')}
       </div>
+      ${Object.keys(ACAO_MANEJO_LABEL).some(acao=>!acaoManejoPermitida(acao, loteSelecionadoManejo)) ? `<p class="hint">Algumas ações não aparecem aqui porque esse usuário não tem permissão de editar em Cria (Inseminação/Diagnóstico são sempre de reprodução, mesmo num lote de Confinamento).</p>` : ''}
     </div>
     <div class="field-row">
       <label class="manejo-check"><input type="checkbox" id="f-vacinacaomanejo" ${d.vacinacao?'checked':''}/> Foi feita vacinação nesse manejo</label>
@@ -2841,13 +2916,13 @@ function PageSaidaRacao(tipo){
     <div class="field" style="max-width:220px;">
       <select data-filtro-lote-racao="${tipo}">
         <option value="">Todos os lotes</option>
-        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${l.nome}</option>`).join('')}
+        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
       </select>
     </div>
     <div class="field" style="max-width:220px;">
       <select data-filtro-dieta-racao="${tipo}">
         <option value="">Todas as dietas</option>
-        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${d.nome}</option>`).join('')}
+        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${esc(d.nome)}</option>`).join('')}
       </select>
     </div>
   </div>
@@ -2975,13 +3050,13 @@ function PagePasto(){
     <div class="field" style="max-width:220px;">
       <select data-filtro-lote-racao="pasto">
         <option value="">Todos os lotes</option>
-        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${l.nome}</option>`).join('')}
+        ${lotesTipo.map(l=>`<option value="${l.id}" ${String(filtro.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
       </select>
     </div>
     <div class="field" style="max-width:220px;">
       <select data-filtro-dieta-racao="pasto">
         <option value="">Todas as dietas</option>
-        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${d.nome}</option>`).join('')}
+        ${dietasTipo.map(d=>`<option value="${d.id}" ${String(filtro.dietaId)===String(d.id)?'selected':''}>${esc(d.nome)}</option>`).join('')}
       </select>
     </div>
   </div>
@@ -3759,8 +3834,16 @@ function valorVenda(v){
   return arrobasVenda(v) * numDecimal(v.valorArroba);
 }
 
+// Ignora pesagens com peso 0 -- é o placeholder que o Manejo cria de
+// antemão pra "Pesagem" (antes de qualquer animal ser pesado de fato) e
+// nunca é um peso real. Se o manejo for abandonado antes de pesar alguém
+// (perda de conexão, fechar o app no meio do curral), esse placeholder
+// fica parado com peso 0 pra sempre -- contá-lo como "peso inicial/final"
+// zerava o ganho de peso e inflava @ produzidas/lote. Ele continua
+// aparecendo normalmente na listagem de lançamentos (pra dar pra editar
+// ou excluir), só não entra nas contas de ganho de peso.
 function pesagensDoLote(loteId){
-  return state.pesagens.filter(p=>p.loteId===loteId).sort((a,b)=> a.data.localeCompare(b.data) || a.id-b.id);
+  return state.pesagens.filter(p=>p.loteId===loteId && Number(p.pesoMedioKg)>0).sort((a,b)=> a.data.localeCompare(b.data) || a.id-b.id);
 }
 // Ganho de peso (kg/dia) entre duas pesagens consecutivas do mesmo lote.
 function gmdEntre(pesoAnterior, pesoAtual, dataAnterior, dataAtual){
@@ -3789,7 +3872,7 @@ function ganhoPesoNoMes(loteId, mesStr){
   if(!final) return null;
   let inicial = pesoNaData(loteId, inicioMes, false);
   if(!inicial){
-    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr)).sort((a,b)=>a.data.localeCompare(b.data));
+    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr) && Number(p.pesoMedioKg)>0).sort((a,b)=>a.data.localeCompare(b.data));
     if(doMes.length<2) return null;
     inicial = doMes[0];
   }
@@ -3826,8 +3909,13 @@ function precoArrobaAtual(sexo){
 
 const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+// Mesmo filtro de racaoLoteTipo que dadosFinanceiro() usa pro mês --
+// saidasRacao só conta pra Confinamento/Cria (Pasto tem seu próprio custo
+// via state.pasto). Sem esse filtro, um lote que mudou de destino pra Pasto
+// depois de já ter saídas de ração lançadas fazia o total do ano (que soma
+// custoVariavelDoMes de cada mês) não bater com o total do mês corrente.
 function custoVariavelDoMes(mesStr){
-  const racao = state.saidasRacao.filter(s=>s.data.startsWith(mesStr)).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const racao = state.saidasRacao.filter(s=>s.data.startsWith(mesStr) && (racaoLoteTipo(s)==='confinamento' || racaoLoteTipo(s)==='reproducao')).reduce((a,s)=>a+custoSaidaRacao(s),0);
   const pasto = state.pasto.filter(p=>p.data.startsWith(mesStr)).reduce((a,p)=>a+custoPasto(p),0);
   const reproducao = state.reproducao.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+custoReproducao(r),0);
   return racao + pasto + reproducao;
@@ -4690,9 +4778,18 @@ function PageResultadosInvestimentos(){
 }
 
 /* ===================== PÁGINA: ADMINISTRAÇÃO — USUÁRIOS ===================== */
+// Cada aba do app (GROUPS) é controlável aqui -- inclusive Manejo, Cadastro,
+// Vendas e Lotes (visão geral), que antes só abriam por regra de cargo
+// (consultor, podeCriarLote etc.) sem dar pro admin liberar/restringir
+// especificamente. Essas regras de cargo continuam valendo como fallback
+// (nunca tiram acesso de quem já tinha) -- ver grupoVisivel().
 const MODULOS_PERMISSAO = [
-  ['insumos','Insumos'], ['dietas','Dietas'], ['confinamento','Confinamento'],
-  ['pasto','Pasto'], ['cria','Cria'], ['financeiro','Financeiro'], ['resultados','Resultados'],
+  ['manejo','Manejo'], ['cadastro','Cadastro'],
+  ['insumos','Insumos'], ['dietas','Dietas'],
+  ['lotesGeral','Lotes (visão geral)'],
+  ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
+  ['vendas','Vendas'],
+  ['financeiro','Financeiro'], ['resultados','Resultados'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
 function papelPill(papel){
@@ -4808,7 +4905,7 @@ function PageFazenda(){
       <tbody>
         ${state.fazendas.map(f=>`
           <tr>
-            <td><strong>${f.nome}</strong></td>
+            <td><strong>${esc(f.nome)}</strong></td>
             <td class="mono">${fmtInt(f.hectares)} ha</td>
             <td style="display:flex; gap:6px;">
               ${souAdmin() ? `
@@ -4830,7 +4927,7 @@ function ModalFazenda(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>${d._editId?'Editar fazenda':'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${d.nome}" placeholder="Ex: Fazenda Santa Alice"/></div>
+        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${esc(d.nome)}" placeholder="Ex: Fazenda Santa Alice"/></div>
         <div class="field"><label>Hectares</label><input id="f-hectaresfazenda" type="number" step="1" value="${d.hectares}"/></div>
       </div>
       <div class="modal-foot">
@@ -5073,6 +5170,11 @@ function ModalProducaoRacao(){
 function ModalLote(){
   const d = editDraft;
   const modoNovo = !d._editId ? (d.modoEntrada||'novo')==='novo' : true;
+  // Só oferece destino (lote novo) ou lote existente que essa pessoa pode
+  // editar -- mesma regra usada em lotesElegiveisManejo()/ModalAnimal, sem
+  // isso dava pra criar/somar animais num módulo sem permissão nenhuma.
+  const destinosPermitidosLote = ['confinamento','pasto','cria'].filter(t=>podeCriarLote() || temPermissao(t,'editar'));
+  const lotesExistentesPermitidos = state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
   const numerosAnimaisListaAtual = !d._editId ? parseNumerosAnimais(d.numerosAnimais||'') : [];
   const algumAnimalNovoLote = numerosAnimaisListaAtual.some(n=>!animalCadastrado(n));
   const loteExistenteAtualLote = !modoNovo ? state.lotes.find(l=>l.id==d.loteExistenteId) : null;
@@ -5115,9 +5217,7 @@ function ModalLote(){
         <div class="field"><label>Identificação do lote</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Lote 12 / Curral 3"/></div>
         <div class="field"><label>Destino</label>
           <select id="f-destino">
-            <option value="confinamento" ${d.destino==='confinamento'?'selected':''}>Confinamento</option>
-            <option value="pasto" ${d.destino==='pasto'?'selected':''}>Pasto</option>
-            <option value="cria" ${d.destino==='cria'?'selected':''}>Cria</option>
+            ${destinosPermitidosLote.map(t=>`<option value="${t}" ${d.destino===t?'selected':''}>${DESTINO_LOTE_LABEL[t]}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>Sexo do lote (opcional)</label>
@@ -5150,7 +5250,7 @@ function ModalLote(){
         ` : `
         <div class="field"><label>Lote de destino</label>
           <select id="f-loteexistente">
-            ${state.lotes.filter(l=>!l.dataFim).map(l=>`<option value="${l.id}" ${d.loteExistenteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
+            ${lotesExistentesPermitidos.map(l=>`<option value="${l.id}" ${d.loteExistenteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
@@ -5659,7 +5759,7 @@ function ModalVenda(){
       <div class="modal-body">
         <div class="field"><label>Lote</label>
           <select id="f-lotevenda">
-            ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${l.nome} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
+            ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
@@ -6426,9 +6526,18 @@ function attachEvents(){
       if(venda && venda.loteId){
         const lote = state.lotes.find(l=>l.id===venda.loteId);
         if(lote){
-          await db.from('lotes').update({numero_animais: Number(lote.numeroAnimais||0)+Number(venda.quantidade||0)}).eq('id', lote.id);
+          const novoNumero = Number(lote.numeroAnimais||0)+Number(venda.quantidade||0);
+          const updLote = {numero_animais: novoNumero};
+          // O lote pode ter sido marcado como encerrado (data_fim) por essa
+          // venda ter zerado os animais -- voltando a ter animais, reabre.
+          if(novoNumero>0 && lote.dataFim) updLote.data_fim = null;
+          await db.from('lotes').update(updLote).eq('id', lote.id);
         }
       }
+      // Apaga a receita explicitamente (não depende de ON DELETE CASCADE no
+      // banco) antes do abate, senão uma receita órfã (sem abate_id válido)
+      // fica contando pra sempre em receitaDoMes/resultado.
+      await db.from('receitas').delete().eq('abate_id', id);
       await db.from('abates').delete().eq('id', id);
       await loadAll();
     };
@@ -6697,6 +6806,7 @@ function attachEvents(){
   if(state.modal && state.modal.type==='diagnosticoGestacional'){
     const resultadoDgEl = document.getElementById('f-resultadodg');
     if(resultadoDgEl) resultadoDgEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroVaca = document.getElementById('f-numvaca').value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.racaVaca = document.getElementById('f-racavaca')?.value;
@@ -6710,6 +6820,7 @@ function attachEvents(){
     // anterior grudada no campo.
     const numVacaDgEl = document.getElementById('f-numvaca');
     if(numVacaDgEl) numVacaDgEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroVaca = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       const previsaoEl = document.getElementById('f-previsaoparto');
@@ -6724,6 +6835,7 @@ function attachEvents(){
     // raça pra que já se conhece dela (ou limpa, se for um número novo).
     const numVacaInsemEl = document.getElementById('f-numvaca');
     if(numVacaInsemEl) numVacaInsemEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroVaca = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.racaTouro = document.getElementById('f-racatouro').value;
@@ -6735,8 +6847,14 @@ function attachEvents(){
   }
   if(state.modal && state.modal.type==='parto'){
     // Mesma lógica -- trocar o número da mãe atualiza a raça conhecida dela.
+    // IMPORTANTE: captura o lote selecionado ANTES de re-renderizar, senão
+    // o <select> do lote (que usa editDraft.loteId pra marcar "selected")
+    // volta pro valor antigo assim que a pessoa digita/sai do campo do
+    // número da mãe, mesmo já tendo trocado o lote na tela -- e o parto
+    // acaba sendo salvo no lote errado.
     const numMaeEl = document.getElementById('f-numeromae');
     if(numMaeEl) numMaeEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroMae = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.sexoBezerro = document.getElementById('f-sexobezerro').value;
@@ -6822,6 +6940,14 @@ function attachEvents(){
       editDraft.vacinacao = document.getElementById('f-vacinacaomanejo').checked;
       editDraft.vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
     }
+    const loteManejoEl = document.getElementById('f-lotemanejo');
+    if(loteManejoEl) loteManejoEl.onchange = ()=>{
+      capturarSetupManejo();
+      // Muda o lote -- a lista de ações disponíveis pode mudar (ex: saiu de
+      // um lote de Cria pra um de Confinamento sem permissão de Cria), então
+      // o PageManejoInicio já poda editDraft.acoes de novo no próximo render.
+      render();
+    };
     document.querySelectorAll('[data-acao-manejo]').forEach(el=>{
       el.onchange = ()=>{
         capturarSetupManejo();
@@ -6849,7 +6975,10 @@ function attachEvents(){
         const loteDestinoId = mudaLote ? Number(document.getElementById('f-lotedestinomanejo').value) : null;
         const vacinacao = document.getElementById('f-vacinacaomanejo').checked;
         const vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
-        const acoes = editDraft.acoes;
+        // Repoda por permissão aqui também (defesa em profundidade -- a UI já
+        // só oferece ação permitida, mas não custa checar de novo no submit).
+        const loteAtualManejo = state.lotes.find(l=>l.id===loteId);
+        const acoes = editDraft.acoes.filter(acao=>acaoManejoPermitida(acao, loteAtualManejo));
         if(!data){ alert('Informe a data do manejo.'); return; }
         if(acoes.length===0 && !mudaLote){ alert('Marque ao menos uma ação, ou ative "Vai mudar de lote" pra um manejo só de troca de lote.'); return; }
         if(mudaLote && !loteDestinoId){ alert('Selecione o lote de destino.'); return; }
@@ -7061,20 +7190,43 @@ function attachEvents(){
         const row = movimentoToRow(campos);
         if(editDraft._editId){
           ({error} = await db.from('movimentos').update(row).eq('id', editDraft._editId));
-          // Corrigir uma entrada (quantidade ou preço errados) precisa
-          // refletir no preço médio do ingrediente — recalcula do zero,
-          // repetindo a média ponderada sobre TODAS as movimentações dele em
-          // ordem cronológica (não só "empurra" o preço de novo, senão o
-          // valor de antes da correção continua contaminando o preço atual).
+          // Corrigir uma entrada (quantidade, preço ou o PRÓPRIO ingrediente
+          // errados) precisa refletir no preço médio do ingrediente --
+          // recalcula do zero, repetindo a média ponderada sobre TODAS as
+          // movimentações dele em ordem cronológica (não só "empurra" o
+          // preço de novo, senão o valor de antes da correção continua
+          // contaminando o preço atual).
           if(!error){
+            // editDraft.ingredienteId nunca é reescrito por um onchange do
+            // campo "Ingrediente" (só f-tipo tem um) -- continua com o valor
+            // ORIGINAL da movimentação até aqui, então dá pra comparar com o
+            // que está no formulário agora pra saber se o ingrediente mudou.
+            const ingredienteIdAntigo = editDraft.ingredienteId;
+            const movEditada = {...campos, id:editDraft._editId};
             const ing = getIng(campos.ingredienteId);
             if(ing){
+              // state.movimentos (em memória) ainda lista essa linha sob o
+              // ingrediente ANTIGO -- filtra ela fora de lá e soma a versão
+              // editada (já no ingrediente novo) manualmente, senão a troca
+              // de ingrediente nunca entra na conta do ingrediente novo.
               const movsIngrediente = state.movimentos
-                .filter(m=>m.ingredienteId===campos.ingredienteId)
-                .map(m=> m.id===editDraft._editId ? {...m, tipo:campos.tipo, quantidade:campos.quantidade, precoKg:campos.precoKg, data:campos.data} : m);
+                .filter(m=>m.ingredienteId===campos.ingredienteId && m.id!==editDraft._editId)
+                .concat([movEditada]);
               const precoRecalc = recomputarPrecoIngrediente(movsIngrediente, ing.unidade);
               if(precoRecalc!=null && precoRecalc!==Number(ing.precoKg)){
                 await db.from('ingredientes').update({preco_kg: precoRecalc}).eq('id', campos.ingredienteId);
+              }
+            }
+            // Ingrediente trocado -- o ANTIGO também precisa recalcular,
+            // agora SEM essa movimentação (que não é mais dele).
+            if(ingredienteIdAntigo && ingredienteIdAntigo!==campos.ingredienteId){
+              const ingAntigo = getIng(ingredienteIdAntigo);
+              if(ingAntigo){
+                const movsIngredienteAntigo = state.movimentos.filter(m=>m.ingredienteId===ingredienteIdAntigo && m.id!==editDraft._editId);
+                const precoRecalcAntigo = recomputarPrecoIngrediente(movsIngredienteAntigo, ingAntigo.unidade);
+                if(precoRecalcAntigo!=null && precoRecalcAntigo!==Number(ingAntigo.precoKg)){
+                  await db.from('ingredientes').update({preco_kg: precoRecalcAntigo}).eq('id', ingredienteIdAntigo);
+                }
               }
             }
           }
@@ -7089,8 +7241,14 @@ function attachEvents(){
             if(ing){
               const saldoAtualKg = qtdEmKg(saldoIngrediente(campos.ingredienteId), ing.unidade);
               const qtdEntradaKg = qtdEmKg(campos.quantidade, ing.unidade);
-              const precoAtual = Number(ing.precoKg)||0;
-              const precoPonderado = saldoAtualKg>0
+              // Só mistura com o preço atual se ele for um preço de verdade
+              // (ingrediente cadastrado sem preço, ou por um colaborador que
+              // não vê esse campo, fica com precoKg null/undefined) -- senão
+              // um "R$ 0" fantasma dilui o preço da entrada nova pra baixo.
+              // Mesma regra do recomputarPrecoIngrediente(), usado ao editar.
+              const temPrecoAtual = ing.precoKg!=null && ing.precoKg!=='';
+              const precoAtual = temPrecoAtual ? Number(ing.precoKg) : null;
+              const precoPonderado = (saldoAtualKg>0 && precoAtual!=null)
                 ? (saldoAtualKg*precoAtual + qtdEntradaKg*campos.precoKg) / (saldoAtualKg+qtdEntradaKg)
                 : campos.precoKg;
               await db.from('ingredientes').update({preco_kg: precoPonderado}).eq('id', campos.ingredienteId);
@@ -7448,21 +7606,28 @@ function attachEvents(){
           const vendaId = editDraft._editId;
           const loteAntigoId = editDraft._loteIdOriginal;
           const quantidadeAntiga = Number(editDraft._quantidadeOriginal||0);
-          // desfaz o efeito da venda antiga no lote antigo antes de aplicar a nova
-          if(loteAntigoId){
-            const loteAntigo = state.lotes.find(l=>l.id===loteAntigoId);
-            if(loteAntigo){
-              ({error} = await db.from('lotes').update({numero_animais: Number(loteAntigo.numeroAnimais||0)+quantidadeAntiga}).eq('id', loteAntigoId));
-            }
-          }
-          if(!error){
-            const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, observacao};
-            ({error} = await db.from('abates').update(row).eq('id', vendaId));
-          }
+          // Atualiza abate e receita PRIMEIRO -- só mexe no número de animais
+          // dos lotes depois que os dois confirmarem sucesso. Antes o
+          // "desfaz" no lote antigo era gravado logo de cara, e se abates/
+          // receitas falhassem em seguida, ficava um número de animais
+          // inflado no banco sem a edição de verdade ter ido adiante (e sem
+          // aviso, já que o app não recarrega o estado nesse erro).
+          const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, observacao};
+          ({error} = await db.from('abates').update(row).eq('id', vendaId));
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
             const descricao = `${TIPO_VENDA_LABEL[tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
             ({error} = await db.from('receitas').update({data, lote_id:loteId, descricao, arrobas, valor:valorTotal}).eq('abate_id', vendaId));
+          }
+          if(!error && loteAntigoId && loteAntigoId!==loteId){
+            // Lote mudou -- desfaz no antigo (soma de volta os animais dessa venda)
+            const loteAntigo = state.lotes.find(l=>l.id===loteAntigoId);
+            if(loteAntigo){
+              const novoNumeroAntigo = Number(loteAntigo.numeroAnimais||0)+quantidadeAntiga;
+              const updLoteAntigo = {numero_animais: novoNumeroAntigo};
+              if(novoNumeroAntigo>0 && loteAntigo.dataFim) updLoteAntigo.data_fim = null;
+              ({error} = await db.from('lotes').update(updLoteAntigo).eq('id', loteAntigoId));
+            }
           }
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
@@ -7471,6 +7636,7 @@ function attachEvents(){
               const novoNumero = Math.max(0, baseAnimais-quantidade);
               const updLote = {numero_animais: novoNumero};
               if(novoNumero===0 && !lote.dataFim) updLote.data_fim = data;
+              else if(novoNumero>0 && lote.dataFim) updLote.data_fim = null;
               ({error} = await db.from('lotes').update(updLote).eq('id', lote.id));
             }
           }
@@ -7500,12 +7666,23 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataReprodVal,
           numeroVaca: numVacaVal,
+          racaVaca: racaVacaVal,
           racaTouro: racaTouroVal,
           qualInseminacao: qualInsemVal,
           custo: Number(custoVal),
         };
         if(editDraft._editId){
           ({error} = await db.from('reproducao_custos').update(reproducaoCustoToRow(campos)).eq('id', editDraft._editId));
+          // A vaca inseminada entra (ou é movida) na composição do lote --
+          // é sempre fêmea. Não bloqueia o save (best-effort, mesmo motivo
+          // do gancho de entrada de animais). No caminho de criação isso já
+          // roda dentro de executarInsertLancamento (também no caso de
+          // sincronizar depois de ficar offline); aqui é só o caminho de
+          // edição, que não passa por lá.
+          if(!error){
+            const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea', raca:racaVacaVal||undefined});
+            if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -7514,17 +7691,7 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
-        }
-        // A vaca inseminada entra (ou é movida) na composição do lote --
-        // é sempre fêmea, então já preenche o sexo automaticamente. Não
-        // bloqueia o save (best-effort, mesmo motivo do gancho de entrada
-        // de animais) -- senão, uma falha aqui deixaria a inseminação
-        // "salva mas com erro na tela", e salvar de novo duplicaria. A
-        // validação acima já garante que, se for animal novo, raça veio
-        // preenchida -- então esse upsert nunca falha por falta de dado.
-        if(!error){
-          const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea', raca:racaVacaVal||undefined});
-          if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
+          if(!error && resultado.avisoAnimal) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resultado.avisoAnimal);
         }
       } else if(type==='diagnosticoGestacional'){
         const dataDgVal = document.getElementById('f-data').value;
@@ -7539,11 +7706,18 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataDgVal,
           numeroVaca: numVacaDgVal,
+          racaVaca: racaVacaDgVal,
           resultado: resultadoVal,
           previsaoParto: previsaoPartoEl ? previsaoPartoEl.value : '',
         };
         if(editDraft._editId){
           ({error} = await db.from('diagnosticos_gestacionais').update(diagnosticoToRow(campos)).eq('id', editDraft._editId));
+          // Mesmo gancho da inseminação (upsertAnimal best-effort) -- só o
+          // caminho de edição, que não passa por executarInsertLancamento.
+          if(!error){
+            const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea', raca:racaVacaDgVal||undefined});
+            if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -7552,14 +7726,7 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
-        }
-        // Mesmo gancho da inseminação (upsertAnimal best-effort) -- a vaca
-        // diagnosticada entra (ou é movida) na composição do lote, já como
-        // fêmea, mesmo que nunca tenha passado por uma inseminação lançada.
-        // A validação acima já garante raça quando é animal novo.
-        if(!error){
-          const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea', raca:racaVacaDgVal||undefined});
-          if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
+          if(!error && resultado.avisoAnimal) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resultado.avisoAnimal);
         }
       } else if(type==='parto'){
         const dataPartoVal = document.getElementById('f-data').value;
@@ -7572,10 +7739,17 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataPartoVal,
           numeroMae: numeroMaeVal,
+          racaMae: racaMaeVal,
           sexoBezerro: document.getElementById('f-sexobezerro').value,
         };
         if(editDraft._editId){
           ({error} = await db.from('partos').update(partoToRow(campos)).eq('id', editDraft._editId));
+          // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
+          // -- só o caminho de edição, que não passa por executarInsertLancamento.
+          if(!error){
+            const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea', raca:racaMaeVal||undefined});
+            if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
+          }
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -7584,14 +7758,7 @@ function attachEvents(){
             return;
           }
           error = resultado.error;
-        }
-        // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
-        // -- a mãe entra (ou é movida) na composição do lote, já como fêmea,
-        // mesmo que o parto seja o primeiro lançamento dela no sistema. A
-        // validação acima já garante raça quando é animal novo.
-        if(!error){
-          const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea', raca:racaMaeVal||undefined});
-          if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
+          if(!error && resultado.avisoAnimal) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resultado.avisoAnimal);
         }
       } else if(type==='desmama'){
         const dataDesmamaVal = document.getElementById('f-data').value;
@@ -7750,6 +7917,11 @@ function attachEvents(){
           ({error} = await db.from('fazendas').insert(row));
         }
       } else if(type==='permissoes'){
+        // Só admin/proprietário pode mexer no papel/permissões de alguém --
+        // o botão que abre esse modal já é só admin (PageAdminUsuarios),
+        // mas é um write sensível o bastante (dá pra virar admin de si
+        // mesmo) pra não confiar só no botão escondido.
+        if(!souAdmin()){ alert('Só administrador ou proprietário pode alterar permissões.'); return; }
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
         const permissoes = {};
@@ -7794,7 +7966,11 @@ function attachEvents(){
       const row = document.querySelector(`[data-legenda-idx="${idx}"]`);
       if(row) row.classList.add('hover');
       if(tooltip){
-        tooltip.innerHTML = `<div class="v">R$ ${el.dataset.tipValor}</div><div class="l">${el.dataset.tipNome} · ${el.dataset.tipPct}%</div>`;
+        // dataset.* decodifica entidades HTML na leitura -- mesmo o atributo
+        // tendo sido escrito com esc(), reinjetar direto aqui desfaria esse
+        // escape (um nome de centro de custo tipo "<img onerror=...>"
+        // executaria no hover). Escapa de novo antes de virar innerHTML.
+        tooltip.innerHTML = `<div class="v">R$ ${esc(el.dataset.tipValor)}</div><div class="l">${esc(el.dataset.tipNome)} · ${esc(el.dataset.tipPct)}%</div>`;
         tooltip.style.display = 'block';
       }
     });
