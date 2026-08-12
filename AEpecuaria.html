@@ -4401,7 +4401,7 @@ function PageFinanceiroCurral(){
   const {custosMesPorLote, custosPorLote, custoPorAreaMes} = custosDiariosPorLote();
 
   return `
-  <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral no mês (ração + pasto + cria + fatia do custo fixo)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
     ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo médio diário de cada um aqui.') : `
     <table>
