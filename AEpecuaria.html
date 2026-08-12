@@ -810,7 +810,7 @@ async function loadAll(){
 
 /* ===================== ESTADO ===================== */
 const state = {
-  page: 'financeiroCustosFixos',
+  page: 'resultadosResumo',
   mobileNavOpen: false,
   ingredientes: [],
   movimentos: [],
@@ -870,8 +870,18 @@ const state = {
 
 let editDraft = null; // temp form state while modal open
 
+// render() substitui o innerHTML inteiro a cada mudança de estado -- inclusive
+// pra coisas pequenas tipo abrir/fechar um grupo de movimentações ou o painel
+// de uma dieta. Trocar o DOM inteiro sem cuidado faz o navegador perder a
+// âncora de scroll e pular a tela pro topo (bug reportado: clicar na setinha
+// pra expandir "sobe" a tela). Guardamos a página renderizada por último pra
+// saber se é uma navegação de verdade (aí sim volta pro topo) ou só uma
+// atualização na mesma página (aí mantém o scroll onde a pessoa estava).
+let ultimaPaginaRenderizada = null;
 function render(){
   const root = document.getElementById('root');
+  const scrollY = window.scrollY;
+  const mesmaPagina = ultimaPaginaRenderizada === state.page;
 
   if(!state.authChecked){
     root.innerHTML = `<div class="login-loading">Carregando...</div>`;
@@ -962,6 +972,11 @@ function render(){
     ${!semModulos ? FabMenu() : ''}
   `;
   attachEvents();
+  ultimaPaginaRenderizada = state.page;
+  // Mesma página (ex: expandiu um grupo, abriu um modal) -- restaura o
+  // scroll exatamente onde estava. Página diferente (navegação de verdade) --
+  // sobe pro topo, como se espera ao abrir uma tela nova.
+  window.scrollTo(0, mesmaPagina ? scrollY : 0);
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
@@ -1044,6 +1059,12 @@ function gruposVisiveis(){
 }
 function primeiraPaginaVisivel(){
   const grupos = gruposVisiveis();
+  // Abre em Resultados por padrão pra quem tem acesso (a primeira coisa que
+  // se quer ver ao logar); quem não tem acesso cai no primeiro grupo visível
+  // de qualquer jeito, como antes.
+  const resultados = grupos.find(([key])=>key==='resultados');
+  const paginasResultados = resultados ? paginasVisiveisDoGrupo(resultados[1]) : [];
+  if(paginasResultados[0]) return paginasResultados[0].key;
   const paginas = grupos[0] ? paginasVisiveisDoGrupo(grupos[0][1]) : [];
   return paginas[0] ? paginas[0].key : null;
 }
@@ -1936,14 +1957,14 @@ function PageIngredientes(){
 }
 
 /* ===================== PÁGINA: ESTOQUE ===================== */
-// Agrupa movimentações (entrada/saída) por insumo+mês, pra não listar todo
-// lançamento diário direto na tela -- cada grupo mostra só o total do mês,
-// e expande pro diário quando o usuário clica.
+// Agrupa movimentações (entrada/saída) por insumo, pra não listar todo
+// lançamento diário direto na tela -- cada grupo mostra só a última
+// movimentação daquele insumo, e expande pro histórico completo (todos os
+// meses, não só um) quando o usuário clica.
 function agruparMovimentos(rows, tipo){
-  const porGrupo = {};
+  const porInsumo = {};
   rows.filter(m=>m.tipo===tipo).forEach(m=>{
-    const mes = m.data.slice(0,7);
-    const key = `${tipo}:${m.ingredienteId}:${mes}`;
+    const key = `${tipo}:${m.ingredienteId}`;
     const ing = getIng(m.ingredienteId);
     // Entrada guarda o preço realmente pago naquela compra (se informado);
     // saída não tem preço próprio (nunca é pedido no formulário), então usa
@@ -1951,34 +1972,34 @@ function agruparMovimentos(rows, tipo){
     // da tela (valor em estoque, custo de dieta etc).
     const precoUnit = (tipo==='entrada' && m.precoKg) ? m.precoKg : (ing?.precoKg||0);
     const valor = qtdEmKg(m.quantidade, ing?.unidade) * precoUnit;
-    if(!porGrupo[key]) porGrupo[key] = {key, ingredienteId:m.ingredienteId, mes, total:0, valorTotal:0, itens:[]};
-    porGrupo[key].total += m.quantidade;
-    porGrupo[key].valorTotal += valor;
-    porGrupo[key].itens.push({...m, precoUnit, valor});
+    if(!porInsumo[key]) porInsumo[key] = {key, ingredienteId:m.ingredienteId, itens:[]};
+    porInsumo[key].itens.push({...m, precoUnit, valor});
   });
-  return Object.values(porGrupo).sort((a,b)=> b.mes.localeCompare(a.mes) || (getIng(a.ingredienteId)?.nome||'').localeCompare(getIng(b.ingredienteId)?.nome||''));
+  return Object.values(porInsumo).map(g=>{
+    const itens = g.itens.sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+    return {...g, itens, ultimo: itens[0]};
+  }).sort((a,b)=> b.ultimo.data.localeCompare(a.ultimo.data) || (getIng(a.ingredienteId)?.nome||'').localeCompare(getIng(b.ingredienteId)?.nome||''));
 }
 function TabelaMovimentosAgrupados(grupos, tipo, verValor){
   if(grupos.length===0) return Empty(`Nenhuma ${tipo==='saida'?'saída':'entrada'} registrada`, `Registre ${tipo==='saida'?'saídas':'entradas'} de insumos.`);
   return `
   <table>
-    <thead><tr><th></th><th>Insumo</th><th>Mês</th><th>Total</th>${verValor?'<th>R$/kg</th><th>Valor</th>':''}<th>Lançamentos</th></tr></thead>
+    <thead><tr><th></th><th>Insumo</th><th>Última em</th><th>Quantidade</th>${verValor?'<th>R$/kg</th><th>Valor</th>':''}<th>Lançamentos</th></tr></thead>
     <tbody>
       ${grupos.map(g=>{
         const ing = getIng(g.ingredienteId);
         const aberto = !!state.movGruposExpandidos[g.key];
-        const totalKg = qtdEmKg(g.total, ing?.unidade);
-        const precoMedio = totalKg>0 ? g.valorTotal/totalKg : 0;
+        const u = g.ultimo;
         return `
         <tr class="mov-grupo-row" data-toggle-mov-grupo="${g.key}" style="cursor:pointer;">
           <td class="mono" style="width:20px;"><svg class="chev ${aberto?'open':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></td>
           <td><strong>${ing?esc(ing.nome):'—'}</strong></td>
-          <td>${mesLabel(g.mes)}</td>
-          <td class="mono">${fmtInt(g.total)} ${ing?ing.unidade:''}</td>
-          ${verValor?`<td class="mono">R$ ${fmt(precoMedio,2)}</td><td class="mono">R$ ${fmt(g.valorTotal)}</td>`:''}
+          <td class="mono">${u.data.split('-').reverse().join('/')}</td>
+          <td class="mono">${fmtInt(u.quantidade)} ${ing?ing.unidade:''}</td>
+          ${verValor?`<td class="mono">R$ ${fmt(u.precoUnit,2)}</td><td class="mono">R$ ${fmt(u.valor)}</td>`:''}
           <td class="mono">${g.itens.length}</td>
         </tr>
-        ${aberto ? g.itens.slice().sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id).map(m=>`
+        ${aberto ? g.itens.map(m=>`
         <tr class="mov-item-row">
           <td></td>
           <td class="mono">${m.data.split('-').reverse().join('/')}</td>
@@ -2061,12 +2082,12 @@ function PageEstoque(){
       </select>
     </div>
   </div>
-  <p class="eyebrow" style="margin-bottom:10px;">Saídas <span class="hint" style="font-weight:400;">— total por insumo/mês, clique pra ver o diário</span></p>
+  <p class="eyebrow" style="margin-bottom:10px;">Saídas <span class="hint" style="font-weight:400;">— última movimentação de cada insumo, clique pra ver o histórico completo</span></p>
   <div class="card" style="margin-bottom:22px;">
     ${TabelaMovimentosAgrupados(gruposSaida, 'saida', verValor)}
   </div>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Entradas <span class="hint" style="font-weight:400;">— total por insumo/mês, clique pra ver o diário</span></p>
+  <p class="eyebrow" style="margin-bottom:10px;">Entradas <span class="hint" style="font-weight:400;">— última movimentação de cada insumo, clique pra ver o histórico completo</span></p>
   <div class="card">
     ${TabelaMovimentosAgrupados(gruposEntrada, 'entrada', verValor)}
   </div>`;
@@ -6134,11 +6155,8 @@ function attachEvents(){
       if(!ing) return;
       state.searchMovimentos = ing.nome;
       state.filtroMesMovimentos = '';
-      const meses = new Set(state.movimentos.filter(m=>m.ingredienteId===ing.id).map(m=>m.data.slice(0,7)));
-      meses.forEach(mes=>{
-        state.movGruposExpandidos[`saida:${ing.id}:${mes}`] = true;
-        state.movGruposExpandidos[`entrada:${ing.id}:${mes}`] = true;
-      });
+      state.movGruposExpandidos[`saida:${ing.id}`] = true;
+      state.movGruposExpandidos[`entrada:${ing.id}`] = true;
       render();
       document.getElementById('movimentacoes-secao')?.scrollIntoView({behavior:'smooth', block:'start'});
     };
