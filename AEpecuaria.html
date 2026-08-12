@@ -2280,8 +2280,9 @@ function PageManejoInicio(){
       <label class="manejo-check"><input type="checkbox" id="f-vacinacaomanejo" ${d.vacinacao?'checked':''}/> Foi feita vacinação nesse manejo</label>
       <label class="manejo-check"><input type="checkbox" id="f-vermifugacaomanejo" ${d.vermifugacao?'checked':''}/> Foi feita vermifugação nesse manejo</label>
     </div>
+    ${d.acoes.length===0 && !d.mudaLote ? `<p class="hint">Marque ao menos uma ação, ou ative "Vai mudar de lote" acima pra um manejo só de troca de lote.</p>` : ''}
     <div class="toolbar" style="margin-top:18px; justify-content:flex-end;">
-      <button class="btn btn-primary btn-lg" data-iniciar-manejo="1" ${d.acoes.length===0?'disabled':''}>Iniciar manejo</button>
+      <button class="btn btn-primary btn-lg" data-iniciar-manejo="1" ${(d.acoes.length===0 && !d.mudaLote)?'disabled':''}>Iniciar manejo</button>
     </div>
   </div>
   <div class="toolbar"><span class="hint">Histórico de manejos</span></div>
@@ -2321,6 +2322,17 @@ function PageManejoAtivo(){
   const sexoLoteFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
   const lote = state.lotes.find(l=>l.id===m.loteId);
   const partosDisponiveis = acoesAtivas.includes('desmama') ? partosSemDesmama(m.loteId) : [];
+  // Sem ação nenhuma marcada que precise do número (inseminação,
+  // diagnóstico, protocolo) mas COM mudança de lote, o número vira
+  // obrigatório mesmo assim -- é ele que diz qual animal está mudando de
+  // lote; sem ele não tem o que mover.
+  const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a)) || !!m.loteDestinoId;
+  const resumoManejo = [
+    ...acoesAtivas.map(a=>ACAO_MANEJO_LABEL[a]),
+    ...(m.vacinacao?['Vacinação']:[]),
+    ...(m.vermifugacao?['Vermifugação']:[]),
+    ...(m.loteDestinoId?[`Movendo pra ${state.lotes.find(l=>l.id===m.loteDestinoId)?.nome||''}`]:[]),
+  ].join(' · ');
   return `
   <div class="manejo-topbar">
     <div>
@@ -2330,9 +2342,9 @@ function PageManejoAtivo(){
     </div>
     <button class="btn btn-primary btn-lg" data-finalizar-manejo="1">Finalizar manejo</button>
   </div>
-  <p class="hint" style="margin:6px 0 16px;">${acoesAtivas.map(a=>ACAO_MANEJO_LABEL[a]).join(' · ')}${m.vacinacao?' · Vacinação':''}${m.vermifugacao?' · Vermifugação':''}${m.loteDestinoId?` · Movendo pra ${esc(state.lotes.find(l=>l.id===m.loteDestinoId)?.nome||'')}`:''}</p>
+  <p class="hint" style="margin:6px 0 16px;">${esc(resumoManejo)}</p>
   <div class="card card-pad" style="margin-bottom:18px; border:1.5px solid var(--verde-medio);">
-    <div class="field campo-grande"><label>Número do animal (opcional)</label><input id="f-numanimalmanejo" value="${esc(m.numeroAtualDraft||'')}" placeholder="Bate o número e aperta Enter"/></div>
+    <div class="field campo-grande"><label>Número do animal${precisaNumero?' (obrigatório)':' (opcional)'}</label><input id="f-numanimalmanejo" value="${esc(m.numeroAtualDraft||'')}" placeholder="Bate o número e aperta Enter"/></div>
     ${animalNovo ? `
     <div class="field-row">
       ${!sexoLoteFixo ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
@@ -6734,7 +6746,7 @@ function attachEvents(){
         const vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
         const acoes = editDraft.acoes;
         if(!data){ alert('Informe a data do manejo.'); return; }
-        if(acoes.length===0){ alert('Marque ao menos uma ação pra esse manejo.'); return; }
+        if(acoes.length===0 && !mudaLote){ alert('Marque ao menos uma ação, ou ative "Vai mudar de lote" pra um manejo só de troca de lote.'); return; }
         if(mudaLote && !loteDestinoId){ alert('Selecione o lote de destino.'); return; }
         const res = await db.from('manejos').insert(manejoToRow({data, loteId, loteDestinoId, acoes, vacinacao, vermifugacao, status:'aberto', totalAnimais:0})).select().single();
         if(res.error){ alert('Não foi possível iniciar o manejo: ' + res.error.message); return; }
@@ -6784,8 +6796,8 @@ function attachEvents(){
       const acoesAtivas = m.acoes;
       const numEl = document.getElementById('f-numanimalmanejo');
       const numero = (numEl.value||'').trim();
-      const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a));
-      if(precisaNumero && !numero){ alert('Informe o número do animal — obrigatório pra inseminação, diagnóstico ou protocolo de inseminação.'); return; }
+      const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a)) || !!m.loteDestinoId;
+      if(precisaNumero && !numero){ alert('Informe o número do animal — obrigatório pra inseminação, diagnóstico, protocolo de inseminação ou mudança de lote.'); return; }
       let sexoNovo = '', racaNovo = '';
       const eraNovo = numero && !animalCadastrado(numero);
       if(eraNovo){
