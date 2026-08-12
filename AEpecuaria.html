@@ -6806,6 +6806,7 @@ function attachEvents(){
   if(state.modal && state.modal.type==='diagnosticoGestacional'){
     const resultadoDgEl = document.getElementById('f-resultadodg');
     if(resultadoDgEl) resultadoDgEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroVaca = document.getElementById('f-numvaca').value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.racaVaca = document.getElementById('f-racavaca')?.value;
@@ -6819,6 +6820,7 @@ function attachEvents(){
     // anterior grudada no campo.
     const numVacaDgEl = document.getElementById('f-numvaca');
     if(numVacaDgEl) numVacaDgEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroVaca = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       const previsaoEl = document.getElementById('f-previsaoparto');
@@ -6833,6 +6835,7 @@ function attachEvents(){
     // raça pra que já se conhece dela (ou limpa, se for um número novo).
     const numVacaInsemEl = document.getElementById('f-numvaca');
     if(numVacaInsemEl) numVacaInsemEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroVaca = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.racaTouro = document.getElementById('f-racatouro').value;
@@ -6844,8 +6847,14 @@ function attachEvents(){
   }
   if(state.modal && state.modal.type==='parto'){
     // Mesma lógica -- trocar o número da mãe atualiza a raça conhecida dela.
+    // IMPORTANTE: captura o lote selecionado ANTES de re-renderizar, senão
+    // o <select> do lote (que usa editDraft.loteId pra marcar "selected")
+    // volta pro valor antigo assim que a pessoa digita/sai do campo do
+    // número da mãe, mesmo já tendo trocado o lote na tela -- e o parto
+    // acaba sendo salvo no lote errado.
     const numMaeEl = document.getElementById('f-numeromae');
     if(numMaeEl) numMaeEl.onchange = (e)=>{
+      editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.numeroMae = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.sexoBezerro = document.getElementById('f-sexobezerro').value;
