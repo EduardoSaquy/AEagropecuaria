@@ -1007,6 +1007,20 @@ const ACAO_MODULOS = {
   // ver o rateio "resultados"/margem continua exclusivo de Resultados.
   receita:['financeiro','resultados'], metaMargem:['resultados'], investimento:['resultados'],
 };
+// Dentro do Manejo, cada ação pertence a um módulo diferente -- entrar no
+// Manejo só pede editar em QUALQUER área (confinamento/pasto/cria), mas
+// isso não deveria liberar TODAS as ações pra todo mundo: um colaborador só
+// de Confinamento não devia conseguir marcar "Inseminação" (é de Cria), por
+// exemplo. Pesagem/Desmama seguem o tipo do lote selecionado (podem
+// acontecer em qualquer área); Protocolo/Inseminação/Diagnóstico são sempre
+// de reprodução, então sempre exigem Cria especificamente.
+function acaoManejoPermitida(acao, lote){
+  if(!lote) return false;
+  const moduloDoLote = TIPO_MODULO[loteTipo(lote)];
+  if(acao==='pesagem') return temPermissao(moduloDoLote,'editar');
+  if(acao==='desmama') return temPermissao('cria','editar') || temPermissao(moduloDoLote,'editar');
+  return temPermissao('cria','editar'); // protocoloIA, inseminacao, diagnostico
+}
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
@@ -1045,11 +1059,15 @@ function podeRegistrarVenda(tipo){
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  if(key==='lotesGeral') return souAdmin() || state.perfil?.papel==='consultor';
   if(key==='fazenda') return souAdmin();
-  if(key==='vendas') return temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
-  if(key==='cadastro') return podeCriarLote() || podeEditarAcao('lote');
-  if(key==='manejo') return temPermissao('confinamento','editar') || temPermissao('pasto','editar') || temPermissao('cria','editar');
+  // Cada regra de cargo abaixo (consultor, podeCriarLote, editar em alguma
+  // área) continua valendo como ATALHO adicional -- só o admin liberando a
+  // permissão explícita do módulo (tabela em Administração > Usuários) nunca
+  // tira acesso de quem já tinha por cargo.
+  if(key==='lotesGeral') return temPermissao('lotesGeral','visualizar') || souAdmin() || state.perfil?.papel==='consultor';
+  if(key==='vendas') return temPermissao('vendas','visualizar') || temPermissao('confinamento','visualizar') || temPermissao('pasto','visualizar') || temPermissao('cria','visualizar');
+  if(key==='cadastro') return temPermissao('cadastro','visualizar') || podeCriarLote() || podeEditarAcao('lote');
+  if(key==='manejo') return temPermissao('manejo','visualizar') || temPermissao('confinamento','editar') || temPermissao('pasto','editar') || temPermissao('cria','editar');
   return temPermissao(MODULOS_GROUP[key], 'visualizar');
 }
 // Algumas páginas dentro de um grupo visível são mais sensíveis que o resto
@@ -1790,7 +1808,11 @@ function openNewModal(type){
     state.modal = {type:'producaoRacao'};
   } else if(type==='lote'){
     const grupoAtual = currentGroupKey();
-    const destinoPadrao = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'cria' : 'confinamento';
+    const destinosPermitidosNovoLote = ['confinamento','pasto','cria'].filter(t=>podeCriarLote() || temPermissao(t,'editar'));
+    const destinoPreferido = grupoAtual==='pasto' ? 'pasto' : grupoAtual==='reproducao' ? 'cria' : 'confinamento';
+    // Usa o destino da aba atual como sugestão, mas só se essa pessoa tiver
+    // permissão nele -- senão cai no primeiro destino que ela realmente pode.
+    const destinoPadrao = destinosPermitidosNovoLote.includes(destinoPreferido) ? destinoPreferido : (destinosPermitidosNovoLote[0]||'confinamento');
     editDraft = {
       modoEntrada:'novo',
       nome:'', numeroAnimais:'', dataInicio:hojeStr(), dataFim:'', destino:destinoPadrao, sexo:'',
@@ -2360,6 +2382,11 @@ function PageManejoInicio(){
     editDraft = {loteId: lotesDisponiveis[0].id, data: hojeStr(), mudaLote:false, loteDestinoId:'', acoes:['pesagem'], vacinacao:false, vermifugacao:false, _manejoSetup:true};
   }
   const d = editDraft;
+  const loteSelecionadoManejo = state.lotes.find(l=>l.id===d.loteId);
+  // Se a pessoa não tem permissão pra alguma ação já marcada (ex: trocou de
+  // lote, ou o admin tirou a permissão de Cria depois de marcar), tira do
+  // rascunho -- não deixa uma ação sem permissão pendurada mesmo escondida.
+  d.acoes = d.acoes.filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo));
   const historico = [...state.manejos].sort((a,b)=>b.id-a.id);
   return `
   <div class="card card-pad" style="margin-bottom:18px;">
@@ -2388,12 +2415,11 @@ function PageManejoInicio(){
     <div class="field">
       <label>O que vai ser feito nesse manejo?</label>
       <div class="manejo-acoes-check">
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="pesagem" ${d.acoes.includes('pesagem')?'checked':''}/> Pesagem</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="protocoloIA" ${d.acoes.includes('protocoloIA')?'checked':''}/> Protocolo de inseminação</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="inseminacao" ${d.acoes.includes('inseminacao')?'checked':''}/> Inseminação</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="diagnostico" ${d.acoes.includes('diagnostico')?'checked':''}/> Diagnóstico gestacional</label>
-        <label class="manejo-check"><input type="checkbox" data-acao-manejo="desmama" ${d.acoes.includes('desmama')?'checked':''}/> Desmama</label>
+        ${Object.keys(ACAO_MANEJO_LABEL).filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo)).map(acao=>`
+        <label class="manejo-check"><input type="checkbox" data-acao-manejo="${acao}" ${d.acoes.includes(acao)?'checked':''}/> ${ACAO_MANEJO_LABEL[acao]}</label>
+        `).join('')}
       </div>
+      ${Object.keys(ACAO_MANEJO_LABEL).some(acao=>!acaoManejoPermitida(acao, loteSelecionadoManejo)) ? `<p class="hint">Algumas ações não aparecem aqui porque esse usuário não tem permissão de editar em Cria (Inseminação/Diagnóstico são sempre de reprodução, mesmo num lote de Confinamento).</p>` : ''}
     </div>
     <div class="field-row">
       <label class="manejo-check"><input type="checkbox" id="f-vacinacaomanejo" ${d.vacinacao?'checked':''}/> Foi feita vacinação nesse manejo</label>
@@ -4747,9 +4773,18 @@ function PageResultadosInvestimentos(){
 }
 
 /* ===================== PÁGINA: ADMINISTRAÇÃO — USUÁRIOS ===================== */
+// Cada aba do app (GROUPS) é controlável aqui -- inclusive Manejo, Cadastro,
+// Vendas e Lotes (visão geral), que antes só abriam por regra de cargo
+// (consultor, podeCriarLote etc.) sem dar pro admin liberar/restringir
+// especificamente. Essas regras de cargo continuam valendo como fallback
+// (nunca tiram acesso de quem já tinha) -- ver grupoVisivel().
 const MODULOS_PERMISSAO = [
-  ['insumos','Insumos'], ['dietas','Dietas'], ['confinamento','Confinamento'],
-  ['pasto','Pasto'], ['cria','Cria'], ['financeiro','Financeiro'], ['resultados','Resultados'],
+  ['manejo','Manejo'], ['cadastro','Cadastro'],
+  ['insumos','Insumos'], ['dietas','Dietas'],
+  ['lotesGeral','Lotes (visão geral)'],
+  ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
+  ['vendas','Vendas'],
+  ['financeiro','Financeiro'], ['resultados','Resultados'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
 function papelPill(papel){
@@ -5130,6 +5165,11 @@ function ModalProducaoRacao(){
 function ModalLote(){
   const d = editDraft;
   const modoNovo = !d._editId ? (d.modoEntrada||'novo')==='novo' : true;
+  // Só oferece destino (lote novo) ou lote existente que essa pessoa pode
+  // editar -- mesma regra usada em lotesElegiveisManejo()/ModalAnimal, sem
+  // isso dava pra criar/somar animais num módulo sem permissão nenhuma.
+  const destinosPermitidosLote = ['confinamento','pasto','cria'].filter(t=>podeCriarLote() || temPermissao(t,'editar'));
+  const lotesExistentesPermitidos = state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
   const numerosAnimaisListaAtual = !d._editId ? parseNumerosAnimais(d.numerosAnimais||'') : [];
   const algumAnimalNovoLote = numerosAnimaisListaAtual.some(n=>!animalCadastrado(n));
   const loteExistenteAtualLote = !modoNovo ? state.lotes.find(l=>l.id==d.loteExistenteId) : null;
@@ -5172,9 +5212,7 @@ function ModalLote(){
         <div class="field"><label>Identificação do lote</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Lote 12 / Curral 3"/></div>
         <div class="field"><label>Destino</label>
           <select id="f-destino">
-            <option value="confinamento" ${d.destino==='confinamento'?'selected':''}>Confinamento</option>
-            <option value="pasto" ${d.destino==='pasto'?'selected':''}>Pasto</option>
-            <option value="cria" ${d.destino==='cria'?'selected':''}>Cria</option>
+            ${destinosPermitidosLote.map(t=>`<option value="${t}" ${d.destino===t?'selected':''}>${DESTINO_LOTE_LABEL[t]}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>Sexo do lote (opcional)</label>
@@ -5207,7 +5245,7 @@ function ModalLote(){
         ` : `
         <div class="field"><label>Lote de destino</label>
           <select id="f-loteexistente">
-            ${state.lotes.filter(l=>!l.dataFim).map(l=>`<option value="${l.id}" ${d.loteExistenteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
+            ${lotesExistentesPermitidos.map(l=>`<option value="${l.id}" ${d.loteExistenteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
           </select>
         </div>
         <div class="field-row">
@@ -6888,6 +6926,14 @@ function attachEvents(){
       editDraft.vacinacao = document.getElementById('f-vacinacaomanejo').checked;
       editDraft.vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
     }
+    const loteManejoEl = document.getElementById('f-lotemanejo');
+    if(loteManejoEl) loteManejoEl.onchange = ()=>{
+      capturarSetupManejo();
+      // Muda o lote -- a lista de ações disponíveis pode mudar (ex: saiu de
+      // um lote de Cria pra um de Confinamento sem permissão de Cria), então
+      // o PageManejoInicio já poda editDraft.acoes de novo no próximo render.
+      render();
+    };
     document.querySelectorAll('[data-acao-manejo]').forEach(el=>{
       el.onchange = ()=>{
         capturarSetupManejo();
@@ -6915,7 +6961,10 @@ function attachEvents(){
         const loteDestinoId = mudaLote ? Number(document.getElementById('f-lotedestinomanejo').value) : null;
         const vacinacao = document.getElementById('f-vacinacaomanejo').checked;
         const vermifugacao = document.getElementById('f-vermifugacaomanejo').checked;
-        const acoes = editDraft.acoes;
+        // Repoda por permissão aqui também (defesa em profundidade -- a UI já
+        // só oferece ação permitida, mas não custa checar de novo no submit).
+        const loteAtualManejo = state.lotes.find(l=>l.id===loteId);
+        const acoes = editDraft.acoes.filter(acao=>acaoManejoPermitida(acao, loteAtualManejo));
         if(!data){ alert('Informe a data do manejo.'); return; }
         if(acoes.length===0 && !mudaLote){ alert('Marque ao menos uma ação, ou ative "Vai mudar de lote" pra um manejo só de troca de lote.'); return; }
         if(mudaLote && !loteDestinoId){ alert('Selecione o lote de destino.'); return; }
@@ -7831,6 +7880,11 @@ function attachEvents(){
           ({error} = await db.from('fazendas').insert(row));
         }
       } else if(type==='permissoes'){
+        // Só admin/proprietário pode mexer no papel/permissões de alguém --
+        // o botão que abre esse modal já é só admin (PageAdminUsuarios),
+        // mas é um write sensível o bastante (dá pra virar admin de si
+        // mesmo) pra não confiar só no botão escondido.
+        if(!souAdmin()){ alert('Só administrador ou proprietário pode alterar permissões.'); return; }
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
         const permissoes = {};
