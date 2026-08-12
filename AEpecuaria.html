@@ -1363,13 +1363,23 @@ async function executarInsertLancamento(type, campos){
     const descricao = `${TIPO_VENDA_LABEL[campos.tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(campos.quantidade)} animais)`;
     const receitaRow = {data:campos.data, lote_id:campos.loteId, descricao, arrobas, valor:valorTotal, observacao:'', abate_id:vendaId};
     const {error:errReceita} = await db.from('receitas').insert(receitaRow);
-    if(errReceita) return {error:errReceita};
+    if(errReceita){
+      // Sem a receita, a venda fica pela metade -- desfaz o abate pra não
+      // duplicar tudo se isso for reenfileirado por falha de rede e tentado
+      // de novo depois (mesmo motivo do rollback em saidaRacao/producaoRacao).
+      await db.from('abates').delete().eq('id', vendaId);
+      return {error:errReceita};
+    }
     if(lote){
       const novoNumero = Math.max(0, Number(lote.numeroAnimais||0) - Number(campos.quantidade||0));
       const updLote = {numero_animais: novoNumero};
       if(novoNumero===0 && !lote.dataFim) updLote.data_fim = campos.data;
       const {error:errLote} = await db.from('lotes').update(updLote).eq('id', lote.id);
-      if(errLote) return {error:errLote};
+      if(errLote){
+        await db.from('receitas').delete().eq('abate_id', vendaId);
+        await db.from('abates').delete().eq('id', vendaId);
+        return {error:errLote};
+      }
     }
     return {error:null};
   }
@@ -3767,8 +3777,16 @@ function valorVenda(v){
   return arrobasVenda(v) * numDecimal(v.valorArroba);
 }
 
+// Ignora pesagens com peso 0 -- é o placeholder que o Manejo cria de
+// antemão pra "Pesagem" (antes de qualquer animal ser pesado de fato) e
+// nunca é um peso real. Se o manejo for abandonado antes de pesar alguém
+// (perda de conexão, fechar o app no meio do curral), esse placeholder
+// fica parado com peso 0 pra sempre -- contá-lo como "peso inicial/final"
+// zerava o ganho de peso e inflava @ produzidas/lote. Ele continua
+// aparecendo normalmente na listagem de lançamentos (pra dar pra editar
+// ou excluir), só não entra nas contas de ganho de peso.
 function pesagensDoLote(loteId){
-  return state.pesagens.filter(p=>p.loteId===loteId).sort((a,b)=> a.data.localeCompare(b.data) || a.id-b.id);
+  return state.pesagens.filter(p=>p.loteId===loteId && Number(p.pesoMedioKg)>0).sort((a,b)=> a.data.localeCompare(b.data) || a.id-b.id);
 }
 // Ganho de peso (kg/dia) entre duas pesagens consecutivas do mesmo lote.
 function gmdEntre(pesoAnterior, pesoAtual, dataAnterior, dataAtual){
@@ -3797,7 +3815,7 @@ function ganhoPesoNoMes(loteId, mesStr){
   if(!final) return null;
   let inicial = pesoNaData(loteId, inicioMes, false);
   if(!inicial){
-    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr)).sort((a,b)=>a.data.localeCompare(b.data));
+    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr) && Number(p.pesoMedioKg)>0).sort((a,b)=>a.data.localeCompare(b.data));
     if(doMes.length<2) return null;
     inicial = doMes[0];
   }
@@ -6434,9 +6452,18 @@ function attachEvents(){
       if(venda && venda.loteId){
         const lote = state.lotes.find(l=>l.id===venda.loteId);
         if(lote){
-          await db.from('lotes').update({numero_animais: Number(lote.numeroAnimais||0)+Number(venda.quantidade||0)}).eq('id', lote.id);
+          const novoNumero = Number(lote.numeroAnimais||0)+Number(venda.quantidade||0);
+          const updLote = {numero_animais: novoNumero};
+          // O lote pode ter sido marcado como encerrado (data_fim) por essa
+          // venda ter zerado os animais -- voltando a ter animais, reabre.
+          if(novoNumero>0 && lote.dataFim) updLote.data_fim = null;
+          await db.from('lotes').update(updLote).eq('id', lote.id);
         }
       }
+      // Apaga a receita explicitamente (não depende de ON DELETE CASCADE no
+      // banco) antes do abate, senão uma receita órfã (sem abate_id válido)
+      // fica contando pra sempre em receitaDoMes/resultado.
+      await db.from('receitas').delete().eq('abate_id', id);
       await db.from('abates').delete().eq('id', id);
       await loadAll();
     };
@@ -7097,8 +7124,14 @@ function attachEvents(){
             if(ing){
               const saldoAtualKg = qtdEmKg(saldoIngrediente(campos.ingredienteId), ing.unidade);
               const qtdEntradaKg = qtdEmKg(campos.quantidade, ing.unidade);
-              const precoAtual = Number(ing.precoKg)||0;
-              const precoPonderado = saldoAtualKg>0
+              // Só mistura com o preço atual se ele for um preço de verdade
+              // (ingrediente cadastrado sem preço, ou por um colaborador que
+              // não vê esse campo, fica com precoKg null/undefined) -- senão
+              // um "R$ 0" fantasma dilui o preço da entrada nova pra baixo.
+              // Mesma regra do recomputarPrecoIngrediente(), usado ao editar.
+              const temPrecoAtual = ing.precoKg!=null && ing.precoKg!=='';
+              const precoAtual = temPrecoAtual ? Number(ing.precoKg) : null;
+              const precoPonderado = (saldoAtualKg>0 && precoAtual!=null)
                 ? (saldoAtualKg*precoAtual + qtdEntradaKg*campos.precoKg) / (saldoAtualKg+qtdEntradaKg)
                 : campos.precoKg;
               await db.from('ingredientes').update({preco_kg: precoPonderado}).eq('id', campos.ingredienteId);
@@ -7456,21 +7489,28 @@ function attachEvents(){
           const vendaId = editDraft._editId;
           const loteAntigoId = editDraft._loteIdOriginal;
           const quantidadeAntiga = Number(editDraft._quantidadeOriginal||0);
-          // desfaz o efeito da venda antiga no lote antigo antes de aplicar a nova
-          if(loteAntigoId){
-            const loteAntigo = state.lotes.find(l=>l.id===loteAntigoId);
-            if(loteAntigo){
-              ({error} = await db.from('lotes').update({numero_animais: Number(loteAntigo.numeroAnimais||0)+quantidadeAntiga}).eq('id', loteAntigoId));
-            }
-          }
-          if(!error){
-            const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, observacao};
-            ({error} = await db.from('abates').update(row).eq('id', vendaId));
-          }
+          // Atualiza abate e receita PRIMEIRO -- só mexe no número de animais
+          // dos lotes depois que os dois confirmarem sucesso. Antes o
+          // "desfaz" no lote antigo era gravado logo de cara, e se abates/
+          // receitas falhassem em seguida, ficava um número de animais
+          // inflado no banco sem a edição de verdade ter ido adiante (e sem
+          // aviso, já que o app não recarrega o estado nesse erro).
+          const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, observacao};
+          ({error} = await db.from('abates').update(row).eq('id', vendaId));
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
             const descricao = `${TIPO_VENDA_LABEL[tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
             ({error} = await db.from('receitas').update({data, lote_id:loteId, descricao, arrobas, valor:valorTotal}).eq('abate_id', vendaId));
+          }
+          if(!error && loteAntigoId && loteAntigoId!==loteId){
+            // Lote mudou -- desfaz no antigo (soma de volta os animais dessa venda)
+            const loteAntigo = state.lotes.find(l=>l.id===loteAntigoId);
+            if(loteAntigo){
+              const novoNumeroAntigo = Number(loteAntigo.numeroAnimais||0)+quantidadeAntiga;
+              const updLoteAntigo = {numero_animais: novoNumeroAntigo};
+              if(novoNumeroAntigo>0 && loteAntigo.dataFim) updLoteAntigo.data_fim = null;
+              ({error} = await db.from('lotes').update(updLoteAntigo).eq('id', loteAntigoId));
+            }
           }
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
@@ -7479,6 +7519,7 @@ function attachEvents(){
               const novoNumero = Math.max(0, baseAnimais-quantidade);
               const updLote = {numero_animais: novoNumero};
               if(novoNumero===0 && !lote.dataFim) updLote.data_fim = data;
+              else if(novoNumero>0 && lote.dataFim) updLote.data_fim = null;
               ({error} = await db.from('lotes').update(updLote).eq('id', lote.id));
             }
           }
