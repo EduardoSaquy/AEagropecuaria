@@ -6901,6 +6901,15 @@ function attachEvents(){
   if(state.modal && state.modal.type==='pesagem' && !editDraft._editId){
     const numPesadoEl = document.getElementById('f-numeropesado');
     if(numPesadoEl) numPesadoEl.onchange = (e)=>{
+      // Mesmo cuidado do parto/inseminação/diagnóstico -- captura o lote (e
+      // data/observação) ANTES de re-renderizar, senão o <select> do lote
+      // volta pro valor antigo assim que a pessoa digita o número do animal
+      // e sai do campo, mesmo já tendo trocado o lote na tela -- e os
+      // animais pesados entram no lote errado.
+      editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
+      editDraft.data = document.getElementById('f-datapesagem').value;
+      const obsEl0 = document.getElementById('f-obspesagem');
+      if(obsEl0) editDraft.observacao = obsEl0.value;
       editDraft.pesagemNumeroDraft = e.target.value;
       render();
       const numEl2 = document.getElementById('f-numeropesado');
