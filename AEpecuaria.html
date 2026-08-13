@@ -619,8 +619,8 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, numero_vaca:r.numeroVaca, raca_touro:r.racaTouro, qual_inseminacao:r.qualInseminacao, custo:r.custo, manejo_id:r.manejoId||null}; }
 function rowToDiagnostico(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroVaca:r.numero_vaca||'', resultado:r.resultado, previsaoParto:r.previsao_parto||'', criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
 function diagnosticoToRow(d){ return {data:d.data, lote_id:d.loteId, numero_vaca:d.numeroVaca, resultado:d.resultado, previsao_parto: d.resultado==='prenha' ? (d.previsaoParto||null) : null, manejo_id:d.manejoId||null}; }
-function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, criadoPor:r.criado_por||''}; }
-function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro}; }
+function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, racaBezerro:r.raca_bezerro, criadoPor:r.criado_por||''}; }
+function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro, raca_bezerro:p.racaBezerro||null}; }
 function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca:r.raca||'', pesoKg:r.peso_kg, criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
 function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg, manejo_id:d.manejoId||null}; }
 function rowToManejo(r){ return {id:r.id, data:r.data, loteId:r.lote_id, loteDestinoId:r.lote_destino_id||null, acoes:r.acoes||[], vacinacao:!!r.vacinacao, vermifugacao:!!r.vermifugacao, status:r.status||'aberto', totalAnimais:r.total_animais||0, criadoPor:r.criado_por||''}; }
@@ -1887,7 +1887,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Cria, ou um lote de Confinamento com sexo Fêmeas (aba Lotes), antes de registrar um parto.');
       return false;
     }
-    editDraft = {loteId: lotesElegiveis[0]?.id||'', data:hojeStr(), numeroMae:'', sexoBezerro:'macho'};
+    editDraft = {loteId: lotesElegiveis[0]?.id||'', data:hojeStr(), numeroMae:'', sexoBezerro:'macho', racaBezerro:''};
     state.modal = {type:'parto'};
   } else if(type==='desmama'){
     const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
@@ -1897,7 +1897,7 @@ function openNewModal(type){
       return false;
     }
     const partosDisponiveis = partosSemDesmama(loteComPartoDisponivel.id);
-    editDraft = {loteId: loteComPartoDisponivel.id, partoId: partosDisponiveis[0].id, data:hojeStr(), raca:'', pesoKg:''};
+    editDraft = {loteId: loteComPartoDisponivel.id, partoId: partosDisponiveis[0].id, data:hojeStr(), raca:partosDisponiveis[0].racaBezerro||'', pesoKg:''};
     state.modal = {type:'desmama'};
   } else if(type==='pesagem'){
     const grupoAtual = currentGroupKey();
@@ -3313,7 +3313,7 @@ function PagePartos(){
     ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhum parto registrado','Registre os partos por lote, com o número da mãe e o sexo do bezerro.') : Empty('Nenhum parto hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Lançado por</th><th></th>
+        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Raça do bezerro</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${rv.itens.map(p=>{
@@ -3323,6 +3323,7 @@ function PagePartos(){
             <td>${lote?esc(lote.nome):'—'}</td>
             <td class="mono">${esc(p.numeroMae)||'—'}</td>
             <td>${SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—'}</td>
+            <td>${RACA_TOURO_LABEL[p.racaBezerro]||'—'}</td>
             <td>${esc(p.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
@@ -5601,6 +5602,14 @@ function ModalParto(){
               <option value="femea" ${d.sexoBezerro==='femea'?'selected':''}>Fêmea</option>
             </select>
           </div>
+          <div class="field"><label>Raça do bezerro</label>
+            <select id="f-racabezerro">
+              <option value="" ${!d.racaBezerro?'selected':''}>— Selecione —</option>
+              <option value="angus" ${d.racaBezerro==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.racaBezerro==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.racaBezerro==='outro'?'selected':''}>Outro</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -6858,6 +6867,7 @@ function attachEvents(){
       editDraft.numeroMae = e.target.value;
       editDraft.data = document.getElementById('f-data').value;
       editDraft.sexoBezerro = document.getElementById('f-sexobezerro').value;
+      editDraft.racaBezerro = document.getElementById('f-racabezerro').value;
       editDraft.racaMae = racaConhecida(e.target.value);
       render();
     };
@@ -6869,22 +6879,37 @@ function attachEvents(){
     const loteDesmamaEl = document.getElementById('f-lote');
     if(loteDesmamaEl) loteDesmamaEl.onchange = (e)=>{
       editDraft.data = document.getElementById('f-data').value;
-      editDraft.raca = document.getElementById('f-racadesmama').value;
       editDraft.pesoKg = document.getElementById('f-pesodesmama').value;
       editDraft.loteId = Number(e.target.value);
       const partosDoLote = partosSemDesmama(editDraft.loteId, null);
       editDraft.partoId = partosDoLote[0]?.id || '';
+      // Trocou de lote -> é outro bezerro. A raça vem pré-preenchida com a
+      // que foi lançada no parto (se tiver); a pessoa ainda pode trocar.
+      editDraft.raca = partosDoLote[0]?.racaBezerro || '';
       render();
     };
     const partoDesmamaEl = document.getElementById('f-parto');
     if(partoDesmamaEl) partoDesmamaEl.onchange = (e)=>{
+      editDraft.data = document.getElementById('f-data').value;
+      editDraft.pesoKg = document.getElementById('f-pesodesmama').value;
       editDraft.partoId = Number(e.target.value)||'';
+      const partoEscolhido = state.partos.find(p=>p.id===editDraft.partoId);
+      editDraft.raca = partoEscolhido?.racaBezerro || '';
       render();
     };
   }
   if(state.modal && state.modal.type==='pesagem' && !editDraft._editId){
     const numPesadoEl = document.getElementById('f-numeropesado');
     if(numPesadoEl) numPesadoEl.onchange = (e)=>{
+      // Mesmo cuidado do parto/inseminação/diagnóstico -- captura o lote (e
+      // data/observação) ANTES de re-renderizar, senão o <select> do lote
+      // volta pro valor antigo assim que a pessoa digita o número do animal
+      // e sai do campo, mesmo já tendo trocado o lote na tela -- e os
+      // animais pesados entram no lote errado.
+      editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
+      editDraft.data = document.getElementById('f-datapesagem').value;
+      const obsEl0 = document.getElementById('f-obspesagem');
+      if(obsEl0) editDraft.observacao = obsEl0.value;
       editDraft.pesagemNumeroDraft = e.target.value;
       render();
       const numEl2 = document.getElementById('f-numeropesado');
@@ -7741,6 +7766,7 @@ function attachEvents(){
           numeroMae: numeroMaeVal,
           racaMae: racaMaeVal,
           sexoBezerro: document.getElementById('f-sexobezerro').value,
+          racaBezerro: document.getElementById('f-racabezerro').value,
         };
         if(editDraft._editId){
           ({error} = await db.from('partos').update(partoToRow(campos)).eq('id', editDraft._editId));
