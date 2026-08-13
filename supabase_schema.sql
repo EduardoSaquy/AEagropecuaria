@@ -1301,3 +1301,9 @@ create policy "select protocolos_inseminacao" on protocolos_inseminacao for sele
 create policy "inserir protocolos_inseminacao" on protocolos_inseminacao for insert with check (tem_permissao('cria','editar'));
 create policy "atualizar protocolos_inseminacao" on protocolos_inseminacao for update using (tem_permissao('cria','editar')) with check (tem_permissao('cria','editar'));
 create policy "excluir protocolos_inseminacao" on protocolos_inseminacao for delete using (tem_permissao('cria','editar'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Raça do bezerro em Partos
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table partos add column if not exists raca_bezerro text check (raca_bezerro in ('angus','nelore','outro'));
