@@ -1472,6 +1472,12 @@ async function tentarSincronizarFila(){
   sincronizandoFila = true;
   const pendentes = [...filaInicial];
   const falhasReais = [];
+  // Lançamentos que salvaram certinho, mas cujo cadastro do animal (mãe/
+  // vaca) ligado a eles falhou -- na sincronização imediata isso vira um
+  // alert() na hora; aqui na fila offline não tinha nenhum aviso, então o
+  // parto/inseminação/diagnóstico ficava salvo pra sempre com o cadastro do
+  // animal quebrado (ou faltando) e ninguém ficava sabendo.
+  const avisosAnimais = [];
   // queueIds que realmente terminaram de processar (sucesso ou falha real) --
   // usado no final pra remover só esses da fila, sem sobrescrever com um
   // snapshot velho (ver comentário abaixo).
@@ -1487,6 +1493,7 @@ async function tentarSincronizarFila(){
       resultado = {error: err};
     }
     if(!resultado.error){
+      if(resultado.avisoAnimal) avisosAnimais.push(`${item.label}: ${resultado.avisoAnimal}`);
       pendentes.splice(i,1);
       processados.add(item.queueId);
       algumSucesso = true;
@@ -1511,6 +1518,9 @@ async function tentarSincronizarFila(){
   if(algumSucesso) await loadAll(); else render();
   if(falhasReais.length>0){
     alert(`Alguns lançamentos pendentes não puderam ser enviados e foram descartados da fila (dado inválido ou registro relacionado removido):\n\n${falhasReais.join('\n')}\n\nSerá preciso lançar de novo.`);
+  }
+  if(avisosAnimais.length>0){
+    alert(`Alguns lançamentos foram sincronizados, mas não deu pra atualizar o cadastro do animal ligado a eles:\n\n${avisosAnimais.join('\n')}\n\nConfira o número na aba Cadastro e corrija manualmente se precisar.`);
   }
 }
 
