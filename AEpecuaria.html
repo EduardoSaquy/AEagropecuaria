@@ -2003,8 +2003,10 @@ function FabMenu(){
     {type:'reproducaoCusto', label:'Nova inseminação'},
     {type:'diagnosticoGestacional', label:'Novo diagnóstico gestacional'},
     {type:'parto', label:'Novo parto'},
-    {type:'desmama', label:'Nova desmama'},
-    {type:'pesagem', label:'Nova pesagem'},
+    // Desmama e Pesagem só são lançadas pelo Manejo agora (fluxo guiado por
+    // animal) -- tirado daqui de propósito, não é esquecimento. As telas
+    // continuam mostrando o histórico e permitindo editar/excluir um
+    // lançamento já feito, só não abrem mais um formulário avulso novo.
     {type:'venda', label:'Nova venda'},
     {type:'custoFixo', label:'Nova despesa'},
     {type:'investimento', label:'Novo investimento'},
@@ -2943,7 +2945,7 @@ function ContextoLoteDetalhe(lote, contexto){
     return `
     <p class="eyebrow" style="margin:0 0 10px;">Desmamas deste lote</p>
     <div class="card" style="margin-bottom:22px;">
-      ${itens.length===0 ? Empty('Nenhuma desmama registrada neste lote','Registre uma desmama na aba Desmama.') : `
+      ${itens.length===0 ? Empty('Nenhuma desmama registrada neste lote','Registre uma desmama pelo Manejo.') : `
       <table>
         <thead><tr><th>Data</th><th>Número da mãe</th><th>Raça</th><th>Peso</th></tr></thead>
         <tbody>
@@ -2966,7 +2968,7 @@ function ContextoLoteDetalhe(lote, contexto){
     return `
     <p class="eyebrow" style="margin:0 0 10px;">Pesagens deste lote</p>
     <div class="card" style="margin-bottom:22px;">
-      ${itens.length===0 ? Empty('Nenhuma pesagem registrada neste lote','Registre uma pesagem na aba Pesagem.') : `
+      ${itens.length===0 ? Empty('Nenhuma pesagem registrada neste lote','Registre uma pesagem pelo Manejo.') : `
       <table>
         <thead><tr><th>Data</th><th>Peso médio</th><th>Observação</th></tr></thead>
         <tbody>
@@ -3540,7 +3542,7 @@ function PageDesmama(){
     ${botaoToggleLista('desmama', rv)}
   </div>
   <div class="card">
-    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro, vinculando ao parto correspondente — precisa de um parto lançado antes.') : Empty('Nenhuma desmama hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
+    ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro pelo Manejo — precisa de um parto lançado antes.') : Empty('Nenhuma desmama hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
         <th>Data</th><th>Lote</th><th>Nº da mãe</th><th>Sexo</th><th>Raça</th><th>Peso</th><th>Dias até a desmama</th><th>Lançado por</th><th></th>
@@ -3633,7 +3635,7 @@ function PagePesagem(tipo){
     ${botaoToggleLista('pesagem-'+tipo, rv)}
   </div>
   <div class="card">
-    ${rv.itens.length===0 ? (pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote com data, peso médio e uma observação opcional.') : Empty('Nenhuma pesagem hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
+    ${rv.itens.length===0 ? (pesagensTipo.length===0 ? Empty('Nenhuma pesagem registrada', 'Registre a pesagem de um lote pelo Manejo.') : Empty('Nenhuma pesagem hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr><th>Lote</th><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Animais pesados</th><th>Observação</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
@@ -4696,7 +4698,7 @@ function PageResultadosReproducao(){
 
   <p class="eyebrow" style="margin:22px 0 10px;">Custo por bezerro desmamado</p>
   <div class="card">
-    ${bezerros.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro (Cria &gt; Reprodução &gt; Desmama) para ver o custo aqui.') : `
+    ${bezerros.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro pelo Manejo para ver o custo aqui.') : `
     <table>
       <thead><tr><th>Lote</th><th>Nº da mãe</th><th>Nasceu em</th><th>Desmamou em</th><th>Dias</th><th>Protocolo</th><th>Ração+Pasto</th><th>Fixo (estimado)</th><th>Total</th></tr></thead>
       <tbody>
