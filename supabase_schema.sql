@@ -1307,3 +1307,12 @@ create policy "excluir protocolos_inseminacao" on protocolos_inseminacao for del
 -- Pode rodar a qualquer momento.
 -- ===================================================================
 alter table partos add column if not exists raca_bezerro text check (raca_bezerro in ('angus','nelore','outro'));
+
+-- ===================================================================
+-- MIGRAÇÃO: Morte de animal (dá baixa sem apagar o histórico)
+-- "status" fica 'ativo' por padrão -- só muda pra 'morto' quando a morte
+-- é registrada (o total de animais do lote desconta 1 nesse momento).
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+alter table animais add column if not exists status text not null default 'ativo' check (status in ('ativo','morto'));
+alter table animais add column if not exists data_morte date;

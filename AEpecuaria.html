@@ -627,7 +627,7 @@ function rowToManejo(r){ return {id:r.id, data:r.data, loteId:r.lote_id, loteDes
 function manejoToRow(m){ return {data:m.data, lote_id:m.loteId, lote_destino_id:m.loteDestinoId||null, acoes:m.acoes||[], vacinacao:!!m.vacinacao, vermifugacao:!!m.vermifugacao, status:m.status||'aberto', total_animais:m.totalAnimais||0}; }
 function rowToProtocoloInseminacao(r){ return {id:r.id, manejoId:r.manejo_id, loteId:r.lote_id, numeroAnimal:r.numero_animal, data:r.data, criadoPor:r.criado_por||''}; }
 function protocoloInseminacaoToRow(p){ return {manejo_id:p.manejoId, lote_id:p.loteId, numero_animal:p.numeroAnimal, data:p.data}; }
-function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', criadoPor:r.criado_por||''}; }
+function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', status:r.status||'ativo', dataMorte:r.data_morte||null, criadoPor:r.criado_por||''}; }
 function animalToRow(a){ return {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null}; }
 // Animal já cadastrado com esse número (em qualquer lote) -- número é único
 // na fazenda inteira, nunca pode haver dois animais com o mesmo número.
@@ -2841,16 +2841,17 @@ function PageLoteDetalhe(){
     ${rows.length===0 ? Empty('Nenhum animal numerado nesse lote ainda', 'Cadastre o número dos animais aos poucos — na Nova entrada de animais, na Nova inseminação ou pesando animal por animal (Pesagem) — pra aparecerem aqui com o histórico.') : `
     <table>
       <thead><tr>
-        <th>Número</th><th>Sexo</th><th>Raça</th><th>Última pesagem</th><th>GMD</th>
+        <th>Número</th><th>Sexo</th><th>Raça</th><th>Status</th><th>Última pesagem</th><th>GMD</th>
         ${ehCria?'<th>Situação reprodutiva</th><th>Última inseminação</th>':''}
         ${podeEditarAnimal?'<th></th>':''}
       </tr></thead>
       <tbody>
         ${rows.map(r=>`
-          <tr>
+          <tr${r.a.status==='morto'?' style="opacity:.6;"':''}>
             <td class="mono"><strong>${esc(r.a.numero)}</strong></td>
             <td>${SEXO_BEZERRO_LABEL[r.a.sexo]||'<span class="hint">—</span>'}</td>
             <td>${RACA_TOURO_LABEL[r.a.raca]||'<span class="hint">—</span>'}</td>
+            <td>${r.a.status==='morto' ? `<span class="pill pill-cat">Morto${r.a.dataMorte?' em '+r.a.dataMorte.split('-').reverse().join('/'):''}</span>` : `<span class="pill pill-ok">Ativo</span>`}</td>
             <td class="mono">${r.ultima ? `${fmt(r.ultima.pesoKg,1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span>` : '—'}</td>
             <td class="mono">${r.gmd!==null ? (r.gmd>=0?'+':'')+fmt(r.gmd,2)+' kg/dia' : '—'}</td>
             ${ehCria ? `
@@ -2860,6 +2861,9 @@ function PageLoteDetalhe(){
             ${podeEditarAnimal ? `
             <td style="display:flex; gap:6px;">
               <button class="btn-ghost btn-sm" data-edit-animal="${r.a.id}">Editar</button>
+              ${r.a.status==='morto'
+                ? (!souColaborador() ? `<button class="btn-ghost btn-sm" data-reverter-morte="${r.a.id}">Reverter morte</button>` : '')
+                : `<button class="btn-ghost btn-sm" data-registrar-morte="${r.a.id}">Registrar morte</button>`}
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-animal="${r.a.id}">Excluir</button>` : ''}
             </td>
             ` : ''}
@@ -5118,6 +5122,7 @@ function Modal(){
   if(state.modal.type==='producaoRacao') return ModalProducaoRacao();
   if(state.modal.type==='lote') return ModalLote();
   if(state.modal.type==='animal') return ModalAnimal();
+  if(state.modal.type==='morteAnimal') return ModalMorteAnimal();
   if(state.modal.type==='saidaRacao') return ModalSaidaRacao();
   if(state.modal.type==='saidaRacaoCria') return ModalSaidaRacaoCria();
   if(state.modal.type==='cocho') return ModalCocho();
@@ -5478,6 +5483,25 @@ function ModalAnimal(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="animal">${d._editId?'Salvar alterações':'Cadastrar animal'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalMorteAnimal(){
+  const d = editDraft;
+  const animal = state.animais.find(a=>a.id===d.animalId);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Registrar morte do animal ${esc(animal?.numero)||''}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Data da morte</label><input id="f-datamorte" type="date" value="${d.data}"/></div>
+        <p class="hint">O total de animais do lote diminui em 1 -- o cadastro do animal continua no histórico, só marcado como morto (dá pra reverter depois se for engano).</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="morteAnimal">Registrar morte</button>
       </div>
     </div>
   </div>`;
@@ -6507,6 +6531,31 @@ function attachEvents(){
       if(!confirm('Excluir o cadastro deste animal? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delAnimal);
       await db.from('animais').delete().eq('id', id);
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-registrar-morte]').forEach(el=>{
+    el.onclick = ()=>{
+      editDraft = {animalId: Number(el.dataset.registrarMorte), data: hojeStr()};
+      state.modal = {type:'morteAnimal'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-reverter-morte]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.reverterMorte);
+      const animal = state.animais.find(a=>a.id===id);
+      if(!animal) return;
+      if(!confirm(`Reverter o registro de morte do animal ${animal.numero}? O total de animais do lote volta a somar ele.`)) return;
+      const {error} = await db.from('animais').update({status:'ativo', data_morte:null}).eq('id', id);
+      if(error){ alert('Não foi possível reverter: ' + error.message); return; }
+      if(animal.loteId){
+        const lote = state.lotes.find(l=>l.id===animal.loteId);
+        if(lote){
+          const erroLote = (await db.from('lotes').update({numero_animais: Number(lote.numeroAnimais||0)+1}).eq('id', lote.id)).error;
+          if(erroLote) alert('O animal voltou a ficar ativo, mas não deu pra atualizar o total de animais do lote: ' + erroLote.message);
+        }
+      }
       await loadAll();
     };
   });
@@ -7612,6 +7661,20 @@ function attachEvents(){
           ({error} = await db.from('animais').update(rowAnimal).eq('id', editDraft._editId));
         } else {
           ({error} = await db.from('animais').insert({...rowAnimal, criado_por:autorAtual()}));
+        }
+      } else if(type==='morteAnimal'){
+        const dataMorteVal = document.getElementById('f-datamorte').value;
+        if(!validarObrigatorios([[dataMorteVal,'Data da morte']])) return;
+        const animalMorte = state.animais.find(a=>a.id===editDraft.animalId);
+        if(!animalMorte){ alert('Animal não encontrado.'); return; }
+        ({error} = await db.from('animais').update({status:'morto', data_morte:dataMorteVal}).eq('id', animalMorte.id));
+        if(!error && animalMorte.loteId){
+          const lote = state.lotes.find(l=>l.id===animalMorte.loteId);
+          if(lote){
+            const novoNumero = Math.max(0, Number(lote.numeroAnimais||0)-1);
+            const erroLote = (await db.from('lotes').update({numero_animais: novoNumero}).eq('id', lote.id)).error;
+            if(erroLote) alert('A morte foi registrada, mas não deu pra atualizar o total de animais do lote: ' + erroLote.message);
+          }
         }
       } else if(type==='saidaRacao' || type==='saidaRacaoCria'){
         const dietaIdVal = document.getElementById('f-dieta').value;
