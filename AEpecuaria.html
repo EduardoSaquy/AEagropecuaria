@@ -3024,15 +3024,15 @@ function PageVendasGeral(){
           const tipo = lote ? loteTipo(lote) : null;
           return `<tr>
             <td class="mono">${v.data.split('-').reverse().join('/')}</td>
-            <td>${lote?lote.nome:'—'}</td>
+            <td>${lote?esc(lote.nome):'<span class="hint">— lote excluído —</span>'}</td>
             <td>${tipo ? `<span class="pill pill-cat">${TIPO_PESAGEM_LABEL[tipo]}</span>` : '—'}</td>
             <td><span class="pill pill-ok">${TIPO_VENDA_LABEL[v.tipoVenda]||'Abate'}</span></td>
             <td class="mono">${fmtInt(v.quantidade)}</td>
             <td class="mono">${detalhePrecoVenda(v)}</td>
             <td class="mono">R$ ${fmt(valorVenda(v))}</td>
-            <td>${v.criadoPor || '—'}</td>
+            <td>${esc(v.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${tipo && podeRegistrarVenda(tipo) ? `
+              ${(tipo ? podeRegistrarVenda(tipo) : souAdmin()) ? `
               <button class="btn-ghost btn-sm" data-edit-venda="${v.id}">Editar</button>
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-venda="${v.id}">Excluir</button>` : ''}
               ` : ''}
@@ -6504,7 +6504,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir este ingrediente? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delIng);
-      await db.from('ingredientes').delete().eq('id', id);
+      const {error} = await db.from('ingredientes').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir este ingrediente: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6520,7 +6521,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta movimentação de estoque? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delMov);
-      await db.from('movimentos').delete().eq('id', id);
+      const {error} = await db.from('movimentos').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta movimentação: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6556,7 +6558,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta dieta? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delDiet);
-      await db.from('dietas').delete().eq('id', id);
+      const {error} = await db.from('dietas').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta dieta: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6602,9 +6605,10 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-lote]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e lançamentos de reprodução desse lote também são apagados junto. Animais numerados desse lote não são apagados, mas ficam sem lote associado.')) return;
+      if(!confirm('Excluir este lote? Essa ação não pode ser desfeita -- leituras de cocho, pesagens e inseminações desse lote são apagadas junto. Saídas de ração, vendas, partos e diagnósticos desse lote NÃO são apagados -- ficam sem lote associado (e por isso saem do histórico de custo/receita por lote, mas continuam no banco). Animais numerados desse lote também ficam sem lote associado, sem serem apagados.')) return;
       const id = Number(el.dataset.delLote);
-      await db.from('lotes').delete().eq('id', id);
+      const {error} = await db.from('lotes').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir o lote: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6620,7 +6624,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir o cadastro deste animal? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delAnimal);
-      await db.from('animais').delete().eq('id', id);
+      const {error} = await db.from('animais').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir este cadastro: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6671,7 +6676,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta saída de ração? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delRacao);
-      await db.from('saidas_racao').delete().eq('id', id);
+      const {error} = await db.from('saidas_racao').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta saída de ração: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6687,7 +6693,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta leitura de cocho? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delCocho);
-      await db.from('leituras_cocho').delete().eq('id', id);
+      const {error} = await db.from('leituras_cocho').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta leitura: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6706,7 +6713,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta saída de ração (pasto)? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delPasto);
-      await db.from('pasto').delete().eq('id', id);
+      const {error} = await db.from('pasto').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta saída de ração: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6722,7 +6730,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta produção de ração? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delProducao);
-      await db.from('producoes_racao').delete().eq('id', id);
+      const {error} = await db.from('producoes_racao').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta produção: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6738,7 +6747,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta inseminação? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delReproducao);
-      await db.from('reproducao_custos').delete().eq('id', id);
+      const {error} = await db.from('reproducao_custos').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta inseminação: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6754,7 +6764,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir este diagnóstico gestacional? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delDiagnostico);
-      await db.from('diagnosticos_gestacionais').delete().eq('id', id);
+      const {error} = await db.from('diagnosticos_gestacionais').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir este diagnóstico: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6770,7 +6781,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir este parto? Essa ação não pode ser desfeita -- a desmama vinculada a este parto (se houver) também é apagada junto.')) return;
       const id = Number(el.dataset.delParto);
-      await db.from('partos').delete().eq('id', id);
+      const {error} = await db.from('partos').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir este parto: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6787,7 +6799,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta desmama? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delDesmama);
-      await db.from('desmamas').delete().eq('id', id);
+      const {error} = await db.from('desmamas').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta desmama: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6804,7 +6817,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta pesagem? Essa ação não pode ser desfeita -- os pesos individuais dessa pesagem (se houver) também são apagados junto.')) return;
       const id = Number(el.dataset.delPesagem);
-      await db.from('pesagens').delete().eq('id', id);
+      const {error} = await db.from('pesagens').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta pesagem: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6840,6 +6854,16 @@ function attachEvents(){
       if(!confirm('Excluir esta venda? Essa ação não pode ser desfeita -- o número de animais volta a somar no lote de origem.')) return;
       const id = Number(el.dataset.delVenda);
       const venda = state.vendas.find(x=>x.id===id);
+      // Apaga o abate (o registro que define a venda) PRIMEIRO -- se isso
+      // falhar (RLS, rede), nada mais é tocado, então não sobra nenhum
+      // estado pela metade. Só depois de confirmar que a venda sumiu de
+      // verdade é que mexe na receita vinculada e no total de animais do
+      // lote -- e se algum desses dois passos falhar, avisa exatamente o
+      // que precisa conferir manualmente, em vez de recarregar em silêncio.
+      const {error: erroAbate} = await db.from('abates').delete().eq('id', id);
+      if(erroAbate){ alert('Não foi possível excluir a venda: ' + erroAbate.message); return; }
+      const {error: erroReceita} = await db.from('receitas').delete().eq('abate_id', id);
+      if(erroReceita) alert('A venda foi excluída, mas não deu pra remover a receita vinculada: ' + erroReceita.message + ' -- confira em Financeiro > Receitas.');
       if(venda && venda.loteId){
         const lote = state.lotes.find(l=>l.id===venda.loteId);
         if(lote){
@@ -6848,14 +6872,10 @@ function attachEvents(){
           // O lote pode ter sido marcado como encerrado (data_fim) por essa
           // venda ter zerado os animais -- voltando a ter animais, reabre.
           if(novoNumero>0 && lote.dataFim) updLote.data_fim = null;
-          await db.from('lotes').update(updLote).eq('id', lote.id);
+          const {error: erroLote} = await db.from('lotes').update(updLote).eq('id', lote.id);
+          if(erroLote) alert('A venda foi excluída, mas não deu pra atualizar o total de animais do lote: ' + erroLote.message + ' -- confira em Lotes.');
         }
       }
-      // Apaga a receita explicitamente (não depende de ON DELETE CASCADE no
-      // banco) antes do abate, senão uma receita órfã (sem abate_id válido)
-      // fica contando pra sempre em receitaDoMes/resultado.
-      await db.from('receitas').delete().eq('abate_id', id);
-      await db.from('abates').delete().eq('id', id);
       await loadAll();
     };
   });
@@ -6871,7 +6891,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta despesa? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delCustofixo);
-      await db.from('custos_fixos').delete().eq('id', id);
+      const {error} = await db.from('custos_fixos').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta despesa: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6887,7 +6908,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir esta fazenda? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delFazenda);
-      await db.from('fazendas').delete().eq('id', id);
+      const {error} = await db.from('fazendas').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir esta fazenda: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6903,7 +6925,8 @@ function attachEvents(){
     el.onclick = async ()=>{
       if(!confirm('Excluir este investimento? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delInvestimento);
-      await db.from('investimentos').delete().eq('id', id);
+      const {error} = await db.from('investimentos').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir este investimento: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -6917,9 +6940,19 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-receita]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir esta receita? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delReceita);
-      await db.from('receitas').delete().eq('id', id);
+      const receita = state.receitas.find(x=>x.id===id);
+      // Receita gerada automaticamente por uma venda não pode ser apagada
+      // separado -- isso deixava a venda "sem receita" (o dinheiro sumia
+      // das contas) sem nenhum aviso, e editar a venda depois não recriava
+      // a receita. O jeito certo de desfazer é excluir a venda em si.
+      if(receita && receita.vendaId){
+        alert('Essa receita foi gerada automaticamente por uma venda -- não dá pra excluir ela separado. Se quiser desfazer, exclua a venda em Vendas (isso remove a receita e devolve os animais pro lote automaticamente).');
+        return;
+      }
+      if(!confirm('Excluir esta receita? Essa ação não pode ser desfeita.')) return;
+      const {error} = await db.from('receitas').delete().eq('id', id);
+      if(error){ alert('Não foi possível excluir a receita: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -7566,25 +7599,21 @@ function attachEvents(){
         } else {
           ({error} = await db.from('movimentos').insert(row));
           // Uma entrada com preço informado recalcula o preço/kg do ingrediente
-          // pela média ponderada entre o estoque que já tinha (antes dessa
-          // entrada) e o que está entrando — só numa entrada nova, nunca ao
-          // editar um lançamento existente.
+          // pela média ponderada -- só numa entrada nova, nunca ao editar um
+          // lançamento existente (ali quem recalcula é o bloco de cima).
+          // Usa a MESMA função do editar (recomputarPrecoIngrediente, replay
+          // cronológico de tudo) em vez de uma conta separada "contra o
+          // saldo de hoje" -- as duas fórmulas podiam divergir (ex: uma
+          // entrada nova com data retroativa não deveria se misturar com o
+          // preço de HOJE, e sim com o preço de quando ela aconteceu).
           if(!error && campos.tipo==='entrada' && campos.precoKg){
             const ing = getIng(campos.ingredienteId);
             if(ing){
-              const saldoAtualKg = qtdEmKg(saldoIngrediente(campos.ingredienteId), ing.unidade);
-              const qtdEntradaKg = qtdEmKg(campos.quantidade, ing.unidade);
-              // Só mistura com o preço atual se ele for um preço de verdade
-              // (ingrediente cadastrado sem preço, ou por um colaborador que
-              // não vê esse campo, fica com precoKg null/undefined) -- senão
-              // um "R$ 0" fantasma dilui o preço da entrada nova pra baixo.
-              // Mesma regra do recomputarPrecoIngrediente(), usado ao editar.
-              const temPrecoAtual = ing.precoKg!=null && ing.precoKg!=='';
-              const precoAtual = temPrecoAtual ? Number(ing.precoKg) : null;
-              const precoPonderado = (saldoAtualKg>0 && precoAtual!=null)
-                ? (saldoAtualKg*precoAtual + qtdEntradaKg*campos.precoKg) / (saldoAtualKg+qtdEntradaKg)
-                : campos.precoKg;
-              await db.from('ingredientes').update({preco_kg: precoPonderado}).eq('id', campos.ingredienteId);
+              const movsIngrediente = state.movimentos
+                .filter(m=>m.ingredienteId===campos.ingredienteId)
+                .concat([{...campos, id:Infinity}]);
+              const precoRecalc = recomputarPrecoIngrediente(movsIngrediente, ing.unidade);
+              if(precoRecalc!=null) await db.from('ingredientes').update({preco_kg: precoRecalc}).eq('id', campos.ingredienteId);
             }
           }
         }
@@ -7724,10 +7753,16 @@ function attachEvents(){
             const res = await db.from('lotes').insert(row).select().single();
             error = res.error;
             if(!error && pesoInicialVal && Number(pesoInicialVal)>0 && res.data){
-              ({error} = await db.from('pesagens').insert({
+              // Best-effort a partir daqui -- o lote já foi criado com
+              // sucesso; se a pesagem inicial falhar, NÃO pode deixar
+              // "error" setado (isso deixaria o modal aberto e um clique de
+              // novo em Salvar criaria um SEGUNDO lote duplicado, já que o
+              // lote em si já foi gravado).
+              const resPeso = await db.from('pesagens').insert({
                 lote_id: res.data.id, data: campos.dataInicio, peso_medio_kg: Number(pesoInicialVal),
                 observacao: 'Peso médio na entrada dos animais.',
-              }));
+              });
+              if(resPeso.error) alert('O lote foi salvo, mas não deu pra registrar o peso inicial: ' + resPeso.error.message + ' -- lance a primeira pesagem manualmente.');
             }
             if(!error && numerosAnimaisLista.length>0 && res.data){
               const erroAnimais = await registrarNumerosAnimais(res.data.id, campos.sexo);
@@ -7964,7 +7999,16 @@ function attachEvents(){
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
             const descricao = `${TIPO_VENDA_LABEL[tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
-            ({error} = await db.from('receitas').update({data, lote_id:loteId, descricao, arrobas, valor:valorTotal}).eq('abate_id', vendaId));
+            const receitaRow = {data, lote_id:loteId, descricao, arrobas, valor:valorTotal};
+            const resReceita = await db.from('receitas').update(receitaRow).eq('abate_id', vendaId).select();
+            error = resReceita.error;
+            // .update() com filtro que não bate nenhuma linha "funciona"
+            // sem erro (0 linhas afetadas) -- se a receita vinculada já
+            // tinha sumido por algum motivo, recria em vez de deixar a
+            // venda editada sem receita nenhuma batendo com ela.
+            if(!error && (!resReceita.data || resReceita.data.length===0)){
+              ({error} = await db.from('receitas').insert({...receitaRow, abate_id:vendaId}));
+            }
           }
           if(!error && loteAntigoId && loteAntigoId!==loteId){
             // Lote mudou -- desfaz no antigo (soma de volta os animais dessa venda)
@@ -8218,20 +8262,36 @@ function attachEvents(){
         const data = document.getElementById('f-dataarroba').value;
         const valorMachoStr = document.getElementById('f-valorarrobamacho').value;
         const valorFemeaStr = document.getElementById('f-valorarrobafemea').value;
+        // Sempre confere direto contra o state pra ESSA data (não confia no
+        // _editId capturado quando o modal abriu, que fica errado se a
+        // pessoa trocar a data pra um dia que já tem cotação -- isso
+        // inseria uma linha duplicada em vez de atualizar). Só usa o
+        // _editId já salvo neste mesmo clique de Salvar se ele foi
+        // capturado pra essa mesma data (retry depois de uma falha
+        // parcial: o macho já foi inserido mas o state local ainda não
+        // sabe, já que não rolou loadAll() no meio do save).
+        const machoIdAtual = (editDraft._editIdMachoData===data && editDraft._editIdMacho) ? editDraft._editIdMacho : (state.precosArroba.find(p=>p.data===data && (p.sexo||'macho')==='macho')?.id || null);
+        const femeaIdAtual = (editDraft._editIdFemeaData===data && editDraft._editIdFemea) ? editDraft._editIdFemea : (state.precosArroba.find(p=>p.data===data && p.sexo==='femea')?.id || null);
         if(valorMachoStr!==''){
           const row = precoArrobaToRow({data, valor:Number(valorMachoStr)||0, sexo:'macho'});
-          if(editDraft._editIdMacho){
-            ({error} = await db.from('precos_arroba').update(row).eq('id', editDraft._editIdMacho));
+          if(machoIdAtual){
+            ({error} = await db.from('precos_arroba').update(row).eq('id', machoIdAtual));
+            if(!error){ editDraft._editIdMacho = machoIdAtual; editDraft._editIdMachoData = data; }
           } else {
-            ({error} = await db.from('precos_arroba').insert(row));
+            const res = await db.from('precos_arroba').insert(row).select().single();
+            error = res.error;
+            if(!error && res.data){ editDraft._editIdMacho = res.data.id; editDraft._editIdMachoData = data; }
           }
         }
         if(!error && valorFemeaStr!==''){
           const row = precoArrobaToRow({data, valor:Number(valorFemeaStr)||0, sexo:'femea'});
-          if(editDraft._editIdFemea){
-            ({error} = await db.from('precos_arroba').update(row).eq('id', editDraft._editIdFemea));
+          if(femeaIdAtual){
+            ({error} = await db.from('precos_arroba').update(row).eq('id', femeaIdAtual));
+            if(!error){ editDraft._editIdFemea = femeaIdAtual; editDraft._editIdFemeaData = data; }
           } else {
-            ({error} = await db.from('precos_arroba').insert(row));
+            const res = await db.from('precos_arroba').insert(row).select().single();
+            error = res.error;
+            if(!error && res.data){ editDraft._editIdFemea = res.data.id; editDraft._editIdFemeaData = data; }
           }
         }
       } else if(type==='metaMargem'){
