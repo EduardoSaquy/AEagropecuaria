@@ -7444,6 +7444,16 @@ function attachEvents(){
         if(feitoNestaLeva.protocoloId) await db.from('protocolos_inseminacao').delete().eq('id', feitoNestaLeva.protocoloId);
         if(feitoNestaLeva.desmamaId) await db.from('desmamas').delete().eq('id', feitoNestaLeva.desmamaId);
       }
+      // Se veio mesmo do lote de origem (pra contar certo na "Mudança de
+      // lote" ao finalizar) -- precisa checar ANTES do upsertAnimal, que já
+      // move o loteId em cache pro destino. Animal novo (nunca cadastrado)
+      // conta como "veio de lá": ele já estava fisicamente nesse lote, só
+      // não tinha número ainda. Um animal já cadastrado só conta se o lote
+      // dele ATUAL for realmente o de origem -- rebipar por engano um
+      // animal que já estava no destino (ou de um terceiro lote) não pode
+      // descontar do lote de origem um animal que nunca esteve lá.
+      const animalAntesDoManejo = numero ? animalCadastrado(numero) : null;
+      const veioDoOrigem = !animalAntesDoManejo || animalAntesDoManejo.loteId===m.loteId;
       if(numero){
         const resAnimalManejo = await upsertAnimal(numero, loteAlvo, {sexo: sexoNovo||undefined, raca: racaNovo||undefined});
         if(resAnimalManejo.error){ alert('Não deu pra atualizar o cadastro do animal: ' + resAnimalManejo.error.message); return; }
@@ -7458,7 +7468,7 @@ function attachEvents(){
           if(existente){ existente.loteId = loteAlvo; if(sexoNovo) existente.sexo = sexoNovo; if(racaNovo) existente.raca = racaNovo; }
         }
       }
-      const registro = {numero};
+      const registro = {numero, veioDoOrigem};
       if(acoesAtivas.includes('pesagem')){
         const resPesoAnimalManejo = await db.from('pesagens_animais').insert({pesagem_id:m.pesagemId, numero_animal:numero||null, peso_kg:Number(pesoVal)}).select().single();
         if(resPesoAnimalManejo.error){ alert('Não foi possível salvar o peso: ' + resPesoAnimalManejo.error.message); await desfazerFeitoNestaLeva(); return; }
@@ -7513,9 +7523,13 @@ function attachEvents(){
       // número de animais realmente numerados (e portanto movidos de
       // verdade, via upsertAnimal) nessa sessão -- sem número, o
       // lançamento não move nenhum cadastro específico, então não conta
-      // aqui (senão a contagem desandaria pra quem pesa sem numerar).
+      // aqui (senão a contagem desandaria pra quem pesa sem numerar). Só
+      // conta quem realmente veio do lote de origem (veioDoOrigem,
+      // calculado animal por animal em salvarAnimalManejo) -- rebipar por
+      // engano um animal que já estava no destino (ou de outro lote) não
+      // pode descontar do lote de origem um animal que nunca esteve lá.
       if(m.loteDestinoId){
-        const numerosMovidos = new Set(m.animaisFeitos.filter(a=>a.numero).map(a=>a.numero));
+        const numerosMovidos = new Set(m.animaisFeitos.filter(a=>a.numero && a.veioDoOrigem!==false).map(a=>a.numero));
         const qtdMovida = numerosMovidos.size;
         if(qtdMovida>0){
           const loteOrigemManejo = state.lotes.find(l=>l.id===m.loteId);
