@@ -3833,8 +3833,21 @@ function composicaoCentrosCusto(custosFixos, extras){
   // como fatia própria; qualquer outro nome cai em "Outros", nunca ganha
   // fatia própria mesmo que seja o maior valor do mês/ano — assim o
   // conjunto de fatias do gráfico não muda sozinho de um mês pro outro.
-  const principais = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
-  const resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  let principais = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  let resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  // A paleta de cores só tem SERIES_COLORS.length tons distintos -- com mais
+  // fatias que isso (contando a própria "Outros", quando existir), duas
+  // fatias diferentes acabavam com a mesma cor (a cor só repete depois de
+  // esgotar a paleta). Se um mês tiver mais "principais" com valor do que
+  // cores disponíveis, as de menor valor caem em "Outros" também (só nesse
+  // mês) em vez de duas fatias ficarem visualmente idênticas.
+  const vaiTerOutros = resto.length>0 || principais.length > SERIES_COLORS.length;
+  const maxPrincipais = vaiTerOutros ? SERIES_COLORS.length-1 : SERIES_COLORS.length;
+  if(principais.length > maxPrincipais){
+    principais.sort((a,b)=>b.valor-a.valor);
+    resto = [...resto, ...principais.slice(maxPrincipais)];
+    principais = principais.slice(0, maxPrincipais);
+  }
   const restoValor = resto.reduce((a,e)=>a+e.valor,0);
   const restoItens = [].concat(...resto.map(e=>e.itens));
   entries = [...principais];
