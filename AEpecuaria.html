@@ -7425,6 +7425,25 @@ function attachEvents(){
         if(!pesoDesmamaVal || Number(pesoDesmamaVal)<=0){ alert('Informe o peso da desmama.'); return; }
       }
       const loteAlvo = m.loteDestinoId || m.loteId;
+      // Rastreia o que essa tentativa específica já inseriu, pra desfazer se
+      // um passo mais adiante falhar -- sem isso, um "Salvar" repetido
+      // depois de uma falha no meio (rede ruim no curral) duplicava peso,
+      // custo de inseminação etc. dos passos que já tinham dado certo antes
+      // do que falhou.
+      const feitoNestaLeva = {};
+      const mediaPesoAntes = m.animaisFeitos.length>0
+        ? m.animaisFeitos.map(a=>a.peso).filter(p=>p!=null).reduce((a,p,_,arr)=>a+p/arr.length,0)
+        : null;
+      async function desfazerFeitoNestaLeva(){
+        if(feitoNestaLeva.pesagemAnimalId){
+          await db.from('pesagens_animais').delete().eq('id', feitoNestaLeva.pesagemAnimalId);
+          await db.from('pesagens').update({peso_medio_kg: mediaPesoAntes}).eq('id', m.pesagemId);
+        }
+        if(feitoNestaLeva.reproducaoId) await db.from('reproducao_custos').delete().eq('id', feitoNestaLeva.reproducaoId);
+        if(feitoNestaLeva.diagnosticoId) await db.from('diagnosticos_gestacionais').delete().eq('id', feitoNestaLeva.diagnosticoId);
+        if(feitoNestaLeva.protocoloId) await db.from('protocolos_inseminacao').delete().eq('id', feitoNestaLeva.protocoloId);
+        if(feitoNestaLeva.desmamaId) await db.from('desmamas').delete().eq('id', feitoNestaLeva.desmamaId);
+      }
       if(numero){
         const resAnimalManejo = await upsertAnimal(numero, loteAlvo, {sexo: sexoNovo||undefined, raca: racaNovo||undefined});
         if(resAnimalManejo.error){ alert('Não deu pra atualizar o cadastro do animal: ' + resAnimalManejo.error.message); return; }
@@ -7441,35 +7460,41 @@ function attachEvents(){
       }
       const registro = {numero};
       if(acoesAtivas.includes('pesagem')){
-        const resPesoAnimalManejo = await db.from('pesagens_animais').insert({pesagem_id:m.pesagemId, numero_animal:numero||null, peso_kg:Number(pesoVal)});
-        if(resPesoAnimalManejo.error){ alert('Não foi possível salvar o peso: ' + resPesoAnimalManejo.error.message); return; }
+        const resPesoAnimalManejo = await db.from('pesagens_animais').insert({pesagem_id:m.pesagemId, numero_animal:numero||null, peso_kg:Number(pesoVal)}).select().single();
+        if(resPesoAnimalManejo.error){ alert('Não foi possível salvar o peso: ' + resPesoAnimalManejo.error.message); await desfazerFeitoNestaLeva(); return; }
+        feitoNestaLeva.pesagemAnimalId = resPesoAnimalManejo.data.id;
         registro.peso = Number(pesoVal);
         const todosPesos = [...m.animaisFeitos.map(a=>a.peso).filter(p=>p!=null), registro.peso];
         const mediaPeso = todosPesos.reduce((a,p)=>a+p,0)/todosPesos.length;
-        await db.from('pesagens').update({peso_medio_kg:mediaPeso}).eq('id', m.pesagemId);
+        const resMediaManejo = await db.from('pesagens').update({peso_medio_kg:mediaPeso}).eq('id', m.pesagemId);
+        if(resMediaManejo.error){ alert('Não foi possível atualizar a média de peso: ' + resMediaManejo.error.message); await desfazerFeitoNestaLeva(); return; }
       }
       if(acoesAtivas.includes('inseminacao')){
-        const resInsemManejo = await db.from('reproducao_custos').insert(reproducaoCustoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, racaTouro:racaTouroVal, qualInseminacao:'', custo:null, manejoId:m.id}));
-        if(resInsemManejo.error){ alert('Não foi possível salvar a inseminação: ' + resInsemManejo.error.message); return; }
+        const resInsemManejo = await db.from('reproducao_custos').insert(reproducaoCustoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, racaTouro:racaTouroVal, qualInseminacao:'', custo:null, manejoId:m.id})).select().single();
+        if(resInsemManejo.error){ alert('Não foi possível salvar a inseminação: ' + resInsemManejo.error.message); await desfazerFeitoNestaLeva(); return; }
+        feitoNestaLeva.reproducaoId = resInsemManejo.data.id;
         registro.racaTouro = racaTouroVal;
       }
       if(acoesAtivas.includes('diagnostico')){
-        const resDiagManejo = await db.from('diagnosticos_gestacionais').insert(diagnosticoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, resultado:resultadoVal, previsaoParto:null, manejoId:m.id}));
-        if(resDiagManejo.error){ alert('Não foi possível salvar o diagnóstico: ' + resDiagManejo.error.message); return; }
+        const resDiagManejo = await db.from('diagnosticos_gestacionais').insert(diagnosticoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, resultado:resultadoVal, previsaoParto:null, manejoId:m.id})).select().single();
+        if(resDiagManejo.error){ alert('Não foi possível salvar o diagnóstico: ' + resDiagManejo.error.message); await desfazerFeitoNestaLeva(); return; }
+        feitoNestaLeva.diagnosticoId = resDiagManejo.data.id;
         registro.resultado = resultadoVal;
       }
       if(acoesAtivas.includes('protocoloIA')){
-        const resProtManejo = await db.from('protocolos_inseminacao').insert(protocoloInseminacaoToRow({manejoId:m.id, loteId:m.loteId, numeroAnimal:numero, data:m.data}));
-        if(resProtManejo.error){ alert('Não foi possível salvar o protocolo: ' + resProtManejo.error.message); return; }
+        const resProtManejo = await db.from('protocolos_inseminacao').insert(protocoloInseminacaoToRow({manejoId:m.id, loteId:m.loteId, numeroAnimal:numero, data:m.data})).select().single();
+        if(resProtManejo.error){ alert('Não foi possível salvar o protocolo: ' + resProtManejo.error.message); await desfazerFeitoNestaLeva(); return; }
+        feitoNestaLeva.protocoloId = resProtManejo.data.id;
       }
       if(acoesAtivas.includes('desmama')){
-        const resDesmManejo = await db.from('desmamas').insert(desmamaToRow({partoId:partoIdVal, data:m.data, raca:racaDesmamaVal, pesoKg:Number(pesoDesmamaVal), manejoId:m.id}));
-        if(resDesmManejo.error){ alert('Não foi possível salvar a desmama: ' + resDesmManejo.error.message); return; }
+        const resDesmManejo = await db.from('desmamas').insert(desmamaToRow({partoId:partoIdVal, data:m.data, raca:racaDesmamaVal, pesoKg:Number(pesoDesmamaVal), manejoId:m.id})).select().single();
+        if(resDesmManejo.error){ alert('Não foi possível salvar a desmama: ' + resDesmManejo.error.message); await desfazerFeitoNestaLeva(); return; }
+        feitoNestaLeva.desmamaId = resDesmManejo.data.id;
         // Sem isso, o mesmo parto continuaria aparecendo como "disponível"
         // no seletor pro próximo animal desse mesmo manejo (partosSemDesmama
         // só enxerga o que já veio do loadAll -- e aqui não tem loadAll no
         // meio da sequência), deixando desmamar o mesmo bezerro duas vezes.
-        state.desmamas.push({id:`temp_${partoIdVal}_${Date.now()}`, partoId:partoIdVal, data:m.data, raca:racaDesmamaVal, pesoKg:Number(pesoDesmamaVal), criadoPor:autorAtual()||'', manejoId:m.id});
+        state.desmamas.push({id:resDesmManejo.data.id, partoId:partoIdVal, data:m.data, raca:racaDesmamaVal, pesoKg:Number(pesoDesmamaVal), criadoPor:autorAtual()||'', manejoId:m.id});
         registro.pesoDesmama = Number(pesoDesmamaVal);
       }
       m.animaisFeitos.push(registro);
