@@ -7454,6 +7454,12 @@ function attachEvents(){
       // descontar do lote de origem um animal que nunca esteve lá.
       const animalAntesDoManejo = numero ? animalCadastrado(numero) : null;
       const veioDoOrigem = !animalAntesDoManejo || animalAntesDoManejo.loteId===m.loteId;
+      // Só precisa mover a CONTAGEM se o animal realmente ainda não estava
+      // no lote de destino -- num retry (depois de um passo mais adiante
+      // ter falhado numa tentativa anterior pra esse mesmo animal), o
+      // upsertAnimal já tinha movido ele antes, e mover a contagem nesta
+      // tentativa de novo contaria em dobro.
+      const precisaMoverContagem = !!m.loteDestinoId && veioDoOrigem && (!animalAntesDoManejo || animalAntesDoManejo.loteId!==loteAlvo);
       if(numero){
         const resAnimalManejo = await upsertAnimal(numero, loteAlvo, {sexo: sexoNovo||undefined, raca: racaNovo||undefined});
         if(resAnimalManejo.error){ alert('Não deu pra atualizar o cadastro do animal: ' + resAnimalManejo.error.message); return; }
@@ -7466,6 +7472,26 @@ function attachEvents(){
         } else {
           const existente = animalCadastrado(numero);
           if(existente){ existente.loteId = loteAlvo; if(sexoNovo) existente.sexo = sexoNovo; if(racaNovo) existente.raca = racaNovo; }
+        }
+        // Ajusta o total de animais dos dois lotes NA HORA, animal por
+        // animal -- não espera "Finalizar manejo" pra fazer isso em lote.
+        // Se a sessão for abandonada no meio (bateria, app fecha), os
+        // animais já processados até ali já deixam a contagem dos dois
+        // lotes certa, em vez de ficar desincronizada até alguém finalizar
+        // um manejo que talvez nunca seja retomado.
+        if(precisaMoverContagem){
+          const loteOrigemManejo = state.lotes.find(l=>l.id===m.loteId);
+          const loteDestinoManejo = state.lotes.find(l=>l.id===m.loteDestinoId);
+          const novoOrigem = Math.max(0, Number(loteOrigemManejo?.numeroAnimais||0)-1);
+          const novoDestino = Number(loteDestinoManejo?.numeroAnimais||0)+1;
+          const erroOrigemManejo = loteOrigemManejo ? (await db.from('lotes').update({numero_animais: novoOrigem}).eq('id', m.loteId)).error : null;
+          const erroDestinoManejo = loteDestinoManejo ? (await db.from('lotes').update({numero_animais: novoDestino}).eq('id', m.loteDestinoId)).error : null;
+          if(erroOrigemManejo || erroDestinoManejo){
+            alert('O animal foi movido, mas não deu pra atualizar o total de animais dos lotes: ' + (erroOrigemManejo||erroDestinoManejo).message);
+          } else {
+            if(loteOrigemManejo) loteOrigemManejo.numeroAnimais = novoOrigem;
+            if(loteDestinoManejo) loteDestinoManejo.numeroAnimais = novoDestino;
+          }
         }
       }
       const registro = {numero, veioDoOrigem};
@@ -7519,26 +7545,13 @@ function attachEvents(){
       if(m.animaisFeitos.length===0 && !confirm('Nenhum animal foi lançado nesse manejo ainda. Finalizar mesmo assim?')) return;
       const {error: erroFinalizarManejo} = await db.from('manejos').update({status:'finalizado', total_animais:m.animaisFeitos.length}).eq('id', m.id);
       if(erroFinalizarManejo){ alert('Não foi possível finalizar o manejo: ' + erroFinalizarManejo.message); return; }
-      // Mudança de lote: desconta do lote de origem e soma no destino o
-      // número de animais realmente numerados (e portanto movidos de
-      // verdade, via upsertAnimal) nessa sessão -- sem número, o
-      // lançamento não move nenhum cadastro específico, então não conta
-      // aqui (senão a contagem desandaria pra quem pesa sem numerar). Só
-      // conta quem realmente veio do lote de origem (veioDoOrigem,
-      // calculado animal por animal em salvarAnimalManejo) -- rebipar por
-      // engano um animal que já estava no destino (ou de outro lote) não
-      // pode descontar do lote de origem um animal que nunca esteve lá.
-      if(m.loteDestinoId){
-        const numerosMovidos = new Set(m.animaisFeitos.filter(a=>a.numero && a.veioDoOrigem!==false).map(a=>a.numero));
-        const qtdMovida = numerosMovidos.size;
-        if(qtdMovida>0){
-          const loteOrigemManejo = state.lotes.find(l=>l.id===m.loteId);
-          const loteDestinoManejo = state.lotes.find(l=>l.id===m.loteDestinoId);
-          const erroOrigem = (await db.from('lotes').update({numero_animais: Math.max(0, Number(loteOrigemManejo?.numeroAnimais||0)-qtdMovida)}).eq('id', m.loteId)).error;
-          const erroDestino = (await db.from('lotes').update({numero_animais: Number(loteDestinoManejo?.numeroAnimais||0)+qtdMovida}).eq('id', m.loteDestinoId)).error;
-          if(erroOrigem || erroDestino) alert('O manejo foi finalizado, mas não deu pra ajustar o número de animais dos lotes: ' + (erroOrigem||erroDestino).message);
-        }
-      }
+      // O total de animais dos lotes de origem/destino (quando o manejo
+      // muda de lote) já é ajustado animal por animal em
+      // salvarAnimalManejo(), na hora que cada um é processado -- não
+      // precisa mais fazer isso em lote aqui. Antes, se a sessão fosse
+      // abandonada no meio (bateria, app fecha) antes de "Finalizar", a
+      // contagem dos dois lotes ficava desincronizada pra sempre, mesmo os
+      // animais já tendo sido movidos de verdade em `animais.lote_id`.
       state.manejoAtivo = null;
       await loadAll();
     };
