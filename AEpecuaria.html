@@ -4734,8 +4734,67 @@ function PageResultadosReproducao(){
   `;
 }
 
+// Lançamentos de alimentação de um lote (Saída de Ração pra Confinamento/
+// Cria, Pasto pra lote de Pasto), normalizados em {data, quantidade}, dentro
+// de uma janela de datas -- usado pelo diagnóstico abaixo.
+function lancamentosAlimentacaoDoLote(lote, inicioJanela, hoje){
+  if(loteTipo(lote)==='pasto'){
+    return state.pasto.filter(p=>p.loteId===lote.id && p.data>=inicioJanela && p.data<=hoje).map(p=>({data:p.data, quantidade:Number(p.quantidade)}));
+  }
+  return state.saidasRacao.filter(s=>s.loteId===lote.id && s.data>=inicioJanela && s.data<=hoje).map(s=>({data:s.data, quantidade:Number(s.quantidadeKg)}));
+}
+// Agrupa uma lista de datas (YYYY-MM-DD) em intervalos contínuos, pra não
+// listar dia por dia numa janela longa -- datas seguidas viram um intervalo só.
+function agruparDatasEmIntervalos(datas){
+  if(datas.length===0) return [];
+  const ordenadas = [...datas].sort();
+  const intervalos = [];
+  let inicio = ordenadas[0], fim = ordenadas[0];
+  for(let i=1;i<ordenadas.length;i++){
+    const diffDias = Math.round((new Date(ordenadas[i]+'T00:00:00') - new Date(fim+'T00:00:00'))/86400000);
+    if(diffDias===1){ fim = ordenadas[i]; }
+    else { intervalos.push({inicio, fim}); inicio = ordenadas[i]; fim = ordenadas[i]; }
+  }
+  intervalos.push({inicio, fim});
+  return intervalos;
+}
+// Varre, pra cada lote ativo, a mesma janela usada no custo médio diário
+// (desde a entrada pro Confinamento, desde 1º de janeiro pro Pasto/Cria) --
+// procurando (1) dias corridos sem nenhum lançamento de alimentação (puxam a
+// média pra baixo, sem aparecer como erro em lugar nenhum) e (2) lançamentos
+// cuja quantidade foge muito da mediana do próprio lote (menos da metade ou
+// mais do dobro -- possível erro de digitação, tipo esquecer um zero).
+function diagnosticoLancamentosPorLote(){
+  const d = dadosFinanceiro();
+  const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
+  const inicioAnoStr = d.mes.slice(0,4)+'-01-01';
+  const inicioMesStr = d.mes+'-01';
+  return lotesAtivos.map(l=>{
+    const inicioJanela = loteTipo(l)==='confinamento' ? (l.dataInicio || inicioMesStr) : ((l.dataInicio && l.dataInicio>inicioAnoStr) ? l.dataInicio : inicioAnoStr);
+    const lancamentos = lancamentosAlimentacaoDoLote(l, inicioJanela, d.hoje).sort((a,b)=>a.data.localeCompare(b.data));
+    const datasComLancamento = new Set(lancamentos.map(x=>x.data));
+
+    const diasFaltantesArr = [];
+    let cursor = new Date(inicioJanela+'T00:00:00');
+    const fimDate = new Date(d.hoje+'T00:00:00');
+    while(cursor<=fimDate){
+      const dataStr = cursor.toISOString().slice(0,10);
+      if(!datasComLancamento.has(dataStr)) diasFaltantesArr.push(dataStr);
+      cursor.setDate(cursor.getDate()+1);
+    }
+    const intervalosFaltantes = agruparDatasEmIntervalos(diasFaltantesArr);
+
+    const quantidadesOrdenadas = lancamentos.map(x=>x.quantidade).filter(q=>q>0).sort((a,b)=>a-b);
+    const mediana = quantidadesOrdenadas.length>0 ? quantidadesOrdenadas[Math.floor(quantidadesOrdenadas.length/2)] : null;
+    const foraPadrao = mediana ? lancamentos.filter(x=>x.quantidade>0 && (x.quantidade>mediana*2 || x.quantidade<mediana*0.5)).map(x=>({...x, pctMediana:x.quantidade/mediana*100})) : [];
+
+    return {lote:l, inicioJanela, diasFaltantes:diasFaltantesArr.length, intervalosFaltantes, mediana, foraPadrao};
+  });
+}
+
 function PageFinanceiroCurral(){
   const {custosMesPorLote, custosPorLote, custoPorAreaMes} = custosDiariosPorLote();
+  const diagnostico = diagnosticoLancamentosPorLote();
 
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
@@ -4804,7 +4863,28 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin-top:12px;">Soma dos lotes de cada área (mesmos dados da tabela "Por Lote" acima) — útil pra comparar, por exemplo, se o Confinamento está produzindo @ mais barata que o Pasto.</p>`;
+  <p class="hint" style="margin-top:12px;">Soma dos lotes de cada área (mesmos dados da tabela "Por Lote" acima) — útil pra comparar, por exemplo, se o Confinamento está produzindo @ mais barata que o Pasto.</p>
+
+  <p class="eyebrow" style="margin-bottom:10px;">Diagnóstico de lançamentos (Saída de Ração / Pasto)</p>
+  <div class="card">
+    ${diagnostico.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para conferir os lançamentos aqui.') : `
+    <table>
+      <thead><tr><th>Curral</th><th>Janela analisada</th><th>Dias sem lançamento</th><th>Lançamentos fora do padrão</th></tr></thead>
+      <tbody>
+        ${diagnostico.map(r=>`
+          <tr>
+            <td><strong>${esc(r.lote.nome)}</strong></td>
+            <td class="mono">${r.inicioJanela.split('-').reverse().join('/')} até hoje</td>
+            <td>${r.diasFaltantes===0 ? '<span class="pill pill-ok">Nenhum</span>' : `<span class="pill pill-alerta">${fmtInt(r.diasFaltantes)} dia(s)</span>`}</td>
+            <td>${r.foraPadrao.length===0 ? '<span class="hint">—</span>' : `<span class="pill pill-alerta">${r.foraPadrao.length} lançamento(s)</span>`}</td>
+          </tr>
+          ${r.diasFaltantes>0 ? `<tr><td colspan="4"><p class="hint" style="margin:4px 0 8px;">Sem lançamento em: ${r.intervalosFaltantes.map(iv=>iv.inicio===iv.fim ? iv.inicio.split('-').reverse().join('/') : `${iv.inicio.split('-').reverse().join('/')} a ${iv.fim.split('-').reverse().join('/')}`).join(', ')}</p></td></tr>` : ''}
+          ${r.foraPadrao.length>0 ? `<tr><td colspan="4"><p class="hint" style="margin:4px 0 8px;">Fora do padrão (mediana do lote: ${fmt(r.mediana,0)} kg): ${r.foraPadrao.map(f=>`${f.data.split('-').reverse().join('/')} — ${fmt(f.quantidade,0)} kg (${fmt(f.pctMediana,0)}% da mediana)`).join(', ')}</p></td></tr>` : ''}
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <p class="hint" style="margin-top:12px;">"Dias sem lançamento" conta dias corridos, dentro da mesma janela usada no custo médio diário acima, sem nenhuma Saída de Ração/Pasto lançada pro lote — cada dia faltando puxa a média (e o "% do teórico" da tabela acima) pra baixo. "Fora do padrão" lista lançamentos com menos da metade ou mais do dobro da quantidade mediana lançada pro mesmo lote — pode ser erro de digitação (esqueceu um zero, ou lançou no lote errado) ou uma mudança real que vale a pena conferir.</p>`;
 }
 
 /* ---- Financeiro: Receitas ---- */
