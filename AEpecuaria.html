@@ -1198,11 +1198,11 @@ function LoginPage(){
       <form data-login-form="1">
         <div class="login-field">
           <label>Usuário</label>
-          <input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus />
+          <input type="text" autocomplete="username" data-login-usuario="1" value="${esc(state.loginDraft.usuario)}" autofocus />
         </div>
         <div class="login-field">
           <label>Senha</label>
-          <input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" />
+          <input type="password" autocomplete="current-password" data-login-senha="1" value="${esc(state.loginDraft.senha)}" />
         </div>
         <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
       </form>
@@ -1546,7 +1546,16 @@ async function tentarSincronizarFila(){
   const filaFinal = filaAtual.filter(item => !processados.has(item.queueId));
   salvarFilaOffline(filaFinal);
   sincronizandoFila = false;
-  if(algumSucesso) await loadAll(); else render();
+  // Essa sincronização roda sozinha a cada 30s em segundo plano -- se
+  // re-renderizasse com um modal aberto (a pessoa lançando outra coisa
+  // nesse meio tempo), o formulário inteiro seria substituído a partir do
+  // editDraft e qualquer campo sem sincronização ao vivo perderia o que já
+  // tinha sido digitado. Com modal aberto, não mexe na tela agora -- os
+  // dados sincronizados aparecem no próximo loadAll (ex: quando a pessoa
+  // fechar o modal e essa rotina rodar de novo, ou na próxima ação normal).
+  if(!state.modal){
+    if(algumSucesso) await loadAll(); else render();
+  }
   if(falhasReais.length>0){
     alert(`Alguns lançamentos pendentes não puderam ser enviados e foram descartados da fila (dado inválido ou registro relacionado removido):\n\n${falhasReais.join('\n')}\n\nSerá preciso lançar de novo.`);
   }
@@ -2508,6 +2517,11 @@ function PageManejoInicio(){
 function PageManejoAtivo(){
   const m = state.manejoAtivo;
   const acoesAtivas = m.acoes;
+  // Guarda o que já foi digitado/escolhido pro animal atual (peso, raça,
+  // sexo etc.) -- sem isso, re-renderizar por causa só do número (que muda
+  // se mostra sexo/raça de animal novo) apagava tudo que já tinha sido
+  // preenchido pros outros campos desse mesmo animal.
+  const draft = m.draftAtual || (m.draftAtual = {});
   const numeroAtual = (m.numeroAtualDraft||'').trim();
   const animalNovo = numeroAtual && !animalCadastrado(numeroAtual);
   // O sexo fixo (quando o lote não é misto) tem que ser do lote onde o
@@ -2543,43 +2557,43 @@ function PageManejoAtivo(){
     <div class="field-row">
       ${!sexoLoteFixo ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
         <select id="f-sexomanejo">
-          <option value="" selected>— Selecione —</option>
-          <option value="macho">Macho</option>
-          <option value="femea">Fêmea</option>
+          <option value="" ${!draft.sexo?'selected':''}>— Selecione —</option>
+          <option value="macho" ${draft.sexo==='macho'?'selected':''}>Macho</option>
+          <option value="femea" ${draft.sexo==='femea'?'selected':''}>Fêmea</option>
         </select>
       </div>` : ''}
       <div class="field"><label>Raça (animal novo -- obrigatório)</label>
         <select id="f-racamanejo">
-          <option value="" selected>— Selecione —</option>
-          <option value="angus">Angus</option>
-          <option value="nelore">Nelore</option>
-          <option value="outro">Outro</option>
+          <option value="" ${!draft.raca?'selected':''}>— Selecione —</option>
+          <option value="angus" ${draft.raca==='angus'?'selected':''}>Angus</option>
+          <option value="nelore" ${draft.raca==='nelore'?'selected':''}>Nelore</option>
+          <option value="outro" ${draft.raca==='outro'?'selected':''}>Outro</option>
         </select>
       </div>
     </div>
     <p class="hint" style="margin-top:-6px;">Animal ${esc(numeroAtual)} ainda não está cadastrado — precisa informar ${!sexoLoteFixo?'sexo e raça':'a raça'} pra numerar.</p>
     ` : ''}
     <div class="field-row campo-grande">
-      ${acoesAtivas.includes('pesagem') ? `<div class="field"><label>Peso (kg)</label><input id="f-pesomanejo" type="number" step="0.1" placeholder="Ex: 345"/></div>` : ''}
-      ${acoesAtivas.includes('inseminacao') ? `<div class="field"><label>Raça do touro</label><select id="f-racatouromanejo"><option value="">— Selecione —</option><option value="angus">Angus</option><option value="nelore">Nelore</option><option value="outro">Outro</option></select></div>` : ''}
-      ${acoesAtivas.includes('diagnostico') ? `<div class="field"><label>Resultado do diagnóstico</label><select id="f-resultadomanejo"><option value="prenha">Prenha</option><option value="vazia">Vazia</option></select></div>` : ''}
+      ${acoesAtivas.includes('pesagem') ? `<div class="field"><label>Peso (kg)</label><input id="f-pesomanejo" type="number" step="0.1" placeholder="Ex: 345" value="${draft.peso||''}"/></div>` : ''}
+      ${acoesAtivas.includes('inseminacao') ? `<div class="field"><label>Raça do touro</label><select id="f-racatouromanejo"><option value="" ${!draft.racaTouro?'selected':''}>— Selecione —</option><option value="angus" ${draft.racaTouro==='angus'?'selected':''}>Angus</option><option value="nelore" ${draft.racaTouro==='nelore'?'selected':''}>Nelore</option><option value="outro" ${draft.racaTouro==='outro'?'selected':''}>Outro</option></select></div>` : ''}
+      ${acoesAtivas.includes('diagnostico') ? `<div class="field"><label>Resultado do diagnóstico</label><select id="f-resultadomanejo"><option value="prenha" ${draft.resultado!=='vazia'?'selected':''}>Prenha</option><option value="vazia" ${draft.resultado==='vazia'?'selected':''}>Vazia</option></select></div>` : ''}
     </div>
     ${acoesAtivas.includes('desmama') ? `
     <div class="field-row campo-grande">
       <div class="field"><label>Bezerro (parto) sendo desmamado</label>
         <select id="f-partodesmamamanejo">
           <option value="">— Selecione —</option>
-          ${partosDisponiveis.map(p=>`<option value="${p.id}">Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
+          ${partosDisponiveis.map(p=>`<option value="${p.id}" ${String(draft.partoDesmama)===String(p.id)?'selected':''}>Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
         </select>
       </div>
-      <div class="field"><label>Peso da desmama (kg)</label><input id="f-pesodesmamamanejo" type="number" step="0.1" placeholder="Ex: 180"/></div>
+      <div class="field"><label>Peso da desmama (kg)</label><input id="f-pesodesmamamanejo" type="number" step="0.1" placeholder="Ex: 180" value="${draft.pesoDesmama||''}"/></div>
     </div>
     <div class="field campo-grande"><label>Raça do bezerro (desmama)</label>
       <select id="f-racadesmamamanejo">
-        <option value="">— Selecione —</option>
-        <option value="angus">Angus</option>
-        <option value="nelore">Nelore</option>
-        <option value="outro">Outro</option>
+        <option value="" ${!draft.racaDesmama?'selected':''}>— Selecione —</option>
+        <option value="angus" ${draft.racaDesmama==='angus'?'selected':''}>Angus</option>
+        <option value="nelore" ${draft.racaDesmama==='nelore'?'selected':''}>Nelore</option>
+        <option value="outro" ${draft.racaDesmama==='outro'?'selected':''}>Outro</option>
       </select>
     </div>
     ` : ''}
@@ -3778,20 +3792,28 @@ function composicaoPorArea(confMes, pastoMes, criaMes, detalhesPorArea){
 // gráfico — qualquer outro nome, por maior ou menor que seja seu valor no
 // mês/ano, cai em "Outros". Lista fixa escolhida pelo usuário (revisou
 // todos os centros de custo cadastrados e escolheu os principais).
+// Precisa ser o nome EXATO que fica salvo em categoria (mesma string de
+// CENTROS_CUSTO_SUGERIDOS) -- a comparação abaixo é exata, então uma
+// versão abreviada aqui (ex: "Armazenagem e Logística" sem o "&") nunca
+// batia com o que era de fato salvo ("Armazenagem & Logística"), e a
+// despesa caía sempre em "Outros" mesmo sendo de uma categoria principal.
+// "Nutrição Animal" não tem correspondente em CENTROS_CUSTO_SUGERIDOS --
+// mantido como está (pode ser um nome digitado à mão em despesas
+// existentes; ajuste aqui se não for o nome real usado).
 const CENTRO_CUSTO_SEMPRE_VISIVEL = [
-  'Terceirização de Serviços',
-  'Mão de Obra',
-  'Combustíveis',
+  'Terceirização de Serviços Agropecuários',
+  'Mão-de-obra de Operacional',
+  'Combustíveis da Operação Agropecuária',
   'Insumos Agrícolas',
   'Nutrição Animal',
-  'Manutenção de Tratores e Máquinas',
+  'Manutenção de Tratores, Caminhões, Máquinas, Equipamentos e Implementos',
   'Serviços Profissionais',
-  'Armazenagem e Logística',
+  'Armazenagem & Logística',
   'Insumos Pecuários',
-  'Manutenção de Infraestrutura',
-  'Refeitório e Alimentação',
-  'Consultorias de Campo',
-  'Energia Elétrica',
+  'Manutenção e Reparo de Infraestruturas',
+  'Refeitório, Restaurantes & Alimentação',
+  'Serviços Técnicos Profissionais (Consultorias de Campo)',
+  'Energia Elétrica de Infraestrutura Operacional',
 ];
 
 function composicaoCentrosCusto(custosFixos, extras){
@@ -3811,8 +3833,21 @@ function composicaoCentrosCusto(custosFixos, extras){
   // como fatia própria; qualquer outro nome cai em "Outros", nunca ganha
   // fatia própria mesmo que seja o maior valor do mês/ano — assim o
   // conjunto de fatias do gráfico não muda sozinho de um mês pro outro.
-  const principais = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
-  const resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  let principais = entries.filter(e=>CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  let resto = entries.filter(e=>!CENTRO_CUSTO_SEMPRE_VISIVEL.includes(e.nome));
+  // A paleta de cores só tem SERIES_COLORS.length tons distintos -- com mais
+  // fatias que isso (contando a própria "Outros", quando existir), duas
+  // fatias diferentes acabavam com a mesma cor (a cor só repete depois de
+  // esgotar a paleta). Se um mês tiver mais "principais" com valor do que
+  // cores disponíveis, as de menor valor caem em "Outros" também (só nesse
+  // mês) em vez de duas fatias ficarem visualmente idênticas.
+  const vaiTerOutros = resto.length>0 || principais.length > SERIES_COLORS.length;
+  const maxPrincipais = vaiTerOutros ? SERIES_COLORS.length-1 : SERIES_COLORS.length;
+  if(principais.length > maxPrincipais){
+    principais.sort((a,b)=>b.valor-a.valor);
+    resto = [...resto, ...principais.slice(maxPrincipais)];
+    principais = principais.slice(0, maxPrincipais);
+  }
   const restoValor = resto.reduce((a,e)=>a+e.valor,0);
   const restoItens = [].concat(...resto.map(e=>e.itens));
   entries = [...principais];
@@ -5067,7 +5102,7 @@ function PageAdminUsuarios(){
         ${state.perfis.map(p=>`
           <tr>
             <td><strong>${esc(p.nome)}</strong></td>
-            <td class="mono">${p.usuario}</td>
+            <td class="mono">${esc(p.usuario)}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
             <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
@@ -5085,10 +5120,10 @@ function ModalUsuario(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
+        ${state.usuarioError ? `<div class="login-error">${esc(state.usuarioError)}</div>` : ''}
         <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
-        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${esc(d.senha)}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -5105,7 +5140,7 @@ function ModalPermissoes(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
+        <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
             <option value="colaborador" ${d.papel==='colaborador'?'selected':''}>Colaborador</option>
@@ -5441,17 +5476,17 @@ function ModalLote(){
         <div class="field-row">
           ${precisaSexoAnimalNovoLote ? `<div class="field"><label>Sexo dos animais novos (obrigatório)</label>
             <select id="f-sexoanimaisnovos">
-              <option value="" selected>— Selecione —</option>
-              <option value="macho">Machos</option>
-              <option value="femea">Fêmeas</option>
+              <option value="" ${!d.sexoAnimaisNovos?'selected':''}>— Selecione —</option>
+              <option value="macho" ${d.sexoAnimaisNovos==='macho'?'selected':''}>Machos</option>
+              <option value="femea" ${d.sexoAnimaisNovos==='femea'?'selected':''}>Fêmeas</option>
             </select>
           </div>` : ''}
           <div class="field"><label>Raça dos animais novos (obrigatório)</label>
             <select id="f-racaanimaisnovos">
-              <option value="" selected>— Selecione —</option>
-              <option value="angus">Angus</option>
-              <option value="nelore">Nelore</option>
-              <option value="outro">Outro</option>
+              <option value="" ${!d.racaAnimaisNovos?'selected':''}>— Selecione —</option>
+              <option value="angus" ${d.racaAnimaisNovos==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.racaAnimaisNovos==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.racaAnimaisNovos==='outro'?'selected':''}>Outro</option>
             </select>
           </div>
         </div>
@@ -5976,23 +6011,23 @@ function ModalPesagem(){
         ${!d._editId ? `
         <div class="field-row">
           <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" value="${esc(numeroAtual)}" placeholder="Ex: 128"/></div>
-          <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320"/></div>
+          <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320" value="${d.pesoPesadoDraft||''}"/></div>
         </div>
         ${animalNovoPesagem ? `
         <div class="field-row">
           ${!sexoLoteFixoPesagem ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
             <select id="f-sexopesado">
-              <option value="" selected>— Selecione —</option>
-              <option value="macho">Macho</option>
-              <option value="femea">Fêmea</option>
+              <option value="" ${!d.sexoPesadoDraft?'selected':''}>— Selecione —</option>
+              <option value="macho" ${d.sexoPesadoDraft==='macho'?'selected':''}>Macho</option>
+              <option value="femea" ${d.sexoPesadoDraft==='femea'?'selected':''}>Fêmea</option>
             </select>
           </div>` : ''}
           <div class="field"><label>Raça (animal novo -- obrigatório)</label>
             <select id="f-racapesado">
-              <option value="" selected>— Selecione —</option>
-              <option value="angus">Angus</option>
-              <option value="nelore">Nelore</option>
-              <option value="outro">Outro</option>
+              <option value="" ${!d.racaPesadoDraft?'selected':''}>— Selecione —</option>
+              <option value="angus" ${d.racaPesadoDraft==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.racaPesadoDraft==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.racaPesadoDraft==='outro'?'selected':''}>Outro</option>
             </select>
           </div>
         </div>
@@ -6077,7 +6112,7 @@ function ModalVenda(){
           <span>${tipoVenda==='arroba' ? `${fmt(arrobas,2)} @ produzidas` : `${fmtInt(Number(d.quantidade)||0)} animais`}</span><span>R$ ${fmt(valorTotal)}</span>
         </div>
         <p class="hint">${tipoVenda==='arroba' ? 'Peso de carcaça (não peso vivo) — 1 @ = 15 kg. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro.' : tipoVenda==='cabeca' ? 'Valor fechado por animal, sem depender de peso.' : 'Valor por kg de peso vivo — comum em venda de bezerros/animais magros.'} Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsvenda" rows="2">${d.observacao||''}</textarea></div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsvenda" rows="2">${esc(d.observacao||'')}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -6262,7 +6297,7 @@ function ModalPendencias(){
           <tbody>
             ${fila.map(item=>`
               <tr>
-                <td>${item.label}</td>
+                <td>${esc(item.label)}</td>
                 <td class="mono">${new Date(item.criadoEm).toLocaleString('pt-BR')}</td>
                 <td><button class="btn-danger-ghost" data-descartar-pendencia="${item.queueId}">Descartar</button></td>
               </tr>
@@ -6345,7 +6380,21 @@ function attachEvents(){
   });
   if(state.modal?.type==='movimento'){
     const tipoMovEl = document.getElementById('f-tipo');
-    if(tipoMovEl) tipoMovEl.onchange = (e)=>{ editDraft.tipo = e.target.value; render(); };
+    if(tipoMovEl) tipoMovEl.onchange = (e)=>{
+      // Trocar Entrada/Saída re-renderiza (mostra/esconde o campo de preço
+      // pago) -- sem sincronizar antes, ingrediente/data/quantidade/preço
+      // já preenchidos eram perdidos.
+      const ingEl = document.getElementById('f-ing');
+      const dataEl = document.getElementById('f-data');
+      const qtdEl = document.getElementById('f-qtd');
+      const precoEl = document.getElementById('f-precoentrada');
+      if(ingEl) editDraft.ingredienteId = Number(ingEl.value);
+      if(dataEl) editDraft.data = dataEl.value;
+      if(qtdEl) editDraft.quantidade = qtdEl.value;
+      if(precoEl) editDraft.precoKg = precoEl.value;
+      editDraft.tipo = e.target.value;
+      render();
+    };
   }
   document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
     el.onclick = ()=>{
@@ -6699,7 +6748,18 @@ function attachEvents(){
     };
   });
   document.querySelectorAll('[data-nota-pick]').forEach(el=>{
-    el.onclick = ()=>{ editDraft.nota = Number(el.dataset.notaPick); render(); };
+    el.onclick = ()=>{
+      // Escolher a nota re-renderiza pra marcar o botão como ativo -- sem
+      // isso o lote/data/observação já preenchidos eram perdidos.
+      const loteEl = document.getElementById('f-lote');
+      const dataEl = document.getElementById('f-data');
+      const obsEl = document.getElementById('f-obs');
+      if(loteEl) editDraft.loteId = Number(loteEl.value);
+      if(dataEl) editDraft.data = dataEl.value;
+      if(obsEl) editDraft.observacao = obsEl.value;
+      editDraft.nota = Number(el.dataset.notaPick);
+      render();
+    };
   });
   document.querySelectorAll('[data-edit-pasto]').forEach(el=>{
     el.onclick = ()=>{
@@ -6985,11 +7045,13 @@ function attachEvents(){
     const kgEl = document.getElementById('f-kganimal');
     const tipoEl = document.getElementById('f-tipodieta');
     const estoqueMinEl = document.getElementById('f-estoqueminpronta');
+    const consumoEl = document.getElementById('f-consumodieta');
     if(nomeEl) editDraft.nome = nomeEl.value;
     if(categoriaEl) editDraft.categoriaAnimal = categoriaEl.value;
     if(kgEl) editDraft.kgAnimalDia = kgEl.value;
     if(tipoEl) editDraft.tipo = tipoEl.value;
     if(estoqueMinEl) editDraft.estoqueMinPronta = estoqueMinEl.value;
+    if(consumoEl) editDraft.consumoDireto = consumoEl.value==='direto';
   }
   document.querySelectorAll('[data-item-add]').forEach(el=>{
     el.onclick = ()=>{ sincronizarCamposDieta(); editDraft.itens.push({ingredienteId:state.ingredientes[0]?.id||'', pct:''}); render(); };
@@ -7013,6 +7075,7 @@ function attachEvents(){
     const el = document.getElementById(id);
     if(!el) return;
     el.oninput = (e)=>{
+      sincronizarDataObsVenda();
       editDraft[campo] = e.target.value;
       render();
       const s = document.getElementById(id);
@@ -7020,10 +7083,19 @@ function attachEvents(){
       if(decimal) s.setSelectionRange(s.value.length, s.value.length);
     };
   }
+  // Data e observação não têm sincronização própria (só são lidas do DOM
+  // no salvar) -- precisam ser copiadas pro editDraft antes de qualquer
+  // onchange que re-renderiza o modal, senão o que já foi digitado ali some.
+  function sincronizarDataObsVenda(){
+    const dataEl = document.getElementById('f-datavenda');
+    const obsEl = document.getElementById('f-obsvenda');
+    if(dataEl) editDraft.data = dataEl.value;
+    if(obsEl) editDraft.observacao = obsEl.value;
+  }
   const loteVendaEl = document.getElementById('f-lotevenda');
-  if(loteVendaEl) loteVendaEl.onchange = (e)=>{ editDraft.loteId = Number(e.target.value); render(); };
+  if(loteVendaEl) loteVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.loteId = Number(e.target.value); render(); };
   const tipoVendaEl = document.getElementById('f-tipovenda');
-  if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ editDraft.tipoVenda = e.target.value; render(); };
+  if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.tipoVenda = e.target.value; render(); };
   refazVendaInput('f-qtdvenda', 'quantidade');
   refazVendaInput('f-pesovenda', 'pesoMedioKg', true);
   refazVendaInput('f-valorarrobavenda', 'valorArroba', true);
@@ -7065,15 +7137,28 @@ function attachEvents(){
     };
   }
   if(state.modal && state.modal.type==='lote'){
+    // Único ponto de sincronização pra todos os onchange desse modal que
+    // re-renderizam (destino/sexo/lote existente/números/modo de entrada) --
+    // cada um listava manualmente os campos-irmão pra copiar antes do
+    // render(), e era fácil esquecer um (ex: números dos animais nunca
+    // entrava na lista do "Destino", ou sexo/raça dos animais novos nunca
+    // entravam em nenhuma). Lê tudo que existe no DOM agora, então cobre
+    // qualquer campo, inclusive os que só aparecem condicionalmente.
+    function sincronizarCamposLote(){
+      const ids = {
+        nome:'nome', numanimais:'numeroAnimais', datainicio:'dataInicio', datafim:'dataFim',
+        sexolote:'sexo', dietalote:'dietaId', pesoentrada:'pesoMedioEntrada', numerosanimais:'numerosAnimais',
+        sexoanimaisnovos:'sexoAnimaisNovos', racaanimaisnovos:'racaAnimaisNovos',
+        loteexistente:'loteExistenteId', qtdentrada:'qtdEntrada', dataentrada:'dataEntrada',
+      };
+      for(const [elId, campo] of Object.entries(ids)){
+        const el = document.getElementById('f-'+elId);
+        if(el) editDraft[campo] = el.value;
+      }
+    }
     const destinoLoteEl = document.getElementById('f-destino');
     if(destinoLoteEl) destinoLoteEl.onchange = (e)=>{
-      editDraft.nome = document.getElementById('f-nome').value;
-      editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
-      editDraft.dataInicio = document.getElementById('f-datainicio').value;
-      editDraft.dataFim = document.getElementById('f-datafim').value;
-      editDraft.sexo = document.getElementById('f-sexolote').value;
-      const pesoEl = document.getElementById('f-pesoentrada');
-      if(pesoEl) editDraft.pesoMedioEntrada = pesoEl.value;
+      sincronizarCamposLote();
       editDraft.destino = e.target.value;
       // a dieta padrão é filtrada por tipo (confinamento/pasto/cria) -- ao
       // trocar o destino, a lista de opções muda, então zera a seleção em
@@ -7081,74 +7166,38 @@ function attachEvents(){
       editDraft.dietaId = '';
       render();
     };
-    const modoNovoAtual = !editDraft._editId ? (editDraft.modoEntrada||'novo')==='novo' : true;
     const sexoLoteEl = document.getElementById('f-sexolote');
     if(sexoLoteEl) sexoLoteEl.onchange = (e)=>{
-      editDraft.nome = document.getElementById('f-nome').value;
-      editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
-      editDraft.dataInicio = document.getElementById('f-datainicio').value;
-      editDraft.dataFim = document.getElementById('f-datafim').value;
-      const pesoEl0 = document.getElementById('f-pesoentrada');
-      if(pesoEl0) editDraft.pesoMedioEntrada = pesoEl0.value;
-      const numerosEl0 = document.getElementById('f-numerosanimais');
-      if(numerosEl0) editDraft.numerosAnimais = numerosEl0.value;
+      sincronizarCamposLote();
       editDraft.sexo = e.target.value;
       render();
     };
     const loteExistenteEl = document.getElementById('f-loteexistente');
     if(loteExistenteEl) loteExistenteEl.onchange = (e)=>{
-      editDraft.qtdEntrada = document.getElementById('f-qtdentrada').value;
-      editDraft.dataEntrada = document.getElementById('f-dataentrada').value;
-      const pesoEl1 = document.getElementById('f-pesoentrada');
-      if(pesoEl1) editDraft.pesoMedioEntrada = pesoEl1.value;
-      const numerosEl1 = document.getElementById('f-numerosanimais');
-      if(numerosEl1) editDraft.numerosAnimais = numerosEl1.value;
+      sincronizarCamposLote();
       editDraft.loteExistenteId = e.target.value;
       render();
     };
     const numerosAnimaisEl = document.getElementById('f-numerosanimais');
     if(numerosAnimaisEl) numerosAnimaisEl.onchange = (e)=>{
-      if(modoNovoAtual){
-        editDraft.nome = document.getElementById('f-nome').value;
-        editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
-        editDraft.dataInicio = document.getElementById('f-datainicio').value;
-        editDraft.dataFim = document.getElementById('f-datafim').value;
-        editDraft.sexo = document.getElementById('f-sexolote').value;
-        const pesoEl2 = document.getElementById('f-pesoentrada');
-        if(pesoEl2) editDraft.pesoMedioEntrada = pesoEl2.value;
-      } else {
-        editDraft.loteExistenteId = document.getElementById('f-loteexistente').value;
-        editDraft.qtdEntrada = document.getElementById('f-qtdentrada').value;
-        editDraft.dataEntrada = document.getElementById('f-dataentrada').value;
-        const pesoEl3 = document.getElementById('f-pesoentrada');
-        if(pesoEl3) editDraft.pesoMedioEntrada = pesoEl3.value;
-      }
+      sincronizarCamposLote();
       editDraft.numerosAnimais = e.target.value;
       render();
     };
+    document.querySelectorAll('#f-sexoanimaisnovos, #f-racaanimaisnovos').forEach(el=>{
+      el.onchange = (e)=>{
+        sincronizarCamposLote();
+        editDraft[el.id==='f-sexoanimaisnovos'?'sexoAnimaisNovos':'racaAnimaisNovos'] = e.target.value;
+        render();
+      };
+    });
     // "Novo lote" x "Lote já existente" -- só existe na criação (não no
     // editar), pra decidir se essa entrada de animais vira um lote novo ou
     // soma na quantidade (com peso recalculado por média ponderada) de um
     // lote que já existe.
     const modoEntradaEl = document.getElementById('f-modoentrada');
     if(modoEntradaEl) modoEntradaEl.onchange = (e)=>{
-      if((editDraft.modoEntrada||'novo')==='novo'){
-        editDraft.nome = document.getElementById('f-nome')?.value ?? editDraft.nome;
-        editDraft.destino = document.getElementById('f-destino')?.value ?? editDraft.destino;
-        editDraft.sexo = document.getElementById('f-sexolote')?.value ?? editDraft.sexo;
-        editDraft.dietaId = document.getElementById('f-dietalote')?.value ?? editDraft.dietaId;
-        editDraft.numeroAnimais = document.getElementById('f-numanimais')?.value ?? editDraft.numeroAnimais;
-        editDraft.dataInicio = document.getElementById('f-datainicio')?.value ?? editDraft.dataInicio;
-        editDraft.dataFim = document.getElementById('f-datafim')?.value ?? editDraft.dataFim;
-      } else {
-        editDraft.loteExistenteId = document.getElementById('f-loteexistente')?.value ?? editDraft.loteExistenteId;
-        editDraft.qtdEntrada = document.getElementById('f-qtdentrada')?.value ?? editDraft.qtdEntrada;
-        editDraft.dataEntrada = document.getElementById('f-dataentrada')?.value ?? editDraft.dataEntrada;
-      }
-      const pesoEl2 = document.getElementById('f-pesoentrada');
-      if(pesoEl2) editDraft.pesoMedioEntrada = pesoEl2.value;
-      const numerosEl2 = document.getElementById('f-numerosanimais');
-      if(numerosEl2) editDraft.numerosAnimais = numerosEl2.value;
+      sincronizarCamposLote();
       editDraft.modoEntrada = e.target.value;
       render();
     };
@@ -7251,11 +7300,24 @@ function attachEvents(){
       editDraft.data = document.getElementById('f-datapesagem').value;
       const obsEl0 = document.getElementById('f-obspesagem');
       if(obsEl0) editDraft.observacao = obsEl0.value;
+      sincronizarDraftPesagemAnimal();
       editDraft.pesagemNumeroDraft = e.target.value;
       render();
       const numEl2 = document.getElementById('f-numeropesado');
       if(numEl2) numEl2.focus();
     };
+    // Peso/sexo/raça do animal sendo pesado agora também não tinham
+    // value= nenhum -- qualquer re-render (corrigir o número, remover uma
+    // linha da tabela de já pesados) apagava o que já tinha sido digitado
+    // pro animal atual.
+    function sincronizarDraftPesagemAnimal(){
+      const pesoEl = document.getElementById('f-pesopesado');
+      const sexoEl = document.getElementById('f-sexopesado');
+      const racaEl = document.getElementById('f-racapesado');
+      if(pesoEl) editDraft.pesoPesadoDraft = pesoEl.value;
+      if(sexoEl) editDraft.sexoPesadoDraft = sexoEl.value;
+      if(racaEl) editDraft.racaPesadoDraft = racaEl.value;
+    }
     const addPesagemAnimalBtn = document.querySelector('[data-add-pesagem-animal]');
     if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = ()=>{
       const numEl = document.getElementById('f-numeropesado');
@@ -7278,6 +7340,9 @@ function attachEvents(){
       editDraft.observacao = document.getElementById('f-obspesagem').value;
       editDraft.entradasPesagem = [...(editDraft.entradasPesagem||[]), {numero, pesoKg: Number(peso), sexo:sexoNovo||undefined, raca:racaNovo||undefined}];
       editDraft.pesagemNumeroDraft = '';
+      editDraft.pesoPesadoDraft = '';
+      editDraft.sexoPesadoDraft = '';
+      editDraft.racaPesadoDraft = '';
       render();
       const numEl2 = document.getElementById('f-numeropesado');
       if(numEl2) numEl2.focus();
@@ -7288,6 +7353,7 @@ function attachEvents(){
         editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
         editDraft.data = document.getElementById('f-datapesagem').value;
         editDraft.observacao = document.getElementById('f-obspesagem').value;
+        sincronizarDraftPesagemAnimal();
         editDraft.entradasPesagem = (editDraft.entradasPesagem||[]).filter((_,i)=>i!==idx);
         render();
       };
@@ -7370,8 +7436,32 @@ function attachEvents(){
   }
 
   if(state.manejoAtivo){
+    // Corrigir o número depois de já ter preenchido peso/raça/diagnóstico
+    // do animal atual re-renderiza a tela (o número decide se mostra os
+    // campos de "animal novo") -- sincroniza tudo antes, senão o que já
+    // tinha sido preenchido pra esse mesmo animal se perdia.
+    function sincronizarDraftManejo(){
+      const d = state.manejoAtivo.draftAtual || (state.manejoAtivo.draftAtual = {});
+      const sexoEl = document.getElementById('f-sexomanejo');
+      const racaEl = document.getElementById('f-racamanejo');
+      const pesoEl = document.getElementById('f-pesomanejo');
+      const racaTouroEl = document.getElementById('f-racatouromanejo');
+      const resultadoEl = document.getElementById('f-resultadomanejo');
+      const partoDesmamaEl = document.getElementById('f-partodesmamamanejo');
+      const pesoDesmamaEl = document.getElementById('f-pesodesmamamanejo');
+      const racaDesmamaEl = document.getElementById('f-racadesmamamanejo');
+      if(sexoEl) d.sexo = sexoEl.value;
+      if(racaEl) d.raca = racaEl.value;
+      if(pesoEl) d.peso = pesoEl.value;
+      if(racaTouroEl) d.racaTouro = racaTouroEl.value;
+      if(resultadoEl) d.resultado = resultadoEl.value;
+      if(partoDesmamaEl) d.partoDesmama = partoDesmamaEl.value;
+      if(pesoDesmamaEl) d.pesoDesmama = pesoDesmamaEl.value;
+      if(racaDesmamaEl) d.racaDesmama = racaDesmamaEl.value;
+    }
     const numManejoEl = document.getElementById('f-numanimalmanejo');
     if(numManejoEl) numManejoEl.onchange = (e)=>{
+      sincronizarDraftManejo();
       state.manejoAtivo.numeroAtualDraft = e.target.value;
       render();
       const numManejoEl2 = document.getElementById('f-numanimalmanejo');
@@ -7535,6 +7625,7 @@ function attachEvents(){
       }
       m.animaisFeitos.push(registro);
       m.numeroAtualDraft = '';
+      m.draftAtual = {};
       render();
       const numEl2 = document.getElementById('f-numanimalmanejo');
       if(numEl2) numEl2.focus();

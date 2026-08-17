@@ -1316,3 +1316,55 @@ alter table partos add column if not exists raca_bezerro text check (raca_bezerr
 -- ===================================================================
 alter table animais add column if not exists status text not null default 'ativo' check (status in ('ativo','morto'));
 alter table animais add column if not exists data_morte date;
+
+-- ===================================================================
+-- MIGRAÇÃO: Consultor consegue mesmo criar/somar entrada de animais
+-- O app já libera "Nova entrada de animais" (aba Lotes/Cadastro) pra
+-- quem tem o cargo Consultor, mesmo sem nenhuma permissão de módulo
+-- marcada em Confinamento/Pasto/Cria (função podeCriarLote() no app —
+-- a ideia é que quem formula dieta consiga cadastrar lote sem precisar
+-- que um admin dê acesso de edição ao módulo inteiro). Sem isso aqui,
+-- o botão aparece, mas o INSERT/UPDATE cai na política de RLS de baixo
+-- e é rejeitado -- a pessoa vê "Não foi possível salvar" sem entender
+-- por quê, e o lote/animal simplesmente não é criado.
+-- Cobre só o que esse fluxo específico grava: criar/editar lote (inclui
+-- somar animais chegando num lote existente, que atualiza
+-- numero_animais), e criar/mover o cadastro do animal. Não mexe em
+-- excluir lote/animal nem nos outros módulos (saída de ração, cocho,
+-- pesagem etc.) -- esses continuam exigindo a permissão normal do
+-- módulo, igual pra qualquer outro cargo.
+-- Pode rodar a qualquer momento.
+-- ===================================================================
+create or replace function eh_consultor() returns boolean
+language sql security definer set search_path = public stable as $$
+  select exists(
+    select 1 from profiles where id = auth.uid() and papel = 'consultor' and ativo = true
+  );
+$$;
+
+drop policy if exists "inserir lotes" on lotes;
+create policy "inserir lotes" on lotes for insert with check (
+  eh_consultor() or tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+drop policy if exists "atualizar lotes" on lotes;
+create policy "atualizar lotes" on lotes for update using (
+  eh_consultor() or tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+) with check (
+  eh_consultor() or tem_permissao(case destino when 'cria' then 'cria' when 'pasto' then 'pasto' else 'confinamento' end, 'editar')
+);
+
+drop policy if exists "inserir animais" on animais;
+create policy "inserir animais" on animais for insert with check (
+  eh_consultor() or tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+drop policy if exists "atualizar animais" on animais;
+create policy "atualizar animais" on animais for update using (
+  eh_consultor() or tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+) with check (
+  eh_consultor() or tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
+
+drop policy if exists "inserir pesagens" on pesagens;
+create policy "inserir pesagens" on pesagens for insert with check (
+  eh_consultor() or tem_permissao('confinamento','editar') or tem_permissao('pasto','editar') or tem_permissao('cria','editar')
+);
