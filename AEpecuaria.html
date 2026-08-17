@@ -4569,7 +4569,15 @@ function custosDiariosPorLote(){
     const fixoAlocado = fixoLoteAlocado(l, fixoAreaMes[loteTipo(l)]/30);
     const total = racao + pasto + reproducao + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal};
+    // Custo teórico: o que a dieta padrão do lote (kg/animal/dia × preço)
+    // diz que deveria custar, pra comparar com o que foi realmente lançado
+    // em Saída de Ração -- ajuda a achar dia sem lançamento (puxa a média
+    // real pra baixo) ou dieta cadastrada desatualizada.
+    const dietaPadrao = l.dietaId ? state.dietas.find(x=>x.id===l.dietaId) : null;
+    const custoTeoricoDia = dietaPadrao ? calcDieta(dietaPadrao).custoAnimalDia*Number(l.numeroAnimais||0) : null;
+    const variavelReal = racao + pasto + reproducao;
+    const pctDoTeorico = (custoTeoricoDia!=null && custoTeoricoDia>0) ? (variavelReal/custoTeoricoDia*100) : null;
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, custoTeoricoDia, pctDoTeorico};
   }).sort((a,b)=> b.total-a.total);
 
   // Mesmos dados de custosMesPorLote, só que somados por área (Confinamento/
@@ -4734,13 +4742,15 @@ function PageFinanceiroCurral(){
   <div class="card" style="margin-bottom:22px;">
     ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo médio diário de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Custo variável (méd./dia)</th><th>Custo fixo (dia)</th><th>Total (méd./dia)</th><th>Custo/animal (méd./dia)</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Custo variável (méd./dia)</th><th>Custo teórico da dieta (dia)</th><th>% do teórico</th><th>Custo fixo (dia)</th><th>Total (méd./dia)</th><th>Custo/animal (méd./dia)</th></tr></thead>
       <tbody>
         ${custosPorLote.map(r=>`
           <tr>
             <td><strong>${esc(r.lote.nome)}</strong></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
             <td class="mono">R$ ${fmt(r.racao+r.pasto+r.reproducao)}</td>
+            <td class="mono">${r.custoTeoricoDia!=null ? 'R$ '+fmt(r.custoTeoricoDia) : '<span class="hint">— sem dieta padrão —</span>'}</td>
+            <td>${r.pctDoTeorico!=null ? `<span class="pill ${r.pctDoTeorico>=85?'pill-ok':r.pctDoTeorico>=60?'pill-cat':'pill-alerta'}">${fmt(r.pctDoTeorico,0)}%</span>` : '<span class="hint">—</span>'}</td>
             <td class="mono">R$ ${fmt(r.fixoAlocado)}</td>
             <td class="mono">R$ ${fmt(r.total)}</td>
             <td class="mono">R$ ${fmt(r.porAnimal,2)}</td>
@@ -4749,7 +4759,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia), e cada atividade tem sua própria janela de tempo, pelo ciclo bem diferente de cada uma: no <strong>Confinamento</strong> (ciclo curto) soma tudo que já foi gasto desde a <strong>entrada do lote</strong>, sem resetar por mês; no <strong>Pasto</strong> e na <strong>Cria</strong> (ciclo de meses a anos) soma desde <strong>1º de janeiro do ano corrente</strong> (ou desde a entrada, se entrou depois), resetando a cada ano novo. O custo fixo continua sendo só do mês corrente (mensal ÷ 30), rateado entre os currais na proporção de animais × dias que cada um já existe no mês — isso não mudou.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia), e cada atividade tem sua própria janela de tempo, pelo ciclo bem diferente de cada uma: no <strong>Confinamento</strong> (ciclo curto) soma tudo que já foi gasto desde a <strong>entrada do lote</strong>, sem resetar por mês; no <strong>Pasto</strong> e na <strong>Cria</strong> (ciclo de meses a anos) soma desde <strong>1º de janeiro do ano corrente</strong> (ou desde a entrada, se entrou depois), resetando a cada ano novo. O custo fixo continua sendo só do mês corrente (mensal ÷ 30), rateado entre os currais na proporção de animais × dias que cada um já existe no mês — isso não mudou. <strong>"Custo teórico da dieta"</strong> é quanto deveria custar se o lote inteiro comesse a dieta padrão cadastrada (kg/animal/dia × preço × nº de animais) — compare com o "Custo variável" real ao lado: se o "% do teórico" estiver bem abaixo de 100%, é sinal de que faltou lançar Saída de Ração em algum dia (o que puxa a média real pra baixo) ou que a dieta padrão cadastrada está desatualizada em relação ao que é realmente dado.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
