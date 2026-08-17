@@ -1546,7 +1546,16 @@ async function tentarSincronizarFila(){
   const filaFinal = filaAtual.filter(item => !processados.has(item.queueId));
   salvarFilaOffline(filaFinal);
   sincronizandoFila = false;
-  if(algumSucesso) await loadAll(); else render();
+  // Essa sincronização roda sozinha a cada 30s em segundo plano -- se
+  // re-renderizasse com um modal aberto (a pessoa lançando outra coisa
+  // nesse meio tempo), o formulário inteiro seria substituído a partir do
+  // editDraft e qualquer campo sem sincronização ao vivo perderia o que já
+  // tinha sido digitado. Com modal aberto, não mexe na tela agora -- os
+  // dados sincronizados aparecem no próximo loadAll (ex: quando a pessoa
+  // fechar o modal e essa rotina rodar de novo, ou na próxima ação normal).
+  if(!state.modal){
+    if(algumSucesso) await loadAll(); else render();
+  }
   if(falhasReais.length>0){
     alert(`Alguns lançamentos pendentes não puderam ser enviados e foram descartados da fila (dado inválido ou registro relacionado removido):\n\n${falhasReais.join('\n')}\n\nSerá preciso lançar de novo.`);
   }
@@ -2508,6 +2517,11 @@ function PageManejoInicio(){
 function PageManejoAtivo(){
   const m = state.manejoAtivo;
   const acoesAtivas = m.acoes;
+  // Guarda o que já foi digitado/escolhido pro animal atual (peso, raça,
+  // sexo etc.) -- sem isso, re-renderizar por causa só do número (que muda
+  // se mostra sexo/raça de animal novo) apagava tudo que já tinha sido
+  // preenchido pros outros campos desse mesmo animal.
+  const draft = m.draftAtual || (m.draftAtual = {});
   const numeroAtual = (m.numeroAtualDraft||'').trim();
   const animalNovo = numeroAtual && !animalCadastrado(numeroAtual);
   // O sexo fixo (quando o lote não é misto) tem que ser do lote onde o
@@ -2543,43 +2557,43 @@ function PageManejoAtivo(){
     <div class="field-row">
       ${!sexoLoteFixo ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
         <select id="f-sexomanejo">
-          <option value="" selected>— Selecione —</option>
-          <option value="macho">Macho</option>
-          <option value="femea">Fêmea</option>
+          <option value="" ${!draft.sexo?'selected':''}>— Selecione —</option>
+          <option value="macho" ${draft.sexo==='macho'?'selected':''}>Macho</option>
+          <option value="femea" ${draft.sexo==='femea'?'selected':''}>Fêmea</option>
         </select>
       </div>` : ''}
       <div class="field"><label>Raça (animal novo -- obrigatório)</label>
         <select id="f-racamanejo">
-          <option value="" selected>— Selecione —</option>
-          <option value="angus">Angus</option>
-          <option value="nelore">Nelore</option>
-          <option value="outro">Outro</option>
+          <option value="" ${!draft.raca?'selected':''}>— Selecione —</option>
+          <option value="angus" ${draft.raca==='angus'?'selected':''}>Angus</option>
+          <option value="nelore" ${draft.raca==='nelore'?'selected':''}>Nelore</option>
+          <option value="outro" ${draft.raca==='outro'?'selected':''}>Outro</option>
         </select>
       </div>
     </div>
     <p class="hint" style="margin-top:-6px;">Animal ${esc(numeroAtual)} ainda não está cadastrado — precisa informar ${!sexoLoteFixo?'sexo e raça':'a raça'} pra numerar.</p>
     ` : ''}
     <div class="field-row campo-grande">
-      ${acoesAtivas.includes('pesagem') ? `<div class="field"><label>Peso (kg)</label><input id="f-pesomanejo" type="number" step="0.1" placeholder="Ex: 345"/></div>` : ''}
-      ${acoesAtivas.includes('inseminacao') ? `<div class="field"><label>Raça do touro</label><select id="f-racatouromanejo"><option value="">— Selecione —</option><option value="angus">Angus</option><option value="nelore">Nelore</option><option value="outro">Outro</option></select></div>` : ''}
-      ${acoesAtivas.includes('diagnostico') ? `<div class="field"><label>Resultado do diagnóstico</label><select id="f-resultadomanejo"><option value="prenha">Prenha</option><option value="vazia">Vazia</option></select></div>` : ''}
+      ${acoesAtivas.includes('pesagem') ? `<div class="field"><label>Peso (kg)</label><input id="f-pesomanejo" type="number" step="0.1" placeholder="Ex: 345" value="${draft.peso||''}"/></div>` : ''}
+      ${acoesAtivas.includes('inseminacao') ? `<div class="field"><label>Raça do touro</label><select id="f-racatouromanejo"><option value="" ${!draft.racaTouro?'selected':''}>— Selecione —</option><option value="angus" ${draft.racaTouro==='angus'?'selected':''}>Angus</option><option value="nelore" ${draft.racaTouro==='nelore'?'selected':''}>Nelore</option><option value="outro" ${draft.racaTouro==='outro'?'selected':''}>Outro</option></select></div>` : ''}
+      ${acoesAtivas.includes('diagnostico') ? `<div class="field"><label>Resultado do diagnóstico</label><select id="f-resultadomanejo"><option value="prenha" ${draft.resultado!=='vazia'?'selected':''}>Prenha</option><option value="vazia" ${draft.resultado==='vazia'?'selected':''}>Vazia</option></select></div>` : ''}
     </div>
     ${acoesAtivas.includes('desmama') ? `
     <div class="field-row campo-grande">
       <div class="field"><label>Bezerro (parto) sendo desmamado</label>
         <select id="f-partodesmamamanejo">
           <option value="">— Selecione —</option>
-          ${partosDisponiveis.map(p=>`<option value="${p.id}">Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
+          ${partosDisponiveis.map(p=>`<option value="${p.id}" ${String(draft.partoDesmama)===String(p.id)?'selected':''}>Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
         </select>
       </div>
-      <div class="field"><label>Peso da desmama (kg)</label><input id="f-pesodesmamamanejo" type="number" step="0.1" placeholder="Ex: 180"/></div>
+      <div class="field"><label>Peso da desmama (kg)</label><input id="f-pesodesmamamanejo" type="number" step="0.1" placeholder="Ex: 180" value="${draft.pesoDesmama||''}"/></div>
     </div>
     <div class="field campo-grande"><label>Raça do bezerro (desmama)</label>
       <select id="f-racadesmamamanejo">
-        <option value="">— Selecione —</option>
-        <option value="angus">Angus</option>
-        <option value="nelore">Nelore</option>
-        <option value="outro">Outro</option>
+        <option value="" ${!draft.racaDesmama?'selected':''}>— Selecione —</option>
+        <option value="angus" ${draft.racaDesmama==='angus'?'selected':''}>Angus</option>
+        <option value="nelore" ${draft.racaDesmama==='nelore'?'selected':''}>Nelore</option>
+        <option value="outro" ${draft.racaDesmama==='outro'?'selected':''}>Outro</option>
       </select>
     </div>
     ` : ''}
@@ -5976,23 +5990,23 @@ function ModalPesagem(){
         ${!d._editId ? `
         <div class="field-row">
           <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" value="${esc(numeroAtual)}" placeholder="Ex: 128"/></div>
-          <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320"/></div>
+          <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320" value="${d.pesoPesadoDraft||''}"/></div>
         </div>
         ${animalNovoPesagem ? `
         <div class="field-row">
           ${!sexoLoteFixoPesagem ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
             <select id="f-sexopesado">
-              <option value="" selected>— Selecione —</option>
-              <option value="macho">Macho</option>
-              <option value="femea">Fêmea</option>
+              <option value="" ${!d.sexoPesadoDraft?'selected':''}>— Selecione —</option>
+              <option value="macho" ${d.sexoPesadoDraft==='macho'?'selected':''}>Macho</option>
+              <option value="femea" ${d.sexoPesadoDraft==='femea'?'selected':''}>Fêmea</option>
             </select>
           </div>` : ''}
           <div class="field"><label>Raça (animal novo -- obrigatório)</label>
             <select id="f-racapesado">
-              <option value="" selected>— Selecione —</option>
-              <option value="angus">Angus</option>
-              <option value="nelore">Nelore</option>
-              <option value="outro">Outro</option>
+              <option value="" ${!d.racaPesadoDraft?'selected':''}>— Selecione —</option>
+              <option value="angus" ${d.racaPesadoDraft==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.racaPesadoDraft==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.racaPesadoDraft==='outro'?'selected':''}>Outro</option>
             </select>
           </div>
         </div>
@@ -7265,11 +7279,24 @@ function attachEvents(){
       editDraft.data = document.getElementById('f-datapesagem').value;
       const obsEl0 = document.getElementById('f-obspesagem');
       if(obsEl0) editDraft.observacao = obsEl0.value;
+      sincronizarDraftPesagemAnimal();
       editDraft.pesagemNumeroDraft = e.target.value;
       render();
       const numEl2 = document.getElementById('f-numeropesado');
       if(numEl2) numEl2.focus();
     };
+    // Peso/sexo/raça do animal sendo pesado agora também não tinham
+    // value= nenhum -- qualquer re-render (corrigir o número, remover uma
+    // linha da tabela de já pesados) apagava o que já tinha sido digitado
+    // pro animal atual.
+    function sincronizarDraftPesagemAnimal(){
+      const pesoEl = document.getElementById('f-pesopesado');
+      const sexoEl = document.getElementById('f-sexopesado');
+      const racaEl = document.getElementById('f-racapesado');
+      if(pesoEl) editDraft.pesoPesadoDraft = pesoEl.value;
+      if(sexoEl) editDraft.sexoPesadoDraft = sexoEl.value;
+      if(racaEl) editDraft.racaPesadoDraft = racaEl.value;
+    }
     const addPesagemAnimalBtn = document.querySelector('[data-add-pesagem-animal]');
     if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = ()=>{
       const numEl = document.getElementById('f-numeropesado');
@@ -7292,6 +7319,9 @@ function attachEvents(){
       editDraft.observacao = document.getElementById('f-obspesagem').value;
       editDraft.entradasPesagem = [...(editDraft.entradasPesagem||[]), {numero, pesoKg: Number(peso), sexo:sexoNovo||undefined, raca:racaNovo||undefined}];
       editDraft.pesagemNumeroDraft = '';
+      editDraft.pesoPesadoDraft = '';
+      editDraft.sexoPesadoDraft = '';
+      editDraft.racaPesadoDraft = '';
       render();
       const numEl2 = document.getElementById('f-numeropesado');
       if(numEl2) numEl2.focus();
@@ -7302,6 +7332,7 @@ function attachEvents(){
         editDraft.loteId = Number(document.getElementById('f-lotepesagem').value);
         editDraft.data = document.getElementById('f-datapesagem').value;
         editDraft.observacao = document.getElementById('f-obspesagem').value;
+        sincronizarDraftPesagemAnimal();
         editDraft.entradasPesagem = (editDraft.entradasPesagem||[]).filter((_,i)=>i!==idx);
         render();
       };
@@ -7384,8 +7415,32 @@ function attachEvents(){
   }
 
   if(state.manejoAtivo){
+    // Corrigir o número depois de já ter preenchido peso/raça/diagnóstico
+    // do animal atual re-renderiza a tela (o número decide se mostra os
+    // campos de "animal novo") -- sincroniza tudo antes, senão o que já
+    // tinha sido preenchido pra esse mesmo animal se perdia.
+    function sincronizarDraftManejo(){
+      const d = state.manejoAtivo.draftAtual || (state.manejoAtivo.draftAtual = {});
+      const sexoEl = document.getElementById('f-sexomanejo');
+      const racaEl = document.getElementById('f-racamanejo');
+      const pesoEl = document.getElementById('f-pesomanejo');
+      const racaTouroEl = document.getElementById('f-racatouromanejo');
+      const resultadoEl = document.getElementById('f-resultadomanejo');
+      const partoDesmamaEl = document.getElementById('f-partodesmamamanejo');
+      const pesoDesmamaEl = document.getElementById('f-pesodesmamamanejo');
+      const racaDesmamaEl = document.getElementById('f-racadesmamamanejo');
+      if(sexoEl) d.sexo = sexoEl.value;
+      if(racaEl) d.raca = racaEl.value;
+      if(pesoEl) d.peso = pesoEl.value;
+      if(racaTouroEl) d.racaTouro = racaTouroEl.value;
+      if(resultadoEl) d.resultado = resultadoEl.value;
+      if(partoDesmamaEl) d.partoDesmama = partoDesmamaEl.value;
+      if(pesoDesmamaEl) d.pesoDesmama = pesoDesmamaEl.value;
+      if(racaDesmamaEl) d.racaDesmama = racaDesmamaEl.value;
+    }
     const numManejoEl = document.getElementById('f-numanimalmanejo');
     if(numManejoEl) numManejoEl.onchange = (e)=>{
+      sincronizarDraftManejo();
       state.manejoAtivo.numeroAtualDraft = e.target.value;
       render();
       const numManejoEl2 = document.getElementById('f-numanimalmanejo');
@@ -7549,6 +7604,7 @@ function attachEvents(){
       }
       m.animaisFeitos.push(registro);
       m.numeroAtualDraft = '';
+      m.draftAtual = {};
       render();
       const numEl2 = document.getElementById('f-numanimalmanejo');
       if(numEl2) numEl2.focus();
