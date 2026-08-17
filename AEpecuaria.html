@@ -3792,20 +3792,28 @@ function composicaoPorArea(confMes, pastoMes, criaMes, detalhesPorArea){
 // gráfico — qualquer outro nome, por maior ou menor que seja seu valor no
 // mês/ano, cai em "Outros". Lista fixa escolhida pelo usuário (revisou
 // todos os centros de custo cadastrados e escolheu os principais).
+// Precisa ser o nome EXATO que fica salvo em categoria (mesma string de
+// CENTROS_CUSTO_SUGERIDOS) -- a comparação abaixo é exata, então uma
+// versão abreviada aqui (ex: "Armazenagem e Logística" sem o "&") nunca
+// batia com o que era de fato salvo ("Armazenagem & Logística"), e a
+// despesa caía sempre em "Outros" mesmo sendo de uma categoria principal.
+// "Nutrição Animal" não tem correspondente em CENTROS_CUSTO_SUGERIDOS --
+// mantido como está (pode ser um nome digitado à mão em despesas
+// existentes; ajuste aqui se não for o nome real usado).
 const CENTRO_CUSTO_SEMPRE_VISIVEL = [
-  'Terceirização de Serviços',
-  'Mão de Obra',
-  'Combustíveis',
+  'Terceirização de Serviços Agropecuários',
+  'Mão-de-obra de Operacional',
+  'Combustíveis da Operação Agropecuária',
   'Insumos Agrícolas',
   'Nutrição Animal',
-  'Manutenção de Tratores e Máquinas',
+  'Manutenção de Tratores, Caminhões, Máquinas, Equipamentos e Implementos',
   'Serviços Profissionais',
-  'Armazenagem e Logística',
+  'Armazenagem & Logística',
   'Insumos Pecuários',
-  'Manutenção de Infraestrutura',
-  'Refeitório e Alimentação',
-  'Consultorias de Campo',
-  'Energia Elétrica',
+  'Manutenção e Reparo de Infraestruturas',
+  'Refeitório, Restaurantes & Alimentação',
+  'Serviços Técnicos Profissionais (Consultorias de Campo)',
+  'Energia Elétrica de Infraestrutura Operacional',
 ];
 
 function composicaoCentrosCusto(custosFixos, extras){
