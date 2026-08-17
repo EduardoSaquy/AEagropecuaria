@@ -1198,11 +1198,11 @@ function LoginPage(){
       <form data-login-form="1">
         <div class="login-field">
           <label>Usuário</label>
-          <input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus />
+          <input type="text" autocomplete="username" data-login-usuario="1" value="${esc(state.loginDraft.usuario)}" autofocus />
         </div>
         <div class="login-field">
           <label>Senha</label>
-          <input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" />
+          <input type="password" autocomplete="current-password" data-login-senha="1" value="${esc(state.loginDraft.senha)}" />
         </div>
         <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
       </form>
@@ -5067,7 +5067,7 @@ function PageAdminUsuarios(){
         ${state.perfis.map(p=>`
           <tr>
             <td><strong>${esc(p.nome)}</strong></td>
-            <td class="mono">${p.usuario}</td>
+            <td class="mono">${esc(p.usuario)}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
             <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
@@ -5085,10 +5085,10 @@ function ModalUsuario(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
+        ${state.usuarioError ? `<div class="login-error">${esc(state.usuarioError)}</div>` : ''}
         <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
-        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${esc(d.senha)}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -5105,7 +5105,7 @@ function ModalPermissoes(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
+        <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
             <option value="colaborador" ${d.papel==='colaborador'?'selected':''}>Colaborador</option>
@@ -6077,7 +6077,7 @@ function ModalVenda(){
           <span>${tipoVenda==='arroba' ? `${fmt(arrobas,2)} @ produzidas` : `${fmtInt(Number(d.quantidade)||0)} animais`}</span><span>R$ ${fmt(valorTotal)}</span>
         </div>
         <p class="hint">${tipoVenda==='arroba' ? 'Peso de carcaça (não peso vivo) — 1 @ = 15 kg. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro.' : tipoVenda==='cabeca' ? 'Valor fechado por animal, sem depender de peso.' : 'Valor por kg de peso vivo — comum em venda de bezerros/animais magros.'} Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsvenda" rows="2">${d.observacao||''}</textarea></div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsvenda" rows="2">${esc(d.observacao||'')}</textarea></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -6262,7 +6262,7 @@ function ModalPendencias(){
           <tbody>
             ${fila.map(item=>`
               <tr>
-                <td>${item.label}</td>
+                <td>${esc(item.label)}</td>
                 <td class="mono">${new Date(item.criadoEm).toLocaleString('pt-BR')}</td>
                 <td><button class="btn-danger-ghost" data-descartar-pendencia="${item.queueId}">Descartar</button></td>
               </tr>
