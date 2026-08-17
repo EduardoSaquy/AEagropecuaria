@@ -5441,17 +5441,17 @@ function ModalLote(){
         <div class="field-row">
           ${precisaSexoAnimalNovoLote ? `<div class="field"><label>Sexo dos animais novos (obrigatório)</label>
             <select id="f-sexoanimaisnovos">
-              <option value="" selected>— Selecione —</option>
-              <option value="macho">Machos</option>
-              <option value="femea">Fêmeas</option>
+              <option value="" ${!d.sexoAnimaisNovos?'selected':''}>— Selecione —</option>
+              <option value="macho" ${d.sexoAnimaisNovos==='macho'?'selected':''}>Machos</option>
+              <option value="femea" ${d.sexoAnimaisNovos==='femea'?'selected':''}>Fêmeas</option>
             </select>
           </div>` : ''}
           <div class="field"><label>Raça dos animais novos (obrigatório)</label>
             <select id="f-racaanimaisnovos">
-              <option value="" selected>— Selecione —</option>
-              <option value="angus">Angus</option>
-              <option value="nelore">Nelore</option>
-              <option value="outro">Outro</option>
+              <option value="" ${!d.racaAnimaisNovos?'selected':''}>— Selecione —</option>
+              <option value="angus" ${d.racaAnimaisNovos==='angus'?'selected':''}>Angus</option>
+              <option value="nelore" ${d.racaAnimaisNovos==='nelore'?'selected':''}>Nelore</option>
+              <option value="outro" ${d.racaAnimaisNovos==='outro'?'selected':''}>Outro</option>
             </select>
           </div>
         </div>
@@ -6345,7 +6345,21 @@ function attachEvents(){
   });
   if(state.modal?.type==='movimento'){
     const tipoMovEl = document.getElementById('f-tipo');
-    if(tipoMovEl) tipoMovEl.onchange = (e)=>{ editDraft.tipo = e.target.value; render(); };
+    if(tipoMovEl) tipoMovEl.onchange = (e)=>{
+      // Trocar Entrada/Saída re-renderiza (mostra/esconde o campo de preço
+      // pago) -- sem sincronizar antes, ingrediente/data/quantidade/preço
+      // já preenchidos eram perdidos.
+      const ingEl = document.getElementById('f-ing');
+      const dataEl = document.getElementById('f-data');
+      const qtdEl = document.getElementById('f-qtd');
+      const precoEl = document.getElementById('f-precoentrada');
+      if(ingEl) editDraft.ingredienteId = Number(ingEl.value);
+      if(dataEl) editDraft.data = dataEl.value;
+      if(qtdEl) editDraft.quantidade = qtdEl.value;
+      if(precoEl) editDraft.precoKg = precoEl.value;
+      editDraft.tipo = e.target.value;
+      render();
+    };
   }
   document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
     el.onclick = ()=>{
@@ -6699,7 +6713,18 @@ function attachEvents(){
     };
   });
   document.querySelectorAll('[data-nota-pick]').forEach(el=>{
-    el.onclick = ()=>{ editDraft.nota = Number(el.dataset.notaPick); render(); };
+    el.onclick = ()=>{
+      // Escolher a nota re-renderiza pra marcar o botão como ativo -- sem
+      // isso o lote/data/observação já preenchidos eram perdidos.
+      const loteEl = document.getElementById('f-lote');
+      const dataEl = document.getElementById('f-data');
+      const obsEl = document.getElementById('f-obs');
+      if(loteEl) editDraft.loteId = Number(loteEl.value);
+      if(dataEl) editDraft.data = dataEl.value;
+      if(obsEl) editDraft.observacao = obsEl.value;
+      editDraft.nota = Number(el.dataset.notaPick);
+      render();
+    };
   });
   document.querySelectorAll('[data-edit-pasto]').forEach(el=>{
     el.onclick = ()=>{
@@ -6985,11 +7010,13 @@ function attachEvents(){
     const kgEl = document.getElementById('f-kganimal');
     const tipoEl = document.getElementById('f-tipodieta');
     const estoqueMinEl = document.getElementById('f-estoqueminpronta');
+    const consumoEl = document.getElementById('f-consumodieta');
     if(nomeEl) editDraft.nome = nomeEl.value;
     if(categoriaEl) editDraft.categoriaAnimal = categoriaEl.value;
     if(kgEl) editDraft.kgAnimalDia = kgEl.value;
     if(tipoEl) editDraft.tipo = tipoEl.value;
     if(estoqueMinEl) editDraft.estoqueMinPronta = estoqueMinEl.value;
+    if(consumoEl) editDraft.consumoDireto = consumoEl.value==='direto';
   }
   document.querySelectorAll('[data-item-add]').forEach(el=>{
     el.onclick = ()=>{ sincronizarCamposDieta(); editDraft.itens.push({ingredienteId:state.ingredientes[0]?.id||'', pct:''}); render(); };
@@ -7013,6 +7040,7 @@ function attachEvents(){
     const el = document.getElementById(id);
     if(!el) return;
     el.oninput = (e)=>{
+      sincronizarDataObsVenda();
       editDraft[campo] = e.target.value;
       render();
       const s = document.getElementById(id);
@@ -7020,10 +7048,19 @@ function attachEvents(){
       if(decimal) s.setSelectionRange(s.value.length, s.value.length);
     };
   }
+  // Data e observação não têm sincronização própria (só são lidas do DOM
+  // no salvar) -- precisam ser copiadas pro editDraft antes de qualquer
+  // onchange que re-renderiza o modal, senão o que já foi digitado ali some.
+  function sincronizarDataObsVenda(){
+    const dataEl = document.getElementById('f-datavenda');
+    const obsEl = document.getElementById('f-obsvenda');
+    if(dataEl) editDraft.data = dataEl.value;
+    if(obsEl) editDraft.observacao = obsEl.value;
+  }
   const loteVendaEl = document.getElementById('f-lotevenda');
-  if(loteVendaEl) loteVendaEl.onchange = (e)=>{ editDraft.loteId = Number(e.target.value); render(); };
+  if(loteVendaEl) loteVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.loteId = Number(e.target.value); render(); };
   const tipoVendaEl = document.getElementById('f-tipovenda');
-  if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ editDraft.tipoVenda = e.target.value; render(); };
+  if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.tipoVenda = e.target.value; render(); };
   refazVendaInput('f-qtdvenda', 'quantidade');
   refazVendaInput('f-pesovenda', 'pesoMedioKg', true);
   refazVendaInput('f-valorarrobavenda', 'valorArroba', true);
@@ -7065,15 +7102,28 @@ function attachEvents(){
     };
   }
   if(state.modal && state.modal.type==='lote'){
+    // Único ponto de sincronização pra todos os onchange desse modal que
+    // re-renderizam (destino/sexo/lote existente/números/modo de entrada) --
+    // cada um listava manualmente os campos-irmão pra copiar antes do
+    // render(), e era fácil esquecer um (ex: números dos animais nunca
+    // entrava na lista do "Destino", ou sexo/raça dos animais novos nunca
+    // entravam em nenhuma). Lê tudo que existe no DOM agora, então cobre
+    // qualquer campo, inclusive os que só aparecem condicionalmente.
+    function sincronizarCamposLote(){
+      const ids = {
+        nome:'nome', numanimais:'numeroAnimais', datainicio:'dataInicio', datafim:'dataFim',
+        sexolote:'sexo', dietalote:'dietaId', pesoentrada:'pesoMedioEntrada', numerosanimais:'numerosAnimais',
+        sexoanimaisnovos:'sexoAnimaisNovos', racaanimaisnovos:'racaAnimaisNovos',
+        loteexistente:'loteExistenteId', qtdentrada:'qtdEntrada', dataentrada:'dataEntrada',
+      };
+      for(const [elId, campo] of Object.entries(ids)){
+        const el = document.getElementById('f-'+elId);
+        if(el) editDraft[campo] = el.value;
+      }
+    }
     const destinoLoteEl = document.getElementById('f-destino');
     if(destinoLoteEl) destinoLoteEl.onchange = (e)=>{
-      editDraft.nome = document.getElementById('f-nome').value;
-      editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
-      editDraft.dataInicio = document.getElementById('f-datainicio').value;
-      editDraft.dataFim = document.getElementById('f-datafim').value;
-      editDraft.sexo = document.getElementById('f-sexolote').value;
-      const pesoEl = document.getElementById('f-pesoentrada');
-      if(pesoEl) editDraft.pesoMedioEntrada = pesoEl.value;
+      sincronizarCamposLote();
       editDraft.destino = e.target.value;
       // a dieta padrão é filtrada por tipo (confinamento/pasto/cria) -- ao
       // trocar o destino, a lista de opções muda, então zera a seleção em
@@ -7081,74 +7131,38 @@ function attachEvents(){
       editDraft.dietaId = '';
       render();
     };
-    const modoNovoAtual = !editDraft._editId ? (editDraft.modoEntrada||'novo')==='novo' : true;
     const sexoLoteEl = document.getElementById('f-sexolote');
     if(sexoLoteEl) sexoLoteEl.onchange = (e)=>{
-      editDraft.nome = document.getElementById('f-nome').value;
-      editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
-      editDraft.dataInicio = document.getElementById('f-datainicio').value;
-      editDraft.dataFim = document.getElementById('f-datafim').value;
-      const pesoEl0 = document.getElementById('f-pesoentrada');
-      if(pesoEl0) editDraft.pesoMedioEntrada = pesoEl0.value;
-      const numerosEl0 = document.getElementById('f-numerosanimais');
-      if(numerosEl0) editDraft.numerosAnimais = numerosEl0.value;
+      sincronizarCamposLote();
       editDraft.sexo = e.target.value;
       render();
     };
     const loteExistenteEl = document.getElementById('f-loteexistente');
     if(loteExistenteEl) loteExistenteEl.onchange = (e)=>{
-      editDraft.qtdEntrada = document.getElementById('f-qtdentrada').value;
-      editDraft.dataEntrada = document.getElementById('f-dataentrada').value;
-      const pesoEl1 = document.getElementById('f-pesoentrada');
-      if(pesoEl1) editDraft.pesoMedioEntrada = pesoEl1.value;
-      const numerosEl1 = document.getElementById('f-numerosanimais');
-      if(numerosEl1) editDraft.numerosAnimais = numerosEl1.value;
+      sincronizarCamposLote();
       editDraft.loteExistenteId = e.target.value;
       render();
     };
     const numerosAnimaisEl = document.getElementById('f-numerosanimais');
     if(numerosAnimaisEl) numerosAnimaisEl.onchange = (e)=>{
-      if(modoNovoAtual){
-        editDraft.nome = document.getElementById('f-nome').value;
-        editDraft.numeroAnimais = document.getElementById('f-numanimais').value;
-        editDraft.dataInicio = document.getElementById('f-datainicio').value;
-        editDraft.dataFim = document.getElementById('f-datafim').value;
-        editDraft.sexo = document.getElementById('f-sexolote').value;
-        const pesoEl2 = document.getElementById('f-pesoentrada');
-        if(pesoEl2) editDraft.pesoMedioEntrada = pesoEl2.value;
-      } else {
-        editDraft.loteExistenteId = document.getElementById('f-loteexistente').value;
-        editDraft.qtdEntrada = document.getElementById('f-qtdentrada').value;
-        editDraft.dataEntrada = document.getElementById('f-dataentrada').value;
-        const pesoEl3 = document.getElementById('f-pesoentrada');
-        if(pesoEl3) editDraft.pesoMedioEntrada = pesoEl3.value;
-      }
+      sincronizarCamposLote();
       editDraft.numerosAnimais = e.target.value;
       render();
     };
+    document.querySelectorAll('#f-sexoanimaisnovos, #f-racaanimaisnovos').forEach(el=>{
+      el.onchange = (e)=>{
+        sincronizarCamposLote();
+        editDraft[el.id==='f-sexoanimaisnovos'?'sexoAnimaisNovos':'racaAnimaisNovos'] = e.target.value;
+        render();
+      };
+    });
     // "Novo lote" x "Lote já existente" -- só existe na criação (não no
     // editar), pra decidir se essa entrada de animais vira um lote novo ou
     // soma na quantidade (com peso recalculado por média ponderada) de um
     // lote que já existe.
     const modoEntradaEl = document.getElementById('f-modoentrada');
     if(modoEntradaEl) modoEntradaEl.onchange = (e)=>{
-      if((editDraft.modoEntrada||'novo')==='novo'){
-        editDraft.nome = document.getElementById('f-nome')?.value ?? editDraft.nome;
-        editDraft.destino = document.getElementById('f-destino')?.value ?? editDraft.destino;
-        editDraft.sexo = document.getElementById('f-sexolote')?.value ?? editDraft.sexo;
-        editDraft.dietaId = document.getElementById('f-dietalote')?.value ?? editDraft.dietaId;
-        editDraft.numeroAnimais = document.getElementById('f-numanimais')?.value ?? editDraft.numeroAnimais;
-        editDraft.dataInicio = document.getElementById('f-datainicio')?.value ?? editDraft.dataInicio;
-        editDraft.dataFim = document.getElementById('f-datafim')?.value ?? editDraft.dataFim;
-      } else {
-        editDraft.loteExistenteId = document.getElementById('f-loteexistente')?.value ?? editDraft.loteExistenteId;
-        editDraft.qtdEntrada = document.getElementById('f-qtdentrada')?.value ?? editDraft.qtdEntrada;
-        editDraft.dataEntrada = document.getElementById('f-dataentrada')?.value ?? editDraft.dataEntrada;
-      }
-      const pesoEl2 = document.getElementById('f-pesoentrada');
-      if(pesoEl2) editDraft.pesoMedioEntrada = pesoEl2.value;
-      const numerosEl2 = document.getElementById('f-numerosanimais');
-      if(numerosEl2) editDraft.numerosAnimais = numerosEl2.value;
+      sincronizarCamposLote();
       editDraft.modoEntrada = e.target.value;
       render();
     };
