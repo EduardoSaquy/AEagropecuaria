@@ -843,6 +843,7 @@ const state = {
   openDietId: null,
   pesagemExpandidaId: null,
   listasExpandidas: {}, // {[listId]: true} -- listas de lançamentos que o usuário expandiu além de "só hoje"
+  gruposRacaoExpandidos: {}, // {[data+'|'+loteId]: true} -- grupo de saída de ração (dia+lote) expandido pra ver os tratos um a um
   loteDetalheId: null,
   loteDetalheOrigem: null,
   loteDetalheContexto: null, // 'parto'|'inseminacao'|'diagnostico'|'desmama'|'pesagem'|null -- de qual sub-aba veio o clique no lote, pra mostrar a informação relacionada primeiro
@@ -3059,6 +3060,20 @@ function PageVendasGeral(){
 }
 
 /* ===================== PÁGINA: SAÍDA DE RAÇÃO ===================== */
+// Pode ter mais de um trato lançado no mesmo dia pro mesmo lote (manhã,
+// tarde etc.) -- agrupa pra mostrar o total do dia numa linha só, com o
+// detalhe trato a trato (e o horário de cada um) disponível ao expandir.
+// Mantém a ordem de chegada da lista (já vem ordenada por data desc).
+function agruparPorDiaLote(lista){
+  const grupos = {};
+  const ordem = [];
+  lista.forEach(item=>{
+    const key = item.data+'|'+item.loteId;
+    if(!grupos[key]){ grupos[key] = {key, data:item.data, loteId:item.loteId, itens:[]}; ordem.push(key); }
+    grupos[key].itens.push(item);
+  });
+  return ordem.map(key=>grupos[key]);
+}
 function PageSaidaRacao(tipo){
   const verValor = podeVerPrecoInsumo();
   const filtro = state.filtrosSaidaRacao[tipo] || {mes:'', loteId:'', dietaId:''};
@@ -3116,25 +3131,46 @@ function PageSaidaRacao(tipo){
         <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th>Lançado em</th><th></th>
       </tr></thead>
       <tbody>
-        ${rv.itens.map(s=>{
-          const dieta = state.dietas.find(d=>d.id===s.dietaId);
-          const lote = state.lotes.find(l=>l.id===s.loteId);
-          const custo = dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0;
+        ${agruparPorDiaLote(rv.itens).map(g=>{
+          const lote = state.lotes.find(l=>l.id===g.loteId);
+          const linhaEntrada = (s, dentroDoGrupo)=>{
+            const dieta = state.dietas.find(d=>d.id===s.dietaId);
+            const custo = dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0;
+            return `<tr>
+              <td class="mono">${dentroDoGrupo ? '' : s.data.split('-').reverse().join('/')}</td>
+              <td>${dieta?esc(dieta.nome):'—'}</td>
+              <td>${dentroDoGrupo ? '' : (lote?esc(lote.nome):'—')}</td>
+              <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
+              ${verValor?`<td class="mono">R$ ${fmt(custo)}</td>`:''}
+              <td>${esc(s.criadoPor) || '—'}</td>
+              <td class="mono">${s.criadoEm ? new Date(s.criadoEm).toLocaleString('pt-BR') : '—'}</td>
+              <td style="display:flex; gap:6px;">
+                ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
+                ${!souColaborador() ? `<button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>` : ''}
+                ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-racao="${s.id}">Excluir</button>` : ''}
+                ` : ''}
+              </td>
+            </tr>`;
+          };
+          if(g.itens.length===1) return linhaEntrada(g.itens[0], false);
+          const totalKg = g.itens.reduce((a,s)=>a+Number(s.quantidadeKg||0),0);
+          const totalCusto = g.itens.reduce((a,s)=>{ const dieta = state.dietas.find(d=>d.id===s.dietaId); return a + (dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0); },0);
+          const dietasDoGrupo = [...new Set(g.itens.map(s=>s.dietaId))];
+          const nomeDieta = dietasDoGrupo.length===1 ? (state.dietas.find(d=>d.id===dietasDoGrupo[0])?.nome) : null;
+          const expandido = !!state.gruposRacaoExpandidos[g.key];
           return `<tr>
-            <td class="mono">${s.data.split('-').reverse().join('/')}</td>
-            <td>${dieta?esc(dieta.nome):'—'}</td>
+            <td class="mono">${g.data.split('-').reverse().join('/')}</td>
+            <td>${nomeDieta ? esc(nomeDieta) : `<span class="hint">Várias dietas</span>`}</td>
             <td>${lote?esc(lote.nome):'—'}</td>
-            <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
-            ${verValor?`<td class="mono">R$ ${fmt(custo)}</td>`:''}
-            <td>${esc(s.criadoPor) || '—'}</td>
-            <td class="mono">${s.criadoEm ? new Date(s.criadoEm).toLocaleString('pt-BR') : '—'}</td>
-            <td style="display:flex; gap:6px;">
-              ${temPermissao(tipo==='reproducao'?'cria':tipo,'editar') ? `
-              ${!souColaborador() ? `<button class="btn-ghost btn-sm" data-edit-racao="${s.id}">Editar</button>` : ''}
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-racao="${s.id}">Excluir</button>` : ''}
-              ` : ''}
-            </td>
-          </tr>`;
+            <td class="mono"><strong>${fmtInt(totalKg)} kg</strong></td>
+            ${verValor?`<td class="mono"><strong>R$ ${fmt(totalCusto)}</strong></td>`:''}
+            <td colspan="2"><button class="btn-ghost btn-sm" data-toggle-grupo-racao="${g.key}">${g.itens.length} trato(s) ${expandido?'▲':'▼'}</button></td>
+            <td></td>
+          </tr>
+          ${expandido ? g.itens
+            .slice()
+            .sort((a,b)=> (a.criadoEm||'').localeCompare(b.criadoEm||''))
+            .map(s=>linhaEntrada(s, true)).join('') : ''}`;
         }).join('')}
       </tbody>
     </table>`}
@@ -3250,23 +3286,40 @@ function PagePasto(){
         <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
-        ${rv.itens.map(p=>{
-          const lote = state.lotes.find(l=>l.id===p.loteId);
-          const dieta = state.dietas.find(d=>d.id===p.dietaId);
+        ${agruparPorDiaLote(rv.itens.map(p=>({...p, quantidadeKg:p.quantidade}))).map(g=>{
+          const lote = state.lotes.find(l=>l.id===g.loteId);
+          const linhaEntrada = (p, dentroDoGrupo)=>{
+            const dieta = state.dietas.find(d=>d.id===p.dietaId);
+            return `<tr>
+              <td class="mono">${dentroDoGrupo ? '' : p.data.split('-').reverse().join('/')}</td>
+              <td>${dentroDoGrupo ? '' : (lote?esc(lote.nome):'—')}</td>
+              <td>${dieta?esc(dieta.nome):'—'}</td>
+              <td class="mono">${fmtInt(p.quantidade)} kg</td>
+              ${verValor?`<td class="mono">R$ ${fmt(custoPasto(p))}</td>`:''}
+              <td>${esc(p.criadoPor) || '—'}</td>
+              <td style="display:flex; gap:6px;">
+                ${temPermissao('pasto','editar') ? `
+                <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
+                ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-pasto="${p.id}">Excluir</button>` : ''}
+                ` : ''}
+              </td>
+            </tr>`;
+          };
+          if(g.itens.length===1) return linhaEntrada(g.itens[0], false);
+          const totalKg = g.itens.reduce((a,p)=>a+Number(p.quantidade||0),0);
+          const totalCusto = g.itens.reduce((a,p)=>a+custoPasto(p),0);
+          const dietasDoGrupo = [...new Set(g.itens.map(p=>p.dietaId))];
+          const nomeDieta = dietasDoGrupo.length===1 ? (state.dietas.find(d=>d.id===dietasDoGrupo[0])?.nome) : null;
+          const expandido = !!state.gruposRacaoExpandidos[g.key];
           return `<tr>
-            <td class="mono">${p.data.split('-').reverse().join('/')}</td>
+            <td class="mono">${g.data.split('-').reverse().join('/')}</td>
             <td>${lote?esc(lote.nome):'—'}</td>
-            <td>${dieta?esc(dieta.nome):'—'}</td>
-            <td class="mono">${fmtInt(p.quantidade)} kg</td>
-            ${verValor?`<td class="mono">R$ ${fmt(custoPasto(p))}</td>`:''}
-            <td>${esc(p.criadoPor) || '—'}</td>
-            <td style="display:flex; gap:6px;">
-              ${temPermissao('pasto','editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-pasto="${p.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-pasto="${p.id}">Excluir</button>` : ''}
-              ` : ''}
-            </td>
-          </tr>`;
+            <td>${nomeDieta ? esc(nomeDieta) : `<span class="hint">Várias dietas</span>`}</td>
+            <td class="mono"><strong>${fmtInt(totalKg)} kg</strong></td>
+            ${verValor?`<td class="mono"><strong>R$ ${fmt(totalCusto)}</strong></td>`:''}
+            <td colspan="2"><button class="btn-ghost btn-sm" data-toggle-grupo-racao="${g.key}">${g.itens.length} trato(s) ${expandido?'▲':'▼'}</button></td>
+          </tr>
+          ${expandido ? g.itens.map(p=>linhaEntrada(p, true)).join('') : ''}`;
         }).join('')}
       </tbody>
     </table>`}
@@ -6893,6 +6946,13 @@ function attachEvents(){
     el.onclick = ()=>{
       const id = el.dataset.toggleLista;
       state.listasExpandidas[id] = !state.listasExpandidas[id];
+      render();
+    };
+  });
+  document.querySelectorAll('[data-toggle-grupo-racao]').forEach(el=>{
+    el.onclick = ()=>{
+      const key = el.dataset.toggleGrupoRacao;
+      state.gruposRacaoExpandidos[key] = !state.gruposRacaoExpandidos[key];
       render();
     };
   });
