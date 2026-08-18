@@ -3128,11 +3128,13 @@ function PageSaidaRacao(tipo){
     ${rv.itens.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Dieta</th><th>Lote</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th>Lançado em</th><th></th>
+        <th>Data</th><th>Dieta</th><th>Lote</th><th>Nº animais</th><th>Quantidade</th><th>Ração/animal</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th>Lançado em</th><th></th>
       </tr></thead>
       <tbody>
         ${agruparPorDiaLote(rv.itens).map(g=>{
           const lote = state.lotes.find(l=>l.id===g.loteId);
+          const numAnimais = Number(lote?.numeroAnimais||0);
+          const racaoPorAnimal = (kg)=> numAnimais>0 ? `${fmt(kg/numAnimais,1)} kg` : '—';
           const linhaEntrada = (s, dentroDoGrupo)=>{
             const dieta = state.dietas.find(d=>d.id===s.dietaId);
             const custo = dieta ? calcDieta(dieta).custoKg * s.quantidadeKg : 0;
@@ -3140,7 +3142,9 @@ function PageSaidaRacao(tipo){
               <td class="mono">${dentroDoGrupo ? '' : s.data.split('-').reverse().join('/')}</td>
               <td>${dieta?esc(dieta.nome):'—'}</td>
               <td>${dentroDoGrupo ? '' : (lote?esc(lote.nome):'—')}</td>
+              <td class="mono">${dentroDoGrupo ? '' : (numAnimais>0?fmtInt(numAnimais):'—')}</td>
               <td class="mono">${fmtInt(s.quantidadeKg)} kg</td>
+              <td class="mono">${racaoPorAnimal(s.quantidadeKg)}</td>
               ${verValor?`<td class="mono">R$ ${fmt(custo)}</td>`:''}
               <td>${esc(s.criadoPor) || '—'}</td>
               <td class="mono">${s.criadoEm ? new Date(s.criadoEm).toLocaleString('pt-BR') : '—'}</td>
@@ -3162,7 +3166,9 @@ function PageSaidaRacao(tipo){
             <td class="mono">${g.data.split('-').reverse().join('/')}</td>
             <td>${nomeDieta ? esc(nomeDieta) : `<span class="hint">Várias dietas</span>`}</td>
             <td>${lote?esc(lote.nome):'—'}</td>
+            <td class="mono">${numAnimais>0?fmtInt(numAnimais):'—'}</td>
             <td class="mono"><strong>${fmtInt(totalKg)} kg</strong></td>
+            <td class="mono"><strong>${racaoPorAnimal(totalKg)}</strong></td>
             ${verValor?`<td class="mono"><strong>R$ ${fmt(totalCusto)}</strong></td>`:''}
             <td colspan="2"><button class="btn-ghost btn-sm" data-toggle-grupo-racao="${g.key}">${g.itens.length} trato(s) ${expandido?'▲':'▼'}</button></td>
             <td></td>
@@ -3283,18 +3289,22 @@ function PagePasto(){
     ${rv.itens.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Dieta de pasto</th><th>Quantidade</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
+        <th>Data</th><th>Lote</th><th>Nº animais</th><th>Dieta de pasto</th><th>Quantidade</th><th>Ração/animal</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${agruparPorDiaLote(rv.itens.map(p=>({...p, quantidadeKg:p.quantidade}))).map(g=>{
           const lote = state.lotes.find(l=>l.id===g.loteId);
+          const numAnimais = Number(lote?.numeroAnimais||0);
+          const racaoPorAnimal = (kg)=> numAnimais>0 ? `${fmt(kg/numAnimais,1)} kg` : '—';
           const linhaEntrada = (p, dentroDoGrupo)=>{
             const dieta = state.dietas.find(d=>d.id===p.dietaId);
             return `<tr>
               <td class="mono">${dentroDoGrupo ? '' : p.data.split('-').reverse().join('/')}</td>
               <td>${dentroDoGrupo ? '' : (lote?esc(lote.nome):'—')}</td>
+              <td class="mono">${dentroDoGrupo ? '' : (numAnimais>0?fmtInt(numAnimais):'—')}</td>
               <td>${dieta?esc(dieta.nome):'—'}</td>
               <td class="mono">${fmtInt(p.quantidade)} kg</td>
+              <td class="mono">${racaoPorAnimal(p.quantidade)}</td>
               ${verValor?`<td class="mono">R$ ${fmt(custoPasto(p))}</td>`:''}
               <td>${esc(p.criadoPor) || '—'}</td>
               <td style="display:flex; gap:6px;">
@@ -3314,8 +3324,10 @@ function PagePasto(){
           return `<tr>
             <td class="mono">${g.data.split('-').reverse().join('/')}</td>
             <td>${lote?esc(lote.nome):'—'}</td>
+            <td class="mono">${numAnimais>0?fmtInt(numAnimais):'—'}</td>
             <td>${nomeDieta ? esc(nomeDieta) : `<span class="hint">Várias dietas</span>`}</td>
             <td class="mono"><strong>${fmtInt(totalKg)} kg</strong></td>
+            <td class="mono"><strong>${racaoPorAnimal(totalKg)}</strong></td>
             ${verValor?`<td class="mono"><strong>R$ ${fmt(totalCusto)}</strong></td>`:''}
             <td colspan="2"><button class="btn-ghost btn-sm" data-toggle-grupo-racao="${g.key}">${g.itens.length} trato(s) ${expandido?'▲':'▼'}</button></td>
           </tr>
