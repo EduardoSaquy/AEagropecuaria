@@ -306,74 +306,68 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===================== SUPABASE ===================== */
-// Projeto da própria matriz (cadastro central de fazendas, apps e
-// usuários). Crie um projeto Supabase novo, rode matriz_schema.sql
-// nele e substitua a URL/chave abaixo — mesmo processo do AECombustível.
+// AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
+// esgotado) — reaproveita o projeto real do AE Lavoura, que já tem
+// fazendas, culturas, talhões e os dados de cana + grãos (Cana e Cereais
+// foram unificados no AE Lavoura). Login/perfis também vêm de lá
+// (profiles compartilhado — mesmo DOMINIO_LOGIN dos dois apps).
 const db = supabase.createClient(
-  'https://SUBSTITUA.supabase.co',
-  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE'
+  'https://kmkystqgpvmzrccxvyaz.supabase.co',
+  'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
 
 // Cliente extra, só de leitura, apontando pro projeto da Pecuária —
 // usado para os indicadores ao vivo do card "AE Pecuária" no Painel.
 // Não duplica dado nenhum: cada consulta lê direto do banco da Pecuária.
+// Requer políticas de leitura liberadas pro anon key nas tabelas usadas
+// aqui (a Pecuária guarda RLS por permissão de usuário logado — ver
+// script de políticas fornecido separadamente).
 const dbPecuaria = supabase.createClient(
   'https://leojfqlbdtlriemdgnyw.supabase.co',
   'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
 );
 
-// Idem, só de leitura, pro projeto do Combustível — usado pros indicadores
-// do card "AE Combustível" e pra ratear o custo de combustível dentro da
-// despesa de cada operação de terra (pecuária/cana/cereais) em Resultados.
-const dbCombustivel = supabase.createClient(
-  'https://SUBSTITUA-COMBUSTIVEL.supabase.co',
-  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_COMBUSTIVEL'
-);
+// AE Combustível ainda não foi implantado com banco real — o card dele
+// fica "em breve" no Painel por enquanto (ver APPS_REGISTRO) e
+// carregarCombustivel() abaixo não faz nenhuma chamada de rede. Quando o
+// schema for desenhado, ele entra no mesmo projeto do Lavoura (db acima),
+// sem precisar de projeto Supabase novo.
 
-// Idem, só de leitura, pro projeto do Cana — usado pro card "AE Cana" no
-// Painel e pelo Resultado dele. Banco próprio e separado (mesmo padrão da
-// Pecuária/Combustível acima) — ver README, seção "AE Cana".
-const dbCana = supabase.createClient(
-  'https://SUBSTITUA-CANA.supabase.co',
-  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_CANA'
-);
-
-// Idem, só de leitura, pro projeto do Cereais — usado só pro card "AE
-// Cereais" no Painel por enquanto. Banco próprio e separado, mesmo padrão
-// do Cana. O AE Cereais ainda não tem receita/Resultado próprio (só
-// Despesas), então ele continua no fallback "custo de combustível
-// rateado, parcial" em Resultados — ver resultadoBrutoOperacao().
-const dbCereais = supabase.createClient(
-  'https://SUBSTITUA-CEREAIS.supabase.co',
-  'SUBSTITUA_PELA_CHAVE_PUBLISHABLE_CEREAIS'
-);
-
-function rowToFazenda(r){ return {id:r.id, nome:r.nome, areaHa:r.area_ha, localizacao:r.localizacao||'', observacao:r.observacao||''}; }
-function fazendaToRow(f){ return {nome:f.nome, area_ha:f.areaHa||null, localizacao:f.localizacao||'', observacao:f.observacao||''}; }
-function rowToOperacao(r){ return {id:r.id, fazendaId:r.fazenda_id, operacao:r.operacao, areaHa:r.area_ha}; }
-function rowToApp(r){ return {id:r.id, nome:r.nome, slug:r.slug, descricao:r.descricao||'', url:r.url||'', cor:r.cor||'#1D5DA8', ordem:r.ordem||0, status:r.status||'em_breve'}; }
-function appToRow(a){ return {nome:a.nome, slug:a.slug, descricao:a.descricao||'', url:a.url||null, cor:a.cor||'#1D5DA8', ordem:a.ordem||0, status:a.status||'em_breve'}; }
+function rowToFazendaLavoura(r){ return {id:r.id, nome:r.nome, estado:r.estado||'', areaHa:r.area_ha, ativo:r.ativo}; }
+function rowToFazendaPecuaria(r){ return {id:r.id, nome:r.nome, hectares:r.hectares}; }
+function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo}; }
 
+// Registro dos apps do Painel — hardcoded no JS (não precisa de tabela
+// própria: nunca muda em runtime, só quando um app novo entra no ar).
+// Cana e Grãos apontam pro mesmo AE Lavoura (app único, duas frentes) mas
+// aparecem como cards/operações separados porque cada um tem talhões,
+// indicadores e resultado financeiro próprios.
+const APPS_REGISTRO = [
+  {slug:'pecuaria', nome:'AE Pecuária', descricao:'Confinamento, pasto, cria, dietas e financeiro do rebanho.', url:'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', cor:'#2a78d6', status:'ativo'},
+  {slug:'cana', nome:'AE Lavoura — Cana', descricao:'Talhões, tratos culturais e financeiro da cana-de-açúcar.', url:'https://eduardosaquy.github.io/AEagropecuaria/AELavoura.html', cor:'#eb6834', status:'ativo'},
+  {slug:'cereais', nome:'AE Lavoura — Grãos', descricao:'Talhões, tratos culturais e financeiro de grãos/cereais.', url:'https://eduardosaquy.github.io/AEagropecuaria/AELavoura.html', cor:'#1baf7a', status:'ativo'},
+  {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'', cor:'#8a6d3b', status:'em_breve'},
+];
+
 async function loadAll(){
-  const [faz, op, ap, perfis] = await Promise.all([
+  state.apps = APPS_REGISTRO;
+  const [faz, tal, cul, fazPec, perfis] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
-    db.from('fazenda_operacoes').select('*'),
-    db.from('apps').select('*').order('ordem'),
+    db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
+    db.from('culturas').select('id, frente'),
+    dbPecuaria.from('fazendas').select('*').order('nome'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
   ]);
-  const erroCarregamento = [faz, op, ap, perfis].find(r=>r.error)?.error;
+  const erroCarregamento = [faz, tal, cul, fazPec, perfis].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
   }
-  state.fazendas = (faz.data||[]).map(rowToFazenda);
-  state.fazendaOperacoes = {};
-  (op.data||[]).map(rowToOperacao).forEach(o=>{
-    if(!state.fazendaOperacoes[o.fazendaId]) state.fazendaOperacoes[o.fazendaId] = [];
-    state.fazendaOperacoes[o.fazendaId].push(o);
-  });
-  state.apps = (ap.data||[]).map(rowToApp);
+  state.fazendasLavoura = (faz.data||[]).map(rowToFazendaLavoura);
+  state.talhoes = (tal.data||[]).map(rowToTalhao);
+  state.culturas = cul.data||[];
+  state.fazendasPecuaria = (fazPec.data||[]).map(rowToFazendaPecuaria);
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   render();
   carregarIndicadoresPecuaria();
@@ -381,8 +375,19 @@ async function loadAll(){
   carregarIndicadoresCana();
   carregarResultadoCana();
   carregarIndicadoresCereais();
-  carregarResultadoCereaisDespesa();
+  carregarResultadoCereais();
   carregarCombustivel();
+}
+
+// frente de uma cultura ('cana' | 'graos' | 'pecuaria' | null) — mesma
+// lógica de frenteDoTalhao() do AELavoura.html, reproduzida aqui porque a
+// matriz não importa o app inteiro, só lê o banco dele.
+function frenteDaCultura(culturaId){
+  const c = state.culturas.find(x=>x.id===culturaId);
+  return c ? c.frente : null;
+}
+function talhoesPorFrente(frente){
+  return state.talhoes.filter(t=>frenteDaCultura(t.culturaId)===frente);
 }
 
 async function carregarIndicadoresPecuaria(){
@@ -408,25 +413,25 @@ async function carregarIndicadoresPecuaria(){
   render();
 }
 
-// Mesmo padrão de carregarIndicadoresPecuaria(), lendo do banco próprio
-// do Cana (dbCana).
+// Mesmo padrão de carregarIndicadoresPecuaria(), lendo do banco do Lavoura
+// (db) — cana e grãos moram no mesmo projeto/tabelas hoje, então a
+// contagem de talhões usa o que já foi carregado em loadAll() (state.talhoes
+// + state.culturas) filtrado por frente, em vez de bater no banco de novo.
 async function carregarIndicadoresCana(){
   state.indicadores.cana = {...state.indicadores.cana, loading:true, erro:''};
   render();
   try{
-    const [talRes, planRes, colRes] = await Promise.all([
-      dbCana.from('talhoes_areas').select('id, tipo').eq('tipo','talhao'),
-      dbCana.from('plantios_cana').select('id, ativo'),
-      dbCana.from('colheitas_cana').select('data, toneladas'),
+    const [planRes, colRes] = await Promise.all([
+      db.from('plantios_cana').select('id, ativo'),
+      db.from('colheitas_cana').select('data, toneladas'),
     ]);
-    if(talRes.error) throw talRes.error;
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cana = {
       loading:false, erro:'',
-      talhoes: (talRes.data||[]).length,
+      talhoes: talhoesPorFrente('cana').length,
       plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
       toneladasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.toneladas||0),0),
     };
@@ -436,26 +441,26 @@ async function carregarIndicadoresCana(){
   render();
 }
 
-// Mesmo padrão de carregarIndicadoresCana(), lendo do banco próprio do
-// Cereais (dbCereais). Produtividade de grãos é em sacas, não toneladas
-// (colheitas_graos.sacas) — unidade diferente da Cana de propósito.
+// Mesmo padrão de carregarIndicadoresCana(), lendo as tabelas de grãos do
+// mesmo banco do Lavoura (db). Produtividade de grãos é em sacas, não
+// toneladas (colheitas_graos.sacas) — unidade diferente da Cana de
+// propósito. Frente usada no filtro de talhões é 'graos' (nome que o
+// AELavoura.html usa internamente pra essa frente).
 async function carregarIndicadoresCereais(){
   state.indicadores.cereais = {...state.indicadores.cereais, loading:true, erro:''};
   render();
   try{
-    const [talRes, planRes, colRes] = await Promise.all([
-      dbCereais.from('talhoes_areas').select('id, tipo').eq('tipo','talhao'),
-      dbCereais.from('plantios_graos').select('id, ativo'),
-      dbCereais.from('colheitas_graos').select('data, sacas'),
+    const [planRes, colRes] = await Promise.all([
+      db.from('plantios_graos').select('id, ativo'),
+      db.from('colheitas_graos').select('data, sacas'),
     ]);
-    if(talRes.error) throw talRes.error;
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cereais = {
       loading:false, erro:'',
-      talhoes: (talRes.data||[]).length,
+      talhoes: talhoesPorFrente('graos').length,
       plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
       sacasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.sacas||0),0),
     };
@@ -564,20 +569,20 @@ async function carregarResultadoPecuaria(){
   render();
 }
 
-// Resultado da Cana, lido direto do banco próprio dela (dbCana) — mesma
-// lógica de preço médio ponderado e custo por talhão que o próprio
-// AECana.html usa em Operações > Estoque e Financeiro > Custo por Talhão —
-// se aquela lógica mudar lá, precisa atualizar aqui também.
+// Resultado da Cana, lido do banco do Lavoura (db) — mesma lógica de preço
+// médio ponderado e custo por talhão que o próprio AELavoura.html usa em
+// Financeiro/Estoque — se aquela lógica mudar lá, precisa atualizar aqui
+// também.
 async function carregarResultadoCana(){
   state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
   render();
   try{
     const [insRes, entRes, aplRes, desRes, recRes] = await Promise.all([
-      dbCana.from('insumos_cana').select('id'),
-      dbCana.from('entradas_insumo_cana').select('insumo_id, quantidade, preco_pago'),
-      dbCana.from('aplicacoes_cana').select('data, insumo_id, quantidade'),
-      dbCana.from('despesas_cana').select('data, valor'),
-      dbCana.from('receitas_cana').select('data, valor_total'),
+      db.from('insumos_cana').select('id'),
+      db.from('entradas_insumo_cana').select('insumo_id, quantidade, preco_pago'),
+      db.from('aplicacoes_cana').select('data, insumo_id, quantidade'),
+      db.from('despesas_cana').select('data, valor'),
+      db.from('receitas_cana').select('data, valor_total'),
     ]);
     for(const r of [insRes, entRes, aplRes, desRes, recRes]) if(r.error) throw r.error;
 
@@ -622,26 +627,23 @@ async function carregarResultadoCana(){
   render();
 }
 
-// Despesa do Cereais, lido direto do banco próprio dele (dbCereais) —
-// mesma lógica de carregarResultadoCana(), mas SEM receita: o AE Cereais
-// ainda não tem módulo de Receita/Resultado (só Despesas, ver #83), então
-// aqui a receita fica sempre 0 e o resultado marcado com `semReceita` —
-// diferente de soDespesaCombustivel (que significa "nenhum dado próprio",
-// caso do AE Cereais antes desta integração): aqui a despesa É real e
-// completa (insumo + despesas gerais), só falta a receita pra fechar a
-// conta. Quando o Cereais ganhar Receita própria, portar igual foi feito
-// pra Cana (ver carregarResultadoCana) e apagar essa função.
-async function carregarResultadoCereaisDespesa(){
-  state.resultados.cereaisDespesa = {...state.resultados.cereaisDespesa, loading:true, erro:''};
+// Resultado dos Cereais/Grãos, lido do banco do Lavoura (db) — mesma
+// lógica de carregarResultadoCana(), agora com receita real também
+// (receitas_graos existe desde a unificação Cana+Cereais no AE Lavoura;
+// antes disso o AE Cereais só tinha Despesas, daí a função só calculava a
+// despesa — ver histórico do arquivo).
+async function carregarResultadoCereais(){
+  state.resultados.cereais = {...state.resultados.cereais, loading:true, erro:''};
   render();
   try{
-    const [insRes, entRes, aplRes, desRes] = await Promise.all([
-      dbCereais.from('insumos_graos').select('id'),
-      dbCereais.from('entradas_insumo_graos').select('insumo_id, quantidade, preco_pago'),
-      dbCereais.from('aplicacoes_graos').select('data, insumo_id, quantidade'),
-      dbCereais.from('despesas_graos').select('data, valor'),
+    const [insRes, entRes, aplRes, desRes, recRes] = await Promise.all([
+      db.from('insumos_graos').select('id'),
+      db.from('entradas_insumo_graos').select('insumo_id, quantidade, preco_pago'),
+      db.from('aplicacoes_graos').select('data, insumo_id, quantidade'),
+      db.from('despesas_graos').select('data, valor'),
+      db.from('receitas_graos').select('data, valor_total'),
     ]);
-    for(const r of [insRes, entRes, aplRes, desRes]) if(r.error) throw r.error;
+    for(const r of [insRes, entRes, aplRes, desRes, recRes]) if(r.error) throw r.error;
 
     const precoMedioPorInsumo = new Map();
     (insRes.data||[]).forEach(i=>{
@@ -661,20 +663,25 @@ async function carregarResultadoCereaisDespesa(){
     function despesaGeralNoPrefixo(prefixo){
       return (desRes.data||[]).filter(d=>d.data && d.data.startsWith(prefixo)).reduce((a,d)=>a+Number(d.valor||0), 0);
     }
+    function receitasNoPrefixoGraos(prefixo){
+      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+    }
 
     const mensal = mesesJanela().map(mesStr=>{
       const custoInsumo = custoInsumoNoPrefixo(mesStr);
       const despesaGeral = despesaGeralNoPrefixo(mesStr);
+      const receitasDoMes = receitasNoPrefixoGraos(mesStr);
+      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor_total||0), 0);
       return {
-        mes: mesStr, despesa: custoInsumo+despesaGeral, receita: 0, resultado: -(custoInsumo+despesaGeral),
+        mes: mesStr, despesa: custoInsumo+despesaGeral, receita, resultado: receita-(custoInsumo+despesaGeral),
         despesaPorCategoria: {custoInsumo, despesaGeral},
-        receitas: [],
+        receitas: receitasDoMes.map(r=>({data:r.data, descricao:'Venda de grãos', valor:Number(r.valor_total||0)})),
       };
     });
 
-    state.resultados.cereaisDespesa = {loading:false, erro:'', mensal, semReceita:true};
+    state.resultados.cereais = {loading:false, erro:'', mensal};
   } catch(e){
-    state.resultados.cereaisDespesa = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
+    state.resultados.cereais = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
   render();
 }
@@ -706,108 +713,25 @@ function agregarPeriodo(resultado, meses){
   };
 }
 
-// Combustível não é uma operação de terra (não tem receita nem hectares
-// próprios) — o que ele contribui pra Resultados é custo, rateado por
-// frente (pecuária/cana-de-açúcar/grãos) igual o próprio AE Combustível já
-// faz pra cada abastecimento (por talhão/área ou centro de custo). Essa
-// função lê o banco do Combustível direto (sem duplicar dado) e devolve,
-// junto dos indicadores do card, o custo mensal já separado por operação —
-// resultadoBrutoOperacao() soma isso na despesa de cada operação depois.
-// "graos" é como o AE Combustível chama a frente que aqui é "cereais".
-const FRENTE_COMBUSTIVEL_PARA_OPERACAO = {pecuaria:'pecuaria', cana:'cana', graos:'cereais'};
+// AE Combustível ainda não tem banco real ligado à matriz (card fica "em
+// breve" no Painel, ver APPS_REGISTRO) — sem chamada de rede por enquanto.
+// Quando o schema for criado dentro do projeto do Lavoura, esta função
+// volta a fazer sentido: ler tanques/entradas/abastecimentos e ratear o
+// custo por frente (pecuária/cana/grãos), igual o AECombustivel.html fazia
+// no projeto próprio dele antes da integração.
 async function carregarCombustivel(){
-  state.indicadores.combustivel = {...state.indicadores.combustivel, loading:true, erro:''};
-  state.resultados.combustivelPorFrente = {...state.resultados.combustivelPorFrente, loading:true, erro:''};
-  render();
-  try{
-    const [tqRes, entRes, abRes, ajRes, alRes, talRes, culRes, ccRes] = await Promise.all([
-      dbCombustivel.from('tanques').select('id, ativo'),
-      dbCombustivel.from('entradas_estoque').select('tanque_id, data, volume_litros, valor_total'),
-      dbCombustivel.from('abastecimentos').select('data_hora, volume_litros, tanque_id, talhao_area_id, centro_custo_id'),
-      dbCombustivel.from('ajustes_estoque').select('tanque_id, volume_ajuste_litros'),
-      dbCombustivel.from('alertas').select('id', {count:'exact', head:true}).eq('status','aberto'),
-      dbCombustivel.from('talhoes_areas').select('id, cultura_id'),
-      dbCombustivel.from('culturas').select('id, frente'),
-      dbCombustivel.from('centros_custo').select('id, frente'),
-    ]);
-    for(const r of [tqRes, entRes, abRes, ajRes, alRes, talRes, culRes, ccRes]) if(r.error) throw r.error;
-
-    const entradas = entRes.data||[];
-    const abastecimentos = abRes.data||[];
-    const tanquesAtivos = new Set((tqRes.data||[]).filter(t=>t.ativo!==false).map(t=>t.id));
-
-    const entradasPorTanque = {}, saidasPorTanque = {}, ajustesPorTanque = {};
-    entradas.forEach(e=>{ entradasPorTanque[e.tanque_id] = (entradasPorTanque[e.tanque_id]||0) + Number(e.volume_litros||0); });
-    abastecimentos.forEach(a=>{ saidasPorTanque[a.tanque_id] = (saidasPorTanque[a.tanque_id]||0) + Number(a.volume_litros||0); });
-    (ajRes.data||[]).forEach(a=>{ ajustesPorTanque[a.tanque_id] = (ajustesPorTanque[a.tanque_id]||0) + Number(a.volume_ajuste_litros||0); });
-    let estoqueAtual = 0;
-    tanquesAtivos.forEach(id=>{ estoqueAtual += (entradasPorTanque[id]||0) - (saidasPorTanque[id]||0) + (ajustesPorTanque[id]||0); });
-
-    // Custo médio ponderado do tanque até uma data — mesma lógica do
-    // custoMedioPonderado() do AECombustivel.html, reproduzida aqui porque
-    // é mais barato do que buscar um valor calculado por linha.
-    function custoMedioPonderado(tanqueId, dataLimite){
-      const limite = dataLimite ? String(dataLimite).slice(0,10) : null;
-      const doTanque = entradas.filter(e=>e.tanque_id===tanqueId && (!limite || e.data<=limite));
-      const volumeTotal = doTanque.reduce((a,e)=>a+Number(e.volume_litros||0),0);
-      if(volumeTotal<=0) return null;
-      const valorTotal = doTanque.reduce((a,e)=>a+Number(e.valor_total||0),0);
-      return valorTotal/volumeTotal;
-    }
-    const culturaFrente = new Map((culRes.data||[]).map(c=>[c.id, c.frente]));
-    const talhaoCultura = new Map((talRes.data||[]).map(t=>[t.id, t.cultura_id]));
-    const centroCustoFrente = new Map((ccRes.data||[]).map(c=>[c.id, c.frente]));
-    function operacaoDoAbastecimento(a){
-      let frente = null;
-      if(a.talhao_area_id){
-        const culturaId = talhaoCultura.get(a.talhao_area_id);
-        frente = culturaId ? culturaFrente.get(culturaId) : null;
-      } else if(a.centro_custo_id){
-        frente = centroCustoFrente.get(a.centro_custo_id);
-      }
-      return FRENTE_COMBUSTIVEL_PARA_OPERACAO[frente] || null; // null: "geral" ou sem rateio — não entra em nenhuma operação
-    }
-
-    const hoje = new Date();
-    const mesAtualStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-    let consumoMes = 0;
-    const custoPorMes = {}; // "YYYY-MM" -> {pecuaria, cana, cereais}
-    abastecimentos.forEach(a=>{
-      const mes = String(a.data_hora||'').slice(0,7);
-      if(!mes) return;
-      const custoUnit = custoMedioPonderado(a.tanque_id, a.data_hora);
-      const custo = custoUnit!=null ? custoUnit * Number(a.volume_litros||0) : 0;
-      if(!custoPorMes[mes]) custoPorMes[mes] = {pecuaria:0, cana:0, cereais:0};
-      const op = operacaoDoAbastecimento(a);
-      if(op) custoPorMes[mes][op] += custo;
-      if(mes===mesAtualStr) consumoMes += Number(a.volume_litros||0);
-    });
-
-    state.indicadores.combustivel = {
-      loading:false, erro:'',
-      estoqueAtual, consumoMes,
-      alertasAbertos: alRes.count ?? 0,
-    };
-    state.resultados.combustivelPorFrente = {
-      loading:false, erro:'',
-      mensal: mesesJanela().map(mesStr=>({mes:mesStr, porFrente: custoPorMes[mesStr] || {pecuaria:0, cana:0, cereais:0}})),
-    };
-  } catch(e){
-    state.indicadores.combustivel = {loading:false, erro:'Não foi possível carregar agora.', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
-    state.resultados.combustivelPorFrente = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
-  }
+  state.indicadores.combustivel = {loading:false, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
+  state.resultados.combustivelPorFrente = {loading:false, erro:'', mensal:[]};
   render();
 }
 // Junta o custo mensal de combustível (por operação) com o resultado
-// próprio da operação (receita/despesa lançadas no app dela, se já
-// existir) — pecuária e cana têm os dois. Cereais tem despesa própria
-// (custo de insumo + despesas gerais, ver carregarResultadoCereaisDespesa)
-// mas ainda não tem receita: nesse caso `baseResultado.semReceita` é
-// repassado pro resultado final, pra tela avisar que a despesa é
-// completa mas falta a receita (diferente de soDespesaCombustivel, que
-// significa "nenhum dado próprio, só o combustível rateado" — não é mais
-// o caso de nenhuma das quatro operações hoje, mas o fallback continua
-// aqui pra qualquer frente futura que ainda não tenha app nenhum).
+// próprio da operação (receita/despesa lançadas no app dela) — hoje as
+// três operações (pecuária, cana, cereais) já têm receita e despesa
+// completas. `soDespesaCombustivel` fica como fallback pra qualquer
+// operação futura que ainda não tenha app nenhum ligado à matriz (hoje
+// não é o caso de nenhuma das três); combustível em si não contribui
+// nada ainda, porque `combustivelPorFrente.mensal` está sempre vazio
+// enquanto o card dele estiver "em breve" (ver carregarCombustivel()).
 function resultadoComCombustivel(baseResultado, slug){
   const comb = state.resultados.combustivelPorFrente;
   if(comb.loading || (baseResultado && baseResultado.loading)) return {loading:true, erro:'', mensal:[]};
@@ -832,11 +756,13 @@ function resultadoComCombustivel(baseResultado, slug){
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'painel',
-  fazendas: [],
-  fazendaOperacoes: {}, // fazendaId -> [{id, fazendaId, operacao, areaHa}]
-  apps: [],
+  fazendasLavoura: [], // {id, nome, estado, areaHa, ativo} — vem do projeto do Lavoura
+  fazendasPecuaria: [], // {id, nome, hectares} — vem do projeto da Pecuária
+  talhoes: [], // {id, fazendaId, areaHa, culturaId, ativo} — talhoes_areas do Lavoura
+  culturas: [], // {id, frente} — culturas do Lavoura, usado só pra achar a frente de cada talhão
+  apps: APPS_REGISTRO, // estático, não depende de carregamento — evita um flash de "nenhum app" antes do primeiro loadAll()
   perfis: [],
-  modal: null, // {type:'fazenda'|'app'|'usuario'|'papelUsuario'|'trocarSenha', data:{...}}
+  modal: null, // {type:'usuario'|'papelUsuario'|'trocarSenha'|'detalheOperacao'|'graficoOperacao', data:{...}}
   mobileMenuAberto: false,
   // loading começa true (não false) — enquanto o primeiro carregamento não
   // chega, a tela precisa mostrar "carregando", não "sem dados".
@@ -852,7 +778,7 @@ const state = {
   resultados: {
     pecuaria: {loading:true, erro:'', mensal:[]},
     cana: {loading:true, erro:'', mensal:[]},
-    cereaisDespesa: {loading:true, erro:'', mensal:[]},
+    cereais: {loading:true, erro:'', mensal:[]},
     combustivelPorFrente: {loading:true, erro:'', mensal:[]},
   },
   // filtro de período da aba Resultados — começa no mês atual; "safra" é o
@@ -1143,6 +1069,10 @@ function iconOperacao(slug, nome){
 
 const PAGE_LABEL = {painel:'Painel', fazendas:'Fazendas', usuarios:'Usuários', resultados:'Resultados'};
 const OPERACOES = {pecuaria:'Pecuária', cana:'Cana-de-açúcar', cereais:'Grãos/Cereais'};
+// profiles é compartilhado com o AE Lavoura — mesmos 6 papéis dele (ver
+// PAPEL_LABELS no AELavoura.html), pra não mostrar/editar errado um perfil
+// que não seja admin/gestor.
+const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', colaborador:'Colaborador', operador:'Operador'};
 
 function iniciais(nome){
   const partes = String(nome||'').trim().split(/\s+/).filter(Boolean);
@@ -1164,7 +1094,7 @@ function Sidebar(){
         <div class="sidebar-user-avatar">${iniciais(state.perfil?.nome)}</div>
         <div class="sidebar-user-info">
           <div class="sidebar-user-nome">${esc(state.perfil?.nome)}</div>
-          <div class="sidebar-user-papel">${state.perfil?.papel==='admin'?'Administrador':'Gestor'}</div>
+          <div class="sidebar-user-papel">${PAPEL_LABELS[state.perfil?.papel] || state.perfil?.papel}</div>
         </div>
       </div>
       <div class="sidebar-user-actions">
@@ -1188,14 +1118,12 @@ function Header(){
   const titles = {
     painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},
     resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado por operação — compare mês a mês, por ano ou por safra (maio a abril).'},
-    fazendas:{eyebrow:'Cadastro central', title:'Fazendas', desc:'Cadastro único de fazendas, com as operações (pecuária, cana, cereais) e hectares de cada uma.'},
+    fazendas:{eyebrow:'Visão consolidada', title:'Fazendas', desc:'Todas as fazendas da operação, com hectares e operações (pecuária, cana, cereais) — cadastradas em cada app de origem.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso à matriz. Cada app (Pecuária, Combustível...) continua com seu próprio login.'},
   };
   const t = titles[state.page] || titles.painel;
   let acao = '';
-  if(state.page==='fazendas' && souAdmin()){
-    acao = `<button class="btn btn-primary" data-nova-fazenda="1">+ Nova fazenda</button>`;
-  } else if(state.page==='usuarios' && souAdmin()){
+  if(state.page==='usuarios' && souAdmin()){
     acao = `<button class="btn btn-primary" data-novo-usuario="1">+ Novo usuário</button>`;
   }
   return `
@@ -1207,7 +1135,9 @@ function Header(){
 
 /* ===================== PAINEL ===================== */
 function AppCard(a){
-  const ind = a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='combustivel' ? state.indicadores.combustivel : a.slug==='cana' ? state.indicadores.cana : a.slug==='cereais' ? state.indicadores.cereais : null;
+  // "em breve" (Combustível hoje) não tem indicador nenhum ainda — nem
+  // tenta mostrar carregando/erro, só o selo "Em breve".
+  const ind = a.status!=='ativo' ? null : a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='cana' ? state.indicadores.cana : a.slug==='cereais' ? state.indicadores.cereais : null;
   let stats = '';
   if(ind){
     if(ind.loading){
@@ -1219,12 +1149,6 @@ function AppCard(a){
         <div class="app-card-stat"><div class="v">${fmtInt(ind.lotesAtivos)}</div><div class="l">Lotes ativos</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.totalAnimais)}</div><div class="l">Animais</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.dietas)}</div><div class="l">Dietas</div></div>
-      </div>`;
-    } else if(a.slug==='combustivel'){
-      stats = `<div class="app-card-stats">
-        <div class="app-card-stat"><div class="v">${fmtInt(ind.estoqueAtual)} L</div><div class="l">Estoque atual</div></div>
-        <div class="app-card-stat"><div class="v">${fmtInt(ind.consumoMes)} L</div><div class="l">Consumo no mês</div></div>
-        <div class="app-card-stat"><div class="v">${fmtInt(ind.alertasAbertos)}</div><div class="l">Alertas abertos</div></div>
       </div>`;
     } else if(a.slug==='cana'){
       stats = `<div class="app-card-stats">
@@ -1253,8 +1177,6 @@ function AppCard(a){
     ${stats}
     <div class="app-card-actions">
       ${a.status==='ativo' && a.url ? `<a class="btn btn-ghost btn-sm" href="${a.url}" target="_blank" rel="noopener">${iconAbrir()} Abrir app</a>` : ''}
-      ${souAdmin() ? `<button class="btn btn-ghost btn-sm" data-editar-app="${a.id}">Editar</button>` : ''}
-      ${souAdmin() ? `<button class="btn-danger-ghost" data-del-app="${a.id}">Excluir</button>` : ''}
     </div>
   </div>`;
 }
@@ -1311,26 +1233,27 @@ function safrasDisponiveis(){
 }
 
 /* ===================== RESULTADOS (geral, todas as operações) ===================== */
-// Pecuária e Cana têm receita e despesa próprias (banco próprio de cada
-// uma). Cereais tem despesa própria (custo de insumo + despesas gerais,
-// ver carregarResultadoCereaisDespesa) mas ainda não tem receita — o
-// resultado dele fica marcado com `semReceita` pra tela deixar claro que
-// não é lucratividade real ainda, só a despesa.
+// Pecuária, Cana e Cereais/Grãos têm receita e despesa próprias, cada uma
+// lida do banco de origem (dbPecuaria ou db/Lavoura).
 function resultadoBrutoOperacao(slug){
   if(slug==='pecuaria') return resultadoComCombustivel(state.resultados.pecuaria, slug);
   if(slug==='cana') return resultadoComCombustivel(state.resultados.cana, slug);
-  if(slug==='cereais') return resultadoComCombustivel(state.resultados.cereaisDespesa, slug);
+  if(slug==='cereais') return resultadoComCombustivel(state.resultados.cereais, slug);
   return null;
 }
 function resultadoOperacaoNoPeriodo(slug){
   return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
 }
+// Área (ha) de cada operação — pecuária soma o cadastro de fazendas da
+// Pecuária; cana/cereais somam os talhões ativos do Lavoura cuja cultura
+// pertence àquela frente ('graos' é como o Lavoura chama a frente que
+// aqui é 'cereais').
+const FRENTE_DA_OPERACAO = {cana:'cana', cereais:'graos'};
 function hectaresPorOperacao(slug){
-  let total = 0;
-  Object.values(state.fazendaOperacoes).forEach(lista=>{
-    lista.forEach(o=>{ if(o.operacao===slug) total += Number(o.areaHa||0); });
-  });
-  return total;
+  if(slug==='pecuaria') return state.fazendasPecuaria.reduce((s,f)=>s+Number(f.hectares||0),0);
+  const frente = FRENTE_DA_OPERACAO[slug];
+  if(!frente) return 0;
+  return talhoesPorFrente(frente).filter(t=>t.ativo!==false).reduce((s,t)=>s+Number(t.areaHa||0),0);
 }
 // Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
 // não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
@@ -1348,7 +1271,7 @@ function resultadoTotal(campo){
   }, 0);
 }
 function algumResultadoCarregando(){
-  return state.resultados.pecuaria.loading || state.resultados.combustivelPorFrente.loading;
+  return state.resultados.pecuaria.loading || state.resultados.cana.loading || state.resultados.cereais.loading || state.resultados.combustivelPorFrente.loading;
 }
 // Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
 // insumo consumido pelas outras, não uma operação com receita/despesa
@@ -1492,11 +1415,11 @@ function PagePorHectare(){
       <tbody>
         ${linhas.map(l=>{
           const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(OPERACAO_COR[l.slug],0.14)}; color:${OPERACAO_COR[l.slug]};">${iconOperacao(l.slug, l.nome)}</span><strong>${esc(l.nome)}</strong></span>`;
-          if(l.ha<=0) return `<tr><td>${chip}</td><td colspan="4" class="hint">Sem hectares cadastrados pra essa operação — cadastre em Fazendas.</td></tr>`;
+          if(l.ha<=0) return `<tr><td>${chip}</td><td colspan="4" class="hint">Sem hectares cadastrados pra essa operação — cadastre a fazenda/talhão no app de origem.</td></tr>`;
           if(!l.r || l.r.erro) return `<tr><td>${chip}</td><td class="mono">${fmtInt(l.ha)}</td><td colspan="3" class="hint">${l.r?.erro || 'Sem dados ainda.'}</td></tr>`;
           const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
           return `<tr>
-            <td>${chip}${l.r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : l.r.semReceita ? `<div class="hint" style="margin-top:2px;">despesa própria, mas ainda sem módulo de receita</div>` : ''}</td>
+            <td>${chip}</td>
             <td class="mono">${fmtInt(l.ha)}</td>
             <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
             <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
@@ -1539,7 +1462,7 @@ function PageResultados(){
           const chip = `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(l.app.cor,0.14)}; color:${l.app.cor};">${iconOperacao(l.app.slug, l.app.nome)}</span><strong>${esc(l.app.nome)}</strong></span>`;
           if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
-            <td>${chip}${r.soDespesaCombustivel ? `<div class="hint" style="margin-top:2px;">só combustível — sem app de receita ainda</div>` : r.semReceita ? `<div class="hint" style="margin-top:2px;">despesa própria, mas ainda sem módulo de receita</div>` : ''}</td>
+            <td>${chip}</td>
             <td class="mono">R$ ${fmt(r.receita)}</td>
             <td class="mono">R$ ${fmt(r.despesa)}</td>
             <td class="mono">R$ ${fmt(r.resultado)}</td>
@@ -1548,35 +1471,56 @@ function PageResultados(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:14px;">Números da Pecuária e da Cana calculados a partir da receita e despesa própria lançada em cada app, mais o combustível abastecido neles (rateado por talhão/centro de custo no AE Combustível). Cereais ainda não tem receita própria — o "resultado" dele por enquanto é só a despesa (insumo + despesas gerais + combustível rateado) com o sinal invertido, não lucratividade de verdade. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
+  <p class="hint" style="margin-top:14px;">Números de Pecuária, Cana e Cereais/Grãos calculados a partir da receita e despesa própria lançada em cada app. Combustível ainda não está com banco ligado à matriz (card "em breve" no Painel), então o custo dele não entra nesses números por enquanto. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
 }
 
-/* ===================== FAZENDAS ===================== */
-function operacoesLabel(fazendaId){
-  const ops = state.fazendaOperacoes[fazendaId]||[];
-  if(ops.length===0) return '<span class="hint">Nenhuma operação cadastrada</span>';
+/* ===================== FAZENDAS (leitura, agregada) ===================== */
+// Cadastro de fazenda continua no app de origem (AE Lavoura ou AE
+// Pecuária) — aqui é só uma visão consolidada, sem escrita (decisão: "só
+// leitura, deriva ao vivo"). A operação de uma fazenda do Lavoura é
+// derivada dos talhões ativos dela, pela frente da cultura de cada um; a
+// Pecuária não tem talhão, então cada fazenda de lá conta inteira como
+// operação "pecuária".
+function operacoesDaFazendaLavoura(fazendaId){
+  const porFrente = {};
+  state.talhoes.filter(t=>t.fazendaId===fazendaId && t.ativo!==false).forEach(t=>{
+    const frente = frenteDaCultura(t.culturaId);
+    const slug = frente==='graos' ? 'cereais' : frente==='cana' ? 'cana' : null;
+    if(!slug) return;
+    porFrente[slug] = (porFrente[slug]||0) + Number(t.areaHa||0);
+  });
+  return Object.entries(porFrente).map(([operacao,areaHa])=>({operacao, areaHa}));
+}
+function chipsOperacoes(ops){
+  if(ops.length===0) return '<span class="hint">Nenhum talhão com cultura definida</span>';
   return `<div style="display:flex; flex-wrap:wrap; gap:8px;">${ops.map(o=>{
     const cor = OPERACAO_COR[o.operacao] || 'var(--verde-medio)';
     return `<span class="op-chip"><span class="op-chip-ic" style="background:${hexToRgba(cor,0.14)}; color:${cor}; width:22px; height:22px;">${iconOperacao(o.operacao)}</span>${OPERACOES[o.operacao]||o.operacao}${o.areaHa!=null ? ' · '+fmtInt(o.areaHa)+' ha' : ''}</span>`;
   }).join('')}</div>`;
 }
 function PageFazendas(){
+  const linhasLavoura = state.fazendasLavoura.map(f=>({
+    nome: f.nome, origem:'Lavoura', areaHa: f.areaHa, estado: f.estado,
+    chips: chipsOperacoes(operacoesDaFazendaLavoura(f.id)),
+  }));
+  const linhasPecuaria = state.fazendasPecuaria.map(f=>({
+    nome: f.nome, origem:'Pecuária', areaHa: f.hectares, estado: '',
+    chips: chipsOperacoes([{operacao:'pecuaria', areaHa: f.hectares}]),
+  }));
+  const linhas = [...linhasLavoura, ...linhasPecuaria].sort((a,b)=>a.nome.localeCompare(b.nome, 'pt-BR'));
   return `
+  <p class="hint" style="margin-bottom:14px;">Cadastro de fazenda é feito no app de origem (AE Lavoura ou AE Pecuária) — aqui é só a visão consolidada, atualizada automaticamente.</p>
   <div class="card" style="overflow-x:auto;">
-    ${state.fazendas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — esse cadastro é a referência central usada pelos demais apps.') : `
+    ${linhas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas no AE Lavoura ou no AE Pecuária — elas aparecem aqui automaticamente.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Área total (ha)</th><th>Operações</th><th>Localização</th>${souAdmin()?'<th></th>':''}</tr></thead>
+      <thead><tr><th>Nome</th><th>Área (ha)</th><th>Operações</th><th>Origem</th></tr></thead>
       <tbody>
-        ${state.fazendas.map(f=>`
+        ${linhas.map(f=>`
           <tr>
-            <td><strong>${esc(f.nome)}</strong></td>
+            <td><strong>${esc(f.nome)}</strong>${f.estado ? ` <span class="hint">(${esc(f.estado)})</span>` : ''}</td>
             <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
-            <td>${operacoesLabel(f.id)}</td>
-            <td>${esc(f.localizacao) || '—'}</td>
-            ${souAdmin() ? `<td style="display:flex; gap:8px;">
-              <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-fazenda="${f.id}">Excluir</button>
-            </td>` : ''}
+            <td>${f.chips}</td>
+            <td><span class="pill pill-cat">${f.origem}</span></td>
           </tr>
         `).join('')}
       </tbody>
@@ -1584,75 +1528,11 @@ function PageFazendas(){
   </div>`;
 }
 
-function ModalFazenda(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId ? 'Editar fazenda' : 'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${esc(d.nome)}" placeholder="Ex: Fazenda Santo Antônio"/></div>
-        <div class="field-row">
-          <div class="field"><label>Área total (ha)</label><input id="f-areafazenda" type="number" step="1" min="0" value="${d.areaHa??''}"/></div>
-          <div class="field"><label>Localização</label><input id="f-localfazenda" value="${esc(d.localizacao)}" placeholder="Cidade/UF"/></div>
-        </div>
-        <div class="field"><label>Observação</label><textarea id="f-obsfazenda" rows="2">${esc(d.observacao)}</textarea></div>
-        <label>Operações rodando nesta fazenda</label>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          ${d.operacoes.map((op,idx)=>`
-            <div class="composicao-row">
-              <select data-op-tipo="${idx}">
-                ${Object.entries(OPERACOES).map(([k,l])=>`<option value="${k}" ${op.operacao===k?'selected':''}>${l}</option>`).join('')}
-              </select>
-              <input data-op-area="${idx}" type="number" step="1" min="0" value="${op.areaHa??''}" placeholder="ha"/>
-              <button class="btn-danger-ghost" data-op-del="${idx}" style="padding:6px;">✕</button>
-            </div>
-          `).join('')}
-        </div>
-        <button class="btn btn-ghost btn-sm" data-op-add="1" style="align-self:flex-start;">+ Adicionar operação</button>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="fazenda">Salvar</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-/* ===================== APPS (registro da matriz) ===================== */
-function ModalApp(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar app — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomeapp" value="${esc(d.nome)}"/></div>
-        <div class="field"><label>Identificador (slug)</label><input value="${d.slug}" disabled/></div>
-        <div class="field"><label>Descrição</label><textarea id="f-descapp" rows="2">${esc(d.descricao)}</textarea></div>
-        <div class="field"><label>Link do app</label><input id="f-urlapp" value="${d.url}" placeholder="https://..."/></div>
-        <div class="field-row">
-          <div class="field"><label>Cor</label><input id="f-corapp" type="color" value="${d.cor}"/></div>
-          <div class="field"><label>Ordem</label><input id="f-ordemapp" type="number" step="1" value="${d.ordem}"/></div>
-        </div>
-        <div class="field"><label>Status</label>
-          <select id="f-statusapp">
-            <option value="ativo" ${d.status==='ativo'?'selected':''}>Ativo</option>
-            <option value="em_breve" ${d.status==='em_breve'?'selected':''}>Em breve</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="app">Salvar</button>
-      </div>
-    </div>
-  </div>`;
-}
-
 /* ===================== USUÁRIOS ===================== */
 function papelPill(papel){
-  return papel==='admin' ? `<span class="pill pill-ok">Administrador</span>` : `<span class="pill pill-cat">Gestor</span>`;
+  const label = PAPEL_LABELS[papel] || papel;
+  const classe = (papel==='admin' || papel==='proprietario') ? 'pill-cat' : (papel==='gestor' ? 'pill-warn' : 'pill-ok');
+  return `<span class="pill ${classe}">${label}</span>`;
 }
 
 function PageUsuarios(){
@@ -1706,12 +1586,16 @@ function ModalPapelUsuario(){
         <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
+            <option value="operador" ${d.papel==='operador'?'selected':''}>Operador</option>
+            <option value="colaborador" ${d.papel==='colaborador'?'selected':''}>Colaborador</option>
+            <option value="encarregado" ${d.papel==='encarregado'?'selected':''}>Encarregado</option>
             <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
+            <option value="proprietario" ${d.papel==='proprietario'?'selected':''}>Proprietário</option>
             <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador pode gerenciar fazendas, apps e usuários. Gestor só visualiza o painel e as fazendas.</p>
+        <p class="hint">Este perfil (papel/ativo) é compartilhado com o AE Lavoura — mudar aqui muda lá também. Só administrador gerencia usuários na matriz. Para liberar módulos específicos dentro do Lavoura (por frente), use a tela de permissões do próprio AE Lavoura.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -1751,8 +1635,6 @@ function Empty(title, sub){
 
 /* ===================== MODAL / FORMS ===================== */
 function Modal(){
-  if(state.modal.type==='fazenda') return ModalFazenda();
-  if(state.modal.type==='app') return ModalApp();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='papelUsuario') return ModalPapelUsuario();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
@@ -1860,7 +1742,7 @@ function ModalGraficoOperacao(){
   let corpo;
   if(semDados){
     const msg = ha<=0
-      ? 'Cadastre os hectares dessa operação em Fazendas pra ver esse gráfico.'
+      ? 'Sem hectares cadastrados pra essa operação — cadastre a fazenda/talhão no app de origem pra ver esse gráfico.'
       : (bruto?.erro || `O app ${nome} ainda não está com o banco de dados ligado à matriz.`);
     corpo = Empty('Sem dados ainda', msg);
   } else {
@@ -1912,69 +1794,6 @@ function attachEvents(){
     el.onclick = ()=>{ editDraft = {senhaAtual:'', novaSenha:'', confirmarSenha:''}; state.modal = {type:'trocarSenha'}; render(); };
   });
 
-  // ---- fazendas ----
-  const novaFazendaBtn = document.querySelector('[data-nova-fazenda]');
-  if(novaFazendaBtn) novaFazendaBtn.onclick = ()=>{
-    editDraft = {nome:'', areaHa:null, localizacao:'', observacao:'', operacoes:[]};
-    state.modal = {type:'fazenda'}; render();
-  };
-  document.querySelectorAll('[data-editar-fazenda]').forEach(el=>{
-    el.onclick = ()=>{
-      const f = state.fazendas.find(x=>x.id===Number(el.dataset.editarFazenda));
-      const operacoes = (state.fazendaOperacoes[f.id]||[]).map(o=>({operacao:o.operacao, areaHa:o.areaHa}));
-      editDraft = {...f, _editId:f.id, operacoes};
-      state.modal = {type:'fazenda'}; render();
-    };
-  });
-  document.querySelectorAll('[data-del-fazenda]').forEach(el=>{
-    el.onclick = async ()=>{
-      if(!confirm('Excluir esta fazenda?')) return;
-      await db.from('fazendas').delete().eq('id', Number(el.dataset.delFazenda));
-      await loadAll();
-    };
-  });
-
-  // fazenda: operações (linhas dinâmicas) — sincroniza os outros campos
-  // antes de re-renderizar, senão o que já foi digitado se perde.
-  function sincronizarCamposFazenda(){
-    const nomeEl = document.getElementById('f-nomefazenda');
-    const areaEl = document.getElementById('f-areafazenda');
-    const localEl = document.getElementById('f-localfazenda');
-    const obsEl = document.getElementById('f-obsfazenda');
-    if(nomeEl) editDraft.nome = nomeEl.value;
-    if(areaEl) editDraft.areaHa = areaEl.value;
-    if(localEl) editDraft.localizacao = localEl.value;
-    if(obsEl) editDraft.observacao = obsEl.value;
-  }
-  document.querySelectorAll('[data-op-add]').forEach(el=>{
-    el.onclick = ()=>{ sincronizarCamposFazenda(); editDraft.operacoes.push({operacao:'pecuaria', areaHa:''}); render(); };
-  });
-  document.querySelectorAll('[data-op-del]').forEach(el=>{
-    el.onclick = ()=>{ sincronizarCamposFazenda(); editDraft.operacoes.splice(Number(el.dataset.opDel),1); render(); };
-  });
-  document.querySelectorAll('[data-op-tipo]').forEach(el=>{
-    el.onchange = (e)=>{ editDraft.operacoes[Number(el.dataset.opTipo)].operacao = e.target.value; };
-  });
-  document.querySelectorAll('[data-op-area]').forEach(el=>{
-    el.oninput = (e)=>{ editDraft.operacoes[Number(el.dataset.opArea)].areaHa = e.target.value; };
-  });
-
-  // ---- apps ----
-  document.querySelectorAll('[data-editar-app]').forEach(el=>{
-    el.onclick = ()=>{
-      const a = state.apps.find(x=>x.id===Number(el.dataset.editarApp));
-      editDraft = {...a, _editId:a.id};
-      state.modal = {type:'app'}; render();
-    };
-  });
-  document.querySelectorAll('[data-del-app]').forEach(el=>{
-    el.onclick = async ()=>{
-      if(!confirm('Excluir este app do painel?')) return;
-      await db.from('apps').delete().eq('id', Number(el.dataset.delApp));
-      await loadAll();
-    };
-  });
-
   // ---- usuários ----
   const novoUsuarioBtn = document.querySelector('[data-novo-usuario]');
   if(novoUsuarioBtn) novoUsuarioBtn.onclick = ()=>{
@@ -1997,7 +1816,10 @@ function attachEvents(){
       const senha = document.getElementById('f-senhausuario').value;
       if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
       state.usuarioLoading = true; state.usuarioError = ''; render();
-      const { data, error } = await db.functions.invoke('criar-usuario-matriz', { body: { nome, usuario, senha } });
+      // Reaproveita a mesma Edge Function do AE Lavoura — não faz sentido
+      // publicar uma "criar-usuario-matriz" própria só pra isso, já que os
+      // dois apps escrevem no mesmo profiles/auth do projeto compartilhado.
+      const { data, error } = await db.functions.invoke('criar-usuario-cana', { body: { nome, usuario, senha } });
       state.usuarioLoading = false;
       if(error || data?.error){
         let msg = data?.error || error?.message || 'Falha ao criar usuário.';
@@ -2029,55 +1851,7 @@ function attachEvents(){
     saveBtn.onclick = async ()=>{
       const type = saveBtn.dataset.save;
       let error;
-      if(type==='fazenda'){
-        const f = {
-          nome: document.getElementById('f-nomefazenda').value.trim(),
-          areaHa: document.getElementById('f-areafazenda').value ? Math.max(0, Number(document.getElementById('f-areafazenda').value)||0) : null,
-          localizacao: document.getElementById('f-localfazenda').value.trim(),
-          observacao: document.getElementById('f-obsfazenda').value.trim(),
-        };
-        if(!f.nome){ alert('Informe o nome da fazenda.'); return; }
-        let fazendaId = editDraft._editId;
-        if(fazendaId){
-          ({error} = await db.from('fazendas').update(fazendaToRow(f)).eq('id', fazendaId));
-        } else {
-          const inserted = await db.from('fazendas').insert(fazendaToRow(f)).select().single();
-          error = inserted.error;
-          fazendaId = inserted.data?.id;
-        }
-        // Insere as operações novas ANTES de apagar as antigas — se o insert
-        // falhar (rede caiu no meio), as operações que já existiam continuam
-        // lá; a alternativa (apagar primeiro) perderia esse cadastro de vez
-        // numa falha no meio do caminho.
-        if(!error && fazendaId){
-          const linhas = (editDraft.operacoes||[])
-            .filter(op=>op.operacao)
-            .map(op=>({fazenda_id: fazendaId, operacao: op.operacao, area_ha: op.areaHa!=null && op.areaHa!=='' ? Math.max(0, Number(op.areaHa)||0) : null}));
-          let idsNovos = [];
-          if(linhas.length>0){
-            const inseridas = await db.from('fazenda_operacoes').insert(linhas).select('id');
-            error = inseridas.error;
-            idsNovos = (inseridas.data||[]).map(r=>r.id);
-          }
-          if(!error){
-            let del = db.from('fazenda_operacoes').delete().eq('fazenda_id', fazendaId);
-            if(idsNovos.length>0) del = del.not('id', 'in', `(${idsNovos.join(',')})`);
-            ({error} = await del);
-          }
-        }
-      } else if(type==='app'){
-        const a = {
-          nome: document.getElementById('f-nomeapp').value.trim(),
-          descricao: document.getElementById('f-descapp').value.trim(),
-          url: document.getElementById('f-urlapp').value.trim(),
-          cor: document.getElementById('f-corapp').value,
-          ordem: Number(document.getElementById('f-ordemapp').value)||0,
-          status: document.getElementById('f-statusapp').value,
-        };
-        if(!a.nome){ alert('Informe o nome do app.'); return; }
-        const row = appToRow(a); delete row.slug;
-        ({error} = await db.from('apps').update(row).eq('id', editDraft._editId));
-      } else if(type==='papelUsuario'){
+      if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
         ({error} = await db.from('profiles').update({papel, ativo}).eq('id', editDraft._perfilId));
