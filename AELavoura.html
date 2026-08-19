@@ -309,6 +309,11 @@ function frenteDoTalhao(t){
   const c = state.culturas.find(x=>x.id===t.culturaId);
   return c ? c.frente : null;
 }
+function culturaDoTalhaoNome(talhaoId){
+  if(talhaoId==null) return null;
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  return t && t.culturaId!=null ? fkNome('culturas', t.culturaId) : null;
+}
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
  * Cadastros de base (fazendas, culturas, talhoes, safras)
@@ -1472,7 +1477,7 @@ function PageDespesas(){
           ${itens.map(d=>`
             <tr>
               <td class="despesa-grupo-data">${fmtData(d.data)}</td>
-              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}<br/><span class="hint">${fkNome('fazendas', d.fazendaId)}${d.talhaoId?' · '+fkNome('talhoes', d.talhaoId):''}</span></td>
+              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}<br/><span class="hint">${fkNome('fazendas', d.fazendaId)}${d.talhaoId?' · '+fkNome('talhoes', d.talhaoId):''}${culturaDoTalhaoNome(d.talhaoId)?' · '+culturaDoTalhaoNome(d.talhaoId):''}</span></td>
               <td class="mono despesa-grupo-valorlinha">R$ ${fmt(d.valor)}</td>
               <td class="despesa-grupo-acoes">
                 ${podeEditar ? `<button class="btn-ghost btn-sm" data-edit-cadastro="${cfgKey}:${d.id}">Editar</button>` : ''}
