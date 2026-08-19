@@ -682,6 +682,7 @@ const state = {
   despesaFiltroCentro: '',
   despesaGruposAbertos: {},
   receitaFrenteAtual: 'cana',
+  fazendaTalhoesAbertos: {},
 };
 
 function render(){
@@ -990,6 +991,7 @@ function PageCadastro(key){
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
   const colunas = cfg.fields.filter(f=>f.list!==false);
+  const colspanTotal = colunas.length + (cfg.semStatus?0:1) + 1;
   return `
   <div class="toolbar">
     ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
@@ -1011,10 +1013,50 @@ function PageCadastro(key){
               ${podeEditar && !souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>` : ''}
             </td>
           </tr>
+          ${key==='fazendas' ? linhaTalhoesDaFazenda(item, podeEditar, colspanTotal) : ''}
         `).join('')}
       </tbody>
     </table>`}
   </div>`;
+}
+/* Fazenda → cadastra o talhão (nome, ha, cultura) direto ali embaixo,
+ * sem precisar ir pra aba Talhões e escolher a fazenda de novo. */
+function linhaTalhoesDaFazenda(fazenda, podeEditar, colspanTotal){
+  const aberto = !!state.fazendaTalhoesAbertos[fazenda.id];
+  const talhoes = state.talhoes.filter(t=>t.fazendaId===fazenda.id && t.tipo==='talhao');
+  return `
+  <tr class="fazenda-talhoes-row">
+    <td colspan="${colspanTotal}" style="padding:0;">
+      <div class="despesa-grupo-header" style="cursor:pointer;" data-fazenda-talhoes-toggle="${fazenda.id}">
+        <span class="despesa-grupo-seta">${aberto?'▼':'▶'}</span>
+        <span class="despesa-grupo-nome">Talhões desta fazenda</span>
+        <span class="hint">${talhoes.length} talhão(ões)</span>
+      </div>
+      ${aberto ? `
+      <div style="padding:0 16px 16px;">
+        ${talhoes.length===0 ? `<p class="hint">Nenhum talhão cadastrado ainda nesta fazenda.</p>` : `
+        <table class="despesa-grupo-tabela">
+          <thead><tr><th>Nome</th><th>Área (ha)</th><th>Cultura</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            ${talhoes.map(t=>`
+              <tr>
+                <td>${t.nome}</td>
+                <td class="mono">${t.areaHa?fmt(t.areaHa)+' ha':'—'}</td>
+                <td>${fkNome('culturas', t.culturaId)}</td>
+                <td><span class="status-dot ${t.ativo?'ativo':'inativo'}"></span>${t.ativo?'Ativo':'Inativo'}</td>
+                <td style="display:flex; gap:6px;">
+                  <button class="btn-ghost btn-sm" data-historico-talhao="${t.id}">Histórico</button>
+                  ${podeEditar ? `<button class="btn-ghost btn-sm" data-edit-cadastro="talhoes:${t.id}">Editar</button>` : ''}
+                  ${podeEditar && !souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="talhoes:${t.id}">Excluir</button>` : ''}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`}
+        ${podeEditar ? `<button class="btn btn-primary btn-sm" style="margin-top:10px;" data-novo-cadastro="talhoes" data-preset-fazenda="${fazenda.id}">+ Novo Talhão</button>` : ''}
+      </div>` : ''}
+    </td>
+  </tr>`;
 }
 function novoCadastroDraft(key){
   const cfg = CADASTROS[key];
@@ -1029,8 +1071,9 @@ function novoCadastroDraft(key){
   });
   return draft;
 }
-function abrirNovoCadastro(key){
+function abrirNovoCadastro(key, presets){
   editDraft = novoCadastroDraft(key);
+  if(presets) Object.assign(editDraft, presets);
   state.cadastroError = '';
   state.modal = {type:'cadastro', key};
 }
@@ -1850,7 +1893,18 @@ function attachEvents(){
     el.onclick = ()=>{ state.page = el.dataset.subnav; render(); };
   });
   document.querySelectorAll('[data-novo-cadastro]').forEach(el=>{
-    el.onclick = ()=>{ abrirNovoCadastro(el.dataset.novoCadastro); render(); };
+    el.onclick = ()=>{
+      const presets = el.dataset.presetFazenda ? {fazendaId:Number(el.dataset.presetFazenda)} : null;
+      abrirNovoCadastro(el.dataset.novoCadastro, presets);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-fazenda-talhoes-toggle]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.fazendaTalhoesToggle);
+      state.fazendaTalhoesAbertos[id] = !state.fazendaTalhoesAbertos[id];
+      render();
+    };
   });
   document.querySelectorAll('[data-edit-cadastro]').forEach(el=>{
     el.onclick = ()=>{
