@@ -1006,7 +1006,7 @@ function PageCadastro(key){
   const colspanTotal = colunas.length + (cfg.semStatus?0:1) + 1;
   return `
   <div class="toolbar">
-    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
+    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1" autocomplete="off"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
   </div>
@@ -1117,7 +1117,7 @@ function campoHtml(f, d){
     return `<div class="field"><label><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto; margin-right:6px;"/> ${f.label}</label></div>`;
   }
   if(f.type==='textarea'){
-    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3">${val}</textarea></div>`;
+    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3" autocomplete="off">${val}</textarea></div>`;
   }
   if(f.type==='select'){
     return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>`;
@@ -1136,9 +1136,9 @@ function campoHtml(f, d){
     return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${val}"/></div>`;
   }
   if(f.type==='number'){
-    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
+    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}" autocomplete="off"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
-  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
+  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" autocomplete="off" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
 }
 function ModalCadastro(){
   const key = state.modal.key;
