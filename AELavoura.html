@@ -294,11 +294,6 @@ const OPCOES = {
     {value:'inseticida',label:'Aplicação de inseticida'}, {value:'fungicida',label:'Aplicação de fungicida'},
     {value:'cultivo_mecanico',label:'Cultivo mecânico'}, {value:'outro',label:'Outro'},
   ],
-  CATEGORIAS_DESPESA: [
-    {value:'mao_obra',label:'Mão de obra'}, {value:'colheita_terceirizada',label:'Colheita terceirizada'},
-    {value:'transporte',label:'Transporte'}, {value:'arrendamento',label:'Arrendamento'},
-    {value:'manutencao',label:'Manutenção'}, {value:'outro',label:'Outro'},
-  ],
 };
 
 /* ===================== FRENTE DE UM TALHÃO =====================
@@ -316,7 +311,7 @@ function frenteDoTalhao(t){
 }
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
- * Cadastros de base (fazendas, culturas, talhoes, safras, centrosCusto)
+ * Cadastros de base (fazendas, culturas, talhoes, safras)
  * são ÚNICOS — compartilhados entre Cana e Grãos, exatamente como já
  * eram dentro de cada um dos dois apps originais (mesma tabela física
  * desde sempre: fazendas/culturas/safras/talhoes_areas/centros_custo).
@@ -374,14 +369,14 @@ const CADASTROS = {
   },
   centrosCusto: {
     table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', modulo:'cadastros',
+    desc:'Mesmo Plano de Contas gerencial do Conag (Centro de Custo/Receita) — não é por fazenda: é o TIPO de gasto ou receita (Manutenção de Frota, Mão de obra, Produção Agropecuária...). Fazenda e Talhão de cada lançamento são campos à parte.',
     fields:[
-      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'nome', label:'Nome', type:'text', required:true},
-      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
+      {key:'nome', label:'Nome (igual ao Conag)', type:'text', required:true, placeholder:'Ex: MANUTENÇÃO DE TRATORES, CAMINHÕES, MÁQUINAS E IMPLEMENTOS'},
+      {key:'tipo', label:'Tipo', type:'select', options:[{value:'saida',label:'Saída (despesa)'},{value:'entrada',label:'Entrada (receita)'}], required:true},
+      {key:'subcategoria', label:'Subcategoria (opcional)', type:'text', placeholder:'Ex: OPERACIONAL | MANUTENÇÃO GERAL DA FAZENDA'},
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
-
   /* ---------- CANA ---------- */
   plantiosCana: {
     table:'plantios_cana', label:'Plantio', singular:'Plantio', modulo:'operacoes',
@@ -464,7 +459,7 @@ const CADASTROS = {
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='cana'},
-      {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='cana'||c.frente==='geral'},
+      {key:'centroCustoId', label:'Centro de Custo', type:'fk', refEntity:'centrosCusto', required:true, filter:c=>c.tipo==='saida'},
       {key:'data', label:'Data', type:'date', required:true},
       {key:'categoria', type:'fixed', value:'outro'},
       {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de trator terceirizado'},
@@ -481,6 +476,7 @@ const CADASTROS = {
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='cana'},
       {key:'safraId', label:'Safra (opcional)', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
+      {key:'centroCustoId', label:'Centro de Custo/Receita (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.tipo==='entrada'},
       {key:'data', label:'Data', type:'date', required:true},
       {key:'toneladas', label:'Toneladas entregues (opcional)', type:'number', step:'0.01'},
       {key:'valorTotal', label:'Valor total (R$)', type:'number', step:'0.01', required:true},
@@ -571,9 +567,9 @@ const CADASTROS = {
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='graos'},
-      {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='graos'||c.frente==='geral'},
+      {key:'centroCustoId', label:'Centro de Custo', type:'fk', refEntity:'centrosCusto', required:true, filter:c=>c.tipo==='saida'},
       {key:'data', label:'Data', type:'date', required:true},
-      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_DESPESA, required:true},
+      {key:'categoria', type:'fixed', value:'outro'},
       {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de colheitadeira terceirizada'},
       {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
@@ -589,6 +585,7 @@ const CADASTROS = {
       {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='graos'},
       {key:'safraId', label:'Safra (opcional)', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='graos'; }},
       {key:'culturaId', label:'Cultura (opcional)', type:'fk', refEntity:'culturas', filter:c=>c.frente==='graos'},
+      {key:'centroCustoId', label:'Centro de Custo/Receita (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.tipo==='entrada'},
       {key:'data', label:'Data', type:'date', required:true},
       {key:'sacas', label:'Sacas entregues (opcional)', type:'number', step:'0.01'},
       {key:'valorTotal', label:'Valor total (R$)', type:'number', step:'0.01', required:true},
@@ -1306,7 +1303,15 @@ function PageCustoProducao(){
  * colapsáveis) do AE Cana original — agora parametrizada por frente e
  * com um seletor Cana/Grãos no topo. Novo/editar/excluir reaproveitam
  * o motor genérico de CADASTROS (despesasCana ou despesasGraos, de
- * acordo com o seletor). */
+ * acordo com o seletor).
+ * Agrupamento é por CENTRO DE CUSTO (centroCustoId) — o mesmo Plano de
+ * Contas gerencial do Conag (Centro Gerencial > SubCategoria > Centro
+ * de Custo/Receita), com os mesmos nomes já usados lá. NÃO é por
+ * fazenda: fazenda/talhão de cada lançamento são campos à parte (o
+ * "onde"); centro de custo é o "o quê" foi gasto/recebido. O campo
+ * `categoria` (enum antigo, mao_obra/transporte/...) fica fixo em
+ * 'outro' só pra satisfazer a constraint do banco — não aparece mais
+ * na tela. Ver conversa de 2026-08-19. */
 const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function mesLabel(yyyyMm){
   const [y,m] = String(yyyyMm).split('-');
@@ -1467,7 +1472,7 @@ function PageDespesas(){
           ${itens.map(d=>`
             <tr>
               <td class="despesa-grupo-data">${fmtData(d.data)}</td>
-              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td>
+              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}<br/><span class="hint">${fkNome('fazendas', d.fazendaId)}${d.talhaoId?' · '+fkNome('talhoes', d.talhaoId):''}</span></td>
               <td class="mono despesa-grupo-valorlinha">R$ ${fmt(d.valor)}</td>
               <td class="despesa-grupo-acoes">
                 ${podeEditar ? `<button class="btn-ghost btn-sm" data-edit-cadastro="${cfgKey}:${d.id}">Editar</button>` : ''}
