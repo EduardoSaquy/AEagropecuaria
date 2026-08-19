@@ -363,6 +363,17 @@ const db = supabase.createClient(
   'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
 );
 
+// Cliente extra, só de leitura, apontando pro projeto do AE Lavoura/Matriz —
+// cadastro de fazendas foi centralizado lá (ver AEMatriz.html). Aqui só
+// lemos as fazendas cuja atividade inclui 'pecuaria', pra calcular hectares
+// usados no resultado por hectare (Resultados). Não escrevemos nessa tabela
+// a partir deste app. Requer a policy de leitura anon liberada no Lavoura
+// (ver "leitura anon (AE Pecuaria)" em fazendas).
+const dbLavoura = supabase.createClient(
+  'https://kmkystqgpvmzrccxvyaz.supabase.co',
+  'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
+);
+
 function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor, unidade:r.unidade, ms:r.ms, pb:r.pb, ndt:r.ndt, precoKg:r.preco_kg, estoqueMin:r.estoque_min, obs:r.obs||''}; }
 function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
 function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg, ajuste:!!r.ajuste}; }
@@ -502,8 +513,11 @@ function centrosCustoInvestimentoConhecidos(){
   state.investimentos.forEach(i=>{ if(i.categoria) vistos.add(i.categoria); });
   return [...vistos].sort((a,b)=>a.localeCompare(b));
 }
-function rowToFazenda(r){ return {id:r.id, nome:r.nome, hectares:r.hectares}; }
-function fazendaToRow(f){ return {nome:f.nome, hectares:f.hectares}; }
+// Fazenda agora é cadastrada só no AE Matriz (tabela fazendas do projeto do
+// Lavoura) — este app só lê, filtrando pelas que têm 'pecuaria' em
+// atividades. area_ha vira "hectares" pra não precisar mexer no resto do
+// código que já usa esse nome de campo.
+function rowToFazenda(r){ return {id:r.id, nome:r.nome, hectares:r.area_ha}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
@@ -528,7 +542,7 @@ async function loadAll(){
     db.from('precos_arroba').select('*').order('id').range(0, 19999),
     db.from('config_financeiro').select('*').eq('id', 1),
     db.from('profiles').select('*').order('nome').range(0, 19999),
-    db.from('fazendas').select('*').order('id').range(0, 19999),
+    dbLavoura.from('fazendas').select('*').contains('atividades', ['pecuaria']).order('id').range(0, 19999),
     db.from('partos').select('*').order('id').range(0, 19999),
     db.from('pesagens').select('*').order('id').range(0, 19999),
     db.from('producoes_racao').select('*').order('id').range(0, 19999),
@@ -708,7 +722,6 @@ function render(){
         ${state.page==='resultadosInvestimentos' ? PageResultadosInvestimentos() : ''}
         ${state.page==='resultadosResumo' ? PageResultadosResumo() : ''}
         ${state.page==='resultadosReceitas' ? PageResultadosReceitas() : ''}
-        ${state.page==='fazendaConfig' ? PageFazenda() : ''}
         ${state.page==='adminUsuarios' ? PageAdminUsuarios() : ''}
         `}
     `;
@@ -821,7 +834,6 @@ function podeRegistrarVenda(tipo){
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  if(key==='fazenda') return souAdmin();
   // Cada regra de cargo abaixo (consultor, podeCriarLote, editar em alguma
   // área) continua valendo como ATALHO adicional -- só o admin liberando a
   // permissão explícita do módulo (tabela em Administração > Usuários) nunca
@@ -1463,9 +1475,6 @@ const GROUPS = {
     {key:'resultadosReproducao', label:'Reprodução', soAdmin:true},
     {key:'resultadosInvestimentos', label:'Investimentos'},
   ]},
-  fazenda: {label:'Fazenda', icon:iconFazenda(), pages:[
-    {key:'fazendaConfig', label:'Fazenda'},
-  ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
   ]},
@@ -1569,7 +1578,6 @@ function Header(){
     resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
     resultadosReceitas:{eyebrow:'Financeiro', title:'Receitas', desc:'Lance a venda de animais e outras receitas da operação, por data e lote.'},
-    fazendaConfig:{eyebrow:'Configuração', title:'Fazenda', desc:'Cadastro das fazendas da operação — a soma dos hectares de todas é usada para calcular o resultado financeiro por hectare.'},
     adminUsuarios:{eyebrow:'Administração', title:'Usuários', desc:'Crie contas de acesso para sua equipe e controle quais módulos cada pessoa pode ver ou editar.'},
     loteDetalhe:{eyebrow:'Lote', title:'Animais do Lote', desc:'Cadastro e histórico de cada animal numerado do lote — última pesagem, ganho médio diário, situação reprodutiva (em Cria) e edição do número/sexo/raça.'},
   };
@@ -1734,9 +1742,6 @@ function openNewModal(type){
   } else if(type==='metaMargem'){
     editDraft = {valor: state.metaMargemPct ?? ''};
     state.modal = {type:'metaMargem'};
-  } else if(type==='fazenda'){
-    editDraft = {nome:'', hectares:''};
-    state.modal = {type:'fazenda'};
   }
   return true;
 }
@@ -4309,7 +4314,7 @@ function PageResultadosResumo(){
     <div class="stat-card"><div class="stat-label">Resultado/ha</div><div class="stat-value ${porHectare.resultado<0?'alerta':''}">R$ ${fmt(porHectare.resultado)}</div></div>
   </div>
   <p class="hint" style="margin:10px 0 20px;">Acumulado de janeiro até o mês atual (${meses.length} mês${meses.length===1?'':'es'}), não só o mês corrente — o valor vai se consolidando conforme o ano avança.</p>
-  ` : `<p class="hint" style="margin:10px 0 20px;">Cadastre a área da fazenda (aba Fazenda, só para Administrador/Proprietário) para ver o resultado por hectare aqui.</p>`}
+  ` : `<p class="hint" style="margin:10px 0 20px;">Cadastre a área da fazenda no AE Matriz, marcando "Pecuária" nas atividades, para ver o resultado por hectare aqui.</p>`}
   ${DemonstrativoReceitaDespesa(d.fixosMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
@@ -4982,58 +4987,6 @@ function ModalPermissoes(){
   </div>`;
 }
 
-/* ===================== PÁGINA: FAZENDA ===================== */
-function PageFazenda(){
-  const hectares = totalHectares();
-  return `
-  <div class="toolbar">
-    <span class="hint">${state.fazendas.length} fazenda(s) cadastrada(s)</span>
-    ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-fab-action="fazenda">+ Nova fazenda</button>` : ''}
-  </div>
-  <div class="stat-row" style="margin-bottom:14px;">
-    <div class="stat-card"><div class="stat-label">Área total</div><div class="stat-value">${fmtInt(hectares)} ha</div></div>
-  </div>
-  <p class="hint" style="margin:-4px 0 14px;">A soma dos hectares de todas as fazendas é usada pra calcular o resultado financeiro (receita, despesa e lucro/prejuízo) por hectare, mostrado na aba Resultados.</p>
-  <div class="card">
-    ${state.fazendas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação, com o nome e a área em hectares de cada uma.') : `
-    <table>
-      <thead><tr><th>Nome</th><th>Hectares</th><th></th></tr></thead>
-      <tbody>
-        ${state.fazendas.map(f=>`
-          <tr>
-            <td><strong>${esc(f.nome)}</strong></td>
-            <td class="mono">${fmtInt(f.hectares)} ha</td>
-            <td style="display:flex; gap:6px;">
-              ${souAdmin() ? `
-              <button class="btn-ghost btn-sm" data-edit-fazenda="${f.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-fazenda="${f.id}">Excluir</button>
-              ` : ''}
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
-}
-
-function ModalFazenda(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar fazenda':'Nova fazenda'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomefazenda" value="${esc(d.nome)}" placeholder="Ex: Fazenda Santa Alice"/></div>
-        <div class="field"><label>Hectares</label><input id="f-hectaresfazenda" type="number" step="1" value="${d.hectares}"/></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="fazenda">${d._editId?'Salvar alterações':'Salvar fazenda'}</button>
-      </div>
-    </div>
-  </div>`;
-}
-
 function Empty(title, sub){
   return `<div class="empty">
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
@@ -5071,7 +5024,6 @@ function Modal(){
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='permissoes') return ModalPermissoes();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
-  if(state.modal.type==='fazenda') return ModalFazenda();
   if(state.modal.type==='pendencias') return ModalPendencias();
   if(state.modal.type==='detalheGrafico') return ModalDetalheGrafico();
   return '';
@@ -6763,23 +6715,6 @@ function attachEvents(){
       await loadAll();
     };
   });
-  document.querySelectorAll('[data-edit-fazenda]').forEach(el=>{
-    el.onclick = ()=>{
-      const f = state.fazendas.find(x=>x.id===Number(el.dataset.editFazenda));
-      editDraft = {...f, _editId: f.id};
-      state.modal = {type:'fazenda'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-del-fazenda]').forEach(el=>{
-    el.onclick = async ()=>{
-      if(!confirm('Excluir esta fazenda? Essa ação não pode ser desfeita.')) return;
-      const id = Number(el.dataset.delFazenda);
-      const {error} = await db.from('fazendas').delete().eq('id', id);
-      if(error){ alert('Não foi possível excluir esta fazenda: ' + error.message); return; }
-      await loadAll();
-    };
-  });
   document.querySelectorAll('[data-edit-investimento]').forEach(el=>{
     el.onclick = ()=>{
       const i = state.investimentos.find(x=>x.id===Number(el.dataset.editInvestimento));
@@ -8247,17 +8182,6 @@ function attachEvents(){
       } else if(type==='metaMargem'){
         const pct = Number(document.getElementById('f-metamargem').value)||0;
         ({error} = await db.from('config_financeiro').upsert({id:1, meta_margem_pct:pct}));
-      } else if(type==='fazenda'){
-        const campos = {
-          nome: document.getElementById('f-nomefazenda').value || 'Sem nome',
-          hectares: Number(document.getElementById('f-hectaresfazenda').value)||0,
-        };
-        const row = fazendaToRow(campos);
-        if(editDraft._editId){
-          ({error} = await db.from('fazendas').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('fazendas').insert(row));
-        }
       } else if(type==='permissoes'){
         // Só admin/proprietário pode mexer no papel/permissões de alguém --
         // o botão que abre esse modal já é só admin (PageAdminUsuarios),
