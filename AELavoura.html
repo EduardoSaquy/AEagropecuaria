@@ -670,7 +670,7 @@ async function loadAll(){
 /* ===================== ESTADO ===================== */
 let editDraft = null;
 const state = {
-  page: 'fazendas',
+  page: 'talhoes',
   ...Object.fromEntries(CADASTRO_KEYS.map(k=>[k, []])),
   perfis: [],
   modal: null,
@@ -799,7 +799,7 @@ async function fazerLogin(){
 }
 async function fazerLogout(){
   await db.auth.signOut();
-  state.session = null; state.perfil = null; state.page = 'fazendas';
+  state.session = null; state.perfil = null; state.page = 'talhoes';
   render();
 }
 
@@ -834,7 +834,6 @@ function AguardandoLiberacao(){
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
 const GROUPS = {
   cadastros: {label:'Cadastros', icon:iconFazenda(), pages:[
-    {key:'fazendas', label:'Fazendas'},
     {key:'talhoes', label:'Talhões'},
     {key:'culturas', label:'Culturas'},
     {key:'safras', label:'Safras'},
