@@ -1,124 +1,135 @@
 -- ============================================================
--- PASSO 4 — JUNTAR USUÁRIOS E PERMISSÕES
+-- PASSO 4 - JUNTAR USUARIOS E PERMISSOES
 --
--- RODAR NO PROJETO DO **LAVOURA/MATRIZ**, depois que:
---   a) o passo 3 (dados) tiver conferido OK; e
---   b) as 5 contas novas já tiverem sido criadas pela tela de Usuários do
---      AE Matriz, com EXATAMENTE estes nomes de usuário:
---        creunice, davi, gustavo, irlei, joilson
+-- RODAR NO PROJETO DO LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).
+-- Cole o arquivo inteiro e aperte Run. Sao dois comandos.
 --
--- Por que o nome de usuário tem que ser idêntico: a autoria dos lançamentos
--- da Pecuária (criado_por) é TEXTO com o nome de usuário, não um ID. Mantendo
--- o mesmo login, todo o histórico de "quem lançou" continua batendo sozinho,
--- sem precisar remapear nada.
+-- ------------------------------------------------------------
+-- ESTE SCRIPT PODE (E DEVE) SER RODADO DUAS VEZES
+--
+-- Na primeira vez ele mostra quais pessoas da Pecuaria ainda nao tem
+-- conta aqui. Voce cria essas contas na tela de Usuarios do AE Matriz e
+-- roda de novo. Rodar repetido nao causa problema: ele so reescreve as
+-- mesmas chaves com os mesmos valores.
+--
+-- IMPORTANTE ao criar as contas: use EXATAMENTE o mesmo nome de usuario
+-- que a pessoa tem na Pecuaria. A autoria dos lancamentos de la
+-- (criado_por) e texto com o nome de usuario, nao um identificador
+-- interno. Mantendo o mesmo login, todo o historico de quem lancou o que
+-- continua valido sozinho.
+--
+-- ------------------------------------------------------------
+-- O QUE ELE FAZ
+--
+-- 1. Libera o papel "consultor" na tabela profiles (o Lavoura nao tinha
+--    esse papel; a Pecuaria tem, e o Irlei usa).
+--
+-- 2. Le as permissoes direto do banco da Pecuaria, pela ponte que o passo
+--    3 deixou montada. Nada e digitado a mao aqui.
+--
+-- 3. Renomeia duas chaves: financeiro vira pec_financeiro e resultados
+--    vira pec_resultados. Essas duas existem nos dois sistemas com
+--    significados diferentes - e o unico conflito real da unificacao. As
+--    outras nove chaves da Pecuaria nao colidem e entram como estao.
+--
+-- 4. Mescla com as permissoes que a pessoa ja tem no Lavoura, sem apagar
+--    nenhuma. Como as chaves agora sao distintas, uma nao sobrescreve a
+--    outra.
+--
+-- SEGURANCA: exige que o backup do passo 0 exista, porque este e o unico
+-- script da unificacao que altera dado de producao que ja existia.
 -- ============================================================
 
-
--- ------------------------------------------------------------
--- ⛔ TRAVA DE PROJETO — não remova
---
--- Rodar isto na Pecuária sobrescreveria as permissões de lá com as chaves
--- pec_*, quebrando o acesso de todo mundo naquele banco.
--- ------------------------------------------------------------
-do $$
+do $permissoes$
+declare
+  faltando int;
 begin
-  if not exists (
-    select 1 from information_schema.tables
-    where table_schema = 'public' and table_name = 'talhoes_areas'
-  ) then
-    raise exception E'PROJETO ERRADO.\nEste script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).\nRodar na Pecuaria quebraria o acesso de todos os usuarios de la. Troque de projeto.';
+  -- ---------- TRAVAS ----------
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'talhoes_areas') then
+    raise exception 'PROJETO ERRADO. Este script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).';
   end if;
-  -- Sem o backup do passo 0, nao deixa seguir: este e o unico script que
-  -- altera dado de producao que ja existia.
-  if not exists (
-    select 1 from information_schema.tables
-    where table_schema = 'public' and table_name = 'profiles_backup_unificacao'
-  ) then
-    raise exception E'SEM BACKUP.\nA tabela profiles_backup_unificacao nao existe: o PASSO 0 nao foi rodado neste projeto.\nEste e o unico script que altera dado ja existente. Rode o unificacao_00_backup.sql primeiro.';
+
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'profiles_backup_unificacao') then
+    raise exception 'SEM BACKUP. Rode antes o script do passo 0. Este e o unico script que altera dado ja existente.';
   end if;
-end $$;
 
+  if not exists (select 1 from information_schema.schemata
+                 where schema_name = 'pec_origem_dados') then
+    raise exception 'A ponte com a Pecuaria nao esta montada. Rode antes o script do passo 3.';
+  end if;
 
--- ------------------------------------------------------------
--- 4.1 — Liberar os papéis da Pecuária no check de profiles
---
--- O Lavoura aceita: admin, proprietario, gestor, encarregado, colaborador,
--- operador. A Pecuária usa também 'consultor' (o irlei é consultor). Sem
--- isto, gravar o papel dele falha.
--- ------------------------------------------------------------
-alter table profiles drop constraint if exists profiles_papel_check;
-alter table profiles add constraint profiles_papel_check
-  check (papel in ('admin','proprietario','gestor','encarregado','colaborador','operador','consultor'));
+  -- ---------- LIBERAR O PAPEL CONSULTOR ----------
+  alter table profiles drop constraint if exists profiles_papel_check;
+  alter table profiles add constraint profiles_papel_check
+    check (papel in ('admin','proprietario','gestor','encarregado','colaborador','operador','consultor'));
 
+  -- ---------- RELATORIO ----------
+  execute 'drop table if exists zz_relatorio_permissoes';
+  execute 'create table zz_relatorio_permissoes (
+             usuario text, nome text, situacao text, papel_pecuaria text,
+             chaves_lavoura_antes int, chaves_pecuaria int)';
 
--- ------------------------------------------------------------
--- 4.2 — Conferir que todo mundo tem conta antes de continuar
---
--- Tem que listar os 9 usuários (os 4 que já existiam + as 5 contas novas).
--- Se faltar alguém, crie a conta e rode de novo antes de seguir.
--- ------------------------------------------------------------
-select usuario, nome, papel, ativo
-from profiles
-where usuario in ('alice','eduardo','marcia','paulo','creunice','davi','gustavo','irlei','joilson')
-order by usuario;
+  execute '
+    insert into zz_relatorio_permissoes
+    select
+      pec.usuario,
+      pec.nome,
+      case when lav.id is null then ''FALTA CRIAR CONTA'' else ''vinculado'' end,
+      pec.papel,
+      coalesce((select count(*)::int from jsonb_object_keys(lav.permissoes)), 0),
+      coalesce((select count(*)::int from jsonb_object_keys(pec.permissoes)), 0)
+    from pec_origem_dados.profiles pec
+    left join profiles lav on lav.usuario = pec.usuario
+    where coalesce(pec.ativo, true) = true';
 
+  -- ---------- MESCLAR AS PERMISSOES ----------
+  -- Somente para quem ja tem conta aqui. Quem falta aparece no relatorio.
+  update profiles p
+  set permissoes = coalesce(p.permissoes, '{}'::jsonb) || origem.permissoes_convertidas,
+      papel      = origem.papel
+  from (
+    select
+      pec.usuario,
+      pec.papel,
+      coalesce(
+        (select jsonb_object_agg(
+           case par.chave
+             when 'financeiro' then 'pec_financeiro'
+             when 'resultados' then 'pec_resultados'
+             else par.chave
+           end,
+           par.valor)
+         from jsonb_each(coalesce(pec.permissoes, '{}'::jsonb)) as par(chave, valor)),
+        '{}'::jsonb
+      ) as permissoes_convertidas
+    from pec_origem_dados.profiles pec
+    where coalesce(pec.ativo, true) = true
+  ) origem
+  where p.usuario = origem.usuario;
 
--- ------------------------------------------------------------
--- 4.3 — Foto do "antes" (guarde este resultado)
--- ------------------------------------------------------------
-select usuario, papel, permissoes as permissoes_antes
-from profiles
-where usuario in ('alice','eduardo','marcia','paulo','creunice','davi','gustavo','irlei','joilson')
-order by usuario;
+  select count(*) into faltando
+  from zz_relatorio_permissoes where situacao = 'FALTA CRIAR CONTA';
 
+  if faltando > 0 then
+    raise notice 'ATENCAO: % pessoa(s) da Pecuaria ainda sem conta aqui. Crie na tela de Usuarios do AE Matriz, com o mesmo nome de usuario, e rode este script de novo.', faltando;
+  else
+    raise notice 'Todas as pessoas da Pecuaria estao vinculadas.';
+  end if;
+end
+$permissoes$;
 
--- ------------------------------------------------------------
--- 4.4 — Trazer as permissões da Pecuária
---
--- Regras aplicadas:
---   * 'financeiro'  -> 'pec_financeiro'   (colide com o Lavoura)
---   * 'resultados'  -> 'pec_resultados'   (colide com o Lavoura)
---   * as outras 9 chaves entram como estão (não colidem com nada)
---   * as permissões de Lavoura de quem já tinha são PRESERVADAS: o || do
---     jsonb mescla, e como as chaves da Pecuária agora são distintas,
---     nenhuma sobrescreve a outra.
---   * o papel NÃO é alterado aqui. Conferi que os 4 que existem nos dois
---     lados já têm papel idêntico, então não há nada a decidir. As 5 contas
---     novas recebem o papel na hora de criar (colaborador; irlei consultor).
--- ------------------------------------------------------------
-with pec as (
-  select * from (values
-    ('alice',    '{"cadastro":"editar","manejo":"nenhum","insumos":"editar","dietas":"editar","lotesGeral":"editar","confinamento":"editar","pasto":"editar","cria":"editar","vendas":"editar","pec_financeiro":"editar","pec_resultados":"editar"}'::jsonb),
-    ('creunice', '{"dietas":"editar","insumos":"editar","confinamento":"visualizar","pasto":"visualizar","cria":"visualizar","pec_financeiro":"editar","pec_resultados":"nenhum"}'::jsonb),
-    ('davi',     '{"dietas":"visualizar","insumos":"nenhum","confinamento":"editar","pasto":"editar","cria":"editar","pec_financeiro":"nenhum","pec_resultados":"nenhum"}'::jsonb)
-  ) as t(usuario, permissoes)
-)
--- ⚠️ ATENÇÃO: os 3 acima são os que eu consegui ler ao vivo. Antes de rodar,
--- complete a lista com gustavo, irlei, joilson, marcia, paulo e eduardo,
--- copiando de: AE Pecuária → Administração → Usuários → Editar acesso.
--- Lembrando de já escrever pec_financeiro / pec_resultados no lugar de
--- financeiro / resultados.
-update profiles p
-set permissoes = coalesce(p.permissoes, '{}'::jsonb) || pec.permissoes
-from pec
-where p.usuario = pec.usuario;
-
-
--- ------------------------------------------------------------
--- 4.5 — ✅ CONFERÊNCIA
---
--- Olhe especialmente alice e paulo: eles têm permissão dos DOIS lados.
--- O resultado tem que mostrar as chaves do Lavoura (cadastros, operacoes,
--- financeiro, resultados, ...) E as da Pecuária (confinamento, cria, pasto,
--- pec_financeiro, pec_resultados, ...) convivendo na mesma linha.
--- ------------------------------------------------------------
+-- Resultado: quem ja esta vinculado e quem falta criar conta.
 select
-  usuario,
-  papel,
-  (select count(*) from jsonb_object_keys(permissoes)) as total_chaves,
-  permissoes ? 'financeiro'      as tem_financeiro_lavoura,
-  permissoes ? 'pec_financeiro'  as tem_financeiro_pecuaria,
-  permissoes
-from profiles
-where usuario in ('alice','eduardo','marcia','paulo','creunice','davi','gustavo','irlei','joilson')
-order by usuario;
+  r.usuario,
+  r.nome,
+  r.situacao,
+  r.papel_pecuaria,
+  p.papel as papel_aqui,
+  (select count(*) from jsonb_object_keys(p.permissoes)) as chaves_agora,
+  p.permissoes ? 'financeiro'     as tem_financeiro_lavoura,
+  p.permissoes ? 'pec_financeiro' as tem_financeiro_pecuaria
+from zz_relatorio_permissoes r
+left join profiles p on p.usuario = r.usuario
+order by r.situacao, r.usuario;
