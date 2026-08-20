@@ -29,6 +29,24 @@
 
 
 -- ------------------------------------------------------------
+-- ⛔ TRAVA DE PROJETO — não remova
+--
+-- Aborta na hora se este script for rodado no banco errado. A tabela
+-- talhoes_areas só existe no Lavoura/Matriz e nunca é criada na Pecuária,
+-- então serve de identificação segura antes e depois da migração.
+-- ------------------------------------------------------------
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'talhoes_areas'
+  ) then
+    raise exception E'PROJETO ERRADO.\nEste script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).\nVoce parece estar no projeto da PECUARIA. Troque de projeto e rode de novo.';
+  end if;
+end $$;
+
+
+-- ------------------------------------------------------------
 -- 0.1 — Cópia de segurança da tabela profiles, dentro do próprio banco
 --
 -- Cópia interna é melhor que CSV aqui: não depende de download, não perde

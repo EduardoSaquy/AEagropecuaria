@@ -14,6 +14,20 @@
 
 
 -- ------------------------------------------------------------
+-- ⛔ TRAVA DE PROJETO — não remova
+-- ------------------------------------------------------------
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'talhoes_areas'
+  ) then
+    raise exception E'PROJETO ERRADO.\nEste script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz). Troque de projeto.';
+  end if;
+end $$;
+
+
+-- ------------------------------------------------------------
 -- 6.1 — Derrubar a ponte com o banco antigo (rodar no LAVOURA)
 -- ------------------------------------------------------------
 drop schema if exists pec_origem_dados cascade;

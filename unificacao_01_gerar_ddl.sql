@@ -16,6 +16,25 @@
 
 
 -- ------------------------------------------------------------
+-- ⛔ TRAVA DE PROJETO — não remova
+--
+-- Este é o ÚNICO script que roda na Pecuária. Aborta se estiver no Lavoura.
+-- ------------------------------------------------------------
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'lotes'
+  ) or exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'talhoes_areas'
+  ) then
+    raise exception E'PROJETO ERRADO.\nEste script e da PECUARIA (leojfqlbdtlriemdgnyw).\nTodos os outros scripts da unificacao rodam no Lavoura; so este roda aqui.\nTroque de projeto e rode de novo.';
+  end if;
+end $$;
+
+
+-- ------------------------------------------------------------
 -- 1.1 — CREATE TABLE de cada tabela (colunas, tipos, defaults, not null)
 --
 -- Pula profiles e fazendas de propósito: já existem no Lavoura.

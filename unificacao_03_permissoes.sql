@@ -15,6 +15,31 @@
 
 
 -- ------------------------------------------------------------
+-- ⛔ TRAVA DE PROJETO — não remova
+--
+-- Rodar isto na Pecuária sobrescreveria as permissões de lá com as chaves
+-- pec_*, quebrando o acesso de todo mundo naquele banco.
+-- ------------------------------------------------------------
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'talhoes_areas'
+  ) then
+    raise exception E'PROJETO ERRADO.\nEste script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).\nRodar na Pecuaria quebraria o acesso de todos os usuarios de la. Troque de projeto.';
+  end if;
+  -- Sem o backup do passo 0, nao deixa seguir: este e o unico script que
+  -- altera dado de producao que ja existia.
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'profiles_backup_unificacao'
+  ) then
+    raise exception E'SEM BACKUP.\nA tabela profiles_backup_unificacao nao existe: o PASSO 0 nao foi rodado neste projeto.\nEste e o unico script que altera dado ja existente. Rode o unificacao_00_backup.sql primeiro.';
+  end if;
+end $$;
+
+
+-- ------------------------------------------------------------
 -- 4.1 — Liberar os papéis da Pecuária no check de profiles
 --
 -- O Lavoura aceita: admin, proprietario, gestor, encarregado, colaborador,
