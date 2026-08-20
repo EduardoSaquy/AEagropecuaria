@@ -15,6 +15,34 @@
 
 
 -- ------------------------------------------------------------
+-- ⛔ TRAVA DE PROJETO — não remova
+--
+-- Este é o script mais perigoso de rodar no lugar errado: se executado na
+-- Pecuária, ele tentaria copiar o banco em cima dele mesmo. A trava impede.
+-- ------------------------------------------------------------
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'talhoes_areas'
+  ) then
+    raise exception E'PROJETO ERRADO.\nEste script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).\nRodar isto na Pecuaria copiaria o banco em cima dele mesmo. Troque de projeto.';
+  end if;
+  -- Segunda trava: o passo 2 (estrutura) precisa ter rodado antes.
+  if not exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'lotes'
+  ) then
+    raise exception E'FORA DE ORDEM.\nA tabela lotes ainda nao existe aqui: o PASSO 2 (estrutura) nao foi aplicado.\nRode o unificacao_01 na Pecuaria, cole o resultado aqui, e so entao volte a este script.';
+  end if;
+  -- Terceira trava: não rodar duas vezes (duplicaria tudo).
+  if (select count(*) from lotes) > 0 then
+    raise exception E'JA TEM DADO AQUI.\nA tabela lotes nao esta vazia — este script provavelmente ja rodou.\nRodar de novo duplicaria todos os lancamentos. Confira antes de insistir.';
+  end if;
+end $$;
+
+
+-- ------------------------------------------------------------
 -- 3.1 — Extensão que permite ler outro Postgres
 -- ------------------------------------------------------------
 create extension if not exists postgres_fdw;
@@ -39,6 +67,40 @@ create user mapping for current_user
     user 'postgres',
     password 'SENHA_DO_BANCO_DA_PECUARIA'   -- <<< TROQUE AQUI
   );
+
+-- ------------------------------------------------------------
+-- SE DER "password authentication failed for user postgres"
+--
+-- Isso é BOA notícia pela metade: significa que a conexão de rede entre os
+-- dois projetos funciona (resolveu o host, chegou na porta 5432 e foi até a
+-- autenticação). Só a senha está errada. Duas causas prováveis:
+--
+-- 1) A senha do banco não é a senha da sua conta Supabase, e ela NÃO fica
+--    visível depois que o projeto é criado. Se você não a tem anotada,
+--    gere uma nova em:
+--      projeto da Pecuária -> Project Settings -> Database
+--      -> Database password -> Reset database password
+--    Resetar é seguro aqui: nada nos apps usa essa senha (eles usam a chave
+--    publishable). Copie a senha nova e cole na linha acima.
+--
+-- 2) Se a senha tiver caractere especial, confira se ela foi colada inteira
+--    entre as aspas simples e sem espaço sobrando.
+--
+-- ALTERNATIVA (se a conexão direta continuar recusando): usar o pooler.
+-- Troque o bloco do server e do user mapping por:
+--
+--   create server pec_origem
+--     foreign data wrapper postgres_fdw
+--     options (host 'aws-0-<REGIAO>.pooler.supabase.com', port '5432', dbname 'postgres');
+--
+--   create user mapping for current_user
+--     server pec_origem
+--     options (user 'postgres.leojfqlbdtlriemdgnyw', password 'SENHA');
+--
+-- O host exato do pooler e a região aparecem em Project Settings -> Database
+-- -> Connection string -> aba "Session pooler". Note que ali o usuário tem o
+-- formato postgres.<ref-do-projeto>, diferente da conexão direta.
+-- ------------------------------------------------------------
 
 -- Espelha as tabelas da Pecuária num schema separado (pec_origem_dados).
 -- São tabelas "janela": não copiam dado, só apontam pro banco de lá.
