@@ -276,10 +276,15 @@ const dbPecuaria = supabase.createClient(
 // Cadastro de fazenda foi centralizado aqui no Matriz (era espalhado entre
 // Lavoura e Pecuária) — este app agora é o único que cria/edita/exclui
 // fazenda; Lavoura e Pecuária só leem (ver AELavoura.html/AEpecuaria.html).
-// "atividades" substitui a antiga separação por projeto: uma fazenda pode
-// ter mais de uma (ex: Faz. Invernada é grãos E pecuária ao mesmo tempo).
-function rowToFazendaLavoura(r){ return {id:r.id, nome:r.nome, estado:r.estado||'', areaHa:r.area_ha, ativo:r.ativo, atividades:r.atividades||[]}; }
-function fazendaToRow(f){ return {nome:f.nome, estado:f.estado||null, area_ha:f.areaHa===''||f.areaHa==null?null:Number(f.areaHa), atividades:f.atividades||[]}; }
+// Quanto hectare de cada atividade (grãos/cana/pecuária) tem em cada
+// fazenda mora à parte, em fazenda_atividades — não na própria fazenda —
+// justamente pra permitir área por atividade independente (inclusive
+// passando da área total, em caso de integração lavoura-pecuária). A
+// antiga coluna fazendas.atividades (lista de tags sem área) foi
+// substituída por essa tabela; não é mais lida por nenhum app.
+function rowToFazendaLavoura(r){ return {id:r.id, nome:r.nome, estado:r.estado||'', areaHa:r.area_ha, ativo:r.ativo}; }
+function fazendaToRow(f){ return {nome:f.nome, estado:f.estado||null, area_ha:f.areaHa===''||f.areaHa==null?null:Number(f.areaHa)}; }
+function rowToFazendaAtividade(r){ return {id:r.id, fazendaId:r.fazenda_id, atividade:r.atividade, areaHa:r.area_ha}; }
 const ESTADOS_BR = [
   ['AC','Acre'],['AL','Alagoas'],['AP','Amapá'],['AM','Amazonas'],['BA','Bahia'],['CE','Ceará'],
   ['DF','Distrito Federal'],['ES','Espírito Santo'],['GO','Goiás'],['MA','Maranhão'],['MT','Mato Grosso'],
@@ -305,18 +310,20 @@ const APPS_REGISTRO = [
 
 async function loadAll(){
   state.apps = APPS_REGISTRO;
-  const [faz, tal, cul, perfis] = await Promise.all([
+  const [faz, fazAtiv, tal, cul, perfis] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
+    db.from('fazenda_atividades').select('*'),
     db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
     db.from('culturas').select('id, frente'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
   ]);
-  const erroCarregamento = [faz, tal, cul, perfis].find(r=>r.error)?.error;
+  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
   }
   state.fazendasLavoura = (faz.data||[]).map(rowToFazendaLavoura);
+  state.fazendaAtividades = (fazAtiv.data||[]).map(rowToFazendaAtividade);
   state.talhoes = (tal.data||[]).map(rowToTalhao);
   state.culturas = cul.data||[];
   state.perfis = (perfis.data||[]).map(rowToPerfil);
@@ -707,7 +714,8 @@ function resultadoComCombustivel(baseResultado, slug){
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'painel',
-  fazendasLavoura: [], // {id, nome, estado, areaHa, ativo, atividades} — cadastro único, feito aqui no Matriz
+  fazendasLavoura: [], // {id, nome, estado, areaHa, ativo} — cadastro único, feito aqui no Matriz
+  fazendaAtividades: [], // {id, fazendaId, atividade, areaHa} — área de cada atividade em cada fazenda
   talhoes: [], // {id, fazendaId, areaHa, culturaId, ativo} — talhoes_areas do Lavoura
   culturas: [], // {id, frente} — culturas do Lavoura, usado só pra achar a frente de cada talhão
   apps: APPS_REGISTRO, // estático, não depende de carregamento — evita um flash de "nenhum app" antes do primeiro loadAll()
@@ -1043,7 +1051,7 @@ function Header(){
   const titles = {
     painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},
     resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado por operação — compare mês a mês, por ano ou por safra (maio a abril).'},
-    fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área e quais atividades (grãos, cana, pecuária) acontecem em cada uma. AE Lavoura e AE Pecuária só leem esses dados.'},
+    fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área total e, pra cada atividade (grãos, cana, pecuária), quantos hectares dela tem ali. AE Lavoura e AE Pecuária só leem esses dados.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso à matriz. Cada app (Pecuária, Combustível...) continua com seu próprio login.'},
   };
   const t = titles[state.page] || titles.painel;
@@ -1169,19 +1177,19 @@ function resultadoBrutoOperacao(slug){
 function resultadoOperacaoNoPeriodo(slug){
   return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
 }
-// Área (ha) de cada operação — pecuária soma a área TOTAL de toda fazenda
-// com 'pecuaria' nas atividades (sem talhão, como no cadastro original da
-// Pecuária); cana/cereais somam só os talhões ativos cuja cultura pertence
-// àquela frente ('graos' é como o Lavoura chama a frente que aqui é
-// 'cereais') — numa fazenda mista (ex: grãos + pecuária), a área de
-// pecuária conta a fazenda inteira e a de grãos conta só os talhões, sem
-// duplicar hectare nenhum porque são cálculos independentes.
-const FRENTE_DA_OPERACAO = {cana:'cana', cereais:'graos'};
+// Área (ha) de cada operação — vem direto do cadastro de Fazendas (aba
+// Fazendas, aqui no Matriz), que guarda quanto hectare de cada atividade
+// (grãos/cana/pecuária) tem em cada fazenda. Não depende mais de somar
+// talhão por talhão: o admin lança a área de cada atividade direto na
+// fazenda. Isso também permite integração lavoura-pecuária (mesma área
+// contando ao mesmo tempo como grãos/cana E como pecuária) sem duplicar
+// hectare por engano — cada atividade é um número independente, a soma
+// das três pode passar da área total da fazenda de propósito.
+const ATIVIDADE_DA_OPERACAO = {cana:'cana', cereais:'graos', pecuaria:'pecuaria'};
 function hectaresPorOperacao(slug){
-  if(slug==='pecuaria') return state.fazendasLavoura.filter(f=>(f.atividades||[]).includes('pecuaria')).reduce((s,f)=>s+Number(f.areaHa||0),0);
-  const frente = FRENTE_DA_OPERACAO[slug];
-  if(!frente) return 0;
-  return talhoesPorFrente(frente).filter(t=>t.ativo!==false).reduce((s,t)=>s+Number(t.areaHa||0),0);
+  const atividade = ATIVIDADE_DA_OPERACAO[slug];
+  if(!atividade) return 0;
+  return state.fazendaAtividades.filter(a=>a.atividade===atividade).reduce((s,a)=>s+Number(a.areaHa||0),0);
 }
 // Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
 // não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
@@ -1403,22 +1411,18 @@ function PageResultados(){
 }
 
 /* ===================== FAZENDAS (cadastro centralizado) ===================== */
-// Cadastro de fazenda é feito só aqui no Matriz (nome, estado, área,
-// atividades) — Lavoura e Pecuária só leem. A "operação" mostrada por
-// fazenda combina duas fontes: talhões ativos do Lavoura (cana/grãos, por
-// cultura) e a tag 'pecuaria' em atividades (que não tem talhão — conta a
-// área da fazenda inteira, igual ao cadastro antigo da Pecuária).
+// Cadastro de fazenda é feito só aqui no Matriz (nome, estado, área total e,
+// pra cada atividade — grãos/cana/pecuária — quantos hectares dela tem
+// nessa fazenda) — Lavoura e Pecuária só leem. Cada atividade guarda sua
+// própria área em fazenda_atividades, independente das outras: não precisa
+// bater com a área total nem com talhão nenhum. Isso cobre integração
+// lavoura-pecuária de propósito (ex: 300ha que são, ao mesmo tempo, área de
+// grãos E de pastagem — contam inteiro nas duas atividades, sem "sobrar"
+// nem "faltar" hectare em nenhuma conta).
 function operacoesDaFazendaLavoura(fazenda){
-  const porFrente = {};
-  state.talhoes.filter(t=>t.fazendaId===fazenda.id && t.ativo!==false).forEach(t=>{
-    const frente = frenteDaCultura(t.culturaId);
-    const slug = frente==='graos' ? 'cereais' : frente==='cana' ? 'cana' : null;
-    if(!slug) return;
-    porFrente[slug] = (porFrente[slug]||0) + Number(t.areaHa||0);
-  });
-  const ops = Object.entries(porFrente).map(([operacao,areaHa])=>({operacao, areaHa}));
-  if((fazenda.atividades||[]).includes('pecuaria')) ops.push({operacao:'pecuaria', areaHa: fazenda.areaHa});
-  return ops;
+  return state.fazendaAtividades
+    .filter(a=>a.fazendaId===fazenda.id)
+    .map(a=>({operacao: a.atividade==='graos' ? 'cereais' : a.atividade, areaHa:a.areaHa}));
 }
 function chipsOperacoes(ops){
   if(ops.length===0) return '<span class="hint">Nenhuma atividade com área definida</span>';
@@ -1435,9 +1439,9 @@ function PageFazendas(){
     ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-nova-fazenda="1">+ Nova fazenda</button>` : ''}
   </div>
   <div class="card" style="overflow-x:auto;">
-    ${linhas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — nome, estado, área e quais atividades acontecem nela.') : `
+    ${linhas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — nome, estado, área total e, pra cada atividade, quantos hectares dela tem ali.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Área (ha)</th><th>Atividades</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Área total (ha)</th><th>Atividades</th><th></th></tr></thead>
       <tbody>
         ${linhas.map(f=>`
           <tr>
@@ -1470,14 +1474,15 @@ function ModalFazenda(){
             ${ESTADOS_BR.map(([uf,label])=>`<option value="${uf}" ${d.estado===uf?'selected':''}>${label} (${uf})</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Área (ha)</label><input id="f-areafazenda" type="number" step="0.01" value="${d.areaHa ?? ''}"/></div>
-        <div class="field"><label>Atividades</label>
+        <div class="field"><label>Área total (ha)</label><input id="f-areafazenda" type="number" step="0.01" value="${d.areaHa ?? ''}"/></div>
+        <div class="field"><label>Área por atividade (ha)</label>
           ${ATIVIDADES_FAZENDA.map(([key,label])=>`
-            <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-weight:400;">
-              <input type="checkbox" data-atividade-fazenda="${key}" ${(d.atividades||[]).includes(key)?'checked':''} style="width:auto;"/> ${label}
-            </label>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+              <span style="flex:1;">${label}</span>
+              <input type="number" step="0.01" placeholder="0" style="width:120px;" data-atividade-input="${key}" value="${d.atividades?.[key] ?? ''}"/>
+            </div>
           `).join('')}
-          <span class="hint">Uma fazenda pode ter mais de uma — ex: parte em grãos, parte em pecuária.</span>
+          <span class="hint">Deixe em branco ou 0 pra atividade que não acontece nessa fazenda. A soma das três pode passar da área total quando há integração lavoura-pecuária (mesma área conta pras duas coisas) — não precisa bater.</span>
         </div>
       </div>
       <div class="modal-foot">
@@ -1756,13 +1761,15 @@ function attachEvents(){
   // ---- fazendas ----
   const novaFazendaBtn = document.querySelector('[data-nova-fazenda]');
   if(novaFazendaBtn) novaFazendaBtn.onclick = ()=>{
-    editDraft = {nome:'', estado:'', areaHa:'', atividades:[]};
+    editDraft = {nome:'', estado:'', areaHa:'', atividades:{}};
     state.modal = {type:'fazenda'}; render();
   };
   document.querySelectorAll('[data-editar-fazenda]').forEach(el=>{
     el.onclick = ()=>{
       const f = state.fazendasLavoura.find(x=>x.id===Number(el.dataset.editarFazenda));
-      editDraft = {...f, _editId: f.id};
+      const atividades = {};
+      state.fazendaAtividades.filter(a=>a.fazendaId===f.id).forEach(a=>{ atividades[a.atividade] = a.areaHa; });
+      editDraft = {...f, _editId: f.id, atividades};
       state.modal = {type:'fazenda'}; render();
     };
   });
@@ -1838,13 +1845,31 @@ function attachEvents(){
           nome: document.getElementById('f-nomefazenda').value.trim() || 'Sem nome',
           estado: document.getElementById('f-estadofazenda').value || '',
           areaHa: document.getElementById('f-areafazenda').value,
-          atividades: [...document.querySelectorAll('[data-atividade-fazenda]:checked')].map(el=>el.dataset.atividadeFazenda),
         };
         const row = fazendaToRow(campos);
-        if(editDraft._editId){
-          ({error} = await db.from('fazendas').update(row).eq('id', editDraft._editId));
+        let fazendaId = editDraft._editId;
+        if(fazendaId){
+          ({error} = await db.from('fazendas').update(row).eq('id', fazendaId));
         } else {
-          ({error} = await db.from('fazendas').insert(row));
+          const res = await db.from('fazendas').insert(row).select().single();
+          error = res.error;
+          if(!error) fazendaId = res.data.id;
+        }
+        // Sincroniza a área de cada atividade em fazenda_atividades — uma
+        // linha por atividade, área independente (pode passar da área
+        // total da fazenda, de propósito, em caso de integração
+        // lavoura-pecuária). Atividade com valor em branco/0 é removida.
+        if(!error && fazendaId){
+          for(const [key] of ATIVIDADES_FAZENDA){
+            const el = document.querySelector(`[data-atividade-input="${key}"]`);
+            const valor = Number(el?.value)||0;
+            if(valor>0){
+              ({error} = await db.from('fazenda_atividades').upsert({fazenda_id:fazendaId, atividade:key, area_ha:valor}, {onConflict:'fazenda_id,atividade'}));
+            } else {
+              ({error} = await db.from('fazenda_atividades').delete().eq('fazenda_id', fazendaId).eq('atividade', key));
+            }
+            if(error) break;
+          }
         }
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
