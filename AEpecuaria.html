@@ -364,11 +364,12 @@ const db = supabase.createClient(
 );
 
 // Cliente extra, só de leitura, apontando pro projeto do AE Lavoura/Matriz —
-// cadastro de fazendas foi centralizado lá (ver AEMatriz.html). Aqui só
-// lemos as fazendas cuja atividade inclui 'pecuaria', pra calcular hectares
-// usados no resultado por hectare (Resultados). Não escrevemos nessa tabela
-// a partir deste app. Requer a policy de leitura anon liberada no Lavoura
-// (ver "leitura anon (AE Pecuaria)" em fazendas).
+// cadastro de fazenda e de área-por-atividade foi centralizado lá (ver
+// AEMatriz.html). Aqui só lemos fazenda_atividades filtrando
+// atividade='pecuaria', pra calcular hectares usados no resultado por
+// hectare (Resultados). Não escrevemos nessas tabelas a partir deste app.
+// Requer a policy de leitura anon liberada no Lavoura, tanto em fazendas
+// quanto em fazenda_atividades (ver "leitura anon (AE Pecuaria)").
 const dbLavoura = supabase.createClient(
   'https://kmkystqgpvmzrccxvyaz.supabase.co',
   'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
@@ -514,10 +515,13 @@ function centrosCustoInvestimentoConhecidos(){
   return [...vistos].sort((a,b)=>a.localeCompare(b));
 }
 // Fazenda agora é cadastrada só no AE Matriz (tabela fazendas do projeto do
-// Lavoura) — este app só lê, filtrando pelas que têm 'pecuaria' em
-// atividades. area_ha vira "hectares" pra não precisar mexer no resto do
-// código que já usa esse nome de campo.
-function rowToFazenda(r){ return {id:r.id, nome:r.nome, hectares:r.area_ha}; }
+// Lavoura). Este app só lê fazenda_atividades filtrando atividade='pecuaria'
+// — cada linha já é a área de pecuária daquela fazenda (não a área total
+// dela), o que permite integração lavoura-pecuária (mesma área contando
+// como pasto E como lavoura no Matriz) sem inflar o hectare aqui. area_ha
+// vira "hectares" pra não precisar mexer no resto do código que já usa
+// esse nome de campo.
+function rowToFazenda(r){ return {id:r.fazenda_id, nome:r.fazendas?.nome||'', hectares:r.area_ha}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 async function loadAll(){
@@ -542,7 +546,7 @@ async function loadAll(){
     db.from('precos_arroba').select('*').order('id').range(0, 19999),
     db.from('config_financeiro').select('*').eq('id', 1),
     db.from('profiles').select('*').order('nome').range(0, 19999),
-    dbLavoura.from('fazendas').select('*').contains('atividades', ['pecuaria']).order('id').range(0, 19999),
+    dbLavoura.from('fazenda_atividades').select('area_ha, fazenda_id, fazendas(nome)').eq('atividade','pecuaria').order('fazenda_id').range(0, 19999),
     db.from('partos').select('*').order('id').range(0, 19999),
     db.from('pesagens').select('*').order('id').range(0, 19999),
     db.from('producoes_racao').select('*').order('id').range(0, 19999),
