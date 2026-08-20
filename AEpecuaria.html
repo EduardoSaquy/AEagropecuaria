@@ -358,22 +358,20 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===================== SUPABASE ===================== */
+// Projeto único: Pecuária, Lavoura e Matriz dividem o mesmo banco desde a
+// unificação. Antes eram dois projetos Supabase separados, o que obrigava
+// cada pessoa a ter dois logins e exigia policies de leitura anônima para
+// um app enxergar os dados do outro. Agora é um login só e as policies
+// abertas foram removidas.
 const db = supabase.createClient(
-  'https://leojfqlbdtlriemdgnyw.supabase.co',
-  'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
-);
-
-// Cliente extra, só de leitura, apontando pro projeto do AE Lavoura/Matriz —
-// cadastro de fazenda e de área-por-atividade foi centralizado lá (ver
-// AEMatriz.html). Aqui só lemos fazenda_atividades filtrando
-// atividade='pecuaria', pra calcular hectares usados no resultado por
-// hectare (Resultados). Não escrevemos nessas tabelas a partir deste app.
-// Requer a policy de leitura anon liberada no Lavoura, tanto em fazendas
-// quanto em fazenda_atividades (ver "leitura anon (AE Pecuaria)").
-const dbLavoura = supabase.createClient(
   'https://kmkystqgpvmzrccxvyaz.supabase.co',
   'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
+
+// dbLavoura era o cliente extra que lia o projeto do Lavoura de fora. Não
+// existe mais: as tabelas de lá (fazendas, fazenda_atividades) agora estão
+// no mesmo banco e são lidas pelo próprio db, com sessão autenticada.
+const dbLavoura = db;
 
 function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor, unidade:r.unidade, ms:r.ms, pb:r.pb, ndt:r.ndt, precoKg:r.preco_kg, estoqueMin:r.estoque_min, obs:r.obs||''}; }
 function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
@@ -768,7 +766,11 @@ function render(){
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
-const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'financeiro', resultados:'resultados'};
+// chave = grupo de abas deste app; valor = chave da permissão em profiles.
+// Financeiro e Resultados usam prefixo pec_ porque, no banco unificado, o
+// Lavoura também tem módulos com esses nomes e com outro significado — sem
+// o prefixo, dar acesso ao financeiro de um liberaria o do outro.
+const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'pec_financeiro', resultados:'pec_resultados'};
 // tipo (mesma chave usada por loteTipo()) -> rótulo de tela e módulo de permissão
 const TIPO_PESAGEM_LABEL = {confinamento:'Confinamento', pasto:'Pasto', reproducao:'Cria'};
 const TIPO_MODULO = {confinamento:'confinamento', pasto:'pasto', reproducao:'cria'};
@@ -781,10 +783,10 @@ const ACAO_MODULOS = {
   pasto:['pasto'],
   saidaRacaoCria:['cria'], reproducaoCusto:['cria'], diagnosticoGestacional:['cria'], parto:['cria','confinamento'], desmama:['cria','confinamento'],
   pesagem:['confinamento','pasto','cria'],
-  custoFixo:['financeiro'], precoArroba:['financeiro'],
+  custoFixo:['pec_financeiro'], precoArroba:['pec_financeiro'],
   // Receita agora se lança pela aba Financeiro (não mais só Resultados) --
   // ver o rateio "resultados"/margem continua exclusivo de Resultados.
-  receita:['financeiro','resultados'], metaMargem:['resultados'], investimento:['resultados'],
+  receita:['pec_financeiro','pec_resultados'], metaMargem:['pec_resultados'], investimento:['pec_resultados'],
 };
 // Dentro do Manejo, cada ação pertence a um módulo diferente -- entrar no
 // Manejo só pede editar em QUALQUER área (confinamento/pasto/cria), mas
@@ -834,7 +836,7 @@ function podeEditarAcao(type){
 // isso exige editar tanto no módulo do lote (Confinamento/Pasto/Cria)
 // quanto em Resultados, não só um dos dois.
 function podeRegistrarVenda(tipo){
-  return temPermissao(TIPO_MODULO[tipo],'editar') && temPermissao('resultados','editar');
+  return temPermissao(TIPO_MODULO[tipo],'editar') && temPermissao('pec_resultados','editar');
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
@@ -3780,7 +3782,7 @@ function DemonstrativoReceitaDespesa(despesa, receita, margemAtualPct, metaMarge
         <span class="stat-label">Margem ${rotulo}</span>
         <span class="mono" style="font-weight:600; color:var(--verde-escuro);">${margemAtualPct!==null ? fmt(margemAtualPct,1)+'%' : '—'}</span>
         ${metaMargemPct!==null ? `<span class="pill ${margemOk?'pill-ok':'pill-alerta'}">${margemOk?'Acima da meta':'Abaixo da meta'} (meta ${fmt(metaMargemPct,1)}%)</span>` : ''}
-        ${mostrarEditarMeta!==false && temPermissao('resultados','editar') ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
+        ${mostrarEditarMeta!==false && temPermissao('pec_resultados','editar') ? `<button class="btn-ghost btn-sm" data-fab-action="metaMargem" style="margin-left:auto;">${metaMargemPct!==null?'Editar meta':'Definir meta'}</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -4190,7 +4192,7 @@ function PageFinanceiroResumo(){
           <div class="hint" style="margin-top:2px;">${arrobaFemea ? 'Atualizado em '+arrobaFemea.data.split('-').reverse().join('/') : 'Nenhum valor cadastrado ainda'}</div>
         </div>
       </div>
-      ${temPermissao('financeiro','editar') ? `<button class="btn btn-ghost btn-sm" data-fab-action="precoArroba">Atualizar preço</button>` : ''}
+      ${temPermissao('pec_financeiro','editar') ? `<button class="btn btn-ghost btn-sm" data-fab-action="precoArroba">Atualizar preço</button>` : ''}
     </div>
   </div>
 
@@ -4762,7 +4764,7 @@ function PageResultadosReceitas(){
             <td class="mono">R$ ${fmt(r.valor)}</td>
             <td>${esc(r.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${(temPermissao('financeiro','editar') || temPermissao('resultados','editar')) ? `
+              ${(temPermissao('pec_financeiro','editar') || temPermissao('pec_resultados','editar')) ? `
               <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>` : ''}
               ` : ''}
@@ -4832,7 +4834,7 @@ function PageFinanceiroCustosFixos(){
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td>${esc(c.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${temPermissao('financeiro','editar') ? `
+              ${temPermissao('pec_financeiro','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>` : ''}
               ` : ''}
@@ -4865,7 +4867,7 @@ function PageResultadosInvestimentos(){
             <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
             <td class="mono">R$ ${fmt(i.valor)}</td>
             <td style="display:flex; gap:6px;">
-              ${temPermissao('resultados','editar') ? `
+              ${temPermissao('pec_resultados','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>` : ''}
               ` : ''}
@@ -4894,7 +4896,9 @@ const MODULOS_PERMISSAO = [
   ['lotesGeral','Lotes (visão geral)'],
   ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
   ['vendas','Vendas'],
-  ['financeiro','Financeiro'], ['resultados','Resultados'],
+  // pec_ nos dois últimos: no banco unificado o Lavoura também tem
+  // 'financeiro' e 'resultados', com outro significado. Ver MODULOS_GROUP.
+  ['pec_financeiro','Financeiro'], ['pec_resultados','Resultados'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
 function papelPill(papel){
@@ -6106,7 +6110,7 @@ function ModalDetalheGrafico(){
                 <td><strong>${esc(it.nome)}</strong></td>
                 <td>${it.mes ? `<span class="pill pill-cat">${mesLabel(it.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
                 <td class="mono">R$ ${fmt(it.valor)}</td>
-                <td>${temPermissao('financeiro','editar') && it.id ? `<button class="btn-ghost btn-sm" data-edit-custofixo="${it.id}">Editar</button>` : ''}</td>
+                <td>${temPermissao('pec_financeiro','editar') && it.id ? `<button class="btn-ghost btn-sm" data-edit-custofixo="${it.id}">Editar</button>` : ''}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -6205,7 +6209,10 @@ function attachEvents(){
       const senha = document.getElementById('f-senhausuario').value;
       if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
       state.usuarioLoading = true; state.usuarioError = ''; render();
-      const { data, error } = await db.functions.invoke('criar-usuario', { body: { nome, usuario, senha } });
+      // Edge Function do projeto único. A antiga 'criar-usuario' vivia no
+      // projeto separado da Pecuária, que saiu de cena na unificação — quem
+      // cria conta agora é a mesma função que o Lavoura e a Matriz usam.
+      const { data, error } = await db.functions.invoke('criar-usuario-cana', { body: { nome, usuario, senha } });
       state.usuarioLoading = false;
       if(error || data?.error){
         let msg = data?.error || error?.message || 'Falha ao criar usuário.';

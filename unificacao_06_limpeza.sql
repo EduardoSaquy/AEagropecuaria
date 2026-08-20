@@ -1,5 +1,5 @@
 -- ============================================================
--- PASSO 6 — LIMPEZA (só depois dos apps já estarem apontando pro banco único
+-- PASSO 6 - LIMPEZA (só depois dos apps já estarem apontando pro banco único
 -- e funcionando)
 --
 -- Duas partes: derrubar a ponte FDW (não é mais necessária) e apagar as
@@ -31,6 +31,9 @@ end $$;
 -- 6.1 — Derrubar a ponte com o banco antigo (rodar no LAVOURA)
 -- ------------------------------------------------------------
 drop schema if exists pec_origem_dados cascade;
+drop table  if exists zz_conferencia_migracao;
+drop table  if exists zz_resync_relatorio;
+drop table  if exists zz_relatorio_permissoes;
 drop server if exists pec_origem cascade;
 -- a extensão pode ficar; não custa nada e não expõe nada sozinha.
 
