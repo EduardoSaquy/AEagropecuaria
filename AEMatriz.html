@@ -320,7 +320,7 @@ const APPS_REGISTRO = [
 
 async function loadAll(){
   state.apps = APPS_REGISTRO;
-  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv] = await Promise.all([
+  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, perfisPec] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
     db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
@@ -328,12 +328,20 @@ async function loadAll(){
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
     souAdmin() ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
     souAdmin() ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
+    // Leitura ao vivo do profiles da Pecuária (projeto separado — exige a
+    // política de leitura anon nova, ver comentário acima do dbPecuaria).
+    // Não bloqueia o carregamento do resto se falhar (projeto separado,
+    // política pode ainda não ter sido aplicada).
+    souAdmin()
+      ? Promise.resolve(dbPecuaria.from('profiles').select('id, nome, usuario, ativo').order('nome')).catch(e=>({data:[], error:e}))
+      : Promise.resolve({data:[]}),
   ]);
   const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
   }
+  if(perfisPec.error) console.warn('Não foi possível ler os usuários da Pecuária (política de leitura anon pode não estar aplicada ainda):', perfisPec.error);
   state.fazendasLavoura = (faz.data||[]).map(rowToFazendaLavoura);
   state.fazendaAtividades = (fazAtiv.data||[]).map(rowToFazendaAtividade);
   state.talhoes = (tal.data||[]).map(rowToTalhao);
@@ -341,6 +349,7 @@ async function loadAll(){
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.funcionarios = (func.data||[]).map(rowToFuncionario);
   state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
+  state.perfisPecuaria = (perfisPec.data||[]).filter(p=>p.ativo!==false);
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
@@ -734,6 +743,7 @@ const state = {
   culturas: [], // {id, frente} — culturas do Lavoura, usado só pra achar a frente de cada talhão
   apps: APPS_REGISTRO, // estático, não depende de carregamento — evita um flash de "nenhum app" antes do primeiro loadAll()
   perfis: [],
+  perfisPecuaria: [], // contas reais lidas do projeto da Pecuária (só leitura) — usado pra vincular funcionário a um login que já existe lá
   funcionarios: [], // {id, nome, cargo, ativo, dataAdmissao, perfilId, usuarioPecuaria, observacao} — sem CPF/salário/Pix
   funcionarioAtividades: [], // {id, funcionarioId, atividade, percentual} — % de alocação em cada atividade
   modal: null, // {type:'usuario'|'papelUsuario'|'trocarSenha'|'detalheOperacao'|'graficoOperacao', data:{...}}
@@ -1538,6 +1548,13 @@ function nomeAcessoFuncionario(f){
     if(p) partes.push(`${esc(p.nome)} (Lavoura/Matriz)`);
   }
   if(f.usuarioPecuaria) partes.push(`${esc(f.usuarioPecuaria)} (Pecuária)`);
+  // Alerta quando a pessoa participa da Pecuária mas não tem login lá —
+  // sem conta própria, os lançamentos dela na Pecuária ficam sem
+  // rastreabilidade real (entram sob a conta genérica de quem logou).
+  const alocadoPecuaria = state.funcionarioAtividades.some(a=>a.funcionarioId===f.id && a.atividade==='pecuaria' && Number(a.percentual)>0);
+  if(alocadoPecuaria && !f.usuarioPecuaria){
+    partes.push('<span class="pill pill-warn" title="Participa da Pecuária mas não tem login lá — lançamentos dessa pessoa não são rastreáveis por conta própria.">Sem login Pecuária</span>');
+  }
   return partes.length ? partes.join(' · ') : '<span class="hint">Sem acesso vinculado</span>';
 }
 function PageFuncionarios(){
@@ -1599,7 +1616,27 @@ function ModalFuncionario(){
           </select>
           <span class="hint">Não cria conta nova — só vincula uma que já existe em Usuários.</span>
         </div>
-        <div class="field"><label>Usuário no AE Pecuária (opcional)</label><input id="f-usuariopecuariafuncionario" value="${esc(d.usuarioPecuaria)}" placeholder="Ex: joao.silva"/><span class="hint">Projeto separado — aqui é só uma referência de texto, não vincula automaticamente.</span></div>
+        <div class="field"><label>Login no AE Pecuária</label>
+          <select id="f-usuariopecuariafuncionario">
+            <option value="">— Nenhum —</option>
+            ${state.perfisPecuaria.map(p=>`<option value="${esc(p.usuario)}" ${d.usuarioPecuaria===p.usuario?'selected':''}>${esc(p.nome)} (${esc(p.usuario)})</option>`).join('')}
+            ${d.usuarioPecuaria && !state.perfisPecuaria.some(p=>p.usuario===d.usuarioPecuaria) ? `<option value="${esc(d.usuarioPecuaria)}" selected>${esc(d.usuarioPecuaria)} (não encontrado na lista atual)</option>` : ''}
+          </select>
+          <span class="hint">${state.perfisPecuaria.length ? 'Lista lida ao vivo do projeto da Pecuária (projeto separado — vínculo por nome de usuário).' : 'Não foi possível ler as contas da Pecuária agora (política de leitura anon pode não estar aplicada — ver Riscos/observações na conversa).'}</span>
+          ${d._criandoAcessoPecuaria ? `
+          <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+            <span class="hint">Cria a conta direto no projeto da Pecuária (mesma Edge Function usada na tela de Usuários de lá). Ainda não testado em produção a partir do Matriz — se der erro, crie pelo AE Pecuária &gt; Usuários normalmente.</span>
+            <input id="f-nomeacessopecuaria" placeholder="Nome" value="${esc(d.nome||'')}"/>
+            <input id="f-usuarioacessopecuaria" placeholder="usuário (login)"/>
+            <input id="f-senhaacessopecuaria" type="password" placeholder="Senha (mín. 6 caracteres)"/>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-pecuaria="1" ${state.acessoPecuariaLoading?'disabled':''}>${state.acessoPecuariaLoading?'Criando...':'Criar'}</button>
+              <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-pecuaria="1">Cancelar</button>
+            </div>
+          </div>
+          ` : `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-pecuaria="1" style="margin-top:6px;">+ Criar novo login na Pecuária</button>`}
+          ${state.acessoPecuariaError ? `<div class="hint" style="color:var(--alerta); margin-top:4px;">${esc(state.acessoPecuariaError)}</div>` : ''}
+        </div>
         <div class="field"><label>Observação</label><textarea id="f-obsfuncionario" rows="2">${esc(d.observacao)}</textarea></div>
       </div>
       <div class="modal-foot">
@@ -1905,6 +1942,7 @@ function attachEvents(){
   const novoFuncionarioBtn = document.querySelector('[data-novo-funcionario]');
   if(novoFuncionarioBtn) novoFuncionarioBtn.onclick = ()=>{
     editDraft = {nome:'', cargo:'', dataAdmissao:'', ativo:true, atividades:{}, perfilId:'', usuarioPecuaria:'', observacao:''};
+    state.acessoPecuariaError = ''; state.acessoPecuariaLoading = false;
     state.modal = {type:'funcionario'}; render();
   };
   document.querySelectorAll('[data-editar-funcionario]').forEach(el=>{
@@ -1913,9 +1951,63 @@ function attachEvents(){
       const atividades = {};
       state.funcionarioAtividades.filter(a=>a.funcionarioId===f.id).forEach(a=>{ atividades[a.atividade] = a.percentual; });
       editDraft = {...f, _editId: f.id, atividades};
+      state.acessoPecuariaError = ''; state.acessoPecuariaLoading = false;
       state.modal = {type:'funcionario'}; render();
     };
   });
+  const criarAcessoPecuariaBtn = document.querySelector('[data-criar-acesso-pecuaria]');
+  if(criarAcessoPecuariaBtn) criarAcessoPecuariaBtn.onclick = ()=>{
+    editDraft._criandoAcessoPecuaria = true;
+    state.acessoPecuariaError = '';
+    render();
+  };
+  const cancelarAcessoPecuariaBtn = document.querySelector('[data-cancelar-acesso-pecuaria]');
+  if(cancelarAcessoPecuariaBtn) cancelarAcessoPecuariaBtn.onclick = ()=>{
+    editDraft._criandoAcessoPecuaria = false;
+    state.acessoPecuariaError = '';
+    render();
+  };
+  const confirmarAcessoPecuariaBtn = document.querySelector('[data-confirmar-acesso-pecuaria]');
+  if(confirmarAcessoPecuariaBtn) confirmarAcessoPecuariaBtn.onclick = async ()=>{
+    const nome = document.getElementById('f-nomeacessopecuaria').value.trim();
+    const usuario = document.getElementById('f-usuarioacessopecuaria').value.trim();
+    const senha = document.getElementById('f-senhaacessopecuaria').value;
+    if(!nome || !usuario || !senha || senha.length<6){
+      state.acessoPecuariaError = 'Preencha nome, usuário e senha (mín. 6 caracteres).';
+      render(); return;
+    }
+    state.acessoPecuariaLoading = true; state.acessoPecuariaError = ''; render();
+    // Chama a Edge Function 'criar-usuario' do projeto da Pecuária (separada
+    // da 'criar-usuario-cana' do Lavoura/Matriz — cada projeto Supabase tem
+    // a sua). Não testado em produção a partir do Matriz até este momento;
+    // se falhar por causa de autenticação exigida pela função, o fallback
+    // garantido é criar a conta na própria tela de Usuários do AE Pecuária.
+    try{
+      const { data, error } = await dbPecuaria.functions.invoke('criar-usuario', { body: { nome, usuario, senha } });
+      if(error || data?.error){
+        let msg = data?.error || error?.message || 'Falha ao criar usuário na Pecuária.';
+        if(error?.context && typeof error.context.json === 'function'){
+          try { const corpo = await error.context.json(); if(corpo?.error) msg = corpo.error; } catch(e){}
+        }
+        state.acessoPecuariaError = msg + ' — crie manualmente em AE Pecuária > Usuários.';
+        state.acessoPecuariaLoading = false;
+        render();
+        return;
+      }
+    } catch(e){
+      state.acessoPecuariaError = 'Não foi possível conectar ao projeto da Pecuária. Crie manualmente em AE Pecuária > Usuários.';
+      state.acessoPecuariaLoading = false;
+      render();
+      return;
+    }
+    editDraft.usuarioPecuaria = usuario;
+    editDraft._criandoAcessoPecuaria = false;
+    state.acessoPecuariaLoading = false;
+    // Atualiza a lista de contas da Pecuária pra já aparecer no select.
+    const { data: novosPerfis } = await Promise.resolve(dbPecuaria.from('profiles').select('id, nome, usuario, ativo').order('nome')).catch(()=>({data:null}));
+    if(novosPerfis) state.perfisPecuaria = novosPerfis.filter(p=>p.ativo!==false);
+    render();
+  };
   document.querySelectorAll('[data-excluir-funcionario]').forEach(el=>{
     el.onclick = async ()=>{
       if(!confirm('Excluir este funcionário? Essa ação não pode ser desfeita.')) return;
