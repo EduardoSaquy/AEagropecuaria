@@ -308,6 +308,52 @@ const ESTADOS_BR = [
   ['RO','Rondônia'],['RR','Roraima'],['SC','Santa Catarina'],['SP','São Paulo'],['SE','Sergipe'],['TO','Tocantins'],
 ];
 const ATIVIDADES_FAZENDA = [['graos','Grãos'],['cana','Cana-de-açúcar'],['pecuaria','Pecuária']];
+
+// Cargos oferecidos na lista do cadastro de Funcionários. Lista inicial,
+// feita pra ser ajustada: mande os cargos reais da fazenda que eu troco.
+// O formulário sempre deixa digitar um cargo fora da lista (opção "Outro"),
+// então nada fica bloqueado enquanto ela não estiver definitiva.
+const CARGOS = [
+  'Gerente',
+  'Encarregado',
+  'Apontador',
+  'Vaqueiro',
+  'Auxiliar de curral',
+  'Tratorista',
+  'Operador de máquinas',
+  'Motorista',
+  'Mecânico',
+  'Auxiliar de manutenção',
+  'Trabalhador rural',
+  'Serviços gerais',
+  'Almoxarife',
+  'Administrativo',
+  'Técnico agrícola',
+  'Veterinário',
+];
+const CARGO_OUTRO = '__outro__';
+// Monta o select de cargo. Se o valor atual não estiver na lista (cadastro
+// antigo, ou cargo digitado à mão), ele aparece selecionado como "Outro"
+// com o texto preservado — nunca se perde o que já estava gravado.
+function selectCargo(id, valorAtual, idOutro){
+  const naLista = CARGOS.includes(valorAtual);
+  const ehOutro = !!valorAtual && !naLista;
+  return `
+    <select id="${id}">
+      <option value="">— Selecione —</option>
+      ${CARGOS.map(c=>`<option value="${esc(c)}" ${valorAtual===c?'selected':''}>${esc(c)}</option>`).join('')}
+      <option value="${CARGO_OUTRO}" ${ehOutro?'selected':''}>Outro (digitar)</option>
+    </select>
+    <input id="${idOutro}" value="${esc(ehOutro?valorAtual:'')}" placeholder="Digite o cargo"
+           autocomplete="off" style="margin-top:6px; ${ehOutro?'':'display:none;'}"/>`;
+}
+// Lê o cargo escolhido, vindo da lista ou do campo "Outro".
+function lerCargo(id, idOutro){
+  const sel = document.getElementById(id);
+  if(!sel) return '';
+  if(sel.value === CARGO_OUTRO) return (document.getElementById(idOutro)?.value || '').trim();
+  return sel.value;
+}
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo, permissoes:r.permissoes||{}}; }
 
@@ -1689,7 +1735,7 @@ function ModalFuncionario(){
       <div class="modal-head"><h3>${d._editId?'Editar funcionário':'Novo funcionário'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Nome</label><input id="f-nomefuncionario" value="${esc(d.nome)}" placeholder="Ex: João Silva"/></div>
-        <div class="field"><label>Cargo</label><input id="f-cargofuncionario" value="${esc(d.cargo)}" placeholder="Ex: Encarregado, Vaqueiro, Operador de máquina"/></div>
+        <div class="field"><label>Cargo</label>${selectCargo('f-cargofuncionario', d.cargo, 'f-cargooutrofuncionario')}</div>
         <div class="field"><label>Admissão</label><input id="f-admissaofuncionario" type="date" value="${d.dataAdmissao||''}"/></div>
         <div class="field"><label><input type="checkbox" id="f-ativofuncionario" ${d.ativo!==false?'checked':''} style="width:auto; margin-right:6px;"/> Funcionário ativo</label></div>
         <div class="field"><label>Atividades e % de alocação</label>
@@ -1746,7 +1792,10 @@ function ModalImportarFuncionarios(){
             <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--linha); border-radius:8px;">
               <input type="checkbox" data-importar-item="${i}" checked style="width:auto;"/>
               <span style="flex:1.2; min-width:0;">${esc(p.nome)} <span class="hint">(${esc(p.usuario)})</span></span>
-              <input type="text" data-importar-cargo="${i}" placeholder="Cargo (opcional)" style="flex:1; min-width:0;"/>
+              <select data-importar-cargo="${i}" style="flex:1; min-width:0;">
+                <option value="">Cargo (opcional)</option>
+                ${CARGOS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+              </select>
             </div>
           `).join('')}
         </div>`}
@@ -2087,6 +2136,16 @@ function attachEvents(){
   };
   // Trocar a conta vinculada precisa re-render pra o bloco de permissões
   // abaixo mostrar os dados da conta certa.
+  // Cargo: escolher "Outro" revela o campo de texto. Sem re-render, pra
+  // não perder o que já foi digitado nos outros campos do formulário.
+  const selCargoFuncionario = document.getElementById('f-cargofuncionario');
+  if(selCargoFuncionario) selCargoFuncionario.onchange = (e)=>{
+    const campoOutro = document.getElementById('f-cargooutrofuncionario');
+    if(!campoOutro) return;
+    const ehOutro = e.target.value === CARGO_OUTRO;
+    campoOutro.style.display = ehOutro ? '' : 'none';
+    if(ehOutro) campoOutro.focus(); else campoOutro.value = '';
+  };
   const selPerfilFuncionario = document.getElementById('f-perfilfuncionario');
   if(selPerfilFuncionario) selPerfilFuncionario.onchange = (e)=>{
     editDraft.perfilId = e.target.value; render();
@@ -2247,7 +2306,7 @@ function attachEvents(){
       } else if(type==='funcionario'){
         const campos = {
           nome: document.getElementById('f-nomefuncionario').value.trim() || 'Sem nome',
-          cargo: document.getElementById('f-cargofuncionario').value.trim(),
+          cargo: lerCargo('f-cargofuncionario', 'f-cargooutrofuncionario'),
           dataAdmissao: document.getElementById('f-admissaofuncionario').value || '',
           ativo: document.getElementById('f-ativofuncionario').checked,
           perfilId: document.getElementById('f-perfilfuncionario').value || '',
