@@ -109,6 +109,22 @@ declare
           where n.nspname = 'public' and con.contype in ('p','u')
         )
     ),
+    ddl_funcoes as (
+      -- As funções auxiliares que as políticas chamam. Sai ANTES delas (ord 55
+      -- contra 60), senão a política referencia função que ainda não existe.
+      -- is_admin e tem_permissao ficam de fora: já existem no Lavoura e foram
+      -- conferidas como idênticas nos dois projetos. A que faltava é a
+      -- eh_consultor(), que só a Pecuária tem.
+      select 55 as ord, p.proname as obj, pg_get_functiondef(p.oid) || ';' as ddl
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.prokind = 'f'
+        and p.proname not in ('is_admin','tem_permissao')
+        and not exists (
+          select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e'
+        )
+    ),
     ddl_policies as (
       select 60 as ord, tablename as obj,
         replace(
@@ -133,6 +149,7 @@ declare
       union all select * from ddl_rls
       union all select * from ddl_constraints
       union all select * from ddl_indices
+      union all select * from ddl_funcoes
       union all select * from ddl_policies
     )
     select ddl from tudo order by ord, obj
