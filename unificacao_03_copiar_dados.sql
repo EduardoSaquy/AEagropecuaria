@@ -1,41 +1,43 @@
 -- ============================================================
 -- PASSO 3 — COPIAR OS DADOS DA PECUÁRIA PARA O LAVOURA
 --
--- RODAR NO PROJETO DO **LAVOURA/MATRIZ** (kmkystqgpvmzrccxvyaz),
--- depois que o passo 2 (estrutura) tiver terminado com sucesso.
+-- RODAR NO PROJETO DO **LAVOURA/MATRIZ** (kmkystqgpvmzrccxvyaz).
 --
 -- O banco da Pecuária é apenas LIDO. Nada é alterado lá.
 --
--- ⚠️ SENHA: troque SENHA_DO_BANCO_DA_PECUARIA no bloco A. É a mesma que
--- você usou no passo 2. Preencha você mesmo; não me mande.
+-- ⚠️ SENHA: troque SENHA_DO_BANCO_DA_PECUARIA lá embaixo, no BLOCO 2.
 --
 -- ------------------------------------------------------------
--- COMO ESTE SCRIPT DESCOBRE A ORDEM DE CÓPIA
+-- COMO RODAR — leia, mudou
 --
--- As tabelas têm chaves estrangeiras entre si, então a ordem importa:
--- não dá pra inserir um lote que aponta pra uma dieta que ainda não existe.
+-- Agora são só DOIS blocos. Você pode simplesmente colar o arquivo
+-- inteiro e apertar Run: eles rodam em sequência sem problema.
 --
--- A versão anterior usava uma ordem que eu calculei a partir do arquivo de
--- schema do repositório — e ela estava errada, porque aquele arquivo está
--- desatualizado (a FK de lotes -> dietas foi criada depois, por alter table,
--- e não aparece lá).
+-- Se preferir ir um de cada vez, selecione o bloco inteiro — do
+-- "do $nome$" até o "$nome$;" correspondente, incluindo as duas linhas.
 --
--- Agora o script não depende de nenhuma ordem pré-definida: ele tenta
--- copiar todas as tabelas, guarda as que falharam por dependência, e repete
--- em rodadas até não sobrar nenhuma. Cada tentativa roda isolada, então uma
--- falha não contamina as outras. Se em alguma rodada nada avançar, ele para
--- e mostra o erro real — em vez de insistir para sempre.
+-- Cada bloco usa um delimitador com nome ($copia$, $confere$) em vez do
+-- $$ genérico. Com $$ repetido várias vezes no mesmo arquivo, o editor
+-- pode fechar o bloco no lugar errado e partir o código no meio — foi o
+-- que gerou o erro "relation pendentes does not exist" (pendentes é uma
+-- variável interna, que só existe dentro do bloco).
 --
--- A lista de tabelas também é descoberta na hora, comparando o que existe
--- nos dois bancos. Não há lista fixa em lugar nenhum deste script.
+-- ------------------------------------------------------------
+-- COMO A ORDEM DE CÓPIA É RESOLVIDA
+--
+-- As tabelas têm chaves estrangeiras entre si, então a ordem importa.
+-- Este script não usa nenhuma ordem pré-definida: tenta copiar todas,
+-- guarda as que falharam por dependência e repete em rodadas até
+-- esvaziar. Cada tentativa fica isolada, então uma falha não derruba as
+-- outras. Se uma rodada inteira não avançar, ele para e mostra o erro
+-- real em vez de insistir.
 -- ============================================================
 
 
--- ------------------------------------------------------------
--- ⛔ TRAVA — selecione e rode ISTO sozinho primeiro.
--- Sem erro e sem resultado = tudo certo, pode seguir.
--- ------------------------------------------------------------
-do $$
+-- ============================================================
+-- BLOCO 1 — TRAVA DE SEGURANÇA
+-- ============================================================
+do $trava$
 begin
   if not exists (select 1 from information_schema.tables
                  where table_schema='public' and table_name='talhoes_areas') then
@@ -48,33 +50,35 @@ begin
   if (select count(*) from lotes) > 0 then
     raise exception E'JA TEM DADO AQUI.\nA tabela lotes nao esta vazia — este script ja rodou.\nRodar de novo duplicaria todos os lancamentos.';
   end if;
-end $$;
+  raise notice 'Trava OK — pode copiar.';
+end
+$trava$;
 
 
 -- ============================================================
--- BLOCO A — CONECTAR E COPIAR
+-- BLOCO 2 — CONECTAR, COPIAR E ACERTAR AS SEQUÊNCIAS
 --
--- Selecione do "create extension" até o "end $$;" final e rode.
--- Roda tudo numa transação: se travar, NADA é copiado.
+-- ⚠️ A SENHA VAI NA PRIMEIRA LINHA DEPOIS DO "declare".
 -- ============================================================
 create extension if not exists postgres_fdw;
 
-do $$
+do $copia$
 declare
-  -- >>> TROQUE SÓ A SENHA AQUI DENTRO <<<
-  senha text := 'SENHA_DO_BANCO_DA_PECUARIA';
+  senha text := 'SENHA_DO_BANCO_DA_PECUARIA';   -- <<< TROQUE AQUI
 
-  pendentes  text[];
-  restantes  text[];
-  t          text;
-  progresso  boolean;
-  rodada     int := 0;
+  pendentes   text[];
+  restantes   text[];
+  t           text;
+  progresso   boolean;
+  rodada      int  := 0;
   ultimo_erro text := '(nenhum)';
-  tem_identidade boolean;
-  n_linhas   bigint;
-  n_copiadas int := 0;
+  tem_ident   boolean;
+  n_linhas    bigint;
+  n_copiadas  int  := 0;
+  seq         text;
+  maxid       bigint;
 begin
-  -- ---- ponte com o banco da Pecuária (só leitura) ----
+  -- ---- ponte com o banco da Pecuária (somente leitura) ----
   execute 'drop server if exists pec_origem cascade';
   execute 'create server pec_origem foreign data wrapper postgres_fdw options ('
        || 'host ''db.leojfqlbdtlriemdgnyw.supabase.co'', port ''5432'', dbname ''postgres'')';
@@ -86,22 +90,22 @@ begin
   execute 'create schema pec_origem_dados';
   execute 'import foreign schema public from server pec_origem into pec_origem_dados';
 
-  -- ---- descobrir quais tabelas copiar (as que existem dos dois lados) ----
-  select array_agg(ft.foreign_table_name::text order by ft.foreign_table_name)
-    into pendentes
-  from information_schema.foreign_tables ft
-  join information_schema.tables lo
-    on lo.table_schema = 'public' and lo.table_name = ft.foreign_table_name
-  where ft.foreign_table_schema = 'pec_origem_dados'
-    and ft.foreign_table_name not in ('profiles','fazendas');
+  -- ---- descobrir as tabelas que existem dos dois lados ----
+  pendentes := (
+    select array_agg(ft.foreign_table_name::text order by ft.foreign_table_name)
+    from information_schema.foreign_tables ft
+    join information_schema.tables lo
+      on lo.table_schema = 'public' and lo.table_name = ft.foreign_table_name
+    where ft.foreign_table_schema = 'pec_origem_dados'
+      and ft.foreign_table_name not in ('profiles','fazendas')
+  );
 
   if pendentes is null then
-    raise exception 'Nenhuma tabela em comum encontrada. A estrutura do passo 2 foi aplicada?';
+    raise exception 'Nenhuma tabela em comum. A estrutura do passo 2 foi aplicada?';
   end if;
-
   raise notice 'Tabelas a copiar: %', array_length(pendentes, 1);
 
-  -- ---- copiar em rodadas, até não sobrar nenhuma ----
+  -- ---- copiar em rodadas ----
   loop
     rodada    := rodada + 1;
     progresso := false;
@@ -109,29 +113,29 @@ begin
 
     foreach t in array pendentes loop
       begin
-        select exists (
-          select 1 from pg_attribute a
-          join pg_class c on c.oid = a.attrelid
-          join pg_namespace n on n.oid = c.relnamespace
-          where n.nspname = 'public' and c.relname = t
-            and a.attidentity <> '' and not a.attisdropped
-        ) into tem_identidade;
+        tem_ident := (
+          select exists (
+            select 1 from pg_attribute a
+            join pg_class c on c.oid = a.attrelid
+            join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relname = t
+              and a.attidentity <> '' and not a.attisdropped
+          )
+        );
 
         execute format(
           'insert into public.%I %s select * from pec_origem_dados.%I',
           t,
-          case when tem_identidade then 'overriding system value' else '' end,
+          case when tem_ident then 'overriding system value' else '' end,
           t
         );
 
         execute format('select count(*) from public.%I', t) into n_linhas;
         raise notice '[rodada %] % -> % linhas', rodada, t, n_linhas;
-        progresso   := true;
-        n_copiadas  := n_copiadas + 1;
+        progresso  := true;
+        n_copiadas := n_copiadas + 1;
 
       exception when others then
-        -- provavelmente depende de outra tabela ainda não copiada:
-        -- guarda pra próxima rodada.
         ultimo_erro := t || ' -> ' || sqlerrm;
         restantes   := restantes || t;
       end;
@@ -141,33 +145,17 @@ begin
     exit when array_length(pendentes, 1) is null;
 
     if not progresso then
-      raise exception E'TRAVOU com % tabela(s) pendente(s): %\n\nUltimo erro real:\n%\n\nNada foi copiado (a transacao voltou atras). Me mande esta mensagem.',
+      raise exception E'TRAVOU com % tabela(s): %\n\nUltimo erro real:\n%\n\nNada foi copiado. Me mande esta mensagem.',
         array_length(pendentes, 1), array_to_string(pendentes, ', '), ultimo_erro;
     end if;
-
     if rodada > 40 then
-      raise exception 'Rodadas demais (%). Algo esta errado.', rodada;
+      raise exception 'Rodadas demais (%).', rodada;
     end if;
   end loop;
 
-  raise notice '=======================================';
-  raise notice 'DADOS COPIADOS: % tabelas em % rodada(s)', n_copiadas, rodada;
-  raise notice '=======================================';
-end $$;
-
-
--- ============================================================
--- BLOCO B — ACERTAR AS SEQUÊNCIAS DE ID (rodar depois, separado)
---
--- Sem isto, o próximo cadastro feito pelo app tenta usar o id 1 e estoura
--- com "duplicate key". Reposiciona cada sequência acima do maior id.
--- ============================================================
-do $$
-declare
-  t text;
-  seq text;
-  maxid bigint;
-begin
+  -- ---- acertar as sequências de id ----
+  -- Sem isto, o primeiro cadastro novo pelo app tentaria usar o id 1 e
+  -- estouraria com "duplicate key".
   for t in
     select ft.foreign_table_name::text
     from information_schema.foreign_tables ft
@@ -181,49 +169,38 @@ begin
     if seq is not null then
       execute format('select coalesce(max(id), 0) from public.%I', t) into maxid;
       perform setval(seq, greatest(maxid, 1));
-      raise notice 'sequencia de % -> %', t, greatest(maxid, 1);
     end if;
   end loop;
-end $$;
+
+  raise notice '=======================================';
+  raise notice 'DADOS COPIADOS: % tabelas em % rodada(s)', n_copiadas, rodada;
+  raise notice 'Sequencias de id reposicionadas.';
+  raise notice '=======================================';
+end
+$copia$;
 
 
 -- ============================================================
--- BLOCO C — ✅ CONFERÊNCIA (rodar depois, separado)
+-- BLOCO 3 — ✅ CONFERÊNCIA
 --
--- Compara origem x destino em todas as tabelas. Aborta se qualquer
--- contagem divergir. Me mande este resultado.
+-- Compara origem x destino. Devolve uma tabela — me mande ela inteira.
 -- ============================================================
-do $$
-declare
-  t text;
-  n_orig bigint;
-  n_dest bigint;
-  divergencias int := 0;
-  total int := 0;
-begin
-  raise notice '%-30s %10s %10s  %s', 'TABELA', 'ORIGEM', 'DESTINO', 'CONFERE';
-  for t in
-    select ft.foreign_table_name::text
-    from information_schema.foreign_tables ft
-    join information_schema.tables lo
-      on lo.table_schema = 'public' and lo.table_name = ft.foreign_table_name
-    where ft.foreign_table_schema = 'pec_origem_dados'
-      and ft.foreign_table_name not in ('profiles','fazendas')
-    order by 1
-  loop
-    execute format('select count(*) from pec_origem_dados.%I', t) into n_orig;
-    execute format('select count(*) from public.%I', t) into n_dest;
-    total := total + 1;
-    if n_orig <> n_dest then divergencias := divergencias + 1; end if;
-    raise notice '%-30s %10s %10s  %s', t, n_orig, n_dest,
-      case when n_orig = n_dest then 'OK' else '*** DIFERENTE ***' end;
-  end loop;
-
-  if divergencias > 0 then
-    raise exception '% de % tabelas com contagem diferente. NAO siga para o passo 4.', divergencias, total;
-  else
-    raise notice '=======================================';
-    raise notice 'TODAS AS % TABELAS CONFEREM', total;
-    raise notice '=======================================';
-  end if;
-end $$;
+select
+  ft.foreign_table_name as tabela,
+  (xpath('/row/c/text()',
+     query_to_xml(format('select count(*) as c from pec_origem_dados.%I', ft.foreign_table_name),
+                  false, true, '')))[1]::text::bigint as origem,
+  (xpath('/row/c/text()',
+     query_to_xml(format('select count(*) as c from public.%I', ft.foreign_table_name),
+                  false, true, '')))[1]::text::bigint as destino,
+  case when
+    (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from pec_origem_dados.%I', ft.foreign_table_name), false, true, '')))[1]::text::bigint
+    =
+    (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', ft.foreign_table_name), false, true, '')))[1]::text::bigint
+  then 'OK' else '*** DIFERENTE ***' end as confere
+from information_schema.foreign_tables ft
+join information_schema.tables lo
+  on lo.table_schema = 'public' and lo.table_name = ft.foreign_table_name
+where ft.foreign_table_schema = 'pec_origem_dados'
+  and ft.foreign_table_name not in ('profiles','fazendas')
+order by 1;
