@@ -856,6 +856,10 @@ function render(){
       alert('Ocorreu um erro ao abrir esta janela: ' + String(e && e.message || e));
     }
   }
+  // render() recria o DOM inteiro, então a posição de rolagem do modal se
+  // perde a cada re-render (ex: abrir o formulário de criar acesso jogava a
+  // tela pro topo). Guarda antes e restaura depois.
+  const scrollModalAntes = document.querySelector('.modal-body')?.scrollTop;
   root.innerHTML = `
     <div class="app">
       ${Topbar()}
@@ -864,6 +868,18 @@ function render(){
     </div>
     ${modalHtml}
   `;
+  if(scrollModalAntes){
+    const corpoModal = document.querySelector('.modal-body');
+    if(corpoModal){
+      // ler scrollHeight força o browser a calcular o layout novo antes de
+      // restaurar — sem isso o scrollTop é cortado pela altura antiga.
+      void corpoModal.scrollHeight;
+      corpoModal.scrollTop = scrollModalAntes;
+      // e de novo no próximo frame, pra vencer o ajuste automático de
+      // rolagem que o Chrome faz quando conteúdo entra acima da posição.
+      requestAnimationFrame(()=>{ corpoModal.scrollTop = scrollModalAntes; });
+    }
+  }
   attachEvents();
 }
 
@@ -1736,9 +1752,9 @@ function ModalFuncionario(){
           ${d._criandoAcessoLavoura ? `
           <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
             <span class="hint">Cria a conta no projeto do Lavoura/Matriz (mesma Edge Function usada na tela de Usuários).</span>
-            <input id="f-nomeacessolavoura" placeholder="Nome" value="${esc(d.nome||'')}"/>
-            <input id="f-usuarioacessolavoura" placeholder="usuário (login)"/>
-            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. 6 caracteres)"/>
+            <input id="f-nomeacessolavoura" placeholder="Nome" value="${esc(d.nome||'')}" autocomplete="off"/>
+            <input id="f-usuarioacessolavoura" placeholder="usuário (login)" autocomplete="off"/>
+            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password"/>
             <div style="display:flex; gap:8px;">
               <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-lavoura="1" ${state.acessoLavouraLoading?'disabled':''}>${state.acessoLavouraLoading?'Criando...':'Criar'}</button>
               <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-lavoura="1">Cancelar</button>
@@ -1758,9 +1774,9 @@ function ModalFuncionario(){
           ${d._criandoAcessoPecuaria ? `
           <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
             <span class="hint">Cria a conta direto no projeto da Pecuária (mesma Edge Function usada na tela de Usuários de lá). Ainda não testado em produção a partir do Matriz — se der erro, crie pelo AE Pecuária &gt; Usuários normalmente.</span>
-            <input id="f-nomeacessopecuaria" placeholder="Nome" value="${esc(d.nome||'')}"/>
-            <input id="f-usuarioacessopecuaria" placeholder="usuário (login)"/>
-            <input id="f-senhaacessopecuaria" type="password" placeholder="Senha (mín. 6 caracteres)"/>
+            <input id="f-nomeacessopecuaria" placeholder="Nome" value="${esc(d.nome||'')}" autocomplete="off"/>
+            <input id="f-usuarioacessopecuaria" placeholder="usuário (login)" autocomplete="off"/>
+            <input id="f-senhaacessopecuaria" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password"/>
             <div style="display:flex; gap:8px;">
               <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-pecuaria="1" ${state.acessoPecuariaLoading?'disabled':''}>${state.acessoPecuariaLoading?'Criando...':'Criar'}</button>
               <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-pecuaria="1">Cancelar</button>
