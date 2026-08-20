@@ -1557,12 +1557,27 @@ function nomeAcessoFuncionario(f){
   }
   return partes.length ? partes.join(' · ') : '<span class="hint">Sem acesso vinculado</span>';
 }
+// Contas de login (Lavoura/Matriz e Pecuária) que ainda não têm nenhum
+// funcionário apontando pra elas — candidatas a importar em vez de
+// recadastrar do zero. Comparação por id (Lavoura/Matriz) ou por
+// usuário/texto (Pecuária, projeto separado sem FK real).
+function contasNaoVinculadas(){
+  const perfilIdsUsados = new Set(state.funcionarios.map(f=>f.perfilId).filter(Boolean));
+  const usuariosPecuariaUsados = new Set(state.funcionarios.map(f=>f.usuarioPecuaria).filter(Boolean));
+  const lavoura = state.perfis.filter(p=>!perfilIdsUsados.has(p.id)).map(p=>({origem:'lavoura', nome:p.nome, usuario:p.usuario, ref:p.id}));
+  const pecuaria = state.perfisPecuaria.filter(p=>!usuariosPecuariaUsados.has(p.usuario)).map(p=>({origem:'pecuaria', nome:p.nome, usuario:p.usuario, ref:p.usuario}));
+  return [...lavoura, ...pecuaria];
+}
 function PageFuncionarios(){
   const linhas = [...state.funcionarios].sort((a,b)=>a.nome.localeCompare(b.nome, 'pt-BR'));
+  const pendentes = contasNaoVinculadas();
   return `
   <div class="toolbar">
     <span class="hint">${linhas.length} funcionário(s) cadastrado(s)</span>
-    ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-novo-funcionario="1">+ Novo funcionário</button>` : ''}
+    <div style="display:flex; gap:8px;">
+      ${souAdmin() && pendentes.length ? `<button class="btn-ghost btn-sm" data-importar-funcionarios="1">Importar ${pendentes.length} conta(s) sem funcionário vinculado</button>` : ''}
+      ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-novo-funcionario="1">+ Novo funcionário</button>` : ''}
+    </div>
   </div>
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhum funcionário cadastrado','Cadastre nome, cargo, em quais atividades a pessoa participa (com % de alocação) e qual login ela usa.') : `
@@ -1614,7 +1629,20 @@ function ModalFuncionario(){
             <option value="">— Nenhum —</option>
             ${state.perfis.map(p=>`<option value="${p.id}" ${d.perfilId===p.id?'selected':''}>${esc(p.nome)} (${esc(p.usuario)})</option>`).join('')}
           </select>
-          <span class="hint">Não cria conta nova — só vincula uma que já existe em Usuários.</span>
+          <span class="hint">Vincula uma conta que já existe, ou crie uma nova abaixo.</span>
+          ${d._criandoAcessoLavoura ? `
+          <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+            <span class="hint">Cria a conta no projeto do Lavoura/Matriz (mesma Edge Function usada na tela de Usuários).</span>
+            <input id="f-nomeacessolavoura" placeholder="Nome" value="${esc(d.nome||'')}"/>
+            <input id="f-usuarioacessolavoura" placeholder="usuário (login)"/>
+            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. 6 caracteres)"/>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-lavoura="1" ${state.acessoLavouraLoading?'disabled':''}>${state.acessoLavouraLoading?'Criando...':'Criar'}</button>
+              <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-lavoura="1">Cancelar</button>
+            </div>
+          </div>
+          ` : `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-lavoura="1" style="margin-top:6px;">+ Criar novo login no Lavoura/Matriz</button>`}
+          ${state.acessoLavouraError ? `<div class="hint" style="color:var(--alerta); margin-top:4px;">${esc(state.acessoLavouraError)}</div>` : ''}
         </div>
         <div class="field"><label>Login no AE Pecuária</label>
           <select id="f-usuariopecuariafuncionario">
@@ -1642,6 +1670,32 @@ function ModalFuncionario(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="funcionario">${d._editId?'Salvar alterações':'Salvar funcionário'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function ModalImportarFuncionarios(){
+  const pendentes = contasNaoVinculadas();
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Importar contas como funcionário</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <span class="hint">Cria um registro de funcionário pra cada conta marcada, já com o acesso vinculado. Cargo e % de alocação por atividade ficam em branco — edite depois em cada um.</span>
+        ${pendentes.length===0 ? Empty('Nenhuma conta pendente', 'Todas as contas de acesso já têm um funcionário vinculado.') : `
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">
+          ${pendentes.map((p,i)=>`
+            <label style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--linha); border-radius:8px;">
+              <input type="checkbox" data-importar-item="${i}" checked style="width:auto;"/>
+              <span style="flex:1;">${esc(p.nome)} <span class="hint">(${esc(p.usuario)})</span></span>
+              <span class="pill ${p.origem==='pecuaria'?'pill-warn':'pill-ok'}">${p.origem==='pecuaria'?'Pecuária':'Lavoura/Matriz'}</span>
+            </label>
+          `).join('')}
+        </div>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        ${pendentes.length ? `<button class="btn btn-primary" data-confirmar-importar-funcionarios="1">Importar selecionados</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -1756,6 +1810,7 @@ function Empty(title, sub){
 function Modal(){
   if(state.modal.type==='fazenda') return ModalFazenda();
   if(state.modal.type==='funcionario') return ModalFuncionario();
+  if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='papelUsuario') return ModalPapelUsuario();
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
@@ -1943,7 +1998,32 @@ function attachEvents(){
   if(novoFuncionarioBtn) novoFuncionarioBtn.onclick = ()=>{
     editDraft = {nome:'', cargo:'', dataAdmissao:'', ativo:true, atividades:{}, perfilId:'', usuarioPecuaria:'', observacao:''};
     state.acessoPecuariaError = ''; state.acessoPecuariaLoading = false;
+    state.acessoLavouraError = ''; state.acessoLavouraLoading = false;
     state.modal = {type:'funcionario'}; render();
+  };
+  const importarFuncionariosBtn = document.querySelector('[data-importar-funcionarios]');
+  if(importarFuncionariosBtn) importarFuncionariosBtn.onclick = ()=>{
+    state.modal = {type:'importarFuncionarios'}; render();
+  };
+  const confirmarImportarBtn = document.querySelector('[data-confirmar-importar-funcionarios]');
+  if(confirmarImportarBtn) confirmarImportarBtn.onclick = async ()=>{
+    const pendentes = contasNaoVinculadas();
+    const selecionados = pendentes.filter((p,i)=>document.querySelector(`[data-importar-item="${i}"]`)?.checked);
+    if(selecionados.length===0){ state.modal = null; render(); return; }
+    confirmarImportarBtn.disabled = true; confirmarImportarBtn.textContent = 'Importando...';
+    const linhas = selecionados.map(p=>funcionarioToRow({
+      nome: p.nome,
+      cargo: '',
+      ativo: true,
+      dataAdmissao: '',
+      perfilId: p.origem==='lavoura' ? p.ref : '',
+      usuarioPecuaria: p.origem==='pecuaria' ? p.ref : '',
+      observacao: '',
+    }));
+    const {error} = await db.from('funcionarios').insert(linhas);
+    if(error){ alert('Não foi possível importar: ' + error.message); confirmarImportarBtn.disabled = false; confirmarImportarBtn.textContent = 'Importar selecionados'; return; }
+    state.modal = null;
+    await loadAll();
   };
   document.querySelectorAll('[data-editar-funcionario]').forEach(el=>{
     el.onclick = ()=>{
@@ -1952,6 +2032,7 @@ function attachEvents(){
       state.funcionarioAtividades.filter(a=>a.funcionarioId===f.id).forEach(a=>{ atividades[a.atividade] = a.percentual; });
       editDraft = {...f, _editId: f.id, atividades};
       state.acessoPecuariaError = ''; state.acessoPecuariaLoading = false;
+      state.acessoLavouraError = ''; state.acessoLavouraLoading = false;
       state.modal = {type:'funcionario'}; render();
     };
   });
@@ -2008,6 +2089,52 @@ function attachEvents(){
     if(novosPerfis) state.perfisPecuaria = novosPerfis.filter(p=>p.ativo!==false);
     render();
   };
+
+  const criarAcessoLavouraBtn = document.querySelector('[data-criar-acesso-lavoura]');
+  if(criarAcessoLavouraBtn) criarAcessoLavouraBtn.onclick = ()=>{
+    editDraft._criandoAcessoLavoura = true;
+    state.acessoLavouraError = '';
+    render();
+  };
+  const cancelarAcessoLavouraBtn = document.querySelector('[data-cancelar-acesso-lavoura]');
+  if(cancelarAcessoLavouraBtn) cancelarAcessoLavouraBtn.onclick = ()=>{
+    editDraft._criandoAcessoLavoura = false;
+    state.acessoLavouraError = '';
+    render();
+  };
+  const confirmarAcessoLavouraBtn = document.querySelector('[data-confirmar-acesso-lavoura]');
+  if(confirmarAcessoLavouraBtn) confirmarAcessoLavouraBtn.onclick = async ()=>{
+    const nome = document.getElementById('f-nomeacessolavoura').value.trim();
+    const usuario = document.getElementById('f-usuarioacessolavoura').value.trim();
+    const senha = document.getElementById('f-senhaacessolavoura').value;
+    if(!nome || !usuario || !senha || senha.length<6){
+      state.acessoLavouraError = 'Preencha nome, usuário e senha (mín. 6 caracteres).';
+      render(); return;
+    }
+    state.acessoLavouraLoading = true; state.acessoLavouraError = ''; render();
+    // Mesma Edge Function que a tela de Usuários já usa (criar-usuario-cana,
+    // reaproveitada — Lavoura e Matriz escrevem no mesmo profiles/auth).
+    const { data, error } = await db.functions.invoke('criar-usuario-cana', { body: { nome, usuario, senha } });
+    if(error || data?.error){
+      let msg = data?.error || error?.message || 'Falha ao criar usuário.';
+      if(error?.context && typeof error.context.json === 'function'){
+        try { const corpo = await error.context.json(); if(corpo?.error) msg = corpo.error; } catch(e){}
+      }
+      state.acessoLavouraError = msg;
+      state.acessoLavouraLoading = false;
+      render();
+      return;
+    }
+    editDraft._criandoAcessoLavoura = false;
+    state.acessoLavouraLoading = false;
+    // Recarrega profiles pra pegar o id novo e já deixar selecionado.
+    const { data: novosPerfis } = await db.from('profiles').select('*').order('nome');
+    state.perfis = (novosPerfis||[]).map(rowToPerfil);
+    const criado = state.perfis.find(p=>p.usuario===usuario);
+    if(criado) editDraft.perfilId = criado.id;
+    render();
+  };
+
   document.querySelectorAll('[data-excluir-funcionario]').forEach(el=>{
     el.onclick = async ()=>{
       if(!confirm('Excluir este funcionário? Essa ação não pode ser desfeita.')) return;
