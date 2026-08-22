@@ -120,12 +120,12 @@ begin
   -- ---------- RECEITAS DA PECUARIA ----------
   insert into lancamentos_financeiros
     (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
-     observacao, lote_id, arrobas)
+     observacao, lote_id, arrobas, abate_id)
   select
     'receita', 'pecuaria', null, id_vendas,
     r.descricao, r.valor, r.data, to_char(r.data, 'YYYY-MM'),
     nullif(trim(coalesce(r.observacao, '')), ''),
-    r.lote_id, r.arrobas
+    r.lote_id, r.arrobas, r.abate_id
   from receitas r
   where coalesce(r.valor, 0) > 0 and r.data is not null;
   get diagnostics n_rec = row_count;

@@ -101,6 +101,12 @@ create table if not exists lancamentos_financeiros (
   areas     text[] not null default '{}',         -- pecuaria: confinamento/pasto/cria
   arrobas   numeric,                              -- receita de pecuaria
 
+  -- Registrar uma venda no AE Pecuaria cria a receita automaticamente e as
+  -- duas ficam ligadas por aqui: editar a venda atualiza a receita, e
+  -- apagar a venda apaga a receita junto. Sem este campo esse vinculo se
+  -- perderia na unificacao.
+  abate_id  bigint references abates(id) on delete cascade,
+
   created_at timestamptz not null default now(),
   criado_por text,
 
@@ -113,6 +119,7 @@ create table if not exists lancamentos_financeiros (
 create index if not exists idx_lanc_fin_tipo_atividade on lancamentos_financeiros (tipo, atividade);
 create index if not exists idx_lanc_fin_mes            on lancamentos_financeiros (mes);
 create index if not exists idx_lanc_fin_fazenda        on lancamentos_financeiros (fazenda_id);
+create index if not exists idx_lanc_fin_abate          on lancamentos_financeiros (abate_id);
 
 alter table lancamentos_financeiros enable row level security;
 
