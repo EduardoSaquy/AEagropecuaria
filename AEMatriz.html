@@ -260,16 +260,13 @@ const db = supabase.createClient(
   'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
 
-// Cliente extra, só de leitura, apontando pro projeto da Pecuária —
-// usado para os indicadores ao vivo do card "AE Pecuária" no Painel.
-// Não duplica dado nenhum: cada consulta lê direto do banco da Pecuária.
-// Requer políticas de leitura liberadas pro anon key nas tabelas usadas
-// aqui (a Pecuária guarda RLS por permissão de usuário logado — ver
-// script de políticas fornecido separadamente).
-const dbPecuaria = supabase.createClient(
-  'https://leojfqlbdtlriemdgnyw.supabase.co',
-  'sb_publishable_IYD9cnj_7tlul7K5zs5YHg_kv5YvzjB'
-);
+// dbPecuaria era um segundo cliente, só de leitura, apontando pro projeto
+// separado da Pecuária. Depois da unificação existe um banco só: as
+// tabelas da Pecuária estão aqui, lidas com a sessão do próprio usuário.
+// Fica como apelido de db para não espalhar a troca por dezenas de
+// chamadas — o nome ainda diz de onde o dado vem, o que ajuda a ler o
+// código do Painel.
+const dbPecuaria = db;
 
 // AE Combustível ainda não foi implantado com banco real — o card dele
 // fica "em breve" no Painel por enquanto (ver APPS_REGISTRO) e
@@ -296,8 +293,12 @@ function rowToFazendaAtividade(r){ return {id:r.id, fazendaId:r.fazenda_id, ativ
 // nova; contas continuam sendo criadas em Usuários (Lavoura/Matriz) ou na
 // tela de Usuários de cada app (Pecuária tem projeto Supabase próprio, por
 // isso o vínculo com ela é só um texto de referência, não um FK real).
-function rowToFuncionario(r){ return {id:r.id, nome:r.nome, cargo:r.cargo||'', ativo:r.ativo, dataAdmissao:r.data_admissao||'', perfilId:r.perfil_id||'', usuarioPecuaria:r.usuario_pecuaria||'', observacao:r.observacao||''}; }
-function funcionarioToRow(f){ return {nome:f.nome, cargo:f.cargo||null, ativo:!!f.ativo, data_admissao:f.dataAdmissao||null, perfil_id:f.perfilId||null, usuario_pecuaria:f.usuarioPecuaria||null, observacao:f.observacao||null}; }
+// usuario_pecuaria saiu: era o vínculo por texto com o login do projeto
+// separado da Pecuária. Com um banco só, perfil_id (FK de verdade)
+// resolve os dois apps. A coluna continua no banco, sem uso, até termos
+// certeza de que a unificação está redonda.
+function rowToFuncionario(r){ return {id:r.id, nome:r.nome, cargo:r.cargo||'', ativo:r.ativo, dataAdmissao:r.data_admissao||'', perfilId:r.perfil_id||'', observacao:r.observacao||''}; }
+function funcionarioToRow(f){ return {nome:f.nome, cargo:f.cargo||null, ativo:!!f.ativo, data_admissao:f.dataAdmissao||null, perfil_id:f.perfilId||null, observacao:f.observacao||null}; }
 function rowToFuncionarioAtividade(r){ return {id:r.id, funcionarioId:r.funcionario_id, atividade:r.atividade, percentual:r.percentual}; }
 const ESTADOS_BR = [
   ['AC','Acre'],['AL','Alagoas'],['AP','Amapá'],['AM','Amazonas'],['BA','Bahia'],['CE','Ceará'],
@@ -307,6 +308,52 @@ const ESTADOS_BR = [
   ['RO','Rondônia'],['RR','Roraima'],['SC','Santa Catarina'],['SP','São Paulo'],['SE','Sergipe'],['TO','Tocantins'],
 ];
 const ATIVIDADES_FAZENDA = [['graos','Grãos'],['cana','Cana-de-açúcar'],['pecuaria','Pecuária']];
+
+// Cargos oferecidos na lista do cadastro de Funcionários. Lista inicial,
+// feita pra ser ajustada: mande os cargos reais da fazenda que eu troco.
+// O formulário sempre deixa digitar um cargo fora da lista (opção "Outro"),
+// então nada fica bloqueado enquanto ela não estiver definitiva.
+const CARGOS = [
+  'Gerente',
+  'Encarregado',
+  'Apontador',
+  'Vaqueiro',
+  'Auxiliar de curral',
+  'Tratorista',
+  'Operador de máquinas',
+  'Motorista',
+  'Mecânico',
+  'Auxiliar de manutenção',
+  'Trabalhador rural',
+  'Serviços gerais',
+  'Almoxarife',
+  'Administrativo',
+  'Técnico agrícola',
+  'Veterinário',
+];
+const CARGO_OUTRO = '__outro__';
+// Monta o select de cargo. Se o valor atual não estiver na lista (cadastro
+// antigo, ou cargo digitado à mão), ele aparece selecionado como "Outro"
+// com o texto preservado — nunca se perde o que já estava gravado.
+function selectCargo(id, valorAtual, idOutro){
+  const naLista = CARGOS.includes(valorAtual);
+  const ehOutro = !!valorAtual && !naLista;
+  return `
+    <select id="${id}">
+      <option value="">— Selecione —</option>
+      ${CARGOS.map(c=>`<option value="${esc(c)}" ${valorAtual===c?'selected':''}>${esc(c)}</option>`).join('')}
+      <option value="${CARGO_OUTRO}" ${ehOutro?'selected':''}>Outro (digitar)</option>
+    </select>
+    <input id="${idOutro}" value="${esc(ehOutro?valorAtual:'')}" placeholder="Digite o cargo"
+           autocomplete="off" style="margin-top:6px; ${ehOutro?'':'display:none;'}"/>`;
+}
+// Lê o cargo escolhido, vindo da lista ou do campo "Outro".
+function lerCargo(id, idOutro){
+  const sel = document.getElementById(id);
+  if(!sel) return '';
+  if(sel.value === CARGO_OUTRO) return (document.getElementById(idOutro)?.value || '').trim();
+  return sel.value;
+}
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo, permissoes:r.permissoes||{}}; }
 
@@ -324,28 +371,20 @@ const APPS_REGISTRO = [
 
 async function loadAll(){
   state.apps = APPS_REGISTRO;
-  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, perfisPec] = await Promise.all([
+  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
     db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
     db.from('culturas').select('id, frente'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
-    souAdmin() ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
-    souAdmin() ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
-    // Leitura ao vivo do profiles da Pecuária (projeto separado — exige a
-    // política de leitura anon nova, ver comentário acima do dbPecuaria).
-    // Não bloqueia o carregamento do resto se falhar (projeto separado,
-    // política pode ainda não ter sido aplicada).
-    souAdmin()
-      ? Promise.resolve(dbPecuaria.from('profiles').select('id, nome, usuario, ativo, papel, permissoes').order('nome')).catch(e=>({data:[], error:e}))
-      : Promise.resolve({data:[]}),
+    temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
+    temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
   ]);
   const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
   }
-  if(perfisPec.error) console.warn('Não foi possível ler os usuários da Pecuária (política de leitura anon pode não estar aplicada ainda):', perfisPec.error);
   state.fazendasLavoura = (faz.data||[]).map(rowToFazendaLavoura);
   state.fazendaAtividades = (fazAtiv.data||[]).map(rowToFazendaAtividade);
   state.talhoes = (tal.data||[]).map(rowToTalhao);
@@ -353,7 +392,6 @@ async function loadAll(){
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.funcionarios = (func.data||[]).map(rowToFuncionario);
   state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
-  state.perfisPecuaria = (perfisPec.data||[]).filter(p=>p.ativo!==false);
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
@@ -747,8 +785,7 @@ const state = {
   culturas: [], // {id, frente} — culturas do Lavoura, usado só pra achar a frente de cada talhão
   apps: APPS_REGISTRO, // estático, não depende de carregamento — evita um flash de "nenhum app" antes do primeiro loadAll()
   perfis: [],
-  perfisPecuaria: [], // contas reais lidas do projeto da Pecuária (só leitura) — usado pra vincular funcionário a um login que já existe lá
-  funcionarios: [], // {id, nome, cargo, ativo, dataAdmissao, perfilId, usuarioPecuaria, observacao} — sem CPF/salário/Pix
+  funcionarios: [], // {id, nome, cargo, ativo, dataAdmissao, perfilId, observacao} — sem CPF/salário/Pix
   funcionarioAtividades: [], // {id, funcionarioId, atividade, percentual} — % de alocação em cada atividade
   modal: null, // {type:'usuario'|'papelUsuario'|'trocarSenha'|'detalheOperacao'|'graficoOperacao', data:{...}}
   // loading começa true (não false) — enquanto o primeiro carregamento não
@@ -829,6 +866,30 @@ function render(){
     return;
   }
 
+  // Sem nenhum módulo liberado, não há o que mostrar. Sem este desvio a
+  // tela abriria vazia, parecendo defeito em vez de falta de permissão.
+  const visiveis = paginasVisiveis();
+  if(visiveis.length === 0){
+    root.innerHTML = `
+      <div class="app">
+        ${Topbar()}
+        <div class="main">
+          <div class="card" style="margin:20px; text-align:center;">
+            <h3>Sem acesso ao AE Matriz</h3>
+            <p class="hint" style="max-width:520px; margin:8px auto 0;">
+              Sua conta ainda não tem nenhum módulo do Matriz liberado. Peça a um
+              administrador para liberar em Funcionários, no bloco de permissões.
+              Isso não afeta seu acesso ao AE Lavoura nem ao AE Pecuária.
+            </p>
+          </div>
+        </div>
+      </div>`;
+    attachEvents();
+    return;
+  }
+  // Página atual fora do que a pessoa pode ver: cai na primeira liberada.
+  if(!visiveis.some(p => p.key === state.page)) state.page = visiveis[0].key;
+
   let conteudo;
   try{
     conteudo = `
@@ -885,17 +946,34 @@ function render(){
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
+// Cada página do Matriz responde a um módulo de permissão, igual Lavoura e
+// Pecuária já faziam. Antes daqui só existia adminOnly, o que deixava
+// QUALQUER pessoa logada ver o Painel e os Resultados consolidados.
+//
+// Usuários continua exclusivo de admin, de propósito: quem mexe em login e
+// permissão precisa ser administrador, não é algo pra liberar por módulo.
 const PAGES = [
-  {key:'painel', label:'Painel', adminOnly:false},
-  {key:'resultados', label:'Resultados', adminOnly:false},
-  {key:'fazendas', label:'Fazendas', adminOnly:false},
-  {key:'funcionarios', label:'Funcionários', adminOnly:true},
+  {key:'painel', label:'Painel', modulo:'matriz_painel'},
+  {key:'resultados', label:'Resultados', modulo:'matriz_resultados'},
+  {key:'fazendas', label:'Fazendas', modulo:'matriz_fazendas'},
+  {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
-function paginasVisiveis(){ return PAGES.filter(p=>!p.adminOnly || souAdmin()); }
+// Administrador e Proprietário enxergam tudo; os demais papéis dependem da
+// matriz de módulos. Mesma regra que Lavoura e Pecuária usam.
+function acessoTotal(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
+function temPermissao(modulo, nivel){
+  if(acessoTotal()) return true;
+  const atual = state.perfil?.permissoes?.[modulo];
+  if(nivel === 'visualizar') return atual === 'visualizar' || atual === 'editar';
+  return atual === 'editar';
+}
+function paginasVisiveis(){
+  return PAGES.filter(p => p.adminOnly ? souAdmin() : temPermissao(p.modulo, 'visualizar'));
+}
 function pareceErroDeRede(error){
   const msg = String(error?.message||'').toLowerCase();
   return msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
@@ -1064,35 +1142,48 @@ const OPERACOES = {pecuaria:'Pecuária', cana:'Cana-de-açúcar', cereais:'Grão
 // profiles é compartilhado com o AE Lavoura — mesmos 6 papéis dele (ver
 // PAPEL_LABELS no AELavoura.html), pra não mostrar/editar errado um perfil
 // que não seja admin/gestor.
-const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', colaborador:'Colaborador', operador:'Operador'};
+// Papéis do banco unificado: união dos que Lavoura e Pecuária usavam
+// separadamente. 'consultor' veio da Pecuária; 'gestor', 'encarregado' e
+// 'operador' vieram do Lavoura.
+const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', colaborador:'Colaborador', operador:'Operador', consultor:'Consultor'};
 
-// Espelha exatamente MODULOS_PERMISSAO do AELavoura.html — mesma tabela
-// profiles, mesma coluna permissoes (jsonb). Editar aqui edita lá também
-// (é o mesmo registro). Admin e Proprietário têm acesso total, a matriz
-// só vale pros outros papéis (mesma regra do Lavoura/Pecuária).
-const MODULOS_PERMISSAO_LAVOURA = [
-  ['cadastros','Cadastros (Fazendas, Talhões, Culturas, Safras...)'],
-  ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
-  ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
-  ['resultados','Resultados de Cana (Receita, Resultado)'],
-  ['operacoes_graos','Operações de Grãos (Plantio, Tratos, Colheita)'],
-  ['financeiro_graos','Financeiro de Grãos (Custo por Talhão, Despesas)'],
-  ['resultados_graos','Resultados de Grãos (Receita, Resultado)'],
+// Todos os módulos de permissão do banco unificado, agrupados por app só
+// para leitura na tela — no banco é um jsonb só, na coluna permissoes.
+//
+// As chaves da Pecuária levam prefixo pec_ em Financeiro e Resultados
+// porque o Lavoura tem módulos com esses mesmos nomes e outro significado.
+// Sem o prefixo, liberar o financeiro de um app liberaria o do outro. As
+// demais chaves da Pecuária não colidem com nada e ficam sem prefixo.
+// Precisa bater com MODULOS_PERMISSAO do AELavoura.html e do
+// AEpecuaria.html.
+//
+// Admin e Proprietário têm acesso total; esta matriz só vale para os
+// outros papéis.
+const MODULOS_PERMISSAO = [
+  ['Matriz', [
+    ['matriz_painel','Painel (indicadores de cada app)'],
+    ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
+    ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
+    ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
+  ]],
+  ['Lavoura — Cana e Grãos', [
+    ['cadastros','Cadastros (Fazendas, Talhões, Culturas, Safras...)'],
+    ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
+    ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
+    ['resultados','Resultados de Cana (Receita, Resultado)'],
+    ['operacoes_graos','Operações de Grãos (Plantio, Tratos, Colheita)'],
+    ['financeiro_graos','Financeiro de Grãos (Custo por Talhão, Despesas)'],
+    ['resultados_graos','Resultados de Grãos (Receita, Resultado)'],
+  ]],
+  ['Pecuária', [
+    ['manejo','Manejo'], ['cadastro','Cadastro'],
+    ['insumos','Insumos'], ['dietas','Dietas'],
+    ['lotesGeral','Lotes (visão geral)'],
+    ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
+    ['vendas','Vendas'],
+    ['pec_financeiro','Financeiro'], ['pec_resultados','Resultados'],
+  ]],
 ];
-// Espelha MODULOS_PERMISSAO do AEpecuaria.html — projeto separado, então
-// só dá pra EXIBIR aqui (leitura anon); editar de verdade exige uma Edge
-// Function própria (ver ATUALIZAR_PERMISSOES_PECUARIA_INFO mais abaixo) —
-// até ela ser publicada, o caminho garantido é AE Pecuária > Administração
-// > Usuários > Editar acesso.
-const MODULOS_PERMISSAO_PECUARIA = [
-  ['manejo','Manejo'], ['cadastro','Cadastro'],
-  ['insumos','Insumos'], ['dietas','Dietas'],
-  ['lotesGeral','Lotes (visão geral)'],
-  ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
-  ['vendas','Vendas'],
-  ['financeiro','Financeiro'], ['resultados','Resultados'],
-];
-const PAPEL_LABELS_PECUARIA = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
 
 function iniciais(nome){
   const partes = String(nome||'').trim().split(/\s+/).filter(Boolean);
@@ -1514,7 +1605,7 @@ function PageFazendas(){
   return `
   <div class="toolbar">
     <span class="hint">${linhas.length} fazenda(s) cadastrada(s)</span>
-    ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-nova-fazenda="1">+ Nova fazenda</button>` : ''}
+    ${temPermissao('matriz_fazendas','editar') ? `<button class="btn btn-primary btn-sm" data-nova-fazenda="1">+ Nova fazenda</button>` : ''}
   </div>
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — nome, estado, área total e, pra cada atividade, quantos hectares dela tem ali.') : `
@@ -1527,7 +1618,7 @@ function PageFazendas(){
             <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
             <td>${chipsOperacoes(operacoesDaFazendaLavoura(f))}</td>
             <td style="display:flex; gap:6px;">
-              ${souAdmin() ? `
+              ${temPermissao('matriz_fazendas','editar') ? `
               <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-excluir-fazenda="${f.id}">Excluir</button>
               ` : ''}
@@ -1590,31 +1681,21 @@ function chipsAtividadesFuncionario(funcionarioId){
   }).join('')}</div>`;
 }
 function nomeAcessoFuncionario(f){
-  const partes = [];
   if(f.perfilId){
     const p = state.perfis.find(x=>x.id===f.perfilId);
-    if(p) partes.push(`${esc(p.nome)} (Lavoura/Matriz)`);
+    if(p) return `${esc(p.nome)} <span class="hint">(${esc(p.usuario)})</span>`;
   }
-  if(f.usuarioPecuaria) partes.push(`${esc(f.usuarioPecuaria)} (Pecuária)`);
-  // Alerta quando a pessoa participa da Pecuária mas não tem login lá —
-  // sem conta própria, os lançamentos dela na Pecuária ficam sem
-  // rastreabilidade real (entram sob a conta genérica de quem logou).
-  const alocadoPecuaria = state.funcionarioAtividades.some(a=>a.funcionarioId===f.id && a.atividade==='pecuaria' && Number(a.percentual)>0);
-  if(alocadoPecuaria && !f.usuarioPecuaria){
-    partes.push('<span class="pill pill-warn" title="Participa da Pecuária mas não tem login lá — lançamentos dessa pessoa não são rastreáveis por conta própria.">Sem login Pecuária</span>');
-  }
-  return partes.length ? partes.join(' · ') : '<span class="hint">Sem acesso vinculado</span>';
+  // Sem login próprio, os lançamentos da pessoa entram sob a conta de quem
+  // estiver logado — some a rastreabilidade de quem fez o quê.
+  return '<span class="pill pill-warn" title="Sem login proprio: os lancamentos desta pessoa nao sao rastreaveis.">Sem acesso</span>';
 }
-// Contas de login (Lavoura/Matriz e Pecuária) que ainda não têm nenhum
-// funcionário apontando pra elas — candidatas a importar em vez de
-// recadastrar do zero. Comparação por id (Lavoura/Matriz) ou por
-// usuário/texto (Pecuária, projeto separado sem FK real).
+// Contas de login que ainda não têm nenhum funcionário apontando pra elas
+// — candidatas a importar em vez de recadastrar do zero.
 function contasNaoVinculadas(){
   const perfilIdsUsados = new Set(state.funcionarios.map(f=>f.perfilId).filter(Boolean));
-  const usuariosPecuariaUsados = new Set(state.funcionarios.map(f=>f.usuarioPecuaria).filter(Boolean));
-  const lavoura = state.perfis.filter(p=>!perfilIdsUsados.has(p.id)).map(p=>({origem:'lavoura', nome:p.nome, usuario:p.usuario, ref:p.id}));
-  const pecuaria = state.perfisPecuaria.filter(p=>!usuariosPecuariaUsados.has(p.usuario)).map(p=>({origem:'pecuaria', nome:p.nome, usuario:p.usuario, ref:p.usuario}));
-  return [...lavoura, ...pecuaria];
+  return state.perfis
+    .filter(p=>!perfilIdsUsados.has(p.id))
+    .map(p=>({nome:p.nome, usuario:p.usuario, ref:p.id}));
 }
 function PageFuncionarios(){
   const linhas = [...state.funcionarios].sort((a,b)=>a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -1624,7 +1705,7 @@ function PageFuncionarios(){
     <span class="hint">${linhas.length} funcionário(s) cadastrado(s)</span>
     <div style="display:flex; gap:8px;">
       ${souAdmin() && pendentes.length ? `<button class="btn-ghost btn-sm" data-importar-funcionarios="1">Importar ${pendentes.length} conta(s) sem funcionário vinculado</button>` : ''}
-      ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-novo-funcionario="1">+ Novo funcionário</button>` : ''}
+      ${temPermissao('matriz_funcionarios','editar') ? `<button class="btn btn-primary btn-sm" data-novo-funcionario="1">+ Novo funcionário</button>` : ''}
     </div>
   </div>
   <div class="card" style="overflow-x:auto;">
@@ -1640,7 +1721,7 @@ function PageFuncionarios(){
             <td>${nomeAcessoFuncionario(f)}</td>
             <td><span class="status-dot ${f.ativo?'ativo':'inativo'}"></span>${f.ativo?'Ativo':'Inativo'}</td>
             <td style="display:flex; gap:6px;">
-              ${souAdmin() ? `
+              ${temPermissao('matriz_funcionarios','editar') ? `
               <button class="btn-ghost btn-sm" data-editar-funcionario="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-excluir-funcionario="${f.id}">Excluir</button>
               ` : ''}
@@ -1651,75 +1732,49 @@ function PageFuncionarios(){
     </table>`}
   </div>`;
 }
-// Bloco de permissões do login Lavoura/Matriz vinculado, direto no modal
-// de Funcionário. Edita a MESMA tabela profiles que a tela de Usuários —
-// escrita autenticada normal (souAdmin()), sem risco extra: não é
-// cross-projeto, então não precisa de Edge Function nem policy nova.
-function blocoPermissoesLavoura(perfilId){
+// Bloco de permissões do login vinculado, direto no modal de Funcionário.
+// Edita a MESMA tabela profiles que a tela de Usuários — escrita
+// autenticada normal (souAdmin()).
+//
+// Antes da unificação isto eram DOIS blocos: um pro login do Lavoura e
+// outro pro da Pecuária, que ficava só de leitura por estar em outro
+// projeto Supabase. Agora a pessoa tem um login só, com todos os módulos
+// dos dois apps na mesma matriz, e tudo grava direto.
+function blocoPermissoes(perfilId){
+  // Só admin edita permissão. Sem isto, quem tivesse "editar" em
+  // matriz_funcionarios poderia se dar acesso de administrador sozinho.
+  if(!souAdmin()) return '';
   if(!perfilId) return '';
   const p = state.perfis.find(x=>x.id===perfilId);
   if(!p) return '';
+  const linhasDoGrupo = (modulos)=> modulos.map(([key,label])=>`
+    <tr><td>${label}</td><td>
+      <select data-perm-modulo="${key}">
+        <option value="nenhum" ${(!p.permissoes?.[key]||p.permissoes[key]==='nenhum')?'selected':''}>Nenhum</option>
+        <option value="visualizar" ${p.permissoes?.[key]==='visualizar'?'selected':''}>Visualizar</option>
+        <option value="editar" ${p.permissoes?.[key]==='editar'?'selected':''}>Editar</option>
+      </select>
+    </td></tr>
+  `).join('');
   return `
   <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px;">
-    <strong style="font-size:13px;">Permissões no Lavoura/Matriz — ${esc(p.nome)}</strong>
+    <strong style="font-size:13px;">Permissões de ${esc(p.nome)}</strong>
     <div class="field" style="margin:8px 0;"><label>Perfil</label>
       <select id="f-papelperfilfuncionario">
         ${Object.entries(PAPEL_LABELS).map(([k,l])=>`<option value="${k}" ${p.papel===k?'selected':''}>${l}</option>`).join('')}
       </select>
     </div>
     <label style="display:flex; align-items:center; gap:6px; margin-bottom:8px;"><input type="checkbox" id="f-ativoperfilfuncionario" ${p.ativo?'checked':''} style="width:auto;"/> Conta ativa</label>
-    <span class="hint">Administrador e Proprietário têm acesso total — a tabela abaixo só vale pros outros perfis. Mudar aqui muda no Lavoura também (é o mesmo login).</span>
+    <span class="hint">Administrador e Proprietário têm acesso total — a tabela abaixo só vale pros outros perfis. É o mesmo login que a pessoa usa no Lavoura e na Pecuária.</span>
     <table class="perm-matrix" style="margin-top:6px;">
       <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
       <tbody>
-        ${MODULOS_PERMISSAO_LAVOURA.map(([key,label])=>`
-          <tr><td>${label}</td><td>
-            <select data-perm-lavoura-modulo="${key}">
-              <option value="nenhum" ${(!p.permissoes?.[key]||p.permissoes[key]==='nenhum')?'selected':''}>Nenhum</option>
-              <option value="visualizar" ${p.permissoes?.[key]==='visualizar'?'selected':''}>Visualizar</option>
-              <option value="editar" ${p.permissoes?.[key]==='editar'?'selected':''}>Editar</option>
-            </select>
-          </td></tr>
+        ${MODULOS_PERMISSAO.map(([grupo, modulos])=>`
+          <tr><td colspan="2" style="background:var(--cinza-fundo,#f5f6f5); font-weight:600; font-size:12px;">${grupo}</td></tr>
+          ${linhasDoGrupo(modulos)}
         `).join('')}
       </tbody>
     </table>
-  </div>`;
-}
-// Bloco de permissões do login Pecuária vinculado. Projeto separado: a
-// leitura é ao vivo (anon), mas GRAVAR exige uma Edge Function própria
-// (atualizar-permissoes) que ainda não existe publicada — até publicar,
-// o botão abaixo só mostra o estado atual e linka pro editor de verdade
-// na própria Pecuária. Ver ATUALIZAR_PERMISSOES_EDGE_FUNCTION.md.
-function blocoPermissoesPecuaria(usuarioPecuaria){
-  if(!usuarioPecuaria) return '';
-  const p = state.perfisPecuaria.find(x=>x.usuario===usuarioPecuaria);
-  if(!p) return '';
-  return `
-  <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-      <strong style="font-size:13px;">Permissões na Pecuária — ${esc(p.nome)}</strong>
-      <a href="https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html" target="_blank" rel="noopener" class="hint">Editar na Pecuária →</a>
-    </div>
-    <div class="field" style="margin:8px 0;"><label>Perfil</label>
-      <select id="f-papelperfilpecuaria">
-        ${Object.entries(PAPEL_LABELS_PECUARIA).map(([k,l])=>`<option value="${k}" ${p.papel===k?'selected':''}>${l}</option>`).join('')}
-      </select>
-    </div>
-    <table class="perm-matrix" style="margin-top:6px;">
-      <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
-      <tbody>
-        ${MODULOS_PERMISSAO_PECUARIA.map(([key,label])=>`
-          <tr><td>${label}</td><td>
-            <select data-perm-pecuaria-modulo="${key}">
-              <option value="nenhum" ${(!p.permissoes?.[key]||p.permissoes[key]==='nenhum')?'selected':''}>Nenhum</option>
-              <option value="visualizar" ${p.permissoes?.[key]==='visualizar'?'selected':''}>Visualizar</option>
-              <option value="editar" ${p.permissoes?.[key]==='editar'?'selected':''}>Editar</option>
-            </select>
-          </td></tr>
-        `).join('')}
-      </tbody>
-    </table>
-    <span class="hint">Salvar aqui tenta gravar direto na Pecuária via Edge Function própria (atualizar-permissoes) — ainda não publicada no projeto dela, então por enquanto vai dar erro; use o link acima até publicar (arquivo com o código entregue à parte). Assim que publicar, volta a funcionar sem precisar mexer em nada aqui.</span>
   </div>`;
 }
 function ModalFuncionario(){
@@ -1730,7 +1785,7 @@ function ModalFuncionario(){
       <div class="modal-head"><h3>${d._editId?'Editar funcionário':'Novo funcionário'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Nome</label><input id="f-nomefuncionario" value="${esc(d.nome)}" placeholder="Ex: João Silva"/></div>
-        <div class="field"><label>Cargo</label><input id="f-cargofuncionario" value="${esc(d.cargo)}" placeholder="Ex: Encarregado, Vaqueiro, Operador de máquina"/></div>
+        <div class="field"><label>Cargo</label>${selectCargo('f-cargofuncionario', d.cargo, 'f-cargooutrofuncionario')}</div>
         <div class="field"><label>Admissão</label><input id="f-admissaofuncionario" type="date" value="${d.dataAdmissao||''}"/></div>
         <div class="field"><label><input type="checkbox" id="f-ativofuncionario" ${d.ativo!==false?'checked':''} style="width:auto; margin-right:6px;"/> Funcionário ativo</label></div>
         <div class="field"><label>Atividades e % de alocação</label>
@@ -1743,15 +1798,15 @@ function ModalFuncionario(){
           `).join('')}
           <span class="hint">Quanto do tempo/trabalho da pessoa vai pra cada atividade — não precisa somar 100%.</span>
         </div>
-        <div class="field"><label>Login no AE Lavoura / AE Matriz</label>
+        <div class="field"><label>Login de acesso</label>
           <select id="f-perfilfuncionario">
             <option value="">— Nenhum —</option>
             ${state.perfis.map(p=>`<option value="${p.id}" ${d.perfilId===p.id?'selected':''}>${esc(p.nome)} (${esc(p.usuario)})</option>`).join('')}
           </select>
-          <span class="hint">Vincula uma conta que já existe, ou crie uma nova abaixo.</span>
+          <span class="hint">Um login só, que serve para Lavoura, Matriz e Pecuária. Vincule uma conta que já existe ou crie uma nova abaixo.</span>
           ${d._criandoAcessoLavoura ? `
           <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
-            <span class="hint">Cria a conta no projeto do Lavoura/Matriz (mesma Edge Function usada na tela de Usuários).</span>
+            <span class="hint">Cria a conta de acesso (mesma Edge Function usada na tela de Usuários).</span>
             <input id="f-nomeacessolavoura" placeholder="Nome" value="${esc(d.nome||'')}" autocomplete="off"/>
             <input id="f-usuarioacessolavoura" placeholder="usuário (login)" autocomplete="off"/>
             <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password"/>
@@ -1760,31 +1815,9 @@ function ModalFuncionario(){
               <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-lavoura="1">Cancelar</button>
             </div>
           </div>
-          ` : `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-lavoura="1" style="margin-top:6px;">+ Criar novo login no Lavoura/Matriz</button>`}
+          ` : `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-lavoura="1" style="margin-top:6px;">+ Criar novo login</button>`}
           ${state.acessoLavouraError ? `<div class="hint" style="color:var(--alerta); margin-top:4px;">${esc(state.acessoLavouraError)}</div>` : ''}
-          ${blocoPermissoesLavoura(d.perfilId)}
-        </div>
-        <div class="field"><label>Login no AE Pecuária</label>
-          <select id="f-usuariopecuariafuncionario">
-            <option value="">— Nenhum —</option>
-            ${state.perfisPecuaria.map(p=>`<option value="${esc(p.usuario)}" ${d.usuarioPecuaria===p.usuario?'selected':''}>${esc(p.nome)} (${esc(p.usuario)})</option>`).join('')}
-            ${d.usuarioPecuaria && !state.perfisPecuaria.some(p=>p.usuario===d.usuarioPecuaria) ? `<option value="${esc(d.usuarioPecuaria)}" selected>${esc(d.usuarioPecuaria)} (não encontrado na lista atual)</option>` : ''}
-          </select>
-          <span class="hint">${state.perfisPecuaria.length ? 'Lista lida ao vivo do projeto da Pecuária (projeto separado — vínculo por nome de usuário).' : 'Não foi possível ler as contas da Pecuária agora (política de leitura anon pode não estar aplicada — ver Riscos/observações na conversa).'}</span>
-          ${d._criandoAcessoPecuaria ? `
-          <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
-            <span class="hint">Cria a conta direto no projeto da Pecuária (mesma Edge Function usada na tela de Usuários de lá). Ainda não testado em produção a partir do Matriz — se der erro, crie pelo AE Pecuária &gt; Usuários normalmente.</span>
-            <input id="f-nomeacessopecuaria" placeholder="Nome" value="${esc(d.nome||'')}" autocomplete="off"/>
-            <input id="f-usuarioacessopecuaria" placeholder="usuário (login)" autocomplete="off"/>
-            <input id="f-senhaacessopecuaria" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password"/>
-            <div style="display:flex; gap:8px;">
-              <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-pecuaria="1" ${state.acessoPecuariaLoading?'disabled':''}>${state.acessoPecuariaLoading?'Criando...':'Criar'}</button>
-              <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-pecuaria="1">Cancelar</button>
-            </div>
-          </div>
-          ` : `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-pecuaria="1" style="margin-top:6px;">+ Criar novo login na Pecuária</button>`}
-          ${state.acessoPecuariaError ? `<div class="hint" style="color:var(--alerta); margin-top:4px;">${esc(state.acessoPecuariaError)}</div>` : ''}
-          ${blocoPermissoesPecuaria(d.usuarioPecuaria)}
+          ${blocoPermissoes(d.perfilId)}
         </div>
         <div class="field"><label>Observação</label><textarea id="f-obsfuncionario" rows="2">${esc(d.observacao)}</textarea></div>
       </div>
@@ -1809,8 +1842,10 @@ function ModalImportarFuncionarios(){
             <div style="display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--linha); border-radius:8px;">
               <input type="checkbox" data-importar-item="${i}" checked style="width:auto;"/>
               <span style="flex:1.2; min-width:0;">${esc(p.nome)} <span class="hint">(${esc(p.usuario)})</span></span>
-              <input type="text" data-importar-cargo="${i}" placeholder="Cargo (opcional)" style="flex:1; min-width:0;"/>
-              <span class="pill ${p.origem==='pecuaria'?'pill-warn':'pill-ok'}">${p.origem==='pecuaria'?'Pecuária':'Lavoura/Matriz'}</span>
+              <select data-importar-cargo="${i}" style="flex:1; min-width:0;">
+                <option value="">Cargo (opcional)</option>
+                ${CARGOS.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+              </select>
             </div>
           `).join('')}
         </div>`}
@@ -2118,8 +2153,7 @@ function attachEvents(){
   // ---- funcionários ----
   const novoFuncionarioBtn = document.querySelector('[data-novo-funcionario]');
   if(novoFuncionarioBtn) novoFuncionarioBtn.onclick = ()=>{
-    editDraft = {nome:'', cargo:'', dataAdmissao:'', ativo:true, atividades:{}, perfilId:'', usuarioPecuaria:'', observacao:''};
-    state.acessoPecuariaError = ''; state.acessoPecuariaLoading = false;
+    editDraft = {nome:'', cargo:'', dataAdmissao:'', ativo:true, atividades:{}, perfilId:'', observacao:''};
     state.acessoLavouraError = ''; state.acessoLavouraLoading = false;
     state.modal = {type:'funcionario'}; render();
   };
@@ -2141,8 +2175,7 @@ function attachEvents(){
         cargo,
         ativo: true,
         dataAdmissao: '',
-        perfilId: p.origem==='lavoura' ? p.ref : '',
-        usuarioPecuaria: p.origem==='pecuaria' ? p.ref : '',
+        perfilId: p.ref,
         observacao: '',
       });
     });
@@ -2151,15 +2184,21 @@ function attachEvents(){
     state.modal = null;
     await loadAll();
   };
-  // Trocar a conta vinculada (Lavoura/Matriz ou Pecuária) precisa re-render
-  // pra o bloco de permissões abaixo mostrar os dados da conta certa.
+  // Trocar a conta vinculada precisa re-render pra o bloco de permissões
+  // abaixo mostrar os dados da conta certa.
+  // Cargo: escolher "Outro" revela o campo de texto. Sem re-render, pra
+  // não perder o que já foi digitado nos outros campos do formulário.
+  const selCargoFuncionario = document.getElementById('f-cargofuncionario');
+  if(selCargoFuncionario) selCargoFuncionario.onchange = (e)=>{
+    const campoOutro = document.getElementById('f-cargooutrofuncionario');
+    if(!campoOutro) return;
+    const ehOutro = e.target.value === CARGO_OUTRO;
+    campoOutro.style.display = ehOutro ? '' : 'none';
+    if(ehOutro) campoOutro.focus(); else campoOutro.value = '';
+  };
   const selPerfilFuncionario = document.getElementById('f-perfilfuncionario');
   if(selPerfilFuncionario) selPerfilFuncionario.onchange = (e)=>{
     editDraft.perfilId = e.target.value; render();
-  };
-  const selUsuarioPecuariaFuncionario = document.getElementById('f-usuariopecuariafuncionario');
-  if(selUsuarioPecuariaFuncionario) selUsuarioPecuariaFuncionario.onchange = (e)=>{
-    editDraft.usuarioPecuaria = e.target.value; render();
   };
   document.querySelectorAll('[data-editar-funcionario]').forEach(el=>{
     el.onclick = ()=>{
@@ -2167,65 +2206,10 @@ function attachEvents(){
       const atividades = {};
       state.funcionarioAtividades.filter(a=>a.funcionarioId===f.id).forEach(a=>{ atividades[a.atividade] = a.percentual; });
       editDraft = {...f, _editId: f.id, atividades};
-      state.acessoPecuariaError = ''; state.acessoPecuariaLoading = false;
-      state.acessoLavouraError = ''; state.acessoLavouraLoading = false;
+        state.acessoLavouraError = ''; state.acessoLavouraLoading = false;
       state.modal = {type:'funcionario'}; render();
     };
   });
-  const criarAcessoPecuariaBtn = document.querySelector('[data-criar-acesso-pecuaria]');
-  if(criarAcessoPecuariaBtn) criarAcessoPecuariaBtn.onclick = ()=>{
-    editDraft._criandoAcessoPecuaria = true;
-    state.acessoPecuariaError = '';
-    render();
-  };
-  const cancelarAcessoPecuariaBtn = document.querySelector('[data-cancelar-acesso-pecuaria]');
-  if(cancelarAcessoPecuariaBtn) cancelarAcessoPecuariaBtn.onclick = ()=>{
-    editDraft._criandoAcessoPecuaria = false;
-    state.acessoPecuariaError = '';
-    render();
-  };
-  const confirmarAcessoPecuariaBtn = document.querySelector('[data-confirmar-acesso-pecuaria]');
-  if(confirmarAcessoPecuariaBtn) confirmarAcessoPecuariaBtn.onclick = async ()=>{
-    const nome = document.getElementById('f-nomeacessopecuaria').value.trim();
-    const usuario = document.getElementById('f-usuarioacessopecuaria').value.trim();
-    const senha = document.getElementById('f-senhaacessopecuaria').value;
-    if(!nome || !usuario || !senha || senha.length<6){
-      state.acessoPecuariaError = 'Preencha nome, usuário e senha (mín. 6 caracteres).';
-      render(); return;
-    }
-    state.acessoPecuariaLoading = true; state.acessoPecuariaError = ''; render();
-    // Chama a Edge Function 'criar-usuario' do projeto da Pecuária (separada
-    // da 'criar-usuario-cana' do Lavoura/Matriz — cada projeto Supabase tem
-    // a sua). Não testado em produção a partir do Matriz até este momento;
-    // se falhar por causa de autenticação exigida pela função, o fallback
-    // garantido é criar a conta na própria tela de Usuários do AE Pecuária.
-    try{
-      const { data, error } = await dbPecuaria.functions.invoke('criar-usuario', { body: { nome, usuario, senha } });
-      if(error || data?.error){
-        let msg = data?.error || error?.message || 'Falha ao criar usuário na Pecuária.';
-        if(error?.context && typeof error.context.json === 'function'){
-          try { const corpo = await error.context.json(); if(corpo?.error) msg = corpo.error; } catch(e){}
-        }
-        state.acessoPecuariaError = msg + ' — crie manualmente em AE Pecuária > Usuários.';
-        state.acessoPecuariaLoading = false;
-        render();
-        return;
-      }
-    } catch(e){
-      state.acessoPecuariaError = 'Não foi possível conectar ao projeto da Pecuária. Crie manualmente em AE Pecuária > Usuários.';
-      state.acessoPecuariaLoading = false;
-      render();
-      return;
-    }
-    editDraft.usuarioPecuaria = usuario;
-    editDraft._criandoAcessoPecuaria = false;
-    state.acessoPecuariaLoading = false;
-    // Atualiza a lista de contas da Pecuária pra já aparecer no select.
-    const { data: novosPerfis } = await Promise.resolve(dbPecuaria.from('profiles').select('id, nome, usuario, ativo, papel, permissoes').order('nome')).catch(()=>({data:null}));
-    if(novosPerfis) state.perfisPecuaria = novosPerfis.filter(p=>p.ativo!==false);
-    render();
-  };
-
   const criarAcessoLavouraBtn = document.querySelector('[data-criar-acesso-lavoura]');
   if(criarAcessoLavouraBtn) criarAcessoLavouraBtn.onclick = ()=>{
     editDraft._criandoAcessoLavoura = true;
@@ -2372,11 +2356,10 @@ function attachEvents(){
       } else if(type==='funcionario'){
         const campos = {
           nome: document.getElementById('f-nomefuncionario').value.trim() || 'Sem nome',
-          cargo: document.getElementById('f-cargofuncionario').value.trim(),
+          cargo: lerCargo('f-cargofuncionario', 'f-cargooutrofuncionario'),
           dataAdmissao: document.getElementById('f-admissaofuncionario').value || '',
           ativo: document.getElementById('f-ativofuncionario').checked,
           perfilId: document.getElementById('f-perfilfuncionario').value || '',
-          usuarioPecuaria: document.getElementById('f-usuariopecuariafuncionario').value.trim(),
           observacao: document.getElementById('f-obsfuncionario').value.trim(),
         };
         const row = funcionarioToRow(campos);
@@ -2403,33 +2386,17 @@ function attachEvents(){
             if(error) break;
           }
         }
-        // Permissões do login Lavoura/Matriz vinculado, se o bloco estava
-        // visível (mesmo profiles, escrita autenticada normal — sem risco
-        // extra, não precisa de Edge Function).
+        // Permissões do login vinculado, se o bloco estava visível.
+        // Depois da unificação é um profiles só: grava direto, com a
+        // sessão do próprio admin. Antes isto eram duas gravações, e a da
+        // Pecuária dependia de uma Edge Function no outro projeto.
         if(!error && campos.perfilId && document.getElementById('f-papelperfilfuncionario')){
           const papelPerfil = document.getElementById('f-papelperfilfuncionario').value;
           const ativoPerfil = document.getElementById('f-ativoperfilfuncionario').checked;
           const permissoesPerfil = {};
-          document.querySelectorAll('[data-perm-lavoura-modulo]').forEach(sel=>{ permissoesPerfil[sel.dataset.permLavouraModulo] = sel.value; });
+          document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoesPerfil[sel.dataset.permModulo] = sel.value; });
           const { error: erroPerm } = await db.from('profiles').update({papel: papelPerfil, ativo: ativoPerfil, permissoes: permissoesPerfil}).eq('id', campos.perfilId);
-          if(erroPerm) console.warn('Não foi possível salvar as permissões do Lavoura/Matriz:', erroPerm);
-        }
-        // Permissões do login Pecuária vinculado — best-effort via Edge
-        // Function própria (ainda não publicada, ver arquivo entregue). Não
-        // trava o salvamento do funcionário se falhar; só avisa.
-        if(!error && campos.usuarioPecuaria && document.getElementById('f-papelperfilpecuaria')){
-          const pPec = state.perfisPecuaria.find(x=>x.usuario===campos.usuarioPecuaria);
-          if(pPec){
-            const papelPecuaria = document.getElementById('f-papelperfilpecuaria').value;
-            const permissoesPecuaria = {};
-            document.querySelectorAll('[data-perm-pecuaria-modulo]').forEach(sel=>{ permissoesPecuaria[sel.dataset.permPecuariaModulo] = sel.value; });
-            try{
-              const { data, error: erroPec } = await dbPecuaria.functions.invoke('atualizar-permissoes', { body: { perfilId: pPec.id, papel: papelPecuaria, permissoes: permissoesPecuaria } });
-              if(erroPec || data?.error) alert('Funcionário salvo, mas as permissões na Pecuária não foram gravadas: ' + (data?.error || erroPec?.message || 'falha desconhecida') + '. Edite direto em AE Pecuária > Administração > Usuários por enquanto.');
-            } catch(e){
-              alert('Funcionário salvo, mas as permissões na Pecuária não foram gravadas — a Edge Function "atualizar-permissoes" ainda não está publicada no projeto da Pecuária. Edite direto em AE Pecuária > Administração > Usuários por enquanto.');
-            }
-          }
+          if(erroPerm) alert('Funcionário salvo, mas as permissões não foram gravadas: ' + erroPerm.message);
         }
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;

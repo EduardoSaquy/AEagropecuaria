@@ -2002,7 +2002,11 @@ function attachEvents(){
       if(type==='permissoes'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
-        const permissoes = {};
+        // Parte das permissoes que a pessoa JA TEM e sobrescreve so os
+        // modulos mostrados nesta tela. Com o banco unificado, profiles.permissoes
+        // guarda os modulos dos tres apps no mesmo jsonb — montar o objeto do
+        // zero aqui apagaria silenciosamente os modulos dos outros apps.
+        const permissoes = {...(editDraft.permissoes || {})};
         document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoes[sel.dataset.permModulo] = sel.value; });
         ({error} = await db.from('profiles').update({papel, ativo, permissoes}).eq('id', editDraft._perfilId));
       } else if(type==='trocarSenha'){
