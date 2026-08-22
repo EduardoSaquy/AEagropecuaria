@@ -1954,8 +1954,126 @@ function despesasVigentesNoMes(mesStr){
   });
   return out;
 }
+
+/* ---- Custo por hectare: como o "Geral" é distribuído ----
+   Lançamento sem fazenda não é dado perdido: ele é rateado, proporcional
+   aos hectares. São dois níveis de rateio, e eles resolvem coisas
+   diferentes:
+
+   1. Atividade "Geral" (contador, escritório) -> dividida entre pecuária,
+      cana e grãos na proporção dos hectares de cada uma.
+   2. Dentro de uma atividade, lançamento sem fazenda -> dividido entre as
+      fazendas que têm hectares daquela atividade, na mesma proporção.
+
+   Por isso a migração deixar as despesas antigas da pecuária como "Geral"
+   não estraga o custo por hectare da pecuária: a atividade já está no
+   lançamento, e o rateio entre fazendas é proporcional. Preencher a
+   fazenda depois só deixa o número por fazenda mais fiel.
+   -------------------------------------------------------------- */
+const ATIVIDADES_PRODUTIVAS = ['pecuaria','cana','graos'];
+function hectaresDaAtividade(atividade){
+  return state.fazendaAtividades
+    .filter(a=>a.atividade===atividade)
+    .reduce((s,a)=>s+Number(a.areaHa||0), 0);
+}
+function despesaPorAtividade(mes){
+  const ha = {};
+  ATIVIDADES_PRODUTIVAS.forEach(a=> ha[a] = hectaresDaAtividade(a));
+  const haTotal = ATIVIDADES_PRODUTIVAS.reduce((s,a)=>s+ha[a], 0);
+  const total = {};
+  ATIVIDADES_PRODUTIVAS.forEach(a=> total[a] = 0);
+  let geralSemRateio = 0;
+  despesasVigentesNoMes(mes).forEach(l=>{
+    const v = Number(l.valor||0);
+    if(l.atividade === 'geral'){
+      // sem hectare cadastrado em lugar nenhum não há como ratear;
+      // fica de fora e a tela avisa, em vez de sumir calado
+      if(haTotal > 0) ATIVIDADES_PRODUTIVAS.forEach(a=> total[a] += v * (ha[a]/haTotal));
+      else geralSemRateio += v;
+    } else if(total[l.atividade] !== undefined){
+      total[l.atividade] += v;
+    }
+  });
+  return {total, ha, haTotal, geralSemRateio};
+}
+// Dentro de uma atividade: fazenda informada leva o valor dela; o que veio
+// sem fazenda é rateado entre as fazendas daquela atividade.
+function despesaPorFazendaDaAtividade(atividade, mes){
+  const areas = state.fazendaAtividades.filter(a=>a.atividade===atividade);
+  const haAtividade = areas.reduce((s,a)=>s+Number(a.areaHa||0), 0);
+  const porFazenda = new Map(areas.map(a=>[a.fazendaId, {ha:Number(a.areaHa||0), valor:0}]));
+  let semFazenda = 0;
+  despesasVigentesNoMes(mes)
+    .filter(l=>l.atividade===atividade)
+    .forEach(l=>{
+      const v = Number(l.valor||0);
+      if(l.fazendaId && porFazenda.has(l.fazendaId)) porFazenda.get(l.fazendaId).valor += v;
+      else semFazenda += v;
+    });
+  if(haAtividade > 0 && semFazenda > 0){
+    porFazenda.forEach(x=>{ x.valor += semFazenda * (x.ha/haAtividade); });
+  }
+  return {porFazenda, haAtividade, semFazendaRateado: semFazenda};
+}
+function BlocoCustoHectare(){
+  const mes = mesAtualStr();
+  const {total, ha, haTotal, geralSemRateio} = despesaPorAtividade(mes);
+  if(haTotal === 0){
+    return `<div class="card">${Empty('Sem hectares cadastrados','Cadastre a área de cada atividade em Fazendas para o custo por hectare poder ser calculado.')}</div>`;
+  }
+  return `
+  <div class="card" style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Atividade</th><th>Hectares</th><th>Despesa do mês</th><th>Custo por hectare</th></tr></thead>
+      <tbody>
+        ${ATIVIDADES_PRODUTIVAS.filter(a=>ha[a] > 0).map(a=>`
+          <tr>
+            <td><strong>${rotuloAtividade(a)}</strong></td>
+            <td class="mono">${fmtInt(ha[a])} ha</td>
+            <td class="mono">R$ ${fmt(total[a])}</td>
+            <td class="mono" style="font-weight:600;">R$ ${fmt(total[a]/ha[a])}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ${geralSemRateio > 0 ? `<p class="hint" style="color:var(--alerta); margin-top:10px;">R$ ${fmt(geralSemRateio)} em despesas "Geral" ficaram de fora: não há hectare cadastrado para ratear.</p>` : ''}
+  <p class="hint" style="margin-top:14px;">Referente a ${mesLabel(mes)}. Despesa marcada como "Geral" é dividida entre as atividades na proporção dos hectares de cada uma; dentro de cada atividade, lançamento sem fazenda é dividido entre as fazendas dela, na mesma lógica.</p>
+
+  ${ATIVIDADES_PRODUTIVAS.filter(a=>ha[a] > 0).map(a=>{
+    const {porFazenda, semFazendaRateado} = despesaPorFazendaDaAtividade(a, mes);
+    if(porFazenda.size === 0) return '';
+    return `
+    <h3 style="margin:22px 0 8px; font-size:15px;">${rotuloAtividade(a)} — por fazenda</h3>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Fazenda</th><th>Hectares</th><th>Despesa</th><th>Custo por hectare</th></tr></thead>
+        <tbody>
+          ${[...porFazenda.entries()].map(([fid, x])=>`
+            <tr>
+              <td>${esc(nomeFazendaLanc(fid))}</td>
+              <td class="mono">${fmtInt(x.ha)} ha</td>
+              <td class="mono">R$ ${fmt(x.valor)}</td>
+              <td class="mono" style="font-weight:600;">R$ ${x.ha > 0 ? fmt(x.valor/x.ha) : '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${semFazendaRateado > 0 ? `<p class="hint" style="margin-top:6px;">R$ ${fmt(semFazendaRateado)} sem fazenda informada, rateados acima por hectare.</p>` : ''}`;
+  }).join('')}`;
+}
 function PageFinanceiro(){
-  const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos']];
+  const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos'],['custoha','Custo por hectare']];
+  if(state.abaFinanceiro==='custoha'){
+    return `
+    <div class="toolbar" style="gap:8px;">
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${abas.map(([key,label])=>`
+          <button class="${state.abaFinanceiro===key?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-aba-financeiro="${key}">${label}</button>
+        `).join('')}
+      </div>
+    </div>` + BlocoCustoHectare();
+  }
   const mesAtual = mesAtualStr();
   const vigentes = despesasVigentesNoMes(mesAtual)
     .filter(l=>!state.filtroAtividade || l.atividade===state.filtroAtividade);
