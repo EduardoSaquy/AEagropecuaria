@@ -22,7 +22,11 @@ import sys
 from pathlib import Path
 
 BASE = Path(__file__).parent
-ORIGEM = BASE / "AELavoura.html"
+# AELavoura.html agora e so a pagina de encaminhamento para os dois apps
+# novos (quem tem o link antigo salvo nao pode cair em pagina nao
+# encontrada). O app completo, que e a fonte deste gerador, ficou guardado
+# no arquivo abaixo.
+ORIGEM = BASE / "AELavoura_app_completo.html.bak"
 
 
 class Editor:
