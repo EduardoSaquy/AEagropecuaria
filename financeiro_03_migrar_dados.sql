@@ -103,15 +103,22 @@ begin
         where c.fazenda_id is null and lower(c.nome) = lower(trim(cf.categoria)) limit 1),
       id_nao_classificado
     ),
-    -- o nome da despesa e o que identifica a linha; a descricao detalhada
-    -- entra junto quando existe, para nao virar duas colunas com o mesmo papel
-    case when coalesce(trim(cf.descricao), '') = '' then cf.nome
-         else cf.nome || ' — ' || trim(cf.descricao) end,
+    -- SO o nome. A descricao detalhada vai para observacao, mais abaixo.
+    -- Juntar as duas aqui quebra o agrupamento que evita contar despesa em
+    -- dobro: a Pecuaria agrupa por nome + centro de custo + atividades, e
+    -- com o detalhe colado no nome o recorrente e o do mes deixam de ser o
+    -- mesmo grupo, e os dois passam a ser contados.
+    cf.nome,
     cf.valor_mensal,
     cf.data,
     case when cf.data is not null then to_char(cf.data, 'YYYY-MM') else null end,
     nullif(trim(coalesce(cf.fornecedor, '')), ''),
-    nullif(trim(coalesce(cf.observacao, '')), ''),
+    nullif(trim(
+      coalesce(cf.observacao, '')
+      || case when coalesce(trim(cf.descricao), '') = '' then ''
+              else case when coalesce(trim(cf.observacao), '') = '' then '' else ' | ' end
+                   || trim(cf.descricao) end
+    ), ''),
     coalesce(cf.areas, '{}')
   from custos_fixos cf
   where coalesce(cf.valor_mensal, 0) > 0;
