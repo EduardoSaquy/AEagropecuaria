@@ -467,10 +467,6 @@ function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p
 function rowToPesagemAnimal(r){ return {id:r.id, pesagemId:r.pesagem_id, numeroAnimal:r.numero_animal, pesoKg:r.peso_kg}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
 function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantidade_kg:p.quantidadeKg}; }
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, descricao:r.descricao||'', fornecedor:r.fornecedor||'', valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, descricao:c.descricao||'', fornecedor:c.fornecedor||'', valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
-function rowToReceita(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||'', vendaId:r.abate_id||null}; }
-function receitaToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor, observacao:r.observacao||''}; }
 // Guardado na tabela "abates" (nome antigo, de quando só existia venda por
 // abate) — mantido por já estar em produção; agora cobre qualquer venda de
 // animais (abate por @, por animal ou por kg vivo), diferenciada por tipoVenda.
@@ -478,8 +474,6 @@ function rowToVenda(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantida
 function vendaToRow(v){ return {data:v.data, lote_id:v.loteId, quantidade:v.quantidade, tipo_venda:v.tipoVenda||'arroba', peso_medio_kg:v.pesoMedioKg||null, valor_arroba:v.valorArroba||null, valor_por_animal:v.valorPorAnimal||null, valor_kg:v.valorKg||null, observacao:v.observacao||''}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor, sexo:r.sexo||'macho'}; }
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor, sexo:p.sexo||'macho'}; }
-function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor||'', valor:r.valor, data:r.data}; }
-function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor||'', valor:i.valor, data:i.data}; }
 // Sugestões de centro de custo e fornecedor pra preencher os datalists dos
 // campos de Despesa/Investimento -- lista inicial vem de um comparativo com
 // o plano de contas real da fazenda (ERP Conag), pra já nascer com opções
@@ -529,7 +523,7 @@ async function loadAll(){
   // passa de 1000 linhas com o tempo, isso fazia lançamentos novos (com o
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
-  const [ing, mov, diet, lot, sr, lc, pt, rc, cf, inv, rec, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim, pesagAnim, manj, protIA] = await Promise.all([
+  const [ing, mov, diet, lot, sr, lc, pt, rc, lanc, cCusto, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim, pesagAnim, manj, protIA] = await Promise.all([
     db.from('ingredientes').select('*').order('id').range(0, 19999),
     db.from('movimentos').select('*').order('id').range(0, 19999),
     db.from('dietas').select('*').order('id').range(0, 19999),
@@ -538,9 +532,13 @@ async function loadAll(){
     db.from('leituras_cocho').select('*').order('id').range(0, 19999),
     db.from('pasto').select('*').order('id').range(0, 19999),
     db.from('reproducao_custos').select('*').order('id').range(0, 19999),
-    db.from('custos_fixos').select('*').order('id').range(0, 19999),
-    db.from('investimentos').select('*').order('id').range(0, 19999),
-    db.from('receitas').select('*').order('id').range(0, 19999),
+    // Financeiro agora vem de lancamentos_financeiros, no AE Matriz. Este
+    // app so LE — quem lanca despesa, receita avulsa e investimento e o
+    // Matriz. A excecao e a receita gerada por uma venda, que continua
+    // nascendo aqui porque a venda e uma acao operacional (ver tipo
+    // 'venda' em salvarRegistro).
+    db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id').range(0, 19999),
+    db.from('centros_custo').select('id, nome').range(0, 19999),
     db.from('precos_arroba').select('*').order('id').range(0, 19999),
     db.from('config_financeiro').select('*').eq('id', 1),
     db.from('profiles').select('*').order('nome').range(0, 19999),
@@ -569,9 +567,26 @@ async function loadAll(){
   state.pesagens = (pesag.data||[]).map(rowToPesagem);
   state.vendas = (abt.data||[]).map(rowToVenda);
   state.producoesRacao = (prod.data||[]).map(rowToProducaoRacao);
-  state.custosFixos = (cf.data||[]).map(rowToCustoFixo);
-  state.investimentos = (inv.data||[]).map(rowToInvestimento);
-  state.receitas = (rec.data||[]).map(rowToReceita);
+  // As telas deste app continuam trabalhando com as formas antigas
+  // (custosFixos, investimentos, receitas). Só a origem mudou: os três
+  // saem agora da mesma tabela, separados por tipo. Assim nenhuma tela de
+  // Resultados, Por Lote ou Reprodução precisou ser reescrita.
+  const nomeCentro = new Map((cCusto.data||[]).map(x=>[x.id, x.nome]));
+  const lancamentos = lanc.data||[];
+  state.centroVendasId = (cCusto.data||[]).find(x=>x.nome==='Vendas')?.id ?? null;
+  state.custosFixos = lancamentos.filter(l=>l.tipo==='despesa').map(l=>({
+    id:l.id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
+    descricao:'', fornecedor:l.fornecedor||'', valorMensal:l.valor,
+    mes:l.mes||null, data:l.data||null, areas:l.areas||[], observacao:l.observacao||'',
+  }));
+  state.investimentos = lancamentos.filter(l=>l.tipo==='investimento').map(l=>({
+    id:l.id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
+    fornecedor:l.fornecedor||'', valor:l.valor, data:l.data,
+  }));
+  state.receitas = lancamentos.filter(l=>l.tipo==='receita').map(l=>({
+    id:l.id, data:l.data, loteId:l.lote_id, descricao:l.descricao,
+    arrobas:l.arrobas, valor:l.valor, observacao:l.observacao||'', vendaId:l.abate_id||null,
+  }));
   state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);
   state.metaMargemPct = (cfg.data||[])[0]?.meta_margem_pct ?? null;
   state.fazendas = (faz.data||[]).map(rowToFazenda);
@@ -611,6 +626,7 @@ const state = {
   precosArroba: [],
   metaMargemPct: null,
   fazendas: [],
+  centroVendasId: null,
   custosFixos: [],
   investimentos: [],
   perfis: [],
@@ -1160,8 +1176,20 @@ async function executarInsertLancamento(type, campos){
     const arrobas = campos.tipoVenda==='arroba' ? arrobasVenda(campos) : null;
     const valorTotal = valorVenda(campos);
     const descricao = `${TIPO_VENDA_LABEL[campos.tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(campos.quantidade)} animais)`;
-    const receitaRow = {data:campos.data, lote_id:campos.loteId, descricao, arrobas, valor:valorTotal, observacao:'', abate_id:vendaId};
-    const {error:errReceita} = await db.from('receitas').insert(receitaRow);
+    // A receita da venda nasce aqui porque vender e uma acao operacional.
+    // Vai para a mesma tabela que o Matriz usa, marcada como pecuaria e
+    // ligada ao abate — e o que permite editar ou apagar a venda depois e
+    // a receita acompanhar.
+    const receitaRow = {tipo:'receita', atividade:'pecuaria', fazenda_id:null,
+      centro_custo_id: state.centroVendasId,
+      data:campos.data, mes:campos.data ? campos.data.slice(0,7) : null,
+      lote_id:campos.loteId, descricao, arrobas, valor:valorTotal,
+      observacao:null, abate_id:vendaId, criado_por:autorAtual()};
+    if(!state.centroVendasId){
+      await db.from('abates').delete().eq('id', vendaId);
+      return {error:{message:'Centro de custo "Vendas" não encontrado. Peça para recriá-lo no cadastro de Centros de Custo.'}};
+    }
+    const {error:errReceita} = await db.from('lancamentos_financeiros').insert(receitaRow);
     if(errReceita){
       // Sem a receita, a venda fica pela metade -- desfaz o abate pra não
       // duplicar tudo se isso for reenfileirado por falha de rede e tentado
@@ -1175,7 +1203,7 @@ async function executarInsertLancamento(type, campos){
       if(novoNumero===0 && !lote.dataFim) updLote.data_fim = campos.data;
       const {error:errLote} = await db.from('lotes').update(updLote).eq('id', lote.id);
       if(errLote){
-        await db.from('receitas').delete().eq('abate_id', vendaId);
+        await db.from('lancamentos_financeiros').delete().eq('abate_id', vendaId);
         await db.from('abates').delete().eq('id', vendaId);
         return {error:errLote};
       }
@@ -1769,9 +1797,10 @@ function FabMenu(){
     // continuam mostrando o histórico e permitindo editar/excluir um
     // lançamento já feito, só não abrem mais um formulário avulso novo.
     {type:'venda', label:'Nova venda'},
-    {type:'custoFixo', label:'Nova despesa'},
-    {type:'investimento', label:'Novo investimento'},
-    {type:'receita', label:'Nova receita'},
+    // Despesa, receita avulsa e investimento saem daqui: passaram a ser
+    // lancados no AE Matriz, que enxerga as tres atividades e permite
+    // comparar custo entre elas. A venda continua aqui porque e acao
+    // operacional -- ela e que gera a receita, automaticamente.
     {type:'precoArroba', label:'Atualizar preço da arroba'},
     {type:'metaMargem', label:'Definir meta de margem'},
   ].filter(a=>{
@@ -4764,10 +4793,7 @@ function PageResultadosReceitas(){
             <td class="mono">R$ ${fmt(r.valor)}</td>
             <td>${esc(r.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${(temPermissao('pec_financeiro','editar') || temPermissao('pec_resultados','editar')) ? `
-              <button class="btn-ghost btn-sm" data-edit-receita="${r.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-receita="${r.id}">Excluir</button>` : ''}
-              ` : ''}
+
             </td>
           </tr>`;
         }).join('')}
@@ -4834,10 +4860,7 @@ function PageFinanceiroCustosFixos(){
             <td class="mono">R$ ${fmt(c.valorMensal)}</td>
             <td>${esc(c.observacao) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${temPermissao('pec_financeiro','editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>` : ''}
-              ` : ''}
+
             </td>
           </tr>
         `).join('')}
@@ -4868,8 +4891,7 @@ function PageResultadosInvestimentos(){
             <td class="mono">R$ ${fmt(i.valor)}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('pec_resultados','editar') ? `
-              <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
-              ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>` : ''}
+
               ` : ''}
             </td>
           </tr>
@@ -5024,9 +5046,6 @@ function Modal(){
   if(state.modal.type==='desmama') return ModalDesmama();
   if(state.modal.type==='pesagem') return ModalPesagem();
   if(state.modal.type==='venda') return ModalVenda();
-  if(state.modal.type==='custoFixo') return ModalCustoFixo();
-  if(state.modal.type==='investimento') return ModalInvestimento();
-  if(state.modal.type==='receita') return ModalReceita();
   if(state.modal.type==='precoArroba') return ModalPrecoArroba();
   if(state.modal.type==='metaMargem') return ModalMetaMargem();
   if(state.modal.type==='usuario') return ModalUsuario();
@@ -5887,107 +5906,6 @@ function ModalVenda(){
   </div>`;
 }
 
-function ModalCustoFixo(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar despesa':'Nova despesa'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Nome (categoria)</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Mão de obra, Energia, Manutenção"/></div>
-        <div class="field"><label>Descrição detalhada (opcional)</label><input id="f-descricaocustofixo" value="${esc(d.descricao||'')}" placeholder="Ex: 20 sacos de ureia, NF 4521"/></div>
-        <div class="field-row">
-          <div class="field"><label>Centro de custo (opcional)</label><input id="f-categoria" list="dl-centro-custo" value="${esc(d.categoria)}" placeholder="Ex: Mão-de-obra Operacional"/>
-            <datalist id="dl-centro-custo">${centrosCustoConhecidos().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
-          </div>
-          <div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedor" list="dl-fornecedor" value="${esc(d.fornecedor||'')}" placeholder="Quem recebeu o pagamento"/>
-            <datalist id="dl-fornecedor">${fornecedoresConhecidos().map(f=>`<option value="${esc(f)}">`).join('')}</datalist>
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>Valor (R$)</label><input id="f-valormensal" type="number" step="0.01" value="${d.valorMensal}"/></div>
-          <div class="field"><label>Data (opcional)</label><input id="f-datacustofixo" type="date" value="${d.data||''}"/></div>
-        </div>
-        <div class="field" style="margin-top:6px;">
-          <label>Atividade(s)</label>
-          <div style="display:flex; gap:16px; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input id="f-areacustofixo-confinamento" type="checkbox" ${(d.areas||[]).includes('confinamento')?'checked':''}/> Confinamento</label>
-            <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input id="f-areacustofixo-pasto" type="checkbox" ${(d.areas||[]).includes('pasto')?'checked':''}/> Pasto</label>
-            <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input id="f-areacustofixo-cria" type="checkbox" ${(d.areas||[]).includes('cria')?'checked':''}/> Cria</label>
-          </div>
-          <p class="hint">Deixe a data em branco para um valor recorrente (vale como padrão pra qualquer mês sem lançamento próprio). Preenchendo a data, o valor conta só no mês dela. Marque 1 atividade pra jogar o valor inteiro nela. Marque 2 ou 3 pra ratear por nº de animais só entre as marcadas. Sem nenhuma marcada (Geral), o valor é rateado por nº de animais entre as três atividades.</p>
-        </div>
-        <div class="field" style="margin-top:6px;"><label>Observação (opcional)</label><textarea id="f-obscustofixo" rows="2" placeholder="Ex: referente à nota fiscal 1234">${esc(d.observacao)}</textarea></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="custoFixo">${d._editId?'Salvar alterações':'Salvar despesa'}</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function ModalInvestimento(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar investimento':'Novo investimento'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Nome do investimento</label><input id="f-nome" value="${esc(d.nome)}" placeholder="Ex: Compra de animais, Trator novo"/></div>
-        <div class="field-row">
-          <div class="field"><label>Categoria (opcional)</label><input id="f-categoria" list="dl-centro-custo-investimento" value="${esc(d.categoria)}" placeholder="Ex: Investimento em Animais"/>
-            <datalist id="dl-centro-custo-investimento">${centrosCustoInvestimentoConhecidos().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
-          </div>
-          <div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedor" list="dl-fornecedor" value="${esc(d.fornecedor||'')}" placeholder="Quem vendeu"/>
-            <datalist id="dl-fornecedor">${fornecedoresConhecidos().map(f=>`<option value="${esc(f)}">`).join('')}</datalist>
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>Valor (R$)</label><input id="f-valorinvest" type="number" step="0.01" value="${d.valor}"/></div>
-          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
-        </div>
-        <p class="hint">Investimentos ficam registrados separadamente e não entram no custo diário/mensal de alimentação do Financeiro.</p>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="investimento">${d._editId?'Salvar alterações':'Salvar investimento'}</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function ModalReceita(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar receita':'Nova receita'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field-row">
-          <div class="field"><label>Lote (opcional)</label>
-            <select id="f-lotereceita">
-              <option value="">— Geral / não vinculada a um lote —</option>
-              ${state.lotes.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
-        </div>
-        <div class="field"><label>Descrição</label><input id="f-descricaoreceita" value="${esc(d.descricao)}" placeholder="Ex: Venda de animais, Venda de esterco"/></div>
-        <div class="field-row">
-          <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobas" type="number" step="0.01" value="${d.arrobas||''}"/></div>
-          <div class="field"><label>Valor recebido (R$)</label><input id="f-valorreceita" type="number" step="0.01" value="${d.valor}"/></div>
-        </div>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsreceita" rows="2" placeholder="Ex: comprador, nº da nota fiscal">${esc(d.observacao)}</textarea></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="receita">${d._editId?'Salvar alterações':'Salvar receita'}</button>
-      </div>
-    </div>
-  </div>`;
-}
-
 function ModalPrecoArroba(){
   const d = editDraft;
   return `
@@ -6110,7 +6028,7 @@ function ModalDetalheGrafico(){
                 <td><strong>${esc(it.nome)}</strong></td>
                 <td>${it.mes ? `<span class="pill pill-cat">${mesLabel(it.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
                 <td class="mono">R$ ${fmt(it.valor)}</td>
-                <td>${temPermissao('pec_financeiro','editar') && it.id ? `<button class="btn-ghost btn-sm" data-edit-custofixo="${it.id}">Editar</button>` : ''}</td>
+                <td></td>
               </tr>
             `).join('')}
           </tbody>
@@ -6692,7 +6610,7 @@ function attachEvents(){
       // que precisa conferir manualmente, em vez de recarregar em silêncio.
       const {error: erroAbate} = await db.from('abates').delete().eq('id', id);
       if(erroAbate){ alert('Não foi possível excluir a venda: ' + erroAbate.message); return; }
-      const {error: erroReceita} = await db.from('receitas').delete().eq('abate_id', id);
+      const {error: erroReceita} = await db.from('lancamentos_financeiros').delete().eq('abate_id', id);
       if(erroReceita) alert('A venda foi excluída, mas não deu pra remover a receita vinculada: ' + erroReceita.message + ' -- confira em Financeiro > Receitas.');
       if(venda && venda.loteId){
         const lote = state.lotes.find(l=>l.id===venda.loteId);
@@ -6706,66 +6624,6 @@ function attachEvents(){
           if(erroLote) alert('A venda foi excluída, mas não deu pra atualizar o total de animais do lote: ' + erroLote.message + ' -- confira em Lotes.');
         }
       }
-      await loadAll();
-    };
-  });
-  document.querySelectorAll('[data-edit-custofixo]').forEach(el=>{
-    el.onclick = ()=>{
-      const c = state.custosFixos.find(x=>x.id===Number(el.dataset.editCustofixo));
-      editDraft = {...c, _editId: c.id};
-      state.modal = {type:'custoFixo'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-del-custofixo]').forEach(el=>{
-    el.onclick = async ()=>{
-      if(!confirm('Excluir esta despesa? Essa ação não pode ser desfeita.')) return;
-      const id = Number(el.dataset.delCustofixo);
-      const {error} = await db.from('custos_fixos').delete().eq('id', id);
-      if(error){ alert('Não foi possível excluir esta despesa: ' + error.message); return; }
-      await loadAll();
-    };
-  });
-  document.querySelectorAll('[data-edit-investimento]').forEach(el=>{
-    el.onclick = ()=>{
-      const i = state.investimentos.find(x=>x.id===Number(el.dataset.editInvestimento));
-      editDraft = {...i, _editId: i.id};
-      state.modal = {type:'investimento'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-del-investimento]').forEach(el=>{
-    el.onclick = async ()=>{
-      if(!confirm('Excluir este investimento? Essa ação não pode ser desfeita.')) return;
-      const id = Number(el.dataset.delInvestimento);
-      const {error} = await db.from('investimentos').delete().eq('id', id);
-      if(error){ alert('Não foi possível excluir este investimento: ' + error.message); return; }
-      await loadAll();
-    };
-  });
-  document.querySelectorAll('[data-edit-receita]').forEach(el=>{
-    el.onclick = ()=>{
-      const r = state.receitas.find(x=>x.id===Number(el.dataset.editReceita));
-      editDraft = {...r, _editId: r.id};
-      state.modal = {type:'receita'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-del-receita]').forEach(el=>{
-    el.onclick = async ()=>{
-      const id = Number(el.dataset.delReceita);
-      const receita = state.receitas.find(x=>x.id===id);
-      // Receita gerada automaticamente por uma venda não pode ser apagada
-      // separado -- isso deixava a venda "sem receita" (o dinheiro sumia
-      // das contas) sem nenhum aviso, e editar a venda depois não recriava
-      // a receita. O jeito certo de desfazer é excluir a venda em si.
-      if(receita && receita.vendaId){
-        alert('Essa receita foi gerada automaticamente por uma venda -- não dá pra excluir ela separado. Se quiser desfazer, exclua a venda em Vendas (isso remove a receita e devolve os animais pro lote automaticamente).');
-        return;
-      }
-      if(!confirm('Excluir esta receita? Essa ação não pode ser desfeita.')) return;
-      const {error} = await db.from('receitas').delete().eq('id', id);
-      if(error){ alert('Não foi possível excluir a receita: ' + error.message); return; }
       await loadAll();
     };
   });
@@ -7896,14 +7754,14 @@ function attachEvents(){
             const lote = state.lotes.find(l=>l.id===loteId);
             const descricao = `${TIPO_VENDA_LABEL[tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
             const receitaRow = {data, lote_id:loteId, descricao, arrobas, valor:valorTotal};
-            const resReceita = await db.from('receitas').update(receitaRow).eq('abate_id', vendaId).select();
+            const resReceita = await db.from('lancamentos_financeiros').update(receitaRow).eq('abate_id', vendaId).select();
             error = resReceita.error;
             // .update() com filtro que não bate nenhuma linha "funciona"
             // sem erro (0 linhas afetadas) -- se a receita vinculada já
             // tinha sumido por algum motivo, recria em vez de deixar a
             // venda editada sem receita nenhuma batendo com ela.
             if(!error && (!resReceita.data || resReceita.data.length===0)){
-              ({error} = await db.from('receitas').insert({...receitaRow, abate_id:vendaId}));
+              ({error} = await db.from('lancamentos_financeiros').insert({...receitaRow, abate_id:vendaId}));
             }
           }
           if(!error && loteAntigoId && loteAntigoId!==loteId){
@@ -8104,55 +7962,6 @@ function attachEvents(){
             observacao: document.getElementById('f-obspesagem').value,
           };
           ({error} = await db.from('pesagens').update(pesagemToRow(campos)).eq('id', editDraft._editId));
-        }
-      } else if(type==='custoFixo'){
-        const data = document.getElementById('f-datacustofixo').value || null;
-        const areas = ['confinamento','pasto','cria'].filter(a=>document.getElementById(`f-areacustofixo-${a}`).checked);
-        const campos = {
-          nome: document.getElementById('f-nome').value || 'Sem nome',
-          categoria: document.getElementById('f-categoria').value,
-          descricao: document.getElementById('f-descricaocustofixo').value,
-          fornecedor: document.getElementById('f-fornecedor').value,
-          valorMensal: Number(document.getElementById('f-valormensal').value)||0,
-          data,
-          mes: data ? data.slice(0,7) : null,
-          areas,
-          observacao: document.getElementById('f-obscustofixo').value,
-        };
-        const row = custoFixoToRow(campos);
-        if(editDraft._editId){
-          ({error} = await db.from('custos_fixos').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('custos_fixos').insert(row));
-        }
-      } else if(type==='investimento'){
-        const campos = {
-          nome: document.getElementById('f-nome').value || 'Sem nome',
-          categoria: document.getElementById('f-categoria').value,
-          fornecedor: document.getElementById('f-fornecedor').value,
-          valor: Number(document.getElementById('f-valorinvest').value)||0,
-          data: document.getElementById('f-data').value,
-        };
-        const row = investimentoToRow(campos);
-        if(editDraft._editId){
-          ({error} = await db.from('investimentos').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('investimentos').insert(row));
-        }
-      } else if(type==='receita'){
-        const campos = {
-          loteId: document.getElementById('f-lotereceita').value ? Number(document.getElementById('f-lotereceita').value) : null,
-          data: document.getElementById('f-data').value,
-          descricao: document.getElementById('f-descricaoreceita').value || 'Sem descrição',
-          arrobas: document.getElementById('f-arrobas').value ? Number(document.getElementById('f-arrobas').value) : null,
-          valor: Number(document.getElementById('f-valorreceita').value)||0,
-          observacao: document.getElementById('f-obsreceita').value,
-        };
-        const row = receitaToRow(campos);
-        if(editDraft._editId){
-          ({error} = await db.from('receitas').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('receitas').insert(row));
         }
       } else if(type==='precoArroba'){
         const data = document.getElementById('f-dataarroba').value;
