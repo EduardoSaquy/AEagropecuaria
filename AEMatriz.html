@@ -384,36 +384,24 @@ function areasLabel(areas){
   if(!areas || areas.length===0) return `<span class="pill pill-ok">Geral · rateado</span>`;
   return `<span class="pill pill-cat">${areas.map(a=>AREA_LABEL[a]).join(' + ')}</span>`;
 }
-// Uma despesa com mês próprio substitui a recorrente NAQUELE mês. O
-// agrupamento inclui as atividades na chave pra não misturar duas contas de
-// mesmo nome e centro de custo que atendem atividades diferentes.
-function custosFixosDoMes(mesStr){
-  const grupos = new Map();
-  state.custosFixos.forEach(c=>{
-    const chaveAreas = (c.areas||[]).slice().sort().join(',');
-    const chave = `${c.nome}||${c.categoria||''}||${chaveAreas}`;
-    if(!grupos.has(chave)) grupos.set(chave, []);
-    grupos.get(chave).push(c);
-  });
-  const resultado = [];
-  grupos.forEach(rows=>{
-    const doMes = rows.filter(c=>c.mes===mesStr);
-    resultado.push(...(doMes.length>0 ? doMes : rows.filter(c=>!c.mes)));
-  });
-  return resultado;
+function rowToLancamento(r){
+  return {id:r.id, tipo:r.tipo, atividade:r.atividade, fazendaId:r.fazenda_id, centroCustoId:r.centro_custo_id,
+          descricao:r.descricao||'', valor:r.valor, data:r.data||null, mes:r.mes||null,
+          fornecedor:r.fornecedor||'', observacao:r.observacao||'',
+          talhaoId:r.talhao_id||null, loteId:r.lote_id||null, areas:r.areas||[], arrobas:r.arrobas??null};
 }
-function totalFixosDoMes(mesStr){
-  return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
+function lancamentoToRow(l){
+  return {tipo:l.tipo, atividade:l.atividade,
+          fazenda_id:l.fazendaId || null, centro_custo_id:Number(l.centroCustoId),
+          descricao:l.descricao, valor:Number(l.valor),
+          data:l.data || null, mes:l.data ? l.data.slice(0,7) : null,
+          fornecedor:l.fornecedor || null, observacao:l.observacao || null,
+          talhao_id:l.talhaoId || null, lote_id:l.loteId || null,
+          areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas)};
 }
-function valoresConhecidos(lista, campo){
-  return [...new Set(lista.map(x=>x[campo]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-}
-function rowToCustoFixo(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, descricao:r.descricao||'', fornecedor:r.fornecedor||'', valorMensal:r.valor_mensal, mes:r.mes||null, data:r.data||null, areas:r.areas||[], observacao:r.observacao||''}; }
-function custoFixoToRow(c){ return {nome:c.nome, categoria:c.categoria, descricao:c.descricao||'', fornecedor:c.fornecedor||'', valor_mensal:c.valorMensal, mes:c.mes||null, data:c.data||null, areas:c.areas||[], observacao:c.observacao||''}; }
-function rowToReceitaPec(r){ return {id:r.id, data:r.data, loteId:r.lote_id, descricao:r.descricao, arrobas:r.arrobas, valor:r.valor, observacao:r.observacao||''}; }
-function receitaPecToRow(r){ return {data:r.data, lote_id:r.loteId||null, descricao:r.descricao, arrobas:r.arrobas||null, valor:r.valor, observacao:r.observacao||''}; }
-function rowToInvestimento(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor||'', valor:r.valor, data:r.data}; }
-function investimentoToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor||'', valor:i.valor, data:i.data}; }
+function rowToCentroCusto(r){ return {id:r.id, nome:r.nome, frente:r.frente, fazendaId:r.fazenda_id, ativo:r.ativo}; }
+const ATIVIDADES_LANC = [['pecuaria','Pecuária'],['cana','Cana-de-açúcar'],['graos','Grãos'],['geral','Geral / administrativo']];
+const TIPO_LABEL = {despesa:'despesa', receita:'receita', investimento:'investimento'};
 function rowToLotePec(r){ return {id:r.id, nome:r.nome}; }
 
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
@@ -433,7 +421,7 @@ const APPS_REGISTRO = [
 
 async function loadAll(){
   state.apps = APPS_REGISTRO;
-  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, cFix, recPec, invs, lotPec] = await Promise.all([
+  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
     db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
@@ -441,9 +429,8 @@ async function loadAll(){
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('custos_fixos').select('*') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('receitas').select('*').order('data', {ascending:false}) : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('investimentos').select('*').order('data', {ascending:false}) : Promise.resolve({data:[]}),
+    temPermissao('matriz_financeiro','visualizar') ? db.from('lancamentos_financeiros').select('*').order('data', {ascending:false, nullsFirst:true}) : Promise.resolve({data:[]}),
+    temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').eq('ativo', true).order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome').order('nome') : Promise.resolve({data:[]}),
   ]);
   const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv].find(r=>r.error)?.error;
@@ -458,10 +445,9 @@ async function loadAll(){
   state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.funcionarios = (func.data||[]).map(rowToFuncionario);
   state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
-  state.custosFixos   = (cFix.data||[]).map(rowToCustoFixo);
-  state.receitasPec   = (recPec.data||[]).map(rowToReceitaPec);
-  state.investimentos = (invs.data||[]).map(rowToInvestimento);
-  state.lotesPec      = (lotPec.data||[]).map(rowToLotePec);
+  state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
+  state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
+  state.lotesPec     = (lotPec.data||[]).map(rowToLotePec);
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
@@ -855,11 +841,12 @@ const state = {
   culturas: [], // {id, frente} — culturas do Lavoura, usado só pra achar a frente de cada talhão
   apps: APPS_REGISTRO, // estático, não depende de carregamento — evita um flash de "nenhum app" antes do primeiro loadAll()
   perfis: [],
-  custosFixos: [],    // despesas da Pecuária (custos_fixos)
-  receitasPec: [],    // receitas da Pecuária
-  investimentos: [],  // investimentos da Pecuária
+  lancamentos: [],    // modelo único: despesa, receita e investimento de todas as atividades
+  centrosCusto: [],
+  filtroAtividade: '',
   lotesPec: [],       // só id e nome, pra vincular receita a um lote
-  abaFinanceiro: 'despesas',
+  abaFinanceiro: 'despesa',
+  erroLancamento: '',
   searchDespesas: '',
   filtroMesDespesas: '',
   filtroMesReceitas: '',
@@ -1300,7 +1287,7 @@ function Header(){
   const titles = {
     painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},
     resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado por operação — compare mês a mês, por ano ou por safra (maio a abril).'},
-    financeiro:{eyebrow:'Lançamentos', title:'Financeiro', desc:'Despesas, receitas e investimentos da Pecuária. As mesmas telas ainda existem no AE Pecuária e mostram este mesmo dado — é o mesmo banco. Quando o AE Lavoura entrar em uso, cana e grãos entram aqui também.'},
+    financeiro:{eyebrow:'Lançamentos', title:'Financeiro', desc:'Despesa, receita e investimento de todas as atividades no mesmo lugar. A atividade é um campo do lançamento, não um app separado — é isso que permite comparar custo por hectare entre pecuária, cana e grãos.'},
     fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área total e, pra cada atividade (grãos, cana, pecuária), quantos hectares dela tem ali. AE Lavoura e AE Pecuária só leem esses dados.'},
     funcionarios:{eyebrow:'Cadastro', title:'Funcionários', desc:'Cargo, em quais atividades cada pessoa participa (com % de alocação) e qual login de acesso ela usa. Sem CPF, salário ou Pix — esses dados não entram aqui.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso. Depois da unificação é um login só, que vale para Matriz, Lavoura e Pecuária.'},
@@ -1911,241 +1898,224 @@ function ModalFuncionario(){
   </div>`;
 }
 
-/* ---------------- Financeiro: página e modais ---------------- */
+/* ---------------- Financeiro: página e modais ----------------
+   Um formulário só para as três atividades. Antes disto o Matriz só
+   aceitava lançamento de pecuária, porque a tela veio portada de lá e
+   nem campo de fazenda tinha — cada app guardava despesa num formato
+   diferente. Agora a atividade é campo, não tabela.
+   ------------------------------------------------------------------ */
 function podeEditarFinanceiro(){ return temPermissao('matriz_financeiro','editar'); }
-function subAbasFinanceiro(){
-  const abas = [['despesas','Despesas'],['receitas','Receitas'],['investimentos','Investimentos']];
-  return `<div class="toolbar" style="gap:8px;">
+function nomeCentroCusto(id){
+  const c = state.centrosCusto.find(x=>x.id===id);
+  return c ? c.nome : '—';
+}
+function nomeFazendaLanc(id){
+  if(!id) return 'Geral';
+  const f = state.fazendasLavoura.find(x=>x.id===id);
+  return f ? f.nome : '—';
+}
+function rotuloAtividade(a){ return (ATIVIDADES_LANC.find(([k])=>k===a)||[null,a])[1]; }
+function lancamentosDoTipo(tipo){
+  return state.lancamentos
+    .filter(l=>l.tipo===tipo)
+    .filter(l=>!state.filtroAtividade || l.atividade===state.filtroAtividade)
+    .filter(l=>{
+      if(tipo!=='despesa') return true;
+      if(!state.filtroMesDespesas) return true;
+      return state.filtroMesDespesas==='__recorrente__' ? !l.mes : l.mes===state.filtroMesDespesas;
+    })
+    .filter(l=>{
+      const b = state.searchDespesas.toLowerCase();
+      if(!b) return true;
+      return l.descricao.toLowerCase().includes(b)
+          || nomeCentroCusto(l.centroCustoId).toLowerCase().includes(b)
+          || (l.fornecedor||'').toLowerCase().includes(b);
+    })
+    .sort((a,b)=>{
+      if(!a.data && b.data) return -1;
+      if(a.data && !b.data) return 1;
+      return (b.data||'').localeCompare(a.data||'');
+    });
+}
+// Despesa com mês próprio substitui a recorrente naquele mês. Agrupa por
+// descrição + centro de custo + atividade para não misturar duas contas que
+// só coincidem de nome.
+function despesasVigentesNoMes(mesStr){
+  const grupos = new Map();
+  state.lancamentos.filter(l=>l.tipo==='despesa').forEach(l=>{
+    const chave = `${l.descricao}||${l.centroCustoId}||${l.atividade}`;
+    if(!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(l);
+  });
+  const out = [];
+  grupos.forEach(rows=>{
+    const doMes = rows.filter(l=>l.mes===mesStr);
+    out.push(...(doMes.length>0 ? doMes : rows.filter(l=>!l.mes)));
+  });
+  return out;
+}
+function PageFinanceiro(){
+  const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos']];
+  const mesAtual = mesAtualStr();
+  const vigentes = despesasVigentesNoMes(mesAtual)
+    .filter(l=>!state.filtroAtividade || l.atividade===state.filtroAtividade);
+  const totalMes = vigentes.reduce((a,l)=>a+Number(l.valor||0),0);
+  const meses = [...new Set(state.lancamentos.map(l=>l.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+  const lista = lancamentosDoTipo(state.abaFinanceiro);
+  const ehDespesa = state.abaFinanceiro==='despesa';
+
+  return `
+  <div class="toolbar" style="gap:8px;">
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
       ${abas.map(([key,label])=>`
         <button class="${state.abaFinanceiro===key?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-aba-financeiro="${key}">${label}</button>
       `).join('')}
     </div>
-    ${podeEditarFinanceiro() ? `<button class="btn btn-primary btn-sm" data-novo-financeiro="${state.abaFinanceiro}">+ ${
-      state.abaFinanceiro==='despesas' ? 'Nova despesa' : state.abaFinanceiro==='receitas' ? 'Nova receita' : 'Novo investimento'
-    }</button>` : ''}
-  </div>`;
-}
-function PageFinanceiro(){
-  return subAbasFinanceiro() + (
-    state.abaFinanceiro==='despesas'      ? BlocoDespesas() :
-    state.abaFinanceiro==='receitas'      ? BlocoReceitas() :
-                                            BlocoInvestimentos()
-  );
-}
-function BlocoDespesas(){
-  const busca = state.searchDespesas.toLowerCase();
-  const mesAtual = mesAtualStr();
-  const meses = [...new Set(state.custosFixos.map(c=>c.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
-  const list = [...state.custosFixos].filter(c=>
-    (!busca || c.nome.toLowerCase().includes(busca) || (c.categoria||'').toLowerCase().includes(busca) || (c.descricao||'').toLowerCase().includes(busca) || (c.fornecedor||'').toLowerCase().includes(busca))
-    && (!state.filtroMesDespesas || (state.filtroMesDespesas==='__recorrente__' ? !c.mes : c.mes===state.filtroMesDespesas))
-  ).sort((a,b)=>{
-    if(!a.mes && b.mes) return -1;
-    if(a.mes && !b.mes) return 1;
-    return (b.mes||'').localeCompare(a.mes||'');
-  });
-  return `
-  <div class="card" style="margin-bottom:14px;">
-    <div class="hint">Despesas acumuladas em ${mesLabel(mesAtual)}</div>
-    <div style="font-size:26px; font-weight:700; margin-top:4px;">R$ ${fmt(totalFixosDoMes(mesAtual))}</div>
-    <div class="hint" style="margin-top:6px;">Cada centro de custo usa o valor cadastrado para ${mesLabel(mesAtual)} quando existe; senão, o valor recorrente.</div>
+    ${podeEditarFinanceiro() ? `<button class="btn btn-primary btn-sm" data-novo-lancamento="${state.abaFinanceiro}">+ Nova ${TIPO_LABEL[state.abaFinanceiro]}</button>` : ''}
   </div>
+
+  ${ehDespesa ? `
+  <div class="card" style="margin-bottom:14px;">
+    <div class="hint">Despesas vigentes em ${mesLabel(mesAtual)}${state.filtroAtividade?` · ${rotuloAtividade(state.filtroAtividade)}`:''}</div>
+    <div style="font-size:26px; font-weight:700; margin-top:4px;">R$ ${fmt(totalMes)}</div>
+    <div class="hint" style="margin-top:6px;">Cada conta usa o valor lançado para ${mesLabel(mesAtual)} quando existe; senão, o valor recorrente.</div>
+  </div>` : ''}
+
   <div class="toolbar">
-    <input type="text" placeholder="Buscar por nome, centro de custo ou fornecedor..." value="${esc(state.searchDespesas)}" data-search-despesas="1" style="max-width:340px;" autocomplete="off"/>
-    <select data-filtro-mes-despesas="1" style="max-width:220px;">
+    <select data-filtro-atividade="1" style="max-width:220px;">
+      <option value="">Todas as atividades</option>
+      ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${state.filtroAtividade===k?'selected':''}>${l}</option>`).join('')}
+    </select>
+    ${ehDespesa ? `
+    <input type="text" placeholder="Buscar por descrição, centro de custo ou fornecedor..." value="${esc(state.searchDespesas)}" data-search-despesas="1" style="max-width:340px;" autocomplete="off"/>
+    <select data-filtro-mes-despesas="1" style="max-width:200px;">
       <option value="">Todos os meses</option>
       <option value="__recorrente__" ${state.filtroMesDespesas==='__recorrente__'?'selected':''}>Só recorrentes</option>
       ${meses.map(m=>`<option value="${m}" ${state.filtroMesDespesas===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
-    </select>
+    </select>` : ''}
   </div>
+
   <div class="card" style="overflow-x:auto;">
-    ${list.length===0 ? Empty(state.custosFixos.length===0 ? 'Nenhuma despesa cadastrada' : 'Nenhuma despesa encontrada', state.custosFixos.length===0 ? 'Cadastre as despesas da operação — recorrentes ou de um mês específico.' : 'Nenhuma despesa bate com essa busca ou filtro.') : `
+    ${lista.length===0 ? Empty('Nenhum lançamento aqui','Use o botão acima para lançar. O filtro de atividade também pode estar escondendo linhas.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Centro de custo</th><th>Fornecedor</th><th>Mês</th><th>Data</th><th>Atividade</th><th>Valor</th><th></th></tr></thead>
+      <thead><tr>
+        <th>Data</th><th>Atividade</th><th>Fazenda</th><th>Centro de custo</th>
+        <th>Descrição</th>${ehDespesa?'<th>Rateio</th>':''}<th>Valor</th><th></th>
+      </tr></thead>
       <tbody>
-        ${list.map(c=>`
+        ${lista.map(l=>`
           <tr>
-            <td><strong>${esc(c.nome)}</strong>${c.descricao ? `<div class="hint" style="margin-top:2px;">${esc(c.descricao)}</div>` : ''}</td>
-            <td>${esc(c.categoria) || '—'}</td>
-            <td>${esc(c.fornecedor) || '—'}</td>
-            <td>${c.mes ? `<span class="pill pill-cat">${mesLabel(c.mes)}</span>` : `<span class="pill pill-ok">Recorrente</span>`}</td>
-            <td class="mono">${c.data ? c.data.split('-').reverse().join('/') : '—'}</td>
-            <td>${areasLabel(c.areas)}</td>
-            <td class="mono">R$ ${fmt(c.valorMensal)}</td>
+            <td class="mono">${l.data ? l.data.split('-').reverse().join('/') : `<span class="pill pill-ok">Recorrente</span>`}</td>
+            <td>${rotuloAtividade(l.atividade)}</td>
+            <td>${l.fazendaId ? esc(nomeFazendaLanc(l.fazendaId)) : `<span class="hint">Geral</span>`}</td>
+            <td>${esc(nomeCentroCusto(l.centroCustoId))}</td>
+            <td><strong>${esc(l.descricao)}</strong>${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}</td>
+            ${ehDespesa?`<td>${l.atividade==='pecuaria' ? areasLabel(l.areas) : '—'}</td>`:''}
+            <td class="mono">R$ ${fmt(l.valor)}</td>
             <td style="display:flex; gap:6px;">
               ${podeEditarFinanceiro() ? `
-              <button class="btn-ghost btn-sm" data-edit-custofixo="${c.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-custofixo="${c.id}">Excluir</button>` : ''}
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>`}
-  </div>
-  <p class="hint" style="margin-top:14px;">"Recorrente" é o valor mensal atual, usado em qualquer mês sem lançamento próprio. Uma despesa com data cai só no mês dela e substitui a recorrente naquele mês.</p>`;
-}
-function BlocoReceitas(){
-  const meses = [...new Set(state.receitasPec.map(r=>r.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
-  const list = [...state.receitasPec]
-    .filter(r=> !state.filtroMesReceitas || r.data.startsWith(state.filtroMesReceitas))
-    .sort((a,b)=> b.data.localeCompare(a.data));
-  return `
-  <div class="toolbar">
-    <select data-filtro-mes-receitas="1" style="max-width:220px;">
-      <option value="">Todos os meses</option>
-      ${meses.map(m=>`<option value="${m}" ${state.filtroMesReceitas===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
-    </select>
-  </div>
-  <div class="card" style="overflow-x:auto;">
-    ${list.length===0 ? Empty('Nenhuma receita registrada','Registre a venda de animais e outras receitas da operação.') : `
-    <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Descrição</th><th>Arrobas</th><th>Valor</th><th>Observação</th><th></th></tr></thead>
-      <tbody>
-        ${list.map(r=>{
-          const lote = state.lotesPec.find(l=>l.id===r.loteId);
-          return `<tr>
-            <td class="mono">${r.data.split('-').reverse().join('/')}</td>
-            <td>${lote?esc(lote.nome):'—'}</td>
-            <td>${esc(r.descricao)}</td>
-            <td class="mono">${r.arrobas ? fmt(r.arrobas) : '—'}</td>
-            <td class="mono">R$ ${fmt(r.valor)}</td>
-            <td>${esc(r.observacao) || '—'}</td>
-            <td style="display:flex; gap:6px;">
-              ${podeEditarFinanceiro() ? `
-              <button class="btn-ghost btn-sm" data-edit-receitapec="${r.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-receitapec="${r.id}">Excluir</button>` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-        <tr>
-          <td colspan="4" style="text-align:right; font-weight:600;">Total recebido</td>
-          <td class="mono" style="font-weight:600;">R$ ${fmt(list.reduce((a,r)=>a+Number(r.valor||0),0))}</td>
-          <td></td><td></td>
-        </tr>
-      </tbody>
-    </table>`}
-  </div>`;
-}
-function BlocoInvestimentos(){
-  const list = [...state.investimentos].sort((a,b)=> (b.data||'').localeCompare(a.data||''));
-  return `
-  <div class="card" style="overflow-x:auto;">
-    ${list.length===0 ? Empty('Nenhum investimento registrado','Compra de animais, máquinas e benfeitorias entram aqui.') : `
-    <table>
-      <thead><tr><th>Data</th><th>Nome</th><th>Categoria</th><th>Fornecedor</th><th>Valor</th><th></th></tr></thead>
-      <tbody>
-        ${list.map(i=>`
-          <tr>
-            <td class="mono">${i.data ? i.data.split('-').reverse().join('/') : '—'}</td>
-            <td><strong>${esc(i.nome)}</strong></td>
-            <td>${esc(i.categoria) || '—'}</td>
-            <td>${esc(i.fornecedor) || '—'}</td>
-            <td class="mono">R$ ${fmt(i.valor)}</td>
-            <td style="display:flex; gap:6px;">
-              ${podeEditarFinanceiro() ? `
-              <button class="btn-ghost btn-sm" data-edit-investimento="${i.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-investimento="${i.id}">Excluir</button>` : ''}
+              <button class="btn-ghost btn-sm" data-edit-lancamento="${l.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-lancamento="${l.id}">Excluir</button>` : ''}
             </td>
           </tr>
         `).join('')}
         <tr>
-          <td colspan="4" style="text-align:right; font-weight:600;">Total investido</td>
-          <td class="mono" style="font-weight:600;">R$ ${fmt(list.reduce((a,i)=>a+Number(i.valor||0),0))}</td>
+          <td colspan="${ehDespesa?6:5}" style="text-align:right; font-weight:600;">Total listado</td>
+          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,l)=>a+Number(l.valor||0),0))}</td>
           <td></td>
         </tr>
       </tbody>
     </table>`}
-  </div>
-  <p class="hint" style="margin-top:14px;">Investimentos ficam à parte e não entram no custo mensal da operação.</p>`;
+  </div>`;
 }
-function ModalCustoFixo(){
+// Lê o formulário de lançamento. Usado ao salvar e também ao trocar a
+// atividade, que redesenha a tela — sem isto o que já foi digitado sumiria.
+function lerLancamentoDoFormulario(base){
+  const v = (id)=> document.getElementById(id)?.value ?? '';
+  const areas = ['confinamento','pasto','cria'].filter(a=>document.getElementById(`f-arealanc-${a}`)?.checked);
+  return {
+    ...base,
+    atividade:     v('f-atividadelanc') || base.atividade,
+    fazendaId:     v('f-fazendalanc'),
+    centroCustoId: v('f-centrocustolanc'),
+    descricao:     v('f-descricaolanc').trim(),
+    valor:         v('f-valorlanc'),
+    data:          v('f-datalanc'),
+    fornecedor:    v('f-fornecedorlanc').trim(),
+    observacao:    v('f-obslanc').trim(),
+    areas:         document.getElementById('f-arealanc-confinamento') ? areas : (base.areas||[]),
+    loteId:        document.getElementById('f-lotelanc') ? v('f-lotelanc') : (base.loteId||''),
+    arrobas:       document.getElementById('f-arrobaslanc') ? v('f-arrobaslanc') : (base.arrobas??''),
+  };
+}
+function ModalLancamento(){
   const d = editDraft;
+  const ehDespesa      = d.tipo==='despesa';
+  const ehReceita      = d.tipo==='receita';
+  const ehPecuaria     = d.atividade==='pecuaria';
+  // Centros de custo da atividade escolhida, mais os gerais — o resto só
+  // atrapalharia a busca.
+  const centros = state.centrosCusto
+    .filter(c=> c.frente===d.atividade || c.frente==='geral')
+    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar despesa':'Nova despesa'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar':'Nova'} ${TIPO_LABEL[d.tipo]}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <div class="field"><label>Nome</label><input id="f-nomecf" value="${esc(d.nome)}" placeholder="Ex: Mão de obra, Energia, Manutenção" autocomplete="off"/></div>
-        <div class="field"><label>Descrição detalhada (opcional)</label><input id="f-desccf" value="${esc(d.descricao||'')}" placeholder="Ex: 20 sacos de ureia, NF 4521" autocomplete="off"/></div>
-        <div class="field"><label>Centro de custo (opcional)</label>
-          <input id="f-catcf" list="dl-centro-custo" value="${esc(d.categoria||'')}" placeholder="Ex: Mão-de-obra Operacional" autocomplete="off"/>
-          <datalist id="dl-centro-custo">${valoresConhecidos(state.custosFixos,'categoria').map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+        <div class="field"><label>Atividade</label>
+          <select id="f-atividadelanc">
+            ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${d.atividade===k?'selected':''}>${l}</option>`).join('')}
+          </select>
+          <span class="hint">Define a qual operação este valor pertence — é o que permite comparar custo por hectare entre elas.</span>
         </div>
-        <div class="field"><label>Fornecedor (opcional)</label>
-          <input id="f-forncf" list="dl-fornecedor" value="${esc(d.fornecedor||'')}" placeholder="Quem recebeu o pagamento" autocomplete="off"/>
-          <datalist id="dl-fornecedor">${valoresConhecidos(state.custosFixos,'fornecedor').map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+        <div class="field"><label>Fazenda</label>
+          <select id="f-fazendalanc">
+            <option value="" ${!d.fazendaId?'selected':''}>Geral / toda a empresa</option>
+            ${state.fazendasLavoura.map(f=>`<option value="${f.id}" ${String(d.fazendaId)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
+          </select>
         </div>
-        <div class="field"><label>Valor (R$)</label><input id="f-valorcf" type="number" step="0.01" value="${d.valorMensal ?? ''}" autocomplete="off"/></div>
-        <div class="field"><label>Data (opcional)</label><input id="f-datacf" type="date" value="${d.data||''}"/></div>
-        <div class="field"><label>Atividade(s)</label>
+        <div class="field"><label>Centro de custo${ehReceita?' / origem':''}</label>
+          <select id="f-centrocustolanc">
+            <option value="">— Selecione —</option>
+            ${centros.map(c=>`<option value="${c.id}" ${String(d.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+          </select>
+          <span class="hint">Cadastre novos centros de custo no AE Lavoura, em Cadastros.</span>
+        </div>
+        <div class="field"><label>Descrição</label><input id="f-descricaolanc" value="${esc(d.descricao||'')}" placeholder="${ehReceita?'Ex: Venda de boi gordo':'Ex: Mão de obra do curral'}" autocomplete="off"/></div>
+        <div class="field"><label>Valor (R$)</label><input id="f-valorlanc" type="number" step="0.01" min="0" value="${d.valor ?? ''}" autocomplete="off"/></div>
+        <div class="field"><label>Data${ehDespesa?' (deixe vazia para recorrente)':''}</label><input id="f-datalanc" type="date" value="${d.data||''}"/>
+          ${ehDespesa?`<span class="hint">Sem data, vale como valor mensal padrão para qualquer mês sem lançamento próprio.</span>`:''}
+        </div>
+        ${ehDespesa?`<div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedorlanc" value="${esc(d.fornecedor||'')}" autocomplete="off"/></div>`:''}
+        ${ehDespesa && ehPecuaria ? `
+        <div class="field"><label>Rateio entre as áreas da pecuária</label>
           <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;">
             ${['confinamento','pasto','cria'].map(a=>`
               <label style="display:flex; align-items:center; gap:6px; font-weight:400;">
-                <input id="f-areacf-${a}" type="checkbox" style="width:auto;" ${(d.areas||[]).includes(a)?'checked':''}/> ${AREA_LABEL[a]}
+                <input id="f-arealanc-${a}" type="checkbox" style="width:auto;" ${(d.areas||[]).includes(a)?'checked':''}/> ${AREA_LABEL[a]}
               </label>`).join('')}
           </div>
-          <span class="hint">Sem data, o valor é recorrente e vale pra qualquer mês sem lançamento próprio. Uma atividade marcada leva o valor inteiro; duas ou três rateiam por número de animais entre as marcadas; nenhuma marcada rateia entre as três.</span>
-        </div>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obscf" rows="2">${esc(d.observacao||'')}</textarea></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="custoFixo">${d._editId?'Salvar alterações':'Salvar despesa'}</button>
-      </div>
-    </div>
-  </div>`;
-}
-function ModalReceitaPec(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar receita':'Nova receita'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
+          <span class="hint">Uma marcada leva o valor inteiro; duas ou três rateiam por número de animais entre as marcadas; nenhuma rateia entre as três.</span>
+        </div>` : ''}
+        ${ehReceita && ehPecuaria ? `
         <div class="field"><label>Lote (opcional)</label>
-          <select id="f-lotereceita">
-            <option value="">— Geral, não vinculada a um lote —</option>
+          <select id="f-lotelanc">
+            <option value="">— Não vinculada a um lote —</option>
             ${state.lotesPec.map(l=>`<option value="${l.id}" ${String(d.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Data</label><input id="f-datarec" type="date" value="${d.data||''}"/></div>
-        <div class="field"><label>Descrição</label><input id="f-descrec" value="${esc(d.descricao||'')}" placeholder="Ex: Venda de boi gordo" autocomplete="off"/></div>
-        <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobas" type="number" step="0.01" value="${d.arrobas ?? ''}" autocomplete="off"/></div>
-        <div class="field"><label>Valor recebido (R$)</label><input id="f-valorrec" type="number" step="0.01" value="${d.valor ?? ''}" autocomplete="off"/></div>
-        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsrec" rows="2" placeholder="Ex: comprador, nº da nota">${esc(d.observacao||'')}</textarea></div>
+        <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobaslanc" type="number" step="0.01" value="${d.arrobas ?? ''}" autocomplete="off"/></div>` : ''}
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obslanc" rows="2">${esc(d.observacao||'')}</textarea></div>
+        ${state.erroLancamento ? `<div class="login-error">${esc(state.erroLancamento)}</div>` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="receitaPec">${d._editId?'Salvar alterações':'Salvar receita'}</button>
+        <button class="btn btn-primary" data-save="lancamento">${d._editId?'Salvar alterações':'Salvar'}</button>
       </div>
     </div>
   </div>`;
 }
-function ModalInvestimento(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar investimento':'Novo investimento'}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Nome do investimento</label><input id="f-nomeinv" value="${esc(d.nome||'')}" placeholder="Ex: Compra de animais, Trator" autocomplete="off"/></div>
-        <div class="field"><label>Categoria (opcional)</label>
-          <input id="f-catinv" list="dl-cat-inv" value="${esc(d.categoria||'')}" placeholder="Ex: Investimento em Animais" autocomplete="off"/>
-          <datalist id="dl-cat-inv">${valoresConhecidos(state.investimentos,'categoria').map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
-        </div>
-        <div class="field"><label>Fornecedor (opcional)</label><input id="f-forninv" value="${esc(d.fornecedor||'')}" placeholder="Quem vendeu" autocomplete="off"/></div>
-        <div class="field"><label>Valor (R$)</label><input id="f-valorinv" type="number" step="0.01" value="${d.valor ?? ''}" autocomplete="off"/></div>
-        <div class="field"><label>Data</label><input id="f-datainv" type="date" value="${d.data||''}"/></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="investimento">${d._editId?'Salvar alterações':'Salvar investimento'}</button>
-      </div>
-    </div>
-  </div>`;
-}
-
 function ModalImportarFuncionarios(){
   const pendentes = contasNaoVinculadas();
   return `
@@ -2284,9 +2254,7 @@ function Empty(title, sub){
 /* ===================== MODAL / FORMS ===================== */
 function Modal(){
   if(state.modal.type==='fazenda') return ModalFazenda();
-  if(state.modal.type==='custoFixo') return ModalCustoFixo();
-  if(state.modal.type==='receitaPec') return ModalReceitaPec();
-  if(state.modal.type==='investimento') return ModalInvestimento();
+  if(state.modal.type==='lancamento') return ModalLancamento();
   if(state.modal.type==='funcionario') return ModalFuncionario();
   if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
   if(state.modal.type==='usuario') return ModalUsuario();
@@ -2475,67 +2443,55 @@ function attachEvents(){
   document.querySelectorAll('[data-aba-financeiro]').forEach(el=>{
     el.onclick = ()=>{ state.abaFinanceiro = el.dataset.abaFinanceiro; render(); };
   });
+  const filtroAtiv = document.querySelector('[data-filtro-atividade]');
+  if(filtroAtiv) filtroAtiv.onchange = (e)=>{ state.filtroAtividade = e.target.value; render(); };
   const buscaDespesas = document.querySelector('[data-search-despesas]');
   if(buscaDespesas) buscaDespesas.oninput = (e)=>{
     state.searchDespesas = e.target.value;
-    // re-render devolve o foco ao campo, senão a digitação se perde
     render();
+    // devolve o foco: render() recria o campo e a digitação se perderia
     const campo = document.querySelector('[data-search-despesas]');
     if(campo){ campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
   };
   const filtroMesDesp = document.querySelector('[data-filtro-mes-despesas]');
   if(filtroMesDesp) filtroMesDesp.onchange = (e)=>{ state.filtroMesDespesas = e.target.value; render(); };
-  const filtroMesRec = document.querySelector('[data-filtro-mes-receitas]');
-  if(filtroMesRec) filtroMesRec.onchange = (e)=>{ state.filtroMesReceitas = e.target.value; render(); };
 
-  const novoFinanceiroBtn = document.querySelector('[data-novo-financeiro]');
-  if(novoFinanceiroBtn) novoFinanceiroBtn.onclick = ()=>{
-    const aba = novoFinanceiroBtn.dataset.novoFinanceiro;
-    const hoje = new Date().toISOString().slice(0,10);
-    if(aba==='despesas'){
-      editDraft = {nome:'', descricao:'', categoria:'', fornecedor:'', valorMensal:'', data:'', areas:[], observacao:''};
-      state.modal = {type:'custoFixo'};
-    } else if(aba==='receitas'){
-      editDraft = {data:hoje, loteId:'', descricao:'', arrobas:'', valor:'', observacao:''};
-      state.modal = {type:'receitaPec'};
-    } else {
-      editDraft = {nome:'', categoria:'', fornecedor:'', valor:'', data:hoje};
-      state.modal = {type:'investimento'};
-    }
+  const novoLancBtn = document.querySelector('[data-novo-lancamento]');
+  if(novoLancBtn) novoLancBtn.onclick = ()=>{
+    const tipo = novoLancBtn.dataset.novoLancamento;
+    editDraft = {
+      tipo,
+      atividade: state.filtroAtividade || 'pecuaria',
+      fazendaId:'', centroCustoId:'', descricao:'', valor:'',
+      // despesa nasce sem data (recorrente); receita e investimento nascem hoje
+      data: tipo==='despesa' ? '' : new Date().toISOString().slice(0,10),
+      fornecedor:'', observacao:'', areas:[], loteId:'', arrobas:'',
+    };
+    state.erroLancamento = '';
+    state.modal = {type:'lancamento'}; render();
+  };
+  // Trocar a atividade muda quais campos e quais centros de custo aparecem.
+  const selAtivLanc = document.getElementById('f-atividadelanc');
+  if(selAtivLanc) selAtivLanc.onchange = (e)=>{
+    editDraft = {...lerLancamentoDoFormulario(editDraft), atividade: e.target.value};
     render();
   };
-  document.querySelectorAll('[data-edit-custofixo]').forEach(el=>{
+  document.querySelectorAll('[data-edit-lancamento]').forEach(el=>{
     el.onclick = ()=>{
-      const c = state.custosFixos.find(x=>x.id===Number(el.dataset.editCustofixo));
-      editDraft = {...c, _editId:c.id}; state.modal = {type:'custoFixo'}; render();
+      const l = state.lancamentos.find(x=>x.id===Number(el.dataset.editLancamento));
+      editDraft = {...l, _editId:l.id};
+      state.erroLancamento = '';
+      state.modal = {type:'lancamento'}; render();
     };
   });
-  document.querySelectorAll('[data-edit-receitapec]').forEach(el=>{
-    el.onclick = ()=>{
-      const r = state.receitasPec.find(x=>x.id===Number(el.dataset.editReceitapec));
-      editDraft = {...r, _editId:r.id}; state.modal = {type:'receitaPec'}; render();
+  document.querySelectorAll('[data-del-lancamento]').forEach(el=>{
+    el.onclick = async ()=>{
+      const l = state.lancamentos.find(x=>x.id===Number(el.dataset.delLancamento));
+      if(!confirm(`Excluir "${l?.descricao||''}"? Essa ação não pode ser desfeita.`)) return;
+      const {error} = await db.from('lancamentos_financeiros').delete().eq('id', Number(el.dataset.delLancamento));
+      if(error){ alert('Não foi possível excluir: ' + error.message); return; }
+      await loadAll();
     };
-  });
-  document.querySelectorAll('[data-edit-investimento]').forEach(el=>{
-    el.onclick = ()=>{
-      const i = state.investimentos.find(x=>x.id===Number(el.dataset.editInvestimento));
-      editDraft = {...i, _editId:i.id}; state.modal = {type:'investimento'}; render();
-    };
-  });
-  const excluirFinanceiro = async (tabela, id, rotulo)=>{
-    if(!confirm(`Excluir ${rotulo}? Essa ação não pode ser desfeita.`)) return;
-    const {error} = await db.from(tabela).delete().eq('id', id);
-    if(error){ alert('Não foi possível excluir: ' + error.message); return; }
-    await loadAll();
-  };
-  document.querySelectorAll('[data-del-custofixo]').forEach(el=>{
-    el.onclick = ()=> excluirFinanceiro('custos_fixos', Number(el.dataset.delCustofixo), 'esta despesa');
-  });
-  document.querySelectorAll('[data-del-receitapec]').forEach(el=>{
-    el.onclick = ()=> excluirFinanceiro('receitas', Number(el.dataset.delReceitapec), 'esta receita');
-  });
-  document.querySelectorAll('[data-del-investimento]').forEach(el=>{
-    el.onclick = ()=> excluirFinanceiro('investimentos', Number(el.dataset.delInvestimento), 'este investimento');
   });
 
   // ---- funcionários ----
@@ -2786,57 +2742,29 @@ function attachEvents(){
           const { error: erroPerm } = await db.from('profiles').update({papel: papelPerfil, ativo: ativoPerfil, permissoes: permissoesPerfil}).eq('id', campos.perfilId);
           if(erroPerm) alert('Funcionário salvo, mas as permissões não foram gravadas: ' + erroPerm.message);
         }
-      } else if(type==='custoFixo'){
-        const data = document.getElementById('f-datacf').value || null;
-        const areas = ['confinamento','pasto','cria'].filter(a=>document.getElementById(`f-areacf-${a}`).checked);
-        const row = custoFixoToRow({
-          nome: document.getElementById('f-nomecf').value.trim() || 'Sem nome',
-          descricao: document.getElementById('f-desccf').value.trim(),
-          categoria: document.getElementById('f-catcf').value.trim(),
-          fornecedor: document.getElementById('f-forncf').value.trim(),
-          valorMensal: Number(document.getElementById('f-valorcf').value)||0,
-          data,
-          // mês sai da data: é ele que define em qual mês a despesa conta,
-          // e sem data a despesa vira recorrente.
-          mes: data ? data.slice(0,7) : null,
-          areas,
-          observacao: document.getElementById('f-obscf').value.trim(),
-        });
-        if(editDraft._editId){
-          ({error} = await db.from('custos_fixos').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('custos_fixos').insert(row));
+      } else if(type==='lancamento'){
+        const campos = lerLancamentoDoFormulario(editDraft);
+        // Obrigatórios de verdade: sem eles o lançamento não serve pra
+        // nenhum relatório depois. Melhor barrar aqui do que descobrir na
+        // hora de fechar o custo por hectare.
+        const faltando = [];
+        if(!campos.atividade) faltando.push('atividade');
+        if(!campos.centroCustoId) faltando.push('centro de custo');
+        if(!campos.descricao) faltando.push('descrição');
+        if(!(Number(campos.valor) > 0)) faltando.push('valor (maior que zero)');
+        if(campos.tipo !== 'despesa' && !campos.data) faltando.push('data');
+        if(faltando.length){
+          state.erroLancamento = 'Preencha: ' + faltando.join(', ') + '.';
+          editDraft = campos;
+          render();
+          return;
         }
-      } else if(type==='receitaPec'){
-        const lote = document.getElementById('f-lotereceita').value;
-        const arrobas = document.getElementById('f-arrobas').value;
-        const row = receitaPecToRow({
-          loteId: lote ? Number(lote) : null,
-          data: document.getElementById('f-datarec').value,
-          descricao: document.getElementById('f-descrec').value.trim() || 'Sem descrição',
-          arrobas: arrobas ? Number(arrobas) : null,
-          valor: Number(document.getElementById('f-valorrec').value)||0,
-          observacao: document.getElementById('f-obsrec').value.trim(),
-        });
-        if(!row.data){ alert('Informe a data da receita.'); return; }
+        state.erroLancamento = '';
+        const row = lancamentoToRow(campos);
         if(editDraft._editId){
-          ({error} = await db.from('receitas').update(row).eq('id', editDraft._editId));
+          ({error} = await db.from('lancamentos_financeiros').update(row).eq('id', editDraft._editId));
         } else {
-          ({error} = await db.from('receitas').insert(row));
-        }
-      } else if(type==='investimento'){
-        const row = investimentoToRow({
-          nome: document.getElementById('f-nomeinv').value.trim() || 'Sem nome',
-          categoria: document.getElementById('f-catinv').value.trim(),
-          fornecedor: document.getElementById('f-forninv').value.trim(),
-          valor: Number(document.getElementById('f-valorinv').value)||0,
-          data: document.getElementById('f-datainv').value,
-        });
-        if(!row.data){ alert('Informe a data do investimento.'); return; }
-        if(editDraft._editId){
-          ({error} = await db.from('investimentos').update(row).eq('id', editDraft._editId));
-        } else {
-          ({error} = await db.from('investimentos').insert(row));
+          ({error} = await db.from('lancamentos_financeiros').insert(row));
         }
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
