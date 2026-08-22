@@ -377,8 +377,8 @@ async function loadAll(){
     db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
     db.from('culturas').select('id, frente'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
-    souAdmin() ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
-    souAdmin() ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
+    temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
+    temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
   ]);
   const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv].find(r=>r.error)?.error;
   if(erroCarregamento){
@@ -866,6 +866,30 @@ function render(){
     return;
   }
 
+  // Sem nenhum módulo liberado, não há o que mostrar. Sem este desvio a
+  // tela abriria vazia, parecendo defeito em vez de falta de permissão.
+  const visiveis = paginasVisiveis();
+  if(visiveis.length === 0){
+    root.innerHTML = `
+      <div class="app">
+        ${Topbar()}
+        <div class="main">
+          <div class="card" style="margin:20px; text-align:center;">
+            <h3>Sem acesso ao AE Matriz</h3>
+            <p class="hint" style="max-width:520px; margin:8px auto 0;">
+              Sua conta ainda não tem nenhum módulo do Matriz liberado. Peça a um
+              administrador para liberar em Funcionários, no bloco de permissões.
+              Isso não afeta seu acesso ao AE Lavoura nem ao AE Pecuária.
+            </p>
+          </div>
+        </div>
+      </div>`;
+    attachEvents();
+    return;
+  }
+  // Página atual fora do que a pessoa pode ver: cai na primeira liberada.
+  if(!visiveis.some(p => p.key === state.page)) state.page = visiveis[0].key;
+
   let conteudo;
   try{
     conteudo = `
@@ -922,17 +946,34 @@ function render(){
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
+// Cada página do Matriz responde a um módulo de permissão, igual Lavoura e
+// Pecuária já faziam. Antes daqui só existia adminOnly, o que deixava
+// QUALQUER pessoa logada ver o Painel e os Resultados consolidados.
+//
+// Usuários continua exclusivo de admin, de propósito: quem mexe em login e
+// permissão precisa ser administrador, não é algo pra liberar por módulo.
 const PAGES = [
-  {key:'painel', label:'Painel', adminOnly:false},
-  {key:'resultados', label:'Resultados', adminOnly:false},
-  {key:'fazendas', label:'Fazendas', adminOnly:false},
-  {key:'funcionarios', label:'Funcionários', adminOnly:true},
+  {key:'painel', label:'Painel', modulo:'matriz_painel'},
+  {key:'resultados', label:'Resultados', modulo:'matriz_resultados'},
+  {key:'fazendas', label:'Fazendas', modulo:'matriz_fazendas'},
+  {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
-function paginasVisiveis(){ return PAGES.filter(p=>!p.adminOnly || souAdmin()); }
+// Administrador e Proprietário enxergam tudo; os demais papéis dependem da
+// matriz de módulos. Mesma regra que Lavoura e Pecuária usam.
+function acessoTotal(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
+function temPermissao(modulo, nivel){
+  if(acessoTotal()) return true;
+  const atual = state.perfil?.permissoes?.[modulo];
+  if(nivel === 'visualizar') return atual === 'visualizar' || atual === 'editar';
+  return atual === 'editar';
+}
+function paginasVisiveis(){
+  return PAGES.filter(p => p.adminOnly ? souAdmin() : temPermissao(p.modulo, 'visualizar'));
+}
 function pareceErroDeRede(error){
   const msg = String(error?.message||'').toLowerCase();
   return msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
@@ -1119,6 +1160,12 @@ const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gesto
 // Admin e Proprietário têm acesso total; esta matriz só vale para os
 // outros papéis.
 const MODULOS_PERMISSAO = [
+  ['Matriz', [
+    ['matriz_painel','Painel (indicadores de cada app)'],
+    ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
+    ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
+    ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
+  ]],
   ['Lavoura — Cana e Grãos', [
     ['cadastros','Cadastros (Fazendas, Talhões, Culturas, Safras...)'],
     ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
@@ -1558,7 +1605,7 @@ function PageFazendas(){
   return `
   <div class="toolbar">
     <span class="hint">${linhas.length} fazenda(s) cadastrada(s)</span>
-    ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-nova-fazenda="1">+ Nova fazenda</button>` : ''}
+    ${temPermissao('matriz_fazendas','editar') ? `<button class="btn btn-primary btn-sm" data-nova-fazenda="1">+ Nova fazenda</button>` : ''}
   </div>
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — nome, estado, área total e, pra cada atividade, quantos hectares dela tem ali.') : `
@@ -1571,7 +1618,7 @@ function PageFazendas(){
             <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
             <td>${chipsOperacoes(operacoesDaFazendaLavoura(f))}</td>
             <td style="display:flex; gap:6px;">
-              ${souAdmin() ? `
+              ${temPermissao('matriz_fazendas','editar') ? `
               <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-excluir-fazenda="${f.id}">Excluir</button>
               ` : ''}
@@ -1658,7 +1705,7 @@ function PageFuncionarios(){
     <span class="hint">${linhas.length} funcionário(s) cadastrado(s)</span>
     <div style="display:flex; gap:8px;">
       ${souAdmin() && pendentes.length ? `<button class="btn-ghost btn-sm" data-importar-funcionarios="1">Importar ${pendentes.length} conta(s) sem funcionário vinculado</button>` : ''}
-      ${souAdmin() ? `<button class="btn btn-primary btn-sm" data-novo-funcionario="1">+ Novo funcionário</button>` : ''}
+      ${temPermissao('matriz_funcionarios','editar') ? `<button class="btn btn-primary btn-sm" data-novo-funcionario="1">+ Novo funcionário</button>` : ''}
     </div>
   </div>
   <div class="card" style="overflow-x:auto;">
@@ -1674,7 +1721,7 @@ function PageFuncionarios(){
             <td>${nomeAcessoFuncionario(f)}</td>
             <td><span class="status-dot ${f.ativo?'ativo':'inativo'}"></span>${f.ativo?'Ativo':'Inativo'}</td>
             <td style="display:flex; gap:6px;">
-              ${souAdmin() ? `
+              ${temPermissao('matriz_funcionarios','editar') ? `
               <button class="btn-ghost btn-sm" data-editar-funcionario="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-excluir-funcionario="${f.id}">Excluir</button>
               ` : ''}
@@ -1694,6 +1741,9 @@ function PageFuncionarios(){
 // projeto Supabase. Agora a pessoa tem um login só, com todos os módulos
 // dos dois apps na mesma matriz, e tudo grava direto.
 function blocoPermissoes(perfilId){
+  // Só admin edita permissão. Sem isto, quem tivesse "editar" em
+  // matriz_funcionarios poderia se dar acesso de administrador sozinho.
+  if(!souAdmin()) return '';
   if(!perfilId) return '';
   const p = state.perfis.find(x=>x.id===perfilId);
   if(!p) return '';
