@@ -438,24 +438,53 @@ const APPS_REGISTRO = [
   {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'', cor:'#8a6d3b', status:'em_breve'},
 ];
 
+/* O Supabase corta toda consulta em 1.000 linhas por padrão e devolve
+ * 200 OK: vem um array truncado que parece completo, sem erro e sem aviso.
+ *
+ * Este é o app onde o número importa, e era o único dos quatro sem
+ * paginação — Pecuária e os apps de lavoura já tinham. Com 2.760
+ * lançamentos, o Financeiro somava no máximo 1.000 deles, e cada tela
+ * pegava uma fatia DIFERENTE conforme a ordenação que pedia: o Financeiro
+ * ordenava por data desc e ficava com os recentes; o Resultados não
+ * ordenava e ficava com os mais antigos. Duas telas, mesmo mês, dois
+ * totais, os dois baixos.
+ *
+ * Nada disso apareceu nas conferências porque elas rodaram em SQL, direto
+ * no banco, e não pela tela. */
+async function fetchAllRows(consulta){
+  const PAGINA = 1000;
+  let todas = [], de = 0;
+  while(true){
+    const { data, error } = await consulta().range(de, de + PAGINA - 1);
+    if(error) return { data: todas, error };
+    todas = todas.concat(data || []);
+    if(!data || data.length < PAGINA) break;
+    de += PAGINA;
+  }
+  return { data: todas, error: null };
+}
+
 async function loadAll(){
   state.apps = APPS_REGISTRO;
   const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
-    db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao'),
+    fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id')),
     db.from('culturas').select('id, frente'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('lancamentos_financeiros').select('*').order('data', {ascending:false, nullsFirst:true}) : Promise.resolve({data:[]}),
+    temPermissao('matriz_financeiro','visualizar') ? fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').order('data', {ascending:false, nullsFirst:true}).order('id')) : Promise.resolve({data:[]}),
     // Carrega inclusive os inativos: sem eles a tela de Centros de Custo
     // nao teria como mostrar nem reativar o que foi desativado. Quem filtra
     // por ativo e o seletor do lancamento, logo abaixo.
     temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome').order('nome') : Promise.resolve({data:[]}),
   ]);
-  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv].find(r=>r.error)?.error;
+  // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
+  // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
+  // apresentado com a mesma confiança de um número real.
+  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
@@ -601,10 +630,10 @@ async function carregarResultadoPecuaria(){
     const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes] = await Promise.all([
       dbPecuaria.from('ingredientes').select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
-      dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg'),
+      fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
       dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
       dbPecuaria.from('reproducao_custos').select('data, custo'),
-      db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria'),
+      fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id')),
     ]);
     for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
@@ -676,8 +705,8 @@ async function carregarResultadoCana(){
     const [insRes, entRes, aplRes, lancRes] = await Promise.all([
       db.from('insumos_cana').select('id'),
       db.from('entradas_insumo_cana').select('insumo_id, quantidade, preco_pago'),
-      db.from('aplicacoes_cana').select('data, insumo_id, quantidade'),
-      db.from('lancamentos_financeiros').select('*').eq('atividade','cana'),
+      fetchAllRows(()=>db.from('aplicacoes_cana').select('data, insumo_id, quantidade').order('id')),
+      fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','cana').order('id')),
     ]);
     for(const r of [insRes, entRes, aplRes, lancRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
@@ -743,8 +772,8 @@ async function carregarResultadoCereais(){
     const [insRes, entRes, aplRes, lancRes] = await Promise.all([
       db.from('insumos_graos').select('id'),
       db.from('entradas_insumo_graos').select('insumo_id, quantidade, preco_pago'),
-      db.from('aplicacoes_graos').select('data, insumo_id, quantidade'),
-      db.from('lancamentos_financeiros').select('*').eq('atividade','graos'),
+      fetchAllRows(()=>db.from('aplicacoes_graos').select('data, insumo_id, quantidade').order('id')),
+      fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','graos').order('id')),
     ]);
     for(const r of [insRes, entRes, aplRes, lancRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
@@ -1790,10 +1819,6 @@ function ModalFazenda(){
  * frente. Um centro por fazenda existe para o que é mesmo só dali. */
 // O Matriz nao tinha busca em tela nenhuma, entao nao tinha o icone.
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
-function nomeFazendaLavoura(id){
-  const f = state.fazendasLavoura.find(x=>String(x.id)===String(id));
-  return f ? f.nome : '-';
-}
 function centroCustoToRow(c){
   return {nome:c.nome, frente:c.frente || null,
           fazenda_id:c.fazendaId ? Number(c.fazendaId) : null,
@@ -1817,14 +1842,13 @@ function PageCentrosCusto(){
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhum centro de custo','Cadastre os centros de custo que a operação usa nos lançamentos.') : `
     <table>
-      <thead><tr><th>Nome</th><th>Fazenda</th><th>Lançamentos</th><th></th></tr></thead>
+      <thead><tr><th>Nome</th><th>Lançamentos</th><th></th></tr></thead>
       <tbody>
         ${linhas.map(c=>{
           const usos = usosDoCentro(c.id);
           return `
           <tr${c.ativo===false ? ' style="opacity:.55;"' : ''}>
             <td><strong>${esc(c.nome)}</strong>${c.ativo===false ? ' <span class="hint">(inativo)</span>' : ''}</td>
-            <td>${c.fazendaId ? esc(nomeFazendaLavoura(c.fazendaId)) : '<span class="hint">Todas (global)</span>'}</td>
             <td class="mono">${usos>0 ? fmtInt(usos) : '—'}</td>
             <td style="display:flex; gap:6px;">
               ${podeEditar ? `
@@ -1849,14 +1873,7 @@ function ModalCentroCusto(){
         <div class="field"><label>Nome</label>
           <input id="f-nomecentro" value="${esc(d.nome||'')}" placeholder="Ex: MANUTENÇÃO DE VEÍCULOS LEVES"/>
         </div>
-        <div class="field"><label>Fazenda</label>
-          <select id="f-fazendacentro">
-            <option value="">Todas as fazendas (global)</option>
-            ${[...state.fazendasLavoura].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'))
-              .map(f=>`<option value="${f.id}" ${String(d.fazendaId)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
-          </select>
-          <span class="hint">Global é o normal: o mesmo centro serve pecuária, cana e cereais. Escolha uma fazenda só quando a conta for mesmo exclusiva dela.</span>
-        </div>
+        <p class="hint" style="margin:-4px 0 14px;">Todo centro de custo vale para <strong>todas as fazendas e todas as atividades</strong>. De onde o gasto é quem diz são os campos Fazenda e Atividade do lançamento, não o centro.</p>
         <div class="field"><label><input type="checkbox" id="f-ativocentro" ${d.ativo!==false?'checked':''}/> Ativo</label>
           <span class="hint">Desativar tira o centro da lista de novos lançamentos, sem mexer nos que já existem. É o caminho certo para uma conta que saiu de uso.</span>
         </div>
@@ -3024,7 +3041,11 @@ function attachEvents(){
         if(!nome){ alert('Informe o nome do centro de custo.'); return; }
         const row = centroCustoToRow({
           nome,
-          fazendaId: document.getElementById('f-fazendacentro').value || '',
+          // sempre global — ver o texto no modal. A coluna fazenda_id é
+          // resquício de quando cada app tinha seu próprio banco e a tabela
+          // exigia fazenda; lavoura_05 zerou o que existia e o banco agora
+          // recusa nome repetido.
+          fazendaId: '',
           ativo: document.getElementById('f-ativocentro').checked,
           // frente e resquicio do desenho anterior a unificacao: hoje quem
           // diz a que atividade o gasto pertence e o proprio lancamento.
