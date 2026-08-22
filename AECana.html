@@ -4,31 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AE Cana</title>
-<link rel="manifest" href="manifest_cana.json">
-<link rel="icon" href="icon-cana-192.png">
-<link rel="apple-touch-icon" href="icon-cana-192.png">
+<link rel="manifest" href="manifest_lavoura.json">
+<link rel="icon" href="icon-lavoura-192.png">
+<link rel="apple-touch-icon" href="icon-lavoura-192.png">
 <meta name="theme-color" content="#1B4332">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --verde-escuro:#1B4332;
-    --verde-medio:#2D6A4F;
-    --verde-claro:#95D5B2;
-    --grafite:#1E2A38;
-    --cinza:#65758A;
-    --cinza-claro:#DEE6F0;
-    --cinza-bg:#F2F5FA;
+    --verde-escuro:#173D2E;
+    --verde-medio:#158A4C;
+    --verde-vivo:#00BE5E;
+    --verde-vivo-escuro:#008C31;
+    --verde-claro:#DFF6E8;
+    --dourado-escuro:#6B4413;
+    --dourado-medio:#A6741F;
+    --dourado-claro:#E3C371;
+    --dourado-bg:#F7EFDC;
+    --grafite:#1A2430;
+    --cinza:#5B6B7A;
+    --cinza-claro:#E1E7EE;
+    --cinza-bg:#F5F7FA;
+    --chip-bg:#F0F1F3;
+    --chip-color:#6B7280;
     --branco:#FFFFFF;
     --ambar:#C98A2B;
     --ambar-bg:#F5E9D7;
-    --alerta:#B3462F;
-    --alerta-bg:#F6E7E2;
+    --alerta:#C0432B;
+    --alerta-bg:#FBEAE6;
     --ok-bg:#E3F1EA;
-    --bom:#0C7A43;
-    --bom-bg:#E3F1E8;
-    --radius:10px;
-    --shadow:0 1px 2px rgba(15,42,74,0.06), 0 4px 12px rgba(15,42,74,0.06);
+    --bom:#008C31;
+    --bom-bg:#DFF6E8;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(15,42,74,0.04), 0 8px 24px rgba(15,42,74,0.06);
   }
   *{box-sizing:border-box;}
   body{
@@ -38,211 +46,195 @@
     color:var(--grafite);
     -webkit-font-smoothing:antialiased;
   }
-  .app{display:flex; height:100vh; overflow:hidden;}
-  /* ---------- SIDEBAR ---------- */
-  .sidebar{
-    width:230px; flex-shrink:0; background:var(--verde-escuro); color:var(--branco);
-    display:flex; flex-direction:column; padding:24px 16px; height:100%;
-    /* overflow-y:auto -- rede de segurança: se o conteúdo do menu passar
-       da altura da tela, rola só a barra em vez de vazar/cortar itens. */
-    overflow-y:auto;
-  }
-  .brand{
-    display:flex; align-items:center; gap:10px; padding:0 8px 24px 8px; margin-bottom:8px;
-    border-bottom:1px solid rgba(255,255,255,0.12);
-  }
-  .brand-mark{width:32px; height:32px; flex-shrink:0;}
-  .brand-name{font-family:'Fraunces',serif; font-weight:600; font-size:19px; letter-spacing:0.2px;}
-  nav{margin-top:18px; display:flex; flex-direction:column; gap:4px;}
-  .nav-item{
-    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; cursor:pointer;
-    font-size:14px; font-weight:500; color:rgba(255,255,255,0.72);
-    transition:background 0.15s, color 0.15s; border:none; background:none; width:100%; text-align:left;
-  }
-  .nav-item:hover{background:rgba(255,255,255,0.06); color:var(--branco);}
-  .nav-item.active{background:var(--verde-medio); color:var(--branco);}
-  .nav-item svg{flex-shrink:0;}
-  .sidebar-footer{
-    margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);
-    font-size:11px; color:rgba(255,255,255,0.45); line-height:1.5;
-  }
+  .app{display:flex; flex-direction:column; height:100vh; overflow:hidden;}
+  /* ---------- TOPBAR + TABSROW ---------- */
+  .topbar{background:var(--verde-escuro); padding:0 28px; display:flex; align-items:center; gap:20px; height:60px; flex-shrink:0;}
+  .brand{display:flex; align-items:center; gap:10px; color:#fff;}
+  .brand-mark{width:26px; height:26px; flex-shrink:0;}
+  .brand-name{font-family:'Fraunces',serif; font-weight:700; font-size:18px; letter-spacing:0.2px;}
+  .topbar-user{margin-left:auto; display:flex; align-items:center; gap:10px;}
+  .topbar-user-nome{color:rgba(255,255,255,0.85); font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:160px;}
+  .avatar{width:28px; height:28px; border-radius:50%; background:var(--verde-vivo); color:#0B2318; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0;}
+  .btn-sair{background:rgba(255,255,255,0.1); border:none; color:#fff; padding:7px 11px; border-radius:8px; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;}
+  .btn-sair:hover{background:rgba(255,255,255,0.2);}
+  .tabsrow{background:var(--branco); border-bottom:1px solid var(--cinza-claro); display:flex; gap:6px; padding:10px 20px; overflow-x:auto; flex-shrink:0;}
+  .nav-item{display:flex; align-items:center; gap:7px; font-family:'Inter',sans-serif; font-size:13px; font-weight:700; color:var(--cinza); background:none; border:none; padding:9px 14px; border-radius:10px; cursor:pointer; white-space:nowrap; transition:background 0.12s, color 0.12s;}
+  .nav-item svg{opacity:0.72; flex-shrink:0;}
+  .nav-item:hover{background:var(--cinza-bg); color:var(--verde-escuro);}
+  .nav-item.active{background:var(--verde-vivo); color:#0B2318;}
+  .nav-item.active svg{opacity:1;}
   /* ---------- MAIN ---------- */
-  .main{flex:1; padding:32px 40px 60px 40px; max-width:1180px; height:100%; overflow-y:auto;}
-  .page-header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:28px;}
-  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:var(--verde-medio); font-weight:600; margin:0 0 4px 0;}
-  h1{font-family:'Fraunces',serif; font-size:28px; font-weight:600; margin:0; color:var(--verde-escuro);}
-  .page-desc{color:var(--cinza); font-size:13.5px; margin-top:6px; max-width:560px;}
+  .main{flex:1; padding:28px 32px 60px 32px; max-width:1280px; width:100%; margin:0 auto; overflow-y:auto;}
+  .page-header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; gap:16px; flex-wrap:wrap;}
+  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--verde-medio); font-weight:700; margin:0 0 4px 0;}
+  h1{font-family:'Fraunces',serif; font-size:26px; font-weight:700; margin:0; color:var(--grafite); letter-spacing:-0.2px;}
+  .page-desc{color:var(--cinza); font-size:13.5px; margin-top:6px; max-width:600px;}
   .btn{
-    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; padding:10px 18px; border-radius:8px;
+    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:700; padding:10px 18px; border-radius:10px;
     border:none; cursor:pointer; transition:filter 0.15s, transform 0.1s; display:inline-flex; align-items:center; gap:6px;
   }
   .btn:active{transform:translateY(1px);}
-  .btn-primary{background:var(--verde-escuro); color:var(--branco);}
-  .btn-primary:hover{filter:brightness(1.15);}
-  .btn-ghost{background:transparent; color:var(--verde-escuro); border:1px solid var(--cinza-claro);}
-  .btn-ghost:hover{background:var(--branco);}
-  .btn-danger-ghost{background:transparent; color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
+  .btn-primary{background:var(--verde-vivo); color:#0B2318;}
+  .btn-primary:hover{filter:brightness(1.06);}
+  .btn-primary.dourado{background:var(--dourado-medio); color:#2B1D06;}
+  .btn-ghost{background:var(--branco); color:var(--verde-escuro); border:1px solid var(--cinza-claro);}
+  .btn-ghost:hover{background:var(--cinza-bg);}
+  .btn-danger-ghost{background:var(--branco); color:var(--alerta); border:1px solid var(--cinza-claro); padding:6px 10px; font-size:12px;}
   .btn-danger-ghost:hover{background:var(--alerta-bg);}
-  .btn-sm{padding:6px 12px; font-size:12.5px;}
+  .btn-sm{padding:7px 13px; font-size:12.5px;}
   .card{background:var(--branco); border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--cinza-claro); overflow-x:auto;}
   .card-pad{padding:22px 24px;}
-  .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;}
-  .stat-card{background:var(--branco); border:1px solid var(--cinza-claro); border-radius:var(--radius); padding:16px 18px;}
-  /* ---------- GRÁFICO DE BARRAS (Despesas por centro de custo, Receita x Despesa) ---------- */
-  .despesa-barras{display:flex; flex-direction:column; gap:10px;}
+  .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;}
+  .stat-card{background:var(--branco); border:1px solid var(--cinza-claro); border-radius:var(--radius); padding:18px 20px;}
+  .frente-bloco{margin-bottom:26px;}
+  .frente-bloco-titulo{display:flex; align-items:center; gap:8px; margin-bottom:12px;}
+  .frente-bloco-titulo h3{font-family:'Fraunces',serif; font-size:16px; margin:0; color:var(--verde-escuro);}
+  .frente-bloco.graos .frente-bloco-titulo h3{color:var(--dourado-escuro);}
+  /* ---------- GRÁFICO DE BARRAS (Despesas, Receita x Despesa) ---------- */
+  .despesa-barras{display:flex; flex-direction:column; gap:8px;}
   .despesa-barra-linha{
-    display:grid; grid-template-columns:200px 1fr 130px; align-items:center; gap:12px;
-    cursor:pointer; padding:4px 6px; border-radius:6px; transition:background 0.12s;
+    display:grid; grid-template-columns:200px 1fr 130px; align-items:center; gap:14px;
+    cursor:pointer; padding:8px 10px; border-radius:9px; transition:background 0.12s;
   }
-  .despesa-barra-linha:hover{background:var(--verde-bg,#EEF5F0);}
-  .despesa-barra-linha.ativa{background:var(--bom-bg);}
-  .despesa-barra-nome{font-size:13px; color:var(--verde-escuro); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .despesa-barra-track{background:var(--cinza-claro); border-radius:5px; height:14px; overflow:hidden;}
-  .despesa-barra-fill{background:var(--verde-medio); height:100%; border-radius:5px; transition:width 0.2s;}
-  .despesa-barra-linha.ativa .despesa-barra-fill{background:var(--bom);}
+  .despesa-barra-linha:hover{background:var(--cinza-bg);}
+  .despesa-barra-linha.ativa{background:var(--verde-claro);}
+  .despesa-barra-nome{font-size:13px; color:var(--grafite); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .despesa-barra-track{background:var(--cinza-claro); border-radius:6px; height:10px; overflow:hidden;}
+  .despesa-barra-fill{background:var(--verde-vivo); height:100%; border-radius:6px; transition:width 0.2s;}
+  .despesa-barra-linha.ativa .despesa-barra-fill{background:var(--verde-vivo-escuro);}
   .despesa-barra-valor{font-size:12.5px; text-align:right; color:var(--cinza);}
   .despesa-grupo{margin-bottom:10px; overflow:visible;}
-  .despesa-grupo-header{
-    display:flex; align-items:center; gap:12px; padding:14px 20px; cursor:pointer;
-  }
-  .despesa-grupo-header:hover{background:var(--fundo,#F7F9F7);}
-  .despesa-grupo-seta{color:var(--verde-medio); font-size:11px; width:12px; flex-shrink:0;}
-  .despesa-grupo-nome{font-weight:600; color:var(--verde-escuro); flex-shrink:0;}
+  .despesa-grupo-header{display:flex; align-items:center; gap:12px; padding:16px 22px; cursor:pointer;}
+  .despesa-grupo-header:hover{background:var(--cinza-bg);}
+  .despesa-grupo-seta{color:var(--cinza); font-size:10px; width:12px; flex-shrink:0;}
+  .despesa-grupo-nome{font-weight:700; color:var(--grafite); flex-shrink:0;}
   .despesa-grupo-valor{margin-left:auto; font-size:13.5px;}
   .despesa-grupo-tabela{width:100%; border-collapse:collapse;}
-  .despesa-grupo-tabela td{padding:9px 20px; border-top:1px solid var(--cinza-claro); font-size:13px; background:var(--fundo,#F7F9F7);}
+  .despesa-grupo-tabela td{padding:13px 22px; border-top:1px solid var(--cinza-claro); font-size:13px; background:transparent;}
+  .despesa-grupo-tabela tr:hover td{background:var(--cinza-bg);}
   .despesa-grupo-data{white-space:nowrap; width:100px; color:var(--cinza);}
   .despesa-grupo-valorlinha{white-space:nowrap; width:130px; text-align:right;}
   .despesa-grupo-acoes{white-space:nowrap; width:170px; text-align:right;}
   .despesa-grupo-acoes .btn-ghost, .despesa-grupo-acoes .btn-danger-ghost{margin-left:6px;}
-  /* ---------- DONUT (Despesa por centro de custo, em Resultados) ---------- */
+  /* ---------- tags de contexto (Fazenda/Talhão/Cultura) ---------- */
+  .contexto-tags{display:flex; gap:6px; align-items:center; margin-top:5px; flex-wrap:wrap;}
+  /* ---------- DONUT ---------- */
   .painel-resultados{display:flex; gap:32px; align-items:center; flex-wrap:wrap;}
   .donut-wrap{flex-shrink:0;}
   .donut-svg{display:block;}
   .donut-slice{cursor:pointer; transition:opacity 0.15s;}
   .donut-slice:hover{opacity:0.82;}
   .donut-label{font-family:'Inter',monospace; font-size:11px; font-weight:600; fill:#fff; pointer-events:none;}
-  .donut-center-value{font-family:'Inter',monospace; font-size:17px; font-weight:600; fill:var(--verde-escuro);}
+  .donut-center-value{font-family:'Inter',monospace; font-size:17px; font-weight:600; fill:var(--grafite);}
   .donut-center-label{font-family:'Inter',sans-serif; font-size:10px; fill:var(--cinza); text-transform:uppercase; letter-spacing:0.5px;}
   .painel-legenda{flex:1; min-width:220px; display:flex; flex-direction:column; gap:2px;}
-  .legenda-row{
-    display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px;
-    padding:7px 8px; border-radius:6px; cursor:pointer;
-  }
-  .legenda-row:hover{background:var(--fundo,#F7F9F7);}
+  .legenda-row{display:grid; grid-template-columns:12px 1fr auto auto; align-items:center; gap:10px; padding:7px 8px; border-radius:8px; cursor:pointer;}
+  .legenda-row:hover{background:var(--cinza-bg);}
   .legenda-swatch{width:12px; height:12px; border-radius:3px;}
-  .legenda-nome{font-size:13px; color:var(--verde-escuro);}
-  .legenda-valor{font-family:'Inter',monospace; font-size:12.5px; color:var(--verde-escuro); font-variant-numeric:tabular-nums;}
+  .legenda-nome{font-size:13px; color:var(--grafite);}
+  .legenda-valor{font-family:'Inter',monospace; font-size:12.5px; color:var(--grafite); font-variant-numeric:tabular-nums;}
   .legenda-pct{font-family:'Inter',monospace; font-size:12.5px; color:var(--cinza); min-width:48px; text-align:right; font-variant-numeric:tabular-nums;}
   @media (max-width:760px){ .painel-resultados{flex-direction:column; align-items:stretch;} .donut-wrap{align-self:center;} }
-  .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:600;}
-  .stat-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--verde-escuro); margin-top:6px;}
+  .stat-label{font-size:11px; text-transform:uppercase; letter-spacing:0.7px; color:var(--cinza); font-weight:700;}
+  .stat-value{font-family:'IBM Plex Mono',monospace; font-size:23px; font-weight:600; color:var(--grafite); margin-top:8px;}
   .stat-value.alerta{color:var(--alerta);}
+  /* ---------- resumo financeiro (totais no topo de Despesas/Receitas) ---------- */
+  .totals-strip{display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:20px; padding-bottom:18px; border-bottom:1px solid var(--cinza-claro);}
+  .totals-nums{display:flex; gap:40px; flex-wrap:wrap; row-gap:14px;}
+  .total-item{display:flex; flex-direction:column; gap:8px;}
+  .total-label{font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--cinza); font-weight:700;}
+  .total-value{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--grafite); padding-bottom:9px; border-bottom:2.5px solid var(--cinza-claro); min-width:140px;}
+  .total-value.neg{color:var(--alerta); border-bottom-color:var(--alerta);}
+  .total-value.pos{color:var(--verde-vivo-escuro); border-bottom-color:var(--verde-vivo);}
   .silo-wrap{display:flex; align-items:center; gap:8px;}
   .silo{width:14px; height:30px; border:1.5px solid var(--verde-escuro); border-radius:3px; position:relative; overflow:hidden; background:var(--cinza-claro); flex-shrink:0;}
   .silo-fill{position:absolute; bottom:0; left:0; right:0; background:var(--verde-medio);}
   .silo-fill.alerta{background:var(--alerta);}
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
-  th{
-    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza);
-    font-weight:600; padding:10px 14px; border-bottom:1px solid var(--cinza-claro); white-space:nowrap;
-  }
-  td{padding:12px 14px; border-bottom:1px solid var(--cinza-claro); color:var(--grafite); vertical-align:middle;}
+  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--cinza); font-weight:700; padding:13px 14px; border-bottom:1px solid var(--cinza-claro); white-space:nowrap;}
+  td{padding:13px 14px; border-bottom:1px solid var(--cinza-claro); color:var(--grafite); vertical-align:middle;}
+  tbody tr:hover td{background:var(--cinza-bg);}
   tr:last-child td{border-bottom:none;}
   .mono{font-family:'IBM Plex Mono',monospace;}
   .pill{display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;}
-  .pill-ok{background:var(--ok-bg); color:var(--verde-medio);}
+  .pill-ok{background:var(--ok-bg); color:var(--verde-vivo-escuro);}
   .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
-  .pill-cat{background:var(--cinza-claro); color:var(--grafite);}
+  .pill-cat{background:var(--chip-bg); color:var(--chip-color); border-radius:8px; font-weight:600;}
   .pill-warn{background:var(--ambar-bg); color:var(--ambar);}
+  .pill-cana{background:var(--verde-claro); color:var(--verde-vivo-escuro);}
+  .pill-graos{background:var(--dourado-bg); color:var(--dourado-medio);}
   /* form modal */
-  .overlay{
-    position:fixed; inset:0; background:rgba(27,67,50,0.35); display:flex; align-items:flex-start;
-    justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;
-  }
-  .modal{background:var(--branco); border-radius:14px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,0.25);}
-  .modal.modal-lg{max-width:720px;}
+  .overlay{position:fixed; inset:0; background:rgba(23,61,46,0.4); display:flex; align-items:flex-start; justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;}
+  .modal{background:var(--branco); border-radius:16px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,0.25);}
+  .modal.modal-lg{max-width:760px;}
   .modal-head{padding:20px 24px; border-bottom:1px solid var(--cinza-claro); display:flex; justify-content:space-between; align-items:center;}
-  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--verde-escuro);}
+  .modal-head h3{font-family:'Fraunces',serif; font-size:18px; margin:0; color:var(--grafite);}
   .modal-close{background:none; border:none; cursor:pointer; color:var(--cinza); font-size:20px; line-height:1;}
   .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
   .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
   .field{display:flex; flex-direction:column; gap:5px;}
   label{font-size:12px; font-weight:600; color:var(--grafite);}
-  input, select, textarea{
-    font-family:'Inter',sans-serif; font-size:13.5px; padding:9px 11px; border:1px solid var(--cinza-claro);
-    border-radius:7px; background:var(--branco); color:var(--grafite); outline:none; width:100%;
-  }
-  input:focus, select:focus, textarea:focus{border-color:var(--verde-medio); box-shadow:0 0 0 3px rgba(45,106,79,0.12);}
+  input, select, textarea{font-family:'Inter',sans-serif; font-size:13.5px; padding:9px 12px; border:1px solid var(--cinza-claro); border-radius:9px; background:var(--branco); color:var(--grafite); outline:none; width:100%;}
+  input:focus, select:focus, textarea:focus{border-color:var(--verde-vivo); box-shadow:0 0 0 3px rgba(0,190,94,0.14);}
   .hint{font-size:11px; color:var(--cinza);}
   .empty{text-align:center; padding:50px 20px; color:var(--cinza);}
-  .empty h4{font-family:'Fraunces',serif; color:var(--verde-escuro); margin:10px 0 6px 0; font-size:16px;}
+  .empty h4{font-family:'Fraunces',serif; color:var(--grafite); margin:10px 0 6px 0; font-size:16px;}
   .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;}
-  .search{
-    display:flex; align-items:center; gap:8px; background:var(--branco);
-    border:1px solid var(--cinza-claro); border-radius:8px; padding:8px 12px; width:260px;
-  }
+  .search{display:flex; align-items:center; gap:8px; background:var(--branco); border:1px solid var(--cinza-claro); border-radius:10px; padding:9px 13px; width:260px;}
   .search input{border:none; padding:0; flex:1;}
   .search input:focus{box-shadow:none;}
-  .subtabs{display:flex; gap:18px; margin-bottom:22px; border-bottom:1px solid var(--cinza-claro); overflow-x:auto;}
-  .subtab{
-    font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; color:var(--cinza); background:none;
-    border:none; padding:10px 2px; cursor:pointer; white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px;
-  }
+  .subtabs{display:flex; gap:6px; margin-bottom:20px; flex-wrap:wrap;}
+  .subtab{font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:var(--cinza); background:var(--branco); border:1px solid var(--cinza-claro); padding:8px 14px; border-radius:20px; cursor:pointer; white-space:nowrap;}
   .subtab:hover{color:var(--verde-escuro);}
-  .subtab.active{color:var(--verde-escuro); border-bottom-color:var(--verde-medio);}
+  .subtab.active{color:#fff; background:var(--verde-escuro); border-color:var(--verde-escuro);}
+  /* ---------- segmentado (toggle Cana/Grãos) ---------- */
+  .segmented{display:inline-flex; border:1px solid var(--cinza-claro); border-radius:9px; overflow:hidden; padding:3px; background:var(--branco);}
+  .segmented button{font-family:'Inter',sans-serif; font-size:12.5px; font-weight:700; padding:7px 15px; border:none; border-radius:7px; background:transparent; color:var(--cinza); cursor:pointer;}
+  .segmented button.active{background:var(--verde-vivo); color:#0B2318;}
+  .segmented button.active.graos{background:var(--dourado-medio); color:#2B1D06;}
   /* ---------- LOGIN ---------- */
-  .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
-  .login-card{background:var(--branco); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.12); border:1px solid var(--cinza-claro); padding:40px 36px; width:100%; max-width:360px;}
+  .login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--cinza-bg);}
+  .login-card{background:var(--branco); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.12); border:1px solid var(--cinza-claro); padding:40px 36px; width:100%; max-width:360px;}
   .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:28px;}
-  .login-brand .brand-name{color:var(--verde-escuro); font-family:'Fraunces',serif; font-weight:600; font-size:19px;}
+  .login-brand .brand-name{color:var(--grafite); font-family:'Fraunces',serif; font-weight:700; font-size:19px;}
   .login-field{margin-bottom:16px; display:flex; flex-direction:column; gap:5px;}
   .login-field input{width:100%;}
-  .login-error{background:var(--alerta-bg); color:var(--alerta); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:16px;}
+  .login-error{background:var(--alerta-bg); color:var(--alerta); font-size:13px; padding:10px 12px; border-radius:9px; margin-bottom:16px;}
   .login-btn{width:100%; margin-top:6px; justify-content:center;}
   .login-btn:disabled{opacity:0.6; cursor:default;}
   .login-loading{min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--cinza); font-size:14px;}
-  /* ---------- USUÁRIO LOGADO (sidebar) ---------- */
-  .sidebar-user{
-    margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.12);
-    display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:rgba(255,255,255,0.85);
-  }
-  .sidebar-user-nome{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .sidebar-user-actions{display:flex; gap:8px;}
-  .btn-sair{
-    background:rgba(255,255,255,0.1); border:none; color:#fff; padding:6px 10px;
-    border-radius:6px; font-size:11.5px; cursor:pointer; white-space:nowrap; flex:1;
-  }
-  .btn-sair:hover{background:rgba(255,255,255,0.2);}
   /* ---------- ADMIN ---------- */
   .perm-matrix{width:100%; border-collapse:collapse; font-size:13px;}
   .perm-matrix th, .perm-matrix td{padding:8px 10px; border-bottom:1px solid var(--cinza-claro); text-align:left;}
   .perm-matrix select{width:100%; padding:6px 8px; font-size:12.5px;}
-  .status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
+  .status-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px;}
   .status-dot.ativo{background:var(--bom);}
   .status-dot.inativo{background:var(--cinza);}
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
-    .app{flex-direction:column; height:auto; overflow:visible;}
-    .sidebar{
-      width:100%; flex-direction:row; align-items:center; justify-content:space-between;
-      padding:12px 16px; gap:12px; overflow-x:auto; height:auto;
-      position:-webkit-sticky; position:sticky; top:0; z-index:40;
-    }
-    .brand{border-bottom:none; padding:0; margin-bottom:0; flex-shrink:0;}
-    nav{margin-top:0; flex-direction:row; gap:4px;}
-    .nav-item{white-space:nowrap; padding:8px 10px; font-size:13px;}
-    .sidebar-footer{display:none;}
-    .sidebar-user{margin-bottom:0; padding-bottom:0; border-bottom:none; flex-shrink:0;}
-    .main{padding:20px 16px 48px 16px; max-width:100%; height:auto; overflow-y:visible;}
+    .app{height:auto; overflow:visible;}
+    .topbar{padding:10px 14px; height:auto; flex-wrap:wrap; row-gap:8px; position:-webkit-sticky; position:sticky; top:0; z-index:40;}
+    .topbar-user-nome{display:none;}
+    .tabsrow{padding:8px 10px; position:-webkit-sticky; position:sticky; top:0; z-index:39;}
+    .nav-item{padding:8px 11px; font-size:12.5px;}
+    .main{padding:20px 16px 48px 16px; max-width:100%; overflow-y:visible;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
-    h1{font-size:23px;}
+    h1{font-size:22px;}
     .btn{width:100%; justify-content:center;}
     .stat-row{grid-template-columns:repeat(2,1fr);}
+    .totals-strip{flex-direction:column; align-items:stretch;}
+    .totals-nums{gap:22px;}
+    .total-value{font-size:19px; min-width:0;}
     .toolbar{flex-direction:column; align-items:stretch;}
     .search{width:100%;}
     .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
     .overlay{padding:16px 10px;}
+    .despesa-barra-linha{grid-template-columns:1fr auto; grid-template-areas:"nome valor" "track track"; row-gap:4px;}
+    .despesa-barra-nome{grid-area:nome;}
+    .despesa-barra-valor{grid-area:valor;}
+    .despesa-barra-track{grid-area:track;}
+    .despesa-grupo-header{flex-wrap:wrap; row-gap:6px;}
+    .despesa-grupo-valor{margin-left:0;}
   }
 </style>
 </head>
@@ -252,21 +244,34 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===================== SUPABASE =====================
- * Projeto Supabase PRÓPRIO e SEPARADO do AEpecuaria.html, do
- * AECombustivel.html e do AECereais.html — cada app tem seu próprio
- * banco, login e financeiro, sem duplicar dado nem depender dos
- * outros. Fazendas, Culturas, Safras e Talhões/Áreas são cadastradas
- * de novo aqui (ver cana_schema.sql, Fase 1) — um talhão cadastrado
- * no AE Combustível não aparece automaticamente aqui, e vice-versa;
- * quem precisar de uma visão consolidada entre os apps usa o AE
- * Matriz (ver matriz_schema.sql), que lê os indicadores de cada um
- * sem duplicar cadastro.
- * Preencha aqui a URL/anon key do projeto Supabase do AE Cana
- * (Project Settings > API, depois de rodar cana_schema.sql nele). */
+ * AE Lavoura reaproveita o MESMO projeto Supabase que hoje é o do AE
+ * Cana (cana_schema.sql) — não é um banco novo. Fazendas, Culturas,
+ * Safras, Talhões/Áreas e Centros de Custo (Fase 1) já existem e já
+ * são compartilháveis entre Cana e Grãos (a coluna `frente` já aceita
+ * 'cana' e 'graos' desde o desenho original). As tabelas de Grãos
+ * (plantios_graos, insumos_graos, entradas_insumo_graos,
+ * aplicacoes_graos, colheitas_graos, despesas_graos, receitas_graos)
+ * foram acrescentadas por lavoura_migracao_graos.sql, sem alterar nada
+ * do que já existia — ver esse arquivo para detalhes.
+ * Login e usuários também são os MESMOS do AE Cana: uma conta que já
+ * existe lá funciona aqui, e o que ela vê depende só das permissões
+ * marcadas em Administração > Usuários (agora com módulos extras para
+ * Grãos, além dos de Cana). O AE Pecuária e o AE Combustível
+ * continuam em projetos Supabase próprios e separados — não mudou
+ * nada neles; ver AEMatriz.html para a visão consolidada entre todos. */
 const db = supabase.createClient(
   'https://kmkystqgpvmzrccxvyaz.supabase.co',
   'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
+
+/* ===================== A FRENTE DESTE APP =====================
+ * Este arquivo e o AE Cana. Ele foi gerado a partir do
+ * AELavoura.html por gerar_apps_lavoura.py e so enxerga uma frente.
+ * Cana e Cereais sao operacoes em estados diferentes, com equipes e
+ * cadastros proprios; o banco continua sendo um so, e o AE Matriz e
+ * quem consolida as tres atividades. */
+const FRENTE = 'cana';       // culturas.frente
+const ATIVIDADE = 'cana'; // fazenda_atividades.atividade
 
 /* ===================== HELPERS DE CONVERSÃO ===================== */
 function toSnake(s){ return s.replace(/[A-Z]/g, m => '_'+m.toLowerCase()); }
@@ -274,42 +279,69 @@ function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
 
-/* ===================== OPÇÕES (catálogos de enum) ===================== */
+/* ===================== OPÇÕES (catálogos de enum) =====================
+ * CATEGORIAS_INSUMO e TIPOS_OPERACAO existem em duas versões porque as
+ * restrições (CHECK) das tabelas *_cana e *_graos no banco são
+ * diferentes: insumos_cana/aplicacoes_cana não aceitam 'semente',
+ * 'dessecacao' nem 'semeadura' (não fazem sentido pra cana, cultura
+ * perene) — só insumos_graos/aplicacoes_graos aceitam. Usar a lista
+ * errada faria o formulário oferecer uma opção que o banco rejeita. */
 const OPCOES = {
   ESTADOS: [{value:'TO',label:'Tocantins'},{value:'SP',label:'São Paulo'}],
-  FRENTES: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'}],
-  CATEGORIAS_INSUMO: [
+  FRENTES: [{value:'cana',label:'Cana-de-açúcar'}],
+  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
+  CATEGORIAS_INSUMO_CANA: [
     {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
     {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'},
     {value:'corretivo',label:'Corretivo de solo (Calcário/Gesso)'}, {value:'outro',label:'Outro'},
   ],
-  TIPOS_OPERACAO: [
+  CATEGORIAS_INSUMO_GRAOS: [
+    {value:'semente',label:'Semente'}, {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
+    {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'},
+    {value:'corretivo',label:'Corretivo de solo (Calcário/Gesso)'}, {value:'outro',label:'Outro'},
+  ],
+  TIPOS_OPERACAO_CANA: [
     {value:'adubacao',label:'Adubação'}, {value:'herbicida',label:'Aplicação de herbicida'},
     {value:'inseticida',label:'Aplicação de inseticida'}, {value:'fungicida',label:'Aplicação de fungicida'},
     {value:'cultivo_mecanico',label:'Cultivo mecânico'}, {value:'outro',label:'Outro'},
   ],
-  CATEGORIAS_DESPESA: [
-    {value:'mao_obra',label:'Mão de obra'}, {value:'colheita_terceirizada',label:'Colheita terceirizada'},
-    {value:'transporte',label:'Transporte'}, {value:'arrendamento',label:'Arrendamento'},
-    {value:'manutencao',label:'Manutenção'}, {value:'outro',label:'Outro'},
+  TIPOS_OPERACAO_GRAOS: [
+    {value:'dessecacao',label:'Dessecação'}, {value:'semeadura',label:'Semeadura'},
+    {value:'adubacao',label:'Adubação'}, {value:'herbicida',label:'Aplicação de herbicida'},
+    {value:'inseticida',label:'Aplicação de inseticida'}, {value:'fungicida',label:'Aplicação de fungicida'},
+    {value:'cultivo_mecanico',label:'Cultivo mecânico'}, {value:'outro',label:'Outro'},
   ],
-  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
 };
 
+/* ===================== FRENTE DE UM TALHÃO =====================
+ * Talhões não têm coluna própria de frente — ela vem da Cultura
+ * vinculada (fazendas/culturas/safras/talhoes_areas são cadastros
+ * ÚNICOS, compartilhados por Cana e Grãos neste app). Um talhão sem
+ * cultura definida (culturaId vazio) fica "sem frente" até alguém
+ * escolher a cultura — nesse estado ele não some do cadastro, mas
+ * fica de fora de Custo por Talhão/Histórico (não dá pra saber qual
+ * conjunto de tabelas usar). */
+function frenteDoTalhao(t){
+  if(!t || t.culturaId==null) return null;
+  const c = state.culturas.find(x=>x.id===t.culturaId);
+  return c ? c.frente : null;
+}
+function culturaDoTalhaoNome(talhaoId){
+  if(talhaoId==null) return null;
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  return t && t.culturaId!=null ? fkNome('culturas', t.culturaId) : null;
+}
+
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
- * Mesmo motor genérico do AECombustivel.html (uma entidade é descrita
- * uma vez — tabela, campos — e lista/modal/salvar/excluir são gerados
- * a partir disso). `modulo:'cadastros'` é obrigatório em fazendas,
- * culturas, safras e talhoes: é o módulo de permissão (RLS) próprio
- * deste app pra esses cadastros de base — ver cana_schema.sql, Fase 1.
- * `plantios` (Fase 2 — Operações) usa o módulo `operacoes`, também
- * próprio do AE Cana (tabela plantios_cana).
- * `culturas` e `safras` ficam de fora do menu (ver GROUPS) — entram só
- * como lista de apoio (Cultura do Talhão, Safra do Plantio); continuam
- * sendo cadastradas pelas abas Cultivo/Estrutura deste mesmo app. */
+ * Cadastros de base (fazendas, culturas, talhoes, safras) sao tabelas
+ * compartilhadas com os outros apps, mas este arquivo so enxerga a
+ * frente 'cana' - o corte e feito em filtrarPelaFrente(), na
+ * entrada dos dados. Fazenda e cadastro do AE Matriz; aqui ela aparece
+ * para consulta e para agrupar os talhoes. Centro de custo saiu junto
+ * com o Financeiro para o Matriz. */
 const CADASTROS = {
   fazendas: {
-    table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'cadastros',
+    table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'matriz_fazendas',
     desc:'Unidades produtivas da empresa, com estado e área total.',
     emptyHint:'Cadastre a primeira fazenda para começar.',
     fields:[
@@ -320,7 +352,7 @@ const CADASTROS = {
     ],
   },
   culturas: {
-    table:'culturas', label:'Culturas', singular:'Cultura', modulo:'cadastros',
+    table:'culturas', label:'Culturas', singular:'Cultura', modulo:'cana_cadastros',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true},
       {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES, required:true},
@@ -328,8 +360,8 @@ const CADASTROS = {
     ],
   },
   talhoes: {
-    table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cadastros',
-    desc:'Talhões de lavoura de cana desta fazenda.',
+    table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cana_cadastros',
+    desc:'Talhões de lavoura desta fazenda — de cana ou de grãos, conforme a Cultura escolhida.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
     historico: true,
@@ -338,37 +370,29 @@ const CADASTROS = {
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Talhão 12'},
       {key:'tipo', type:'fixed', value:'talhao', list:false},
       {key:'areaHa', label:'Área (ha)', type:'number', step:'0.01', suffix:' ha'},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', filter:c=>c.frente==='cana'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', filter:c=>c.frente==='cana'||c.frente==='graos'},
       {key:'ativo', label:'Talhão ativo', type:'checkbox', default:true, list:false},
     ],
   },
   safras: {
-    table:'safras', label:'Safras', singular:'Safra', modulo:'cadastros',
+    table:'safras', label:'Safras', singular:'Safra', modulo:'cana_cadastros',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='cana'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='cana'||c.frente==='graos'},
       {key:'nome', label:'Safra', type:'text', required:true, placeholder:'Ex: 2024/2025'},
       {key:'dataInicio', label:'Início', type:'date'},
       {key:'dataFim', label:'Fim', type:'date'},
       {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
     ],
   },
-  centrosCusto: {
-    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', modulo:'cadastros',
-    fields:[
-      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'nome', label:'Nome', type:'text', required:true},
-      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
-      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
-    ],
-  },
-  plantios: {
+  /* ---------- CANA ---------- */
+  plantiosCana: {
     table:'plantios_cana', label:'Plantio', singular:'Plantio', modulo:'operacoes',
-    desc:'Registro do plantio de cada talhão — variedade e data de plantio, com previsão de reforma. Uma linha por estande de cana (do plantio até a reforma); os cortes/colheitas de cada estande entram no módulo de Colheita.',
-    emptyHint:'Cadastre um talhão antes de registrar um plantio.',
+    desc:'Registro do plantio de cada talhão de cana — variedade e data de plantio, com previsão de reforma. Uma linha por estande (do plantio até a reforma); os cortes entram em Colheita.',
+    emptyHint:'Cadastre um talhão de cana antes de registrar um plantio.',
     orderBy:'data_plantio', orderDesc:true, semBusca:true,
     fields:[
-      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='cana'},
       {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
       {key:'variedade', label:'Variedade', type:'text', required:true, placeholder:'Ex: RB92579'},
       {key:'dataPlantio', label:'Data do plantio', type:'date', required:true},
@@ -377,13 +401,13 @@ const CADASTROS = {
       {key:'ativo', label:'Plantio ativo (talhão em produção)', type:'checkbox', default:true, list:false},
     ],
   },
-  colheitas: {
+  colheitasCana: {
     table:'colheitas_cana', label:'Colheita', singular:'Colheita', modulo:'operacoes',
-    desc:'Registro da colheita de cada talhão — toneladas colhidas e TCH (toneladas por hectare).',
-    emptyHint:'Cadastre um talhão antes de registrar uma colheita.',
+    desc:'Registro da colheita de cada talhão de cana — toneladas colhidas e TCH (toneladas por hectare).',
+    emptyHint:'Cadastre um talhão de cana antes de registrar uma colheita.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
     fields:[
-      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='cana'},
       {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
       {key:'data', label:'Data', type:'date', required:true},
       {key:'corte', label:'Corte', type:'number', step:'1', dec:0, hint:'1 = cana-planta, 2 = 1ª soca, 3 = 2ª soca...'},
@@ -395,24 +419,24 @@ const CADASTROS = {
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
-  insumos: {
+  insumosCana: {
     table:'insumos_cana', label:'Insumos', singular:'Insumo', modulo:'operacoes',
-    desc:'Defensivos e fertilizantes usados nos tratos culturais, com estoque mínimo para alerta.',
+    desc:'Defensivos e fertilizantes usados nos tratos culturais da cana, com estoque mínimo para alerta.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Glifosato'},
-      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_INSUMO, required:true},
+      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_INSUMO_CANA, required:true},
       {key:'unidade', label:'Unidade', type:'text', required:true},
       {key:'estoqueMinimo', label:'Estoque mínimo', type:'number', step:'0.01', suffix:''},
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
-  entradasInsumo: {
+  entradasInsumoCana: {
     table:'entradas_insumo_cana', label:'Entradas de Insumo', singular:'Entrada', modulo:'operacoes',
-    desc:'Compra/recebimento de insumo — soma no estoque; informar o preço pago recalcula o preço médio do insumo.',
-    emptyHint:'Cadastre um insumo antes de lançar uma entrada.',
+    desc:'Compra/recebimento de insumo de cana — soma no estoque; informar o preço pago recalcula o preço médio.',
+    emptyHint:'Cadastre um insumo de cana antes de lançar uma entrada.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
     fields:[
-      {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumos', required:true},
+      {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumosCana', required:true},
       {key:'data', label:'Data', type:'date', required:true},
       {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
       {key:'precoPago', label:'Preço pago (R$/unidade)', type:'number', step:'0.0001'},
@@ -420,54 +444,26 @@ const CADASTROS = {
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
-  aplicacoes: {
+  aplicacoesCana: {
     table:'aplicacoes_cana', label:'Aplicações', singular:'Aplicação', modulo:'operacoes',
-    desc:'Lançamento de trato cultural em campo — desconta o insumo do estoque na quantidade aplicada.',
-    emptyHint:'Cadastre um talhão e um insumo antes de lançar uma aplicação.',
+    desc:'Lançamento de trato cultural em campo (cana) — desconta o insumo do estoque na quantidade aplicada.',
+    emptyHint:'Cadastre um talhão e um insumo de cana antes de lançar uma aplicação.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
     fields:[
-      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true},
-      {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumos', required:true},
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='cana'},
+      {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumosCana', required:true},
       {key:'data', label:'Data', type:'date', required:true},
-      {key:'tipoOperacao', label:'Tipo de operação', type:'select', options:OPCOES.TIPOS_OPERACAO, required:true},
+      {key:'tipoOperacao', label:'Tipo de operação', type:'select', options:OPCOES.TIPOS_OPERACAO_CANA, required:true},
       {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
-      {key:'custo', label:'Custo', type:'computed', compute:item=>{ const p=precoMedioInsumo(item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
+      {key:'custo', label:'Custo', type:'computed', compute:item=>{ const p=precoMedioInsumo('Cana',item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
-  despesas: {
-    table:'despesas_cana', label:'Despesas', singular:'Despesa', modulo:'financeiro',
-    desc:'Despesas gerais da lavoura que não são insumo lançado em Aplicações (mão de obra, colheita terceirizada, transporte, arrendamento, manutenção).',
-    emptyHint:'Cadastre uma fazenda antes de lançar uma despesa.',
-    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
-    fields:[
-      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
-      {key:'centroCustoId', label:'Centro de custo (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.frente==='cana'||c.frente==='geral'},
-      {key:'data', label:'Data', type:'date', required:true},
-      {key:'categoria', type:'fixed', value:'outro'},
-      {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de trator terceirizado'},
-      {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
-      {key:'observacao', label:'Observação', type:'textarea', list:false},
-    ],
-  },
-  receitas: {
-    table:'receitas_cana', label:'Receita', singular:'Receita', modulo:'resultados', moduloEditarAlt:'financeiro',
-    desc:'Venda/entrega de cana para a usina — gera a receita usada no Resultado. Quem só tem acesso a Financeiro pode lançar receita aqui, mas não vê a lista nem o valor das já lançadas — só quem tem Resultados enxerga isso (o banco bloqueia a leitura pra quem não tem).',
-    emptyHint:'Nenhuma receita para mostrar — ou porque ainda não há nenhuma, ou porque seu acesso permite lançar mas não ver (fala com o administrador se achar que deveria ver).',
-    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
-    fields:[
-      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes'},
-      {key:'safraId', label:'Safra (opcional)', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
-      {key:'data', label:'Data', type:'date', required:true},
-      {key:'toneladas', label:'Toneladas entregues (opcional)', type:'number', step:'0.01'},
-      {key:'valorTotal', label:'Valor total (R$)', type:'number', step:'0.01', required:true},
-      {key:'observacao', label:'Observação', type:'textarea', list:false},
-    ],
-  },
+
+  /* ---------- GRÃOS ---------- */
 };
 const CADASTRO_KEYS = Object.keys(CADASTROS);
+const FRENTE_KEYS = ['plantiosCana','colheitasCana','insumosCana','entradasInsumoCana','aplicacoesCana'];
 
 function rowToCadastro(row, cfg){
   const obj = {id: row.id};
@@ -494,11 +490,11 @@ function carregarCacheLocal(){
   }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
 }
 
-/* O Supabase limita cada consulta a no máximo 1000 linhas por padrão
- * (Project Settings > API > Max Rows) — sem paginar, uma tabela que
- * passa disso (ex: despesas_cana depois da carga do relatório, com
- * 2245 linhas) vinha cortada silenciosamente nas primeiras 1000,
- * subestimando totais no Custo por Talhão e em Resultados. */
+/* O Supabase limita cada consulta a no máximo 1000 linhas por padrão —
+ * sem paginar, uma tabela grande (despesas_cana já passou de 2000
+ * linhas na carga de 2026) vem cortada silenciosamente, subestimando
+ * totais no Custo por Talhão e em Resultados. Paginamos todas as
+ * tabelas (não só as de cana) por segurança. */
 async function fetchAllRows(table, orderBy, ascending){
   const PAGE = 1000;
   let all = [];
@@ -519,20 +515,42 @@ async function loadAll(){
       return fetchAllRows(cfg.table, cfg.orderBy || 'nome', !cfg.orderDesc);
     }),
     db.from('profiles').select('*').order('nome'),
+    db.from('fazenda_atividades').select('*'),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
+  filtrarPelaFrente((results[CADASTRO_KEYS.length+1].data)||[]);
   salvarCacheLocal();
   render();
+}
+
+/* Corta tudo que nao e desta frente na ENTRADA dos dados, e nao em cada
+ * tela. Assim toda lista, todo seletor e todo calculo ja nascem certos,
+ * sem depender de alguem lembrar de filtrar em cada lugar novo. */
+function filtrarPelaFrente(fazendaAtividades){
+  state.culturas = state.culturas.filter(c => c.frente === FRENTE);
+  const idsCultura = new Set(state.culturas.map(c=>c.id));
+  state.safras  = state.safras.filter(s  => s.culturaId!=null && idsCultura.has(s.culturaId));
+  state.talhoes = state.talhoes.filter(t => t.culturaId!=null && idsCultura.has(t.culturaId));
+
+  // Uma fazenda entra se DECLAROU a atividade ou se ja tem talhao desta
+  // frente. A segunda condicao existe para nunca esconder fazenda que tem
+  // trabalho de verdade so porque faltou declarar a area no Matriz.
+  const daFrente = new Set([
+    ...fazendaAtividades.filter(a => a.atividade===ATIVIDADE && Number(a.area_ha||0)>0)
+                        .map(a => a.fazenda_id),
+    ...state.talhoes.map(t => t.fazendaId),
+  ]);
+  state.fazendas = state.fazendas.filter(f => daFrente.has(f.id));
 }
 
 /* ===================== ESTADO ===================== */
 let editDraft = null;
 const state = {
-  page: 'fazendas',
+  page: 'talhoes',
   ...Object.fromEntries(CADASTRO_KEYS.map(k=>[k, []])),
   perfis: [],
-  modal: null, // {type:'cadastro', key} | {type:'usuario'|'permissoes'|'trocarSenha'}
+  modal: null,
   search: '',
   cadastroError: '',
   cadastroLoading: false,
@@ -547,6 +565,7 @@ const state = {
   despesaFiltroMes: '',
   despesaFiltroCentro: '',
   despesaGruposAbertos: {},
+  fazendaTalhoesAbertos: {},
 };
 
 function render(){
@@ -559,12 +578,13 @@ function render(){
   const semModulos = grupos.length===0;
   root.innerHTML = `
     <div class="app">
-      ${Sidebar()}
+      ${Topbar()}
+      ${TabsRow()}
       <div class="main">
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
         ${Header()}
         ${SubTabs()}
-        ${state.page==='adminUsuarios' ? PageAdminUsuarios() : state.page==='estoqueInsumos' ? PageEstoqueInsumos() : state.page==='custoProducao' ? PageCustoProducao() : state.page==='resultado' ? PageResultado() : state.page==='despesas' ? PageDespesas() : PageCadastro(state.page)}
+        ${paginaCustom(state.page)}
         `}
       </div>
     </div>
@@ -572,14 +592,22 @@ function render(){
   `;
   attachEvents();
 }
+function paginaCustom(page){
+  if(page==='adminUsuarios') return PageAdminUsuarios();
+  if(page==='estoqueInsumosCana') return PageEstoqueInsumos('Cana');
+  return PageCadastro(page);
+}
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES =====================
- * Login e tabela profiles próprios deste app — uma conta criada aqui
- * não funciona no AE Combustível nem em nenhum outro app (cada um tem
- * seu próprio projeto Supabase e seu próprio cadastro de usuários). */
+ * Login e tabela profiles são as MESMAS do AE Cana (mesmo projeto
+ * Supabase) — uma conta criada em Administração aqui também entra no
+ * AECana.html antigo, e vice-versa, porque é a mesma tabela profiles.
+ * O AE Pecuária e o AE Combustível continuam com login próprio, em
+ * projetos separados. */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
+function souOperador(){ return state.perfil?.papel === 'operador'; }
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
   if(souAdmin()) return true;
@@ -600,7 +628,7 @@ async function loadPerfil(){
 }
 
 async function initAuth(){
-  carregarCacheLocal(); // mostra os últimos cadastros conhecidos mesmo antes de falar com o servidor (ou offline)
+  carregarCacheLocal();
   const { data } = await db.auth.getSession();
   state.session = data.session;
   if(state.session) await loadPerfil();
@@ -641,7 +669,7 @@ async function fazerLogin(){
 }
 async function fazerLogout(){
   await db.auth.signOut();
-  state.session = null; state.perfil = null; state.page = 'fazendas';
+  state.session = null; state.perfil = null; state.page = 'talhoes';
   render();
 }
 
@@ -676,24 +704,18 @@ function AguardandoLiberacao(){
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
 const GROUPS = {
   cadastros: {label:'Cadastros', icon:iconFazenda(), pages:[
-    {key:'fazendas', label:'Fazendas'},
     {key:'talhoes', label:'Talhões'},
+    {key:'fazendas', label:'Fazendas'},
+    {key:'culturas', label:'Culturas'},
+    {key:'safras', label:'Safras'},
   ]},
   operacoes: {label:'Operações', icon:iconPlantio(), pages:[
-    {key:'plantios', label:'Plantio'},
-    {key:'colheitas', label:'Colheita'},
-    {key:'insumos', label:'Insumos'},
-    {key:'entradasInsumo', label:'Entradas'},
-    {key:'estoqueInsumos', label:'Estoque'},
-    {key:'aplicacoes', label:'Aplicações'},
-  ]},
-  financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
-    {key:'custoProducao', label:'Custo por Talhão'},
-    {key:'despesas', label:'Despesas'},
-  ]},
-  resultados: {label:'Resultados', icon:iconResultado(), pages:[
-    {key:'receitas', label:'Receita'},
-    {key:'resultado', label:'Resultado'},
+    {key:'plantiosCana', label:'Plantio'},
+    {key:'colheitasCana', label:'Colheita'},
+    {key:'insumosCana', label:'Insumos'},
+    {key:'entradasInsumoCana', label:'Entradas'},
+    {key:'estoqueInsumosCana', label:'Estoque'},
+    {key:'aplicacoesCana', label:'Aplicações'},
   ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
@@ -703,63 +725,49 @@ function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.s
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
-  if(key==='financeiro') return temPermissao('financeiro','visualizar');
-  // Resultados (receita/lucratividade) é enxergado por quem tem
-  // 'resultados' — mas quem só tem 'financeiro' (editar) também
-  // precisa entrar aqui pra conseguir LANÇAR receita (ver paginaVisivel
-  // abaixo: enxerga só a sub-aba Receita, e mesmo essa fica em branco
-  // pra ele — o RLS não deixa esse perfil ler receitas_cana, só inserir).
-  if(key==='resultados') return temPermissao('resultados','visualizar') || temPermissao('financeiro','editar');
-  return temPermissao('cadastros','visualizar');
+  return temPermissao('cana_cadastros','visualizar');
 }
-// Dentro de um grupo visível, algumas páginas ainda exigem checagem
-// própria — hoje só o caso de Resultado (lucratividade), que fica
-// escondido de quem só tem 'financeiro' (só pode lançar Receita, não
-// ver receita nem resultado). Administrador vê tudo por padrão; quem
-// mais deve ver o resultado completo, o admin libera 'resultados' pra
-// essa conta na Administração (ex: o(a) proprietário(a)).
-function paginaVisivel(key){
-  if(key==='resultado') return temPermissao('resultados','visualizar');
-  return true;
-}
+function paginaVisivel(key){ return true; }
 function paginaAcessivel(page){
   const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
   if(!grupo) return false;
-  return grupoVisivel(grupo[0]) && paginaVisivel(page);
+  return grupoVisivel(grupo[0]);
 }
 function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
 function primeiraPaginaVisivel(){
   for(const [,g] of gruposVisiveis()){
-    const pagina = g.pages.find(p=>paginaVisivel(p.key));
-    if(pagina) return pagina.key;
+    if(g.pages[0]) return g.pages[0].key;
   }
   return null;
 }
 
 /* ===================== SIDEBAR / HEADER ===================== */
-function Sidebar(){
+function Topbar(){
+  const nome = state.perfil?.nome || '';
+  const inicial = nome ? nome.trim().charAt(0).toUpperCase() : '?';
+  return `
+  <div class="topbar">
+    <div class="brand">${brandMark()}<span class="brand-name">AE Cana</span></div>
+    <div class="topbar-user">
+      <span class="topbar-user-nome">${nome}</span>
+      <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
+      <button class="btn-sair" data-logout="1">Sair</button>
+      <div class="avatar">${inicial}</div>
+    </div>
+  </div>`;
+}
+function TabsRow(){
   const activeGroup = currentGroupKey();
   return `
-  <div class="sidebar">
-    <div class="brand">${brandMark()}<div><div class="brand-name">AE Cana</div></div></div>
-    <div class="sidebar-user">
-      <span class="sidebar-user-nome">${state.perfil?.nome||''}</span>
-      <div class="sidebar-user-actions">
-        <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
-        <button class="btn-sair" data-logout="1">Sair</button>
-      </div>
-    </div>
-    <nav>
-      ${gruposVisiveis().map(([key,g])=>`
-        <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
-      `).join('')}
-    </nav>
-    <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase).</div>
+  <div class="tabsrow">
+    ${gruposVisiveis().map(([key,g])=>`
+      <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
+    `).join('')}
   </div>`;
 }
 function SubTabs(){
   const group = GROUPS[currentGroupKey()];
-  const paginas = group ? group.pages.filter(p=>paginaVisivel(p.key)) : [];
+  const paginas = group ? group.pages : [];
   if(paginas.length<2) return '';
   return `
   <div class="subtabs">
@@ -768,19 +776,13 @@ function SubTabs(){
 }
 function Header(){
   if(state.page==='adminUsuarios'){
-    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso.');
+    return headerHtml('Administração','Usuários','Contas de acesso desta operação e o que cada uma pode ver e editar.');
   }
-  if(state.page==='estoqueInsumos'){
-    return headerHtml('Operações','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
-  }
-  if(state.page==='custoProducao'){
-    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo por hectare e por tonelada colhida, cruzando Aplicações (Tratos culturais) e Colheita de cada talhão.');
-  }
-  if(state.page==='resultado'){
-    return headerHtml('Resultados','Resultado','Receita menos despesas (gerais + custo de insumo) da operação de cana, e o resultado por hectare.');
+  if(state.page==='estoqueInsumosCana'){
+    return headerHtml('Operações · Cana','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
   const cfg = CADASTROS[state.page];
-  const eyebrow = cfg.modulo==='operacoes' ? 'Operações' : 'Cadastro';
+  const eyebrow = (cfg.modulo==='operacoes') ? 'Operações · Cana' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
 }
 function headerHtml(eyebrow,title,desc){
@@ -796,6 +798,7 @@ function brandMark(){
 }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 function iconPlantio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 13C12 9 9 6 5 6c0 4 3 7 7 7Z"/></svg>`; }
+function iconGrao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c2 2 2 5 0 7-2-2-2-5 0-7Z"/><path d="M12 9v13"/><path d="M8 13c0 3 2 4 4 4M16 13c0 3-2 4-4 4M6 17c0 2.5 2.5 3.5 6 3.5M18 17c0 2.5-2.5 3.5-6 3.5"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconMoney(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.8c0-1.5-1.3-2.6-3-2.6s-3 1-3 2.3c0 3 6 1.4 6 4.4 0 1.4-1.3 2.6-3 2.6s-3-1.1-3-2.6"/></svg>`; }
 function iconResultado(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11 13 15 21 7"/><path d="M15 7h6v6"/></svg>`; }
@@ -824,14 +827,15 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
+  const podeEditar = temPermissao(cfg.modulo||'cana_cadastros','editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
   const termo = state.search.toLowerCase();
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
   const colunas = cfg.fields.filter(f=>f.list!==false);
+  const colspanTotal = colunas.length + (cfg.semStatus?0:1) + 1;
   return `
   <div class="toolbar">
-    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
+    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1" autocomplete="off"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
   </div>
@@ -846,16 +850,54 @@ function PageCadastro(key){
             ${cfg.semStatus?'':`<td><span class="status-dot ${item.ativo?'ativo':'inativo'}"></span>${item.ativo?'Ativo':'Inativo'}</td>`}
             <td style="display:flex; gap:6px;">
               ${cfg.historico ? `<button class="btn-ghost btn-sm" data-historico-talhao="${item.id}">Histórico</button>` : ''}
-              ${podeEditar ? `
-              <button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>
-              ` : ''}
+              ${podeEditar ? `<button class="btn-ghost btn-sm" data-edit-cadastro="${key}:${item.id}">Editar</button>` : ''}
+              ${podeEditar && !souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="${key}:${item.id}">Excluir</button>` : ''}
             </td>
           </tr>
+          ${key==='fazendas' ? linhaTalhoesDaFazenda(item, podeEditar, colspanTotal) : ''}
         `).join('')}
       </tbody>
     </table>`}
   </div>`;
+}
+/* Fazenda → cadastra o talhão (nome, ha, cultura) direto ali embaixo,
+ * sem precisar ir pra aba Talhões e escolher a fazenda de novo. */
+function linhaTalhoesDaFazenda(fazenda, podeEditar, colspanTotal){
+  const aberto = !!state.fazendaTalhoesAbertos[fazenda.id];
+  const talhoes = state.talhoes.filter(t=>t.fazendaId===fazenda.id && t.tipo==='talhao');
+  return `
+  <tr class="fazenda-talhoes-row">
+    <td colspan="${colspanTotal}" style="padding:0;">
+      <div class="despesa-grupo-header" style="cursor:pointer;" data-fazenda-talhoes-toggle="${fazenda.id}">
+        <span class="despesa-grupo-seta">${aberto?'▼':'▶'}</span>
+        <span class="despesa-grupo-nome">Talhões desta fazenda</span>
+        <span class="hint">${talhoes.length} talhão(ões)</span>
+      </div>
+      ${aberto ? `
+      <div style="padding:0 16px 16px;">
+        ${talhoes.length===0 ? `<p class="hint">Nenhum talhão cadastrado ainda nesta fazenda.</p>` : `
+        <table class="despesa-grupo-tabela">
+          <thead><tr><th>Nome</th><th>Área (ha)</th><th>Cultura</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            ${talhoes.map(t=>`
+              <tr>
+                <td>${t.nome}</td>
+                <td class="mono">${t.areaHa?fmt(t.areaHa)+' ha':'—'}</td>
+                <td>${t.culturaId!=null ? `<span class="pill ${frenteDoTalhao(t)==='graos'?'pill-graos':'pill-cana'}">${fkNome('culturas', t.culturaId)}</span>` : '—'}</td>
+                <td><span class="status-dot ${t.ativo?'ativo':'inativo'}"></span>${t.ativo?'Ativo':'Inativo'}</td>
+                <td style="display:flex; gap:6px;">
+                  <button class="btn-ghost btn-sm" data-historico-talhao="${t.id}">Histórico</button>
+                  ${podeEditar ? `<button class="btn-ghost btn-sm" data-edit-cadastro="talhoes:${t.id}">Editar</button>` : ''}
+                  ${podeEditar && !souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="talhoes:${t.id}">Excluir</button>` : ''}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`}
+        ${podeEditar ? `<button class="btn btn-primary btn-sm" style="margin-top:10px;" data-novo-cadastro="talhoes" data-preset-fazenda="${fazenda.id}">+ Novo Talhão</button>` : ''}
+      </div>` : ''}
+    </td>
+  </tr>`;
 }
 function novoCadastroDraft(key){
   const cfg = CADASTROS[key];
@@ -870,8 +912,9 @@ function novoCadastroDraft(key){
   });
   return draft;
 }
-function abrirNovoCadastro(key){
+function abrirNovoCadastro(key, presets){
   editDraft = novoCadastroDraft(key);
+  if(presets) Object.assign(editDraft, presets);
   state.cadastroError = '';
   state.modal = {type:'cadastro', key};
 }
@@ -903,7 +946,7 @@ function campoHtml(f, d){
     return `<div class="field"><label><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto; margin-right:6px;"/> ${f.label}</label></div>`;
   }
   if(f.type==='textarea'){
-    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3">${val}</textarea></div>`;
+    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3" autocomplete="off">${val}</textarea></div>`;
   }
   if(f.type==='select'){
     return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>`;
@@ -922,9 +965,9 @@ function campoHtml(f, d){
     return `<div class="field"><label>${f.label}</label><input type="date" id="${id}" value="${val}"/></div>`;
   }
   if(f.type==='number'){
-    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
+    return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}" autocomplete="off"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
-  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
+  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" autocomplete="off" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
 }
 function ModalCadastro(){
   const key = state.modal.key;
@@ -981,36 +1024,40 @@ async function salvarCadastro(key){
 }
 
 /* ===================== ESTOQUE DE INSUMOS (Tratos culturais) =====================
- * Saldo e preço médio ponderado do insumo não ficam guardados numa
- * coluna — são calculados aqui a partir de Entradas e Aplicações,
- * mesmo padrão já usado pelo AE Combustível para o saldo de tanque
- * (saldoTanque/custoMedioPonderado). Assim, editar ou excluir uma
- * entrada/aplicação já reflete automaticamente no saldo, sem precisar
- * reconciliar nada à parte. */
-function totalEntradasInsumo(insumoId){
-  return state.entradasInsumo.filter(e=>e.insumoId===insumoId).reduce((a,e)=>a+Number(e.quantidade||0),0);
+ * Parametrizado por frente ('Cana' ou 'Graos') — usa as chaves de
+ * CADASTROS correspondentes (insumosCana/entradasInsumoCana/
+ * aplicacoesCana, ou os equivalentes de Grãos). Saldo e preço médio
+ * ponderado não ficam guardados numa coluna — são calculados aqui a
+ * partir de Entradas e Aplicações, mesmo padrão do AE Combustível. */
+function totalEntradasInsumo(frente, insumoId){
+  return state['entradasInsumo'+frente].filter(e=>e.insumoId===insumoId).reduce((a,e)=>a+Number(e.quantidade||0),0);
 }
-function totalAplicacoesInsumo(insumoId){
-  return state.aplicacoes.filter(a=>a.insumoId===insumoId).reduce((a,x)=>a+Number(x.quantidade||0),0);
+function totalAplicacoesInsumo(frente, insumoId){
+  return state['aplicacoes'+frente].filter(a=>a.insumoId===insumoId).reduce((a,x)=>a+Number(x.quantidade||0),0);
 }
-function saldoInsumo(insumoId){
-  return totalEntradasInsumo(insumoId) - totalAplicacoesInsumo(insumoId);
+function saldoInsumo(frente, insumoId){
+  return totalEntradasInsumo(frente, insumoId) - totalAplicacoesInsumo(frente, insumoId);
 }
-function precoMedioInsumo(insumoId){
-  const entradas = state.entradasInsumo.filter(e=>e.insumoId===insumoId && e.precoPago!=null && e.precoPago!=='');
+function precoMedioInsumo(frente, insumoId){
+  const entradas = state['entradasInsumo'+frente].filter(e=>e.insumoId===insumoId && e.precoPago!=null && e.precoPago!=='');
   const qtd = entradas.reduce((a,e)=>a+Number(e.quantidade||0),0);
   if(qtd<=0) return null;
   const valor = entradas.reduce((a,e)=>a+Number(e.quantidade||0)*Number(e.precoPago||0),0);
   return valor/qtd;
 }
-function PageEstoqueInsumos(){
-  const insumos = state.insumos.filter(i=>i.ativo!==false);
+function pctEstoque(saldo, minimo){
+  if(!minimo || minimo<=0) return saldo>0 ? 100 : 0;
+  return Math.round(Math.max(0, Math.min(saldo/(minimo*2), 1)) * 100);
+}
+function PageEstoqueInsumos(frente){
+  const categoriasOpt = frente==='Cana' ? OPCOES.CATEGORIAS_INSUMO_CANA : OPCOES.CATEGORIAS_INSUMO_GRAOS;
+  const insumos = state['insumos'+frente].filter(i=>i.ativo!==false);
   if(insumos.length===0){
-    return `<div class="card">${Empty('Nenhum insumo ativo','Cadastre um insumo em Operações > Insumos para acompanhar o estoque.')}</div>`;
+    return `<div class="card">${Empty('Nenhum insumo ativo', `Cadastre um insumo em Operações · ${frente==='Cana'?'Cana':'Grãos'} > Insumos para acompanhar o estoque.`)}</div>`;
   }
   const linhas = insumos.map(i=>{
-    const saldo = saldoInsumo(i.id);
-    const precoMedio = precoMedioInsumo(i.id);
+    const saldo = saldoInsumo(frente, i.id);
+    const precoMedio = precoMedioInsumo(frente, i.id);
     const baixo = i.estoqueMinimo!=null && saldo < Number(i.estoqueMinimo);
     return {i, saldo, precoMedio, baixo};
   });
@@ -1032,7 +1079,7 @@ function PageEstoqueInsumos(){
           <tr>
             <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${l.baixo?'alerta':''}" style="height:${pct}%"></div></div></div></td>
             <td><strong>${l.i.nome}</strong></td>
-            <td>${(OPCOES.CATEGORIAS_INSUMO.find(o=>o.value===l.i.categoria)||{}).label || '—'}</td>
+            <td>${(categoriasOpt.find(o=>o.value===l.i.categoria)||{}).label || '—'}</td>
             <td class="mono">${fmt(l.saldo)} ${l.i.unidade} ${l.i.estoqueMinimo?`<span class="hint">/ mín. ${fmt(l.i.estoqueMinimo)} ${l.i.unidade}</span>`:''}</td>
             <td class="mono">${l.precoMedio==null ? '—' : `R$ ${fmt(l.precoMedio,4)}/${l.i.unidade}`}</td>
             <td>${l.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
@@ -1042,341 +1089,55 @@ function PageEstoqueInsumos(){
     </table>
   </div>`;
 }
-function pctEstoque(saldo, minimo){
-  if(!minimo || minimo<=0) return saldo>0 ? 100 : 0;
-  return Math.round(Math.max(0, Math.min(saldo/(minimo*2), 1)) * 100);
-}
 
-/* ===================== FINANCEIRO: CUSTO POR TALHÃO =====================
- * Cruza o que já existe em Aplicações (custo de insumo, pelo preço
- * médio ponderado), Despesas (custo geral) e Colheita (toneladas) por
- * talhão — sem guardar nada à parte.
- * Despesa com talhão marcado entra 100% naquele talhão. Despesa sem
- * talhão (geral — mão de obra, transporte, etc.) é RATEADA entre os
- * talhões que têm um plantio ativo (hectares "de plantação", não
- * qualquer talhão cadastrado), proporcional à área de cada um — pedido
- * do usuário: sem custo por talhão vindo de fonte externa (planilha),
- * ratear pela área é a aproximação mais justa disponível. */
-function producaoTotalTalhao(talhaoId){
-  return state.colheitas.filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c.toneladas||0),0);
-}
-function custoInsumosTalhao(talhaoId){
-  return state.aplicacoes.filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
-    const preco = precoMedioInsumo(ap.insumoId);
+/* ===================== FINANCEIRO: CUSTO POR TALHÃO (unificado) =====================
+ * Uma tabela só, com TODOS os talhões ativos (cana e grãos juntos) —
+ * cada linha usa o conjunto de tabelas certo (aplicacoes_cana/
+ * despesas_cana/colheitas_cana OU os equivalentes _graos) de acordo
+ * com a frente da Cultura vinculada ao talhão (frenteDoTalhao). Custo
+ * de insumo pelo preço médio ponderado; despesa com talhão marcado
+ * entra 100% nele; despesa geral (sem talhão) é rateada ENTRE OS
+ * TALHÕES DA MESMA FRENTE com plantio ativo, proporcional à área —
+ * uma despesa de Grãos nunca dilui o custo de um talhão de Cana e
+ * vice-versa, porque os dois ratões são calculados separadamente. */
+function custoInsumosTalhao(frente, talhaoId){
+  return state['aplicacoes'+frente].filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
+    const preco = precoMedioInsumo(frente, ap.insumoId);
     return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
   },0);
 }
-function talhaoEmProducao(t){
-  return state.plantios.some(p=>p.talhaoId===t.id && p.ativo);
+function talhaoEmProducao(frente, t){
+  const chave = frente==='Cana' ? 'plantiosCana' : 'plantiosGraos';
+  return state[chave].some(p=>p.talhaoId===t.id && p.ativo);
 }
-function areaTotalEmProducao(){
-  return state.talhoes.filter(t=>t.ativo!==false && talhaoEmProducao(t)).reduce((a,t)=>a+Number(t.areaHa||0),0);
+function areaTotalEmProducao(frente){
+  return state.talhoes.filter(t=>t.ativo!==false && frenteDoTalhao(t)===(frente==='Cana'?'cana':'graos') && talhaoEmProducao(frente,t)).reduce((a,t)=>a+Number(t.areaHa||0),0);
 }
-function despesasGeraisSemTalhao(){
-  return state.despesas.filter(d=>!d.talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
-}
-function custoDespesasTalhao(talhaoId){
-  const t = state.talhoes.find(x=>x.id===talhaoId);
-  const direta = state.despesas.filter(d=>d.talhaoId===talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
-  let rateio = 0;
-  if(t && t.areaHa && talhaoEmProducao(t)){
-    const areaTotal = areaTotalEmProducao();
-    if(areaTotal>0) rateio = despesasGeraisSemTalhao() * (Number(t.areaHa)/areaTotal);
-  }
-  return direta + rateio;
-}
-function PageCustoProducao(){
-  const talhoes = state.talhoes.filter(t=>t.ativo!==false);
-  if(talhoes.length===0){
-    return `<div class="card">${Empty('Nenhum talhão ativo','Cadastre um talhão em Cadastros > Talhões para acompanhar o custo.')}</div>`;
-  }
-  const linhas = talhoes.map(t=>{
-    const custoInsumos = custoInsumosTalhao(t.id);
-    const custoDespesas = custoDespesasTalhao(t.id);
-    const custoTotalTalhao = custoInsumos + custoDespesas;
-    const producao = producaoTotalTalhao(t.id);
-    const custoHa = t.areaHa ? custoTotalTalhao/Number(t.areaHa) : null;
-    const custoTon = producao>0 ? custoTotalTalhao/producao : null;
-    return {t, custoInsumos, custoDespesas, custoTotalTalhao, producao, custoHa, custoTon};
-  });
-  const custoInsumoGeral = linhas.reduce((a,l)=>a+l.custoInsumos,0);
-  const custoDespesasGeral = linhas.reduce((a,l)=>a+l.custoDespesas,0);
-  const custoTotal = custoInsumoGeral + custoDespesasGeral;
-  const producaoTotalGeral = linhas.reduce((a,l)=>a+l.producao,0);
-  const custoTonMedio = producaoTotalGeral>0 ? custoTotal/producaoTotalGeral : null;
-  return `
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Custo insumos</div><div class="stat-value">R$ ${fmt(custoInsumoGeral)}</div></div>
-    <div class="stat-card"><div class="stat-label">Custo despesas</div><div class="stat-value">R$ ${fmt(custoDespesasGeral)}</div></div>
-    <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotalGeral)} t</div></div>
-    <div class="stat-card"><div class="stat-label">Custo médio / tonelada</div><div class="stat-value">${custoTonMedio==null?'—':'R$ '+fmt(custoTonMedio)}</div></div>
-  </div>
-  <div class="card" style="overflow-x:auto;">
-    <table>
-      <thead><tr><th>Talhão</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo despesas</th><th>Custo total</th><th>Custo/ha</th><th>Produção</th><th>Custo/tonelada</th></tr></thead>
-      <tbody>
-        ${linhas.map(l=>`
-          <tr>
-            <td><strong>${l.t.nome}</strong></td>
-            <td>${fkNome('fazendas', l.t.fazendaId)}</td>
-            <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
-            <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
-            <td class="mono">R$ ${fmt(l.custoDespesas)}</td>
-            <td class="mono">R$ ${fmt(l.custoTotalTalhao)}</td>
-            <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
-            <td class="mono">${fmt(l.producao)} t</td>
-            <td class="mono">${l.custoTon==null?'—':'R$ '+fmt(l.custoTon)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>
-  <p class="hint" style="margin-top:12px;">Custo de insumos pelo preço médio ponderado (Operações &gt; Estoque); aplicação sem nenhuma entrada com preço informado entra com custo zero. Despesa com talhão marcado (Financeiro &gt; Despesas) entra 100% nele; despesa geral (sem talhão) é rateada entre os talhões com plantio ativo, proporcional à área de cada um.</p>`;
+function producaoTotalTalhao(frente, talhaoId){
+  const chave = frente==='Cana' ? 'colheitasCana' : 'colheitasGraos';
+  const campo = frente==='Cana' ? 'toneladas' : 'sacas';
+  return state[chave].filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c[campo]||0),0);
 }
 
-/* ===================== FINANCEIRO: DESPESAS =====================
- * Lista customizada (não usa a tabela genérica do CADASTROS) para dar
- * espaço a filtro por mês/centro de custo, gráfico de despesa por
- * centro de custo (clicável, filtra a lista) e descrição colapsada —
- * mostra só o centro de custo na linha, expande pra ver o texto
- * completo (fornecedor, nº do documento, data de pagamento original
- * etc.) ao clicar. Novo/editar/excluir reaproveitam o motor genérico
- * de CADASTROS (mesmos data-attributes, mesmo modal). */
-const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-function mesLabel(yyyyMm){
-  const [y,m] = String(yyyyMm).split('-');
-  return `${MESES_PT[Number(m)-1]||m}/${y}`;
-}
-/* Agregação de despesa por centro de custo, reaproveitada pelo gráfico
- * de barras clicável (Despesas) e pelo donut anual (Resultados). */
-function despesaPorCentroCusto(lista){
-  const agreg = new Map();
-  lista.forEach(d=>{
-    const chave = d.centroCustoId ?? 'sem';
-    agreg.set(chave, (agreg.get(chave)||0) + Number(d.valor||0));
-  });
-  return [...agreg.entries()].map(([chave,total])=>({
-    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
-  })).sort((a,b)=>b.total-a.total);
-}
-/* ---------- DONUT (mesmo componente visual do AEpecuária) ---------- */
-function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
-function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
-  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
-  const [x0,y0] = polarXY(cx,cy,rOut,a0);
-  const [x1,y1] = polarXY(cx,cy,rOut,a1);
-  const [x2,y2] = polarXY(cx,cy,rIn,a1);
-  const [x3,y3] = polarXY(cx,cy,rIn,a0);
-  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
-}
-const DONUT_PALETTE = ['#1B4332','#2D6A4F','#40916C','#74C69D','#95D5B2','#C98A2B','#E0A458','#8A5A2B','#B3462F','#D98A73','#4A5A7A','#6E7BA6','#2E4057','#7A5C61','#A6798E','#65758A'];
-function corCentroCusto(idx){ return DONUT_PALETTE[idx % DONUT_PALETTE.length]; }
-// Fatias abaixo de LIMITE_PCT_OUTROS viram uma única fatia "Outros" (soma
-// delas) — sem isso, um centro de custo de 0,1% vira uma lasquinha
-// ilegível no donut e some no meio das cores. A soma continua batendo:
-// "Outros" é só uma forma de exibir, não descarta nenhum valor.
-const LIMITE_PCT_OUTROS = 3;
-function donutChart(entries, opts){
-  opts = opts || {};
-  const totalGeral = entries.reduce((a,e)=>a+e.total,0);
-  if(entries.length===0 || totalGeral<=0){
-    return `<div class="card">${Empty('Sem despesa para compor o gráfico', 'Lance uma despesa para ver o gráfico por centro de custo.')}</div>`;
-  }
-  const principais = entries.filter(e => (e.total/totalGeral*100) >= LIMITE_PCT_OUTROS);
-  const pequenas = entries.filter(e => (e.total/totalGeral*100) < LIMITE_PCT_OUTROS);
-  const agrupadas = pequenas.length>0
-    ? [...principais, {chave:'outros', nome:`Outros (${pequenas.length})`, total: pequenas.reduce((a,e)=>a+e.total,0)}]
-    : principais;
-  const total = totalGeral;
-  const cx=110, cy=110, rOut=100, rIn=64;
-  const gap = agrupadas.length>1 ? 0.025 : 0;
-  let angle = 0;
-  const slices = agrupadas.map((e,idx)=>{
-    const frac = total>0 ? e.total/total : 0;
-    const sweep = frac*Math.PI*2;
-    const a0 = angle + gap/2;
-    const a1 = angle + sweep - gap/2;
-    angle += sweep;
-    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
-    const midAngle = (a0+a1)/2;
-    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
-    const pct = frac*100;
-    const showLabel = pct>=6;
-    const clicavel = e.chave!=='outros';
-    return `
-      <path class="donut-slice" ${clicavel?`data-donut-centro="${e.chave}"`:'style="cursor:default;"'} d="${path}" fill="${corCentroCusto(idx)}"
-        tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.total)}, ${fmt(pct,1)}%"></path>
-      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
-    `;
-  }).join('');
-  const legenda = agrupadas.map((e,idx)=>{
-    const clicavel = e.chave!=='outros';
-    return `
-    <div class="legenda-row" ${clicavel?`data-donut-centro="${e.chave}"`:'style="cursor:default;"'}>
-      <span class="legenda-swatch" style="background:${corCentroCusto(idx)}"></span>
-      <span class="legenda-nome">${e.nome}</span>
-      <span class="legenda-valor">R$ ${fmt(e.total)}</span>
-      <span class="legenda-pct">${fmt(total>0?e.total/total*100:0,1)}%</span>
-    </div>
-  `;}).join('');
-  return `
-  <div class="card card-pad" style="margin-bottom:16px;">
-    <div class="eyebrow" style="margin-bottom:12px;">${opts.titulo||'Despesa por centro de custo (ano)'}</div>
-    <div class="painel-resultados">
-      <div class="donut-wrap">
-        <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
-          ${slices}
-          <text class="donut-center-value" x="110" y="104" text-anchor="middle">R$ ${fmt(total,0)}</text>
-          <text class="donut-center-label" x="110" y="123" text-anchor="middle">ano</text>
-        </svg>
-      </div>
-      <div class="painel-legenda">${legenda}</div>
-    </div>
-  </div>`;
-}
-function PageDespesas(){
-  const cfg = CADASTROS.despesas;
-  const podeEditar = temPermissao(cfg.modulo,'editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
-  const todas = state.despesas;
-  const meses = [...new Set(todas.map(d=>String(d.data||'').slice(0,7)).filter(Boolean))].sort();
-  const centrosUsados = [...new Set(todas.map(d=>d.centroCustoId).filter(id=>id!=null))]
-    .map(id=>state.centrosCusto.find(c=>c.id===id)).filter(Boolean)
-    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+/* ---------- DONUT ---------- */
 
-  const porMes = state.despesaFiltroMes ? todas.filter(d=>String(d.data||'').slice(0,7)===state.despesaFiltroMes) : todas;
+/* ===================== RESULTADOS: RECEITA (unificado, por frente) ===================== */
 
-  const barras = despesaPorCentroCusto(porMes);
-  const maxBarra = barras.reduce((a,b)=>Math.max(a,b.total),0);
-
-  // Grupos: um por centro de custo, recolhido por padrão -- clicar no
-  // cabeçalho abre e mostra os lançamentos daquele centro. Escolher um
-  // centro de custo no filtro (ou clicar numa barra/fatia do gráfico)
-  // restringe a só aquele grupo, já aberto.
-  const gruposVisiveis = state.despesaFiltroCentro
-    ? barras.filter(b=>String(b.chave)===String(state.despesaFiltroCentro))
-    : barras;
-  const totalFiltrado = gruposVisiveis.reduce((a,g)=>a+g.total,0);
-  const totalLancamentos = gruposVisiveis.reduce((a,g)=>a + porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).length, 0);
-
-  return `
-  <div class="toolbar">
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <select data-despesa-filtro-mes>
-        <option value="">Todos os meses</option>
-        ${meses.map(m=>`<option value="${m}" ${state.despesaFiltroMes===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
-      </select>
-      <select data-despesa-filtro-centro>
-        <option value="">Todos os centros de custo</option>
-        ${centrosUsados.map(c=>`<option value="${c.id}" ${String(state.despesaFiltroCentro)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}
-        <option value="sem" ${state.despesaFiltroCentro==='sem'?'selected':''}>Sem centro de custo</option>
-      </select>
-    </div>
-    <span class="hint">${totalLancamentos} lançamento(s) · R$ ${fmt(totalFiltrado)}</span>
-    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="despesas">+ Nova Despesa</button>` : ''}
-  </div>
-  ${barras.length===0 ? '' : `
-  <div class="card card-pad" style="margin-bottom:16px;">
-    <div class="eyebrow" style="margin-bottom:12px;">Despesa por centro de custo${state.despesaFiltroMes?` — ${mesLabel(state.despesaFiltroMes)}`:' (ano)'}</div>
-    <div class="despesa-barras">
-      ${barras.map(b=>`
-        <div class="despesa-barra-linha ${String(state.despesaFiltroCentro)===String(b.chave)?'ativa':''}" data-despesa-filtro-centro-bar="${b.chave}">
-          <div class="despesa-barra-nome">${b.nome}</div>
-          <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${maxBarra>0?(b.total/maxBarra*100):0}%"></div></div>
-          <div class="despesa-barra-valor mono">R$ ${fmt(b.total)}</div>
-        </div>
-      `).join('')}
-    </div>
-  </div>`}
-  ${gruposVisiveis.length===0 ? `<div class="card">${Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.')}</div>` : gruposVisiveis.map(g=>{
-    const itens = porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
-    const aberto = !!state.despesaGruposAbertos[g.chave] || (!!state.despesaFiltroCentro && String(state.despesaFiltroCentro)===String(g.chave));
-    return `
-    <div class="card despesa-grupo">
-      <div class="despesa-grupo-header" data-despesa-grupo-toggle="${g.chave}">
-        <span class="despesa-grupo-seta">${aberto?'▼':'▶'}</span>
-        <span class="despesa-grupo-nome">${g.nome}</span>
-        <span class="hint">${itens.length} lançamento(s)</span>
-        <span class="mono despesa-grupo-valor">R$ ${fmt(g.total)}</span>
-      </div>
-      ${aberto ? `
-      <table class="despesa-grupo-tabela">
-        <tbody>
-          ${itens.map(d=>`
-            <tr>
-              <td class="despesa-grupo-data">${fmtData(d.data)}</td>
-              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}</td>
-              <td class="mono despesa-grupo-valorlinha">R$ ${fmt(d.valor)}</td>
-              <td class="despesa-grupo-acoes">
-                ${podeEditar ? `
-                <button class="btn-ghost btn-sm" data-edit-cadastro="despesas:${d.id}">Editar</button>
-                <button class="btn-danger-ghost" data-del-cadastro="despesas:${d.id}">Excluir</button>
-                ` : ''}
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>` : ''}
-    </div>`;
-  }).join('')}`;
-}
-
-/* ===================== RESULTADOS: RECEITA x DESPESA =====================
- * Módulo de acesso separado do Financeiro (mesmo racional do
- * AEpecuária: quem vê custo de insumo não necessariamente deve ver
- * receita/margem da operação). Junta Receita (receitas_cana) com
- * Despesas gerais (despesas_cana) + custo de insumo (Aplicações, já
- * calculado em custoInsumosTalhao) — sem guardar nada à parte. */
-function PageResultado(){
-  const receitaTotal = state.receitas.reduce((a,r)=>a+Number(r.valorTotal||0),0);
-  const despesasGerais = state.despesas.reduce((a,d)=>a+Number(d.valor||0),0);
-  const custoInsumoTotal = state.talhoes.reduce((a,t)=>a+custoInsumosTalhao(t.id),0);
-  const despesaTotal = despesasGerais + custoInsumoTotal;
-  const resultado = receitaTotal - despesaTotal;
-  const areaTotal = state.fazendas.filter(f=>f.ativo!==false).reduce((a,f)=>a+Number(f.areaHa||0),0);
-  const resultadoHa = areaTotal>0 ? resultado/areaTotal : null;
-  const maxRD = Math.max(receitaTotal, despesaTotal, 1);
-  return `
-  <div class="stat-row">
-    <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(receitaTotal)}</div></div>
-    <div class="stat-card"><div class="stat-label">Despesa total</div><div class="stat-value">R$ ${fmt(despesaTotal)}</div></div>
-    <div class="stat-card"><div class="stat-label">Resultado</div><div class="stat-value ${resultado<0?'alerta':''}">R$ ${fmt(resultado)}</div></div>
-    <div class="stat-card"><div class="stat-label">Resultado / hectare</div><div class="stat-value ${resultadoHa!=null&&resultadoHa<0?'alerta':''}">${resultadoHa==null?'—':'R$ '+fmt(resultadoHa)}</div></div>
-  </div>
-  <div class="card card-pad" style="margin-bottom:16px;">
-    <div class="eyebrow" style="margin-bottom:12px;">Receita x Despesa (ano)</div>
-    <div class="despesa-barras">
-      <div class="despesa-barra-linha" style="cursor:default;">
-        <div class="despesa-barra-nome">Receita</div>
-        <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${(receitaTotal/maxRD*100)}%; background:var(--bom);"></div></div>
-        <div class="despesa-barra-valor mono">R$ ${fmt(receitaTotal)}</div>
-      </div>
-      <div class="despesa-barra-linha" style="cursor:default;">
-        <div class="despesa-barra-nome">Despesa</div>
-        <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${(despesaTotal/maxRD*100)}%; background:var(--alerta);"></div></div>
-        <div class="despesa-barra-valor mono">R$ ${fmt(despesaTotal)}</div>
-      </div>
-    </div>
-  </div>
-  ${donutChart(despesaPorCentroCusto(state.despesas), {titulo:'Despesa por centro de custo (ano)'})}
-  <div class="card card-pad">
-    <table>
-      <tbody>
-        <tr><td>Receita (venda de cana)</td><td class="mono" style="text-align:right;">R$ ${fmt(receitaTotal)}</td></tr>
-        <tr><td>Despesas gerais (mão de obra, transporte, etc.)</td><td class="mono" style="text-align:right;">R$ ${fmt(despesasGerais)}</td></tr>
-        <tr><td>Custo de insumo (Tratos culturais)</td><td class="mono" style="text-align:right;">R$ ${fmt(custoInsumoTotal)}</td></tr>
-        <tr><td><strong>Resultado</strong></td><td class="mono" style="text-align:right;"><strong>R$ ${fmt(resultado)}</strong></td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="hint" style="margin-top:12px;">Resultado por hectare divide pela soma da área de todas as fazendas ativas (Cadastros &gt; Fazendas), igual ao AEpecuária. Ainda não separa por safra/período — mostra o acumulado de tudo que foi lançado.</p>`;
-}
+/* ===================== RESULTADOS: RESULTADO (Cana, Grãos e Geral) =====================
+ * Junta Receita (receitas_cana/receitas_graos) com Despesas gerais e
+ * custo de insumo de cada frente — sem guardar nada à parte. O bloco
+ * "Geral" soma as duas frentes: é a resposta direta para "quanto a
+ * lavoura inteira deu de lucro" (o que o AE Matriz também vai
+ * enxergar, lendo este mesmo indicador). Resultado/ha de cada frente
+ * usa a área EM PRODUÇÃO daquela frente (talhões com plantio ativo) —
+ * mais correto que usar a área total das fazendas (que inclui hectares
+ * de outra frente, ou nenhuma). O bloco Geral usa a soma das duas
+ * áreas em produção. */
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
-  ['cadastros','Cadastros (Fazendas, Talhões, Culturas...)'],
-  ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
-  ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
-  ['resultados','Resultados de Cana (Receita, Resultado)'],
+  ['cana_cadastros','Cadastros (Talhões, Culturas, Safras)'],
+  ['operacoes','Operações (Plantio, Tratos, Colheita, Insumos)'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', colaborador:'Colaborador', operador:'Operador'};
 function papelPill(papel){
@@ -1417,7 +1178,7 @@ function ModalUsuario(){
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
         <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. Vale para o AE Cana antigo também (mesma conta, mesmo banco).</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
@@ -1446,7 +1207,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis. <strong>Financeiro x Resultados:</strong> "Financeiro: Editar" deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado (lucratividade) — isso só quem tiver "Resultados" liberado enxerga (além do Administrador, que já vê tudo).</p>
+        <p class="hint">Administrador tem acesso total a todos os módulos, das duas frentes. Cada módulo abaixo é independente — dá pra liberar só Grãos, só Cana, ou os dois. <strong>Financeiro x Resultados:</strong> "Financeiro: Editar" (de cada frente) deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado — isso só quem tiver "Resultados" daquela frente liberado enxerga.</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
@@ -1492,31 +1253,48 @@ function ModalTrocarSenha(){
   </div>`;
 }
 /* ===================== HISTÓRICO DO TALHÃO =====================
- * Não é um cadastro novo — junta numa tela só o que já existe em
- * Colheita (número de cortes, produção) e Aplicações (insumo por
- * insumo, incluindo calcário/gesso/adubo), filtrado por talhão. Como
- * lê direto de colheitas_cana/aplicacoes_cana, fica sempre conciliado
- * com os lançamentos de Colheita e Tratos culturais — não há nada
- * guardado à parte para desatualizar. */
+ * Ramifica por frente (frenteDoTalhao) — usa colheitas_cana/
+ * aplicacoes_cana para talhão de cana, colheitas_graos/aplicacoes_graos
+ * para talhão de grãos. Não guarda nada à parte: lê direto dos dois
+ * módulos, então fica sempre conciliado com o que já foi lançado. */
 function ModalHistoricoTalhao(){
   const talhaoId = state.modal.talhaoId;
   const t = state.talhoes.find(x=>x.id===talhaoId);
   if(!t) return '';
-  const colheitasDoTalhao = state.colheitas.filter(c=>c.talhaoId===talhaoId).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
-  const producaoTotal = colheitasDoTalhao.reduce((a,c)=>a+Number(c.toneladas||0),0);
-  const tchMedio = t.areaHa ? producaoTotal/Number(t.areaHa)/(colheitasDoTalhao.length||1) : null;
+  const frente = frenteDoTalhao(t);
+  if(!frente){
+    return `
+    <div class="overlay" data-close-overlay="1">
+      <div class="modal modal-lg" data-stop="1">
+        <div class="modal-head"><h3>Histórico — ${t.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+        <div class="modal-body">${Empty('Talhão sem cultura definida','Defina a Cultura deste talhão em Cadastros > Talhões (Cana ou Grãos) para ver o histórico.')}</div>
+        <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
+      </div>
+    </div>`;
+  }
+  const frenteChave = frente==='cana' ? 'Cana' : 'Graos';
+  const unidade = frenteChave==='Cana' ? 't' : 'sc';
+  const campoQtd = frenteChave==='Cana' ? 'toneladas' : 'sacas';
+  const chaveColheitas = frenteChave==='Cana' ? 'colheitasCana' : 'colheitasGraos';
+  const chaveAplicacoes = frenteChave==='Cana' ? 'aplicacoesCana' : 'aplicacoesGraos';
+  const chaveInsumos = frenteChave==='Cana' ? 'insumosCana' : 'insumosGraos';
+  const categoriasOpt = frenteChave==='Cana' ? OPCOES.CATEGORIAS_INSUMO_CANA : OPCOES.CATEGORIAS_INSUMO_GRAOS;
 
-  const aplicacoesDoTalhao = state.aplicacoes.filter(a=>a.talhaoId===talhaoId);
+  const colheitasDoTalhao = state[chaveColheitas].filter(c=>c.talhaoId===talhaoId).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+  const producaoTotal = colheitasDoTalhao.reduce((a,c)=>a+Number(c[campoQtd]||0),0);
+  const produtividadeMedia = t.areaHa ? producaoTotal/Number(t.areaHa)/(colheitasDoTalhao.length||1) : null;
+
+  const aplicacoesDoTalhao = state[chaveAplicacoes].filter(a=>a.talhaoId===talhaoId);
   const porInsumo = {};
   aplicacoesDoTalhao.forEach(a=>{
     if(!porInsumo[a.insumoId]) porInsumo[a.insumoId] = 0;
     porInsumo[a.insumoId] += Number(a.quantidade||0);
   });
   const linhasInsumo = Object.entries(porInsumo).map(([insumoId,total])=>{
-    const insumo = state.insumos.find(x=>x.id===Number(insumoId));
+    const insumo = state[chaveInsumos].find(x=>x.id===Number(insumoId));
     return {
       nome: insumo?.nome || '—',
-      categoria: (OPCOES.CATEGORIAS_INSUMO.find(o=>o.value===insumo?.categoria)||{}).label || '—',
+      categoria: (categoriasOpt.find(o=>o.value===insumo?.categoria)||{}).label || '—',
       total, unidade: insumo?.unidade || '',
     };
   }).sort((a,b)=> a.nome.localeCompare(b.nome));
@@ -1524,33 +1302,33 @@ function ModalHistoricoTalhao(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal modal-lg" data-stop="1">
-      <div class="modal-head"><h3>Histórico — ${t.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Histórico — ${t.nome} <span class="pill ${frenteChave==='Cana'?'pill-cana':'pill-graos'}" style="margin-left:8px;">${frenteChave==='Cana'?'Cana':'Grãos'}</span></h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint">${fkNome('fazendas', t.fazendaId)} · ${t.areaHa ? fmt(t.areaHa)+' ha' : 'área não informada'}</p>
 
         <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
-          <div class="stat-card"><div class="stat-label">Número de cortes</div><div class="stat-value">${colheitasDoTalhao.length}</div></div>
-          <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotal)} t</div></div>
-          <div class="stat-card"><div class="stat-label">TCH médio</div><div class="stat-value">${tchMedio==null?'—':fmt(tchMedio)+' t/ha'}</div></div>
+          <div class="stat-card"><div class="stat-label">Número de colheitas</div><div class="stat-value">${colheitasDoTalhao.length}</div></div>
+          <div class="stat-card"><div class="stat-label">Produção total</div><div class="stat-value">${fmt(producaoTotal)} ${unidade}</div></div>
+          <div class="stat-card"><div class="stat-label">${frenteChave==='Cana'?'TCH médio':'Produtividade média'}</div><div class="stat-value">${produtividadeMedia==null?'—':fmt(produtividadeMedia)+' '+unidade+'/ha'}</div></div>
         </div>
 
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:4px 0;">Colheitas (cortes)</h4>
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:4px 0;">${frenteChave==='Cana'?'Colheitas (cortes)':'Colheitas'}</h4>
         ${colheitasDoTalhao.length===0 ? `<p class="hint">Nenhuma colheita registrada para este talhão.</p>` : `
         <table>
-          <thead><tr><th>Data</th><th>Corte</th><th>Toneladas</th><th>TCH</th></tr></thead>
+          <thead><tr><th>Data</th>${frenteChave==='Cana'?'<th>Corte</th>':''}<th>${unidade==='t'?'Toneladas':'Sacas'}</th><th>${frenteChave==='Cana'?'TCH':'Produtividade'}</th></tr></thead>
           <tbody>
             ${colheitasDoTalhao.map(c=>`
               <tr>
                 <td>${fmtData(c.data)}</td>
-                <td>${c.corte ?? '—'}</td>
-                <td class="mono">${fmt(c.toneladas)} t</td>
-                <td class="mono">${t.areaHa ? fmt(Number(c.toneladas||0)/Number(t.areaHa)) + ' t/ha' : '—'}</td>
+                ${frenteChave==='Cana'?`<td>${c.corte ?? '—'}</td>`:''}
+                <td class="mono">${fmt(c[campoQtd])} ${unidade}</td>
+                <td class="mono">${t.areaHa ? fmt(Number(c[campoQtd]||0)/Number(t.areaHa)) + ' '+unidade+'/ha' : '—'}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>`}
 
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:16px 0 4px 0;">Insumos aplicados (calcário, gesso, adubo, defensivos...)</h4>
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:16px 0 4px 0;">Insumos aplicados</h4>
         ${linhasInsumo.length===0 ? `<p class="hint">Nenhuma aplicação registrada para este talhão.</p>` : `
         <table>
           <thead><tr><th>Insumo</th><th>Categoria</th><th>Total aplicado</th></tr></thead>
@@ -1647,7 +1425,18 @@ function attachEvents(){
     el.onclick = ()=>{ state.page = el.dataset.subnav; render(); };
   });
   document.querySelectorAll('[data-novo-cadastro]').forEach(el=>{
-    el.onclick = ()=>{ abrirNovoCadastro(el.dataset.novoCadastro); render(); };
+    el.onclick = ()=>{
+      const presets = el.dataset.presetFazenda ? {fazendaId:Number(el.dataset.presetFazenda)} : null;
+      abrirNovoCadastro(el.dataset.novoCadastro, presets);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-fazenda-talhoes-toggle]').forEach(el=>{
+    el.onclick = ()=>{
+      const id = Number(el.dataset.fazendaTalhoesToggle);
+      state.fazendaTalhoesAbertos[id] = !state.fazendaTalhoesAbertos[id];
+      render();
+    };
   });
   document.querySelectorAll('[data-edit-cadastro]').forEach(el=>{
     el.onclick = ()=>{
@@ -1670,14 +1459,6 @@ function attachEvents(){
     el.onclick = ()=>{
       const chave = el.dataset.despesaFiltroCentroBar;
       state.despesaFiltroCentro = String(state.despesaFiltroCentro)===String(chave) ? '' : chave;
-      render();
-    };
-  });
-  document.querySelectorAll('[data-donut-centro]').forEach(el=>{
-    el.onclick = ()=>{
-      state.despesaFiltroMes = '';
-      state.despesaFiltroCentro = el.dataset.donutCentro;
-      state.page = 'despesas';
       render();
     };
   });
@@ -1704,7 +1485,6 @@ function attachEvents(){
   const stopEl = document.querySelector('[data-stop]');
   if(stopEl) stopEl.onclick = (e)=> e.stopPropagation();
 
-  // ações que não passam pelo motor genérico de cadastro (permissões e troca de senha)
   const saveBtn = document.querySelector('[data-save]');
   if(saveBtn){
     saveBtn.onclick = async ()=>{
@@ -1713,7 +1493,11 @@ function attachEvents(){
       if(type==='permissoes'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
-        const permissoes = {};
+        // Parte das permissoes que a pessoa JA TEM e sobrescreve so os
+        // modulos mostrados nesta tela. Com o banco unificado, profiles.permissoes
+        // guarda os modulos dos tres apps no mesmo jsonb — montar o objeto do
+        // zero aqui apagaria silenciosamente os modulos dos outros apps.
+        const permissoes = {...(editDraft.permissoes || {})};
         document.querySelectorAll('[data-perm-modulo]').forEach(sel=>{ permissoes[sel.dataset.permModulo] = sel.value; });
         ({error} = await db.from('profiles').update({papel, ativo, permissoes}).eq('id', editDraft._perfilId));
       } else if(type==='trocarSenha'){
@@ -1743,7 +1527,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_cana.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_lavoura.js'));
 }
 </script>
 </body>
