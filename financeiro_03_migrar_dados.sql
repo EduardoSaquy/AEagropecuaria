@@ -111,7 +111,11 @@ begin
     cf.nome,
     cf.valor_mensal,
     cf.data,
-    case when cf.data is not null then to_char(cf.data, 'YYYY-MM') else null end,
+    -- mes vem do proprio campo mes: em custos_fixos ele e independente da
+    -- data. Lancamento historico tem mes preenchido e data vazia (competencia
+    -- mensal). Derivar da data zeraria o mes desses e eles virariam
+    -- recorrentes, valendo para todo mes.
+    coalesce(cf.mes, case when cf.data is not null then to_char(cf.data, 'YYYY-MM') end),
     nullif(trim(coalesce(cf.fornecedor, '')), ''),
     nullif(trim(
       coalesce(cf.observacao, '')

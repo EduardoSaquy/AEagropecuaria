@@ -110,9 +110,11 @@ create table if not exists lancamentos_financeiros (
   created_at timestamptz not null default now(),
   criado_por text,
 
-  -- mes tem que bater com a data, ou os dois nulos (recorrente)
+  -- Com data, o mes tem que ser o dela. SEM data, o mes e livre: preenchido
+  -- significa competencia mensal (lancamento historico, sem dia especifico);
+  -- vazio significa despesa recorrente.
   constraint mes_bate_com_data check (
-    (data is null and mes is null) or (data is not null and mes = to_char(data, 'YYYY-MM'))
+    data is null or mes = to_char(data, 'YYYY-MM')
   )
 );
 
