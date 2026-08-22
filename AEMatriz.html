@@ -388,13 +388,32 @@ function rowToLancamento(r){
   return {id:r.id, tipo:r.tipo, atividade:r.atividade, fazendaId:r.fazenda_id, centroCustoId:r.centro_custo_id,
           descricao:r.descricao||'', valor:r.valor, data:r.data||null, mes:r.mes||null,
           fornecedor:r.fornecedor||'', observacao:r.observacao||'',
-          talhaoId:r.talhao_id||null, loteId:r.lote_id||null, areas:r.areas||[], arrobas:r.arrobas??null};
+          talhaoId:r.talhao_id||null, loteId:r.lote_id||null, areas:r.areas||[], arrobas:r.arrobas??null,
+          // quanto foi entregue (tonelada na cana, saca nos cereais) e a
+          // safra — vieram das receitas de lavoura na migração. Ainda não
+          // aparecem no formulário; ficam aqui para não se perderem e para
+          // o R$ por tonelada poder ser calculado depois.
+          quantidade:r.quantidade??null, unidade:r.unidade||null,
+          safraId:r.safra_id||null, culturaId:r.cultura_id||null};
 }
 function lancamentoToRow(l){
   return {tipo:l.tipo, atividade:l.atividade,
           fazenda_id:l.fazendaId || null, centro_custo_id:Number(l.centroCustoId),
           descricao:l.descricao, valor:Number(l.valor),
-          data:l.data || null, mes:l.data ? l.data.slice(0,7) : null,
+          data:l.data || null,
+          // Com data, o mês é o dela. SEM data, preserva o mês que o
+          // lançamento já tinha.
+          //
+          // Isto não é detalhe: centenas de lançamentos históricos vindos do
+          // Conag têm mês preenchido e data vazia — são competências
+          // mensais, sem dia específico. Escrever mes=null neles os
+          // transformaria em despesa RECORRENTE, válida em todo mês. Foi
+          // exatamente assim que o custo de um mês saltou de R$ 43.928,73
+          // para mais de um milhão. Ali o erro veio da migração; aqui vinha
+          // pela edição: bastava alguém abrir um lançamento antigo e salvar.
+          // Lançamento novo não tem mes, então continua nulo e recorrente,
+          // que é o que se espera dele.
+          mes: l.data ? l.data.slice(0,7) : (l.mes || null),
           fornecedor:l.fornecedor || null, observacao:l.observacao || null,
           talhao_id:l.talhaoId || null, lote_id:l.loteId || null,
           areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas)};
@@ -414,8 +433,8 @@ function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:
 // indicadores e resultado financeiro próprios.
 const APPS_REGISTRO = [
   {slug:'pecuaria', nome:'AE Pecuária', descricao:'Confinamento, pasto, cria, dietas e financeiro do rebanho.', url:'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', cor:'#2a78d6', status:'ativo'},
-  {slug:'cana', nome:'AE Lavoura — Cana', descricao:'Talhões, tratos culturais e financeiro da cana-de-açúcar.', url:'https://eduardosaquy.github.io/AEagropecuaria/AELavoura.html', cor:'#eb6834', status:'ativo'},
-  {slug:'cereais', nome:'AE Lavoura — Grãos', descricao:'Talhões, tratos culturais e financeiro de grãos/cereais.', url:'https://eduardosaquy.github.io/AEagropecuaria/AELavoura.html', cor:'#1baf7a', status:'ativo'},
+  {slug:'cana', nome:'AE Cana', descricao:'Talhões, plantio, tratos culturais e colheita da cana-de-açúcar (SP).', url:'https://eduardosaquy.github.io/AEagropecuaria/AECana.html', cor:'#eb6834', status:'ativo'},
+  {slug:'cereais', nome:'AE Cereais', descricao:'Talhões, plantio, tratos culturais e colheita de soja, milho e demais grãos (TO).', url:'https://eduardosaquy.github.io/AEagropecuaria/AECereais.html', cor:'#1baf7a', status:'ativo'},
   {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'', cor:'#8a6d3b', status:'em_breve'},
 ];
 
@@ -430,7 +449,10 @@ async function loadAll(){
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
     temPermissao('matriz_financeiro','visualizar') ? db.from('lancamentos_financeiros').select('*').order('data', {ascending:false, nullsFirst:true}) : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').eq('ativo', true).order('nome') : Promise.resolve({data:[]}),
+    // Carrega inclusive os inativos: sem eles a tela de Centros de Custo
+    // nao teria como mostrar nem reativar o que foi desativado. Quem filtra
+    // por ativo e o seletor do lancamento, logo abaixo.
+    temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome').order('nome') : Promise.resolve({data:[]}),
   ]);
   const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv].find(r=>r.error)?.error;
@@ -576,16 +598,16 @@ async function carregarResultadoPecuaria(){
   state.resultados.pecuaria = {...state.resultados.pecuaria, loading:true, erro:''};
   render();
   try{
-    const [ingRes, dietRes, srRes, ptRes, rcRes, cfRes, recRes] = await Promise.all([
+    const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes] = await Promise.all([
       dbPecuaria.from('ingredientes').select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
       dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg'),
       dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
       dbPecuaria.from('reproducao_custos').select('data, custo'),
-      dbPecuaria.from('custos_fixos').select('nome, categoria, valor_mensal, mes, areas'),
-      dbPecuaria.from('receitas').select('data, descricao, valor'),
+      db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria'),
     ]);
-    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, cfRes, recRes]) if(r.error) throw r.error;
+    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes]) if(r.error) throw r.error;
+    const lanc = (lancRes.data||[]).map(rowToLancamento);
 
     const ingredientes = ingRes.data||[];
     const custoKgPorDieta = new Map();
@@ -606,24 +628,19 @@ async function carregarResultadoPecuaria(){
       const reproducao = (rcRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.custo||0), 0);
       return {racao, pasto, reproducao, total: racao+pasto+reproducao};
     }
+    // Despesa fixa e receita vêm do modelo único, a MESMA fonte do
+    // Financeiro. Antes esta tela agrupava custos_fixos por conta própria,
+    // com uma cópia da regra do recorrente escrita aqui dentro — e foi
+    // essa cópia, divergindo da original, que fez o custo do mês aparecer
+    // errado. Agora as duas telas chamam vigentesNoMes().
+    const despesas = lanc.filter(l=>l.tipo==='despesa');
+    const receitasPec = lanc.filter(l=>l.tipo==='receita');
     function fixosDoMes(mesFiltro){
-      const grupos = new Map();
-      (cfRes.data||[]).forEach(c=>{
-        const chaveAreas = (c.areas||[]).slice().sort().join(',');
-        const chave = `${c.nome}||${c.categoria||''}||${chaveAreas}`;
-        if(!grupos.has(chave)) grupos.set(chave, []);
-        grupos.get(chave).push(c);
-      });
-      let total = 0;
-      grupos.forEach(rows=>{
-        const doMes = rows.filter(c=>c.mes===mesFiltro);
-        const usar = doMes.length>0 ? doMes : rows.filter(c=>!c.mes);
-        total += usar.reduce((a,c)=>a+Number(c.valor_mensal||0),0);
-      });
-      return total;
+      return vigentesNoMes(despesas, mesFiltro).reduce((a,l)=>a+Number(l.valor||0), 0);
     }
     function receitasNoPrefixo(prefixo){
-      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+      return receitasPec.filter(r=>r.mes===prefixo)
+        .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     }
 
     // Um item por mês da janela, já com tudo que os filtros (Mês/Ano/Safra)
@@ -656,14 +673,14 @@ async function carregarResultadoCana(){
   state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
   render();
   try{
-    const [insRes, entRes, aplRes, desRes, recRes] = await Promise.all([
+    const [insRes, entRes, aplRes, lancRes] = await Promise.all([
       db.from('insumos_cana').select('id'),
       db.from('entradas_insumo_cana').select('insumo_id, quantidade, preco_pago'),
       db.from('aplicacoes_cana').select('data, insumo_id, quantidade'),
-      db.from('despesas_cana').select('data, valor'),
-      db.from('receitas_cana').select('data, valor_total'),
+      db.from('lancamentos_financeiros').select('*').eq('atividade','cana'),
     ]);
-    for(const r of [insRes, entRes, aplRes, desRes, recRes]) if(r.error) throw r.error;
+    for(const r of [insRes, entRes, aplRes, lancRes]) if(r.error) throw r.error;
+    const lanc = (lancRes.data||[]).map(rowToLancamento);
 
     const precoMedioPorInsumo = new Map();
     (insRes.data||[]).forEach(i=>{
@@ -680,22 +697,30 @@ async function carregarResultadoCana(){
         return acc + (preco!=null ? Number(a.quantidade||0)*preco : 0);
       }, 0);
     }
+    // Despesa e receita vêm do modelo único, a MESMA fonte que o Financeiro
+    // e o custo por hectare usam. Antes esta tela lia despesas_cana e
+    // receitas_cana direto: a despesa lançada na tela nova não aparecia
+    // aqui, e o Resultado mostrava um número diferente do Financeiro para o
+    // mesmo mês.
+    const despesas = lanc.filter(l=>l.tipo==='despesa');
+    const receitasCana = lanc.filter(l=>l.tipo==='receita');
     function despesaGeralNoPrefixo(prefixo){
-      return (desRes.data||[]).filter(d=>d.data && d.data.startsWith(prefixo)).reduce((a,d)=>a+Number(d.valor||0), 0);
+      return vigentesNoMes(despesas, prefixo).reduce((a,d)=>a+Number(d.valor||0), 0);
     }
     function receitasNoPrefixoCana(prefixo){
-      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+      return receitasCana.filter(r=>r.mes===prefixo)
+        .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     }
 
     const mensal = mesesJanela().map(mesStr=>{
       const custoInsumo = custoInsumoNoPrefixo(mesStr);
       const despesaGeral = despesaGeralNoPrefixo(mesStr);
       const receitasDoMes = receitasNoPrefixoCana(mesStr);
-      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor_total||0), 0);
+      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0), 0);
       return {
         mes: mesStr, despesa: custoInsumo+despesaGeral, receita, resultado: receita-(custoInsumo+despesaGeral),
         despesaPorCategoria: {custoInsumo, despesaGeral},
-        receitas: receitasDoMes.map(r=>({data:r.data, descricao:'Venda de cana', valor:Number(r.valor_total||0)})),
+        receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Venda de cana', valor:Number(r.valor||0)})),
       };
     });
 
@@ -715,14 +740,14 @@ async function carregarResultadoCereais(){
   state.resultados.cereais = {...state.resultados.cereais, loading:true, erro:''};
   render();
   try{
-    const [insRes, entRes, aplRes, desRes, recRes] = await Promise.all([
+    const [insRes, entRes, aplRes, lancRes] = await Promise.all([
       db.from('insumos_graos').select('id'),
       db.from('entradas_insumo_graos').select('insumo_id, quantidade, preco_pago'),
       db.from('aplicacoes_graos').select('data, insumo_id, quantidade'),
-      db.from('despesas_graos').select('data, valor'),
-      db.from('receitas_graos').select('data, valor_total'),
+      db.from('lancamentos_financeiros').select('*').eq('atividade','graos'),
     ]);
-    for(const r of [insRes, entRes, aplRes, desRes, recRes]) if(r.error) throw r.error;
+    for(const r of [insRes, entRes, aplRes, lancRes]) if(r.error) throw r.error;
+    const lanc = (lancRes.data||[]).map(rowToLancamento);
 
     const precoMedioPorInsumo = new Map();
     (insRes.data||[]).forEach(i=>{
@@ -739,22 +764,27 @@ async function carregarResultadoCereais(){
         return acc + (preco!=null ? Number(a.quantidade||0)*preco : 0);
       }, 0);
     }
+    // Mesma fonte única do Financeiro — ver o comentário em
+    // carregarResultadoCana().
+    const despesas = lanc.filter(l=>l.tipo==='despesa');
+    const receitasGraos = lanc.filter(l=>l.tipo==='receita');
     function despesaGeralNoPrefixo(prefixo){
-      return (desRes.data||[]).filter(d=>d.data && d.data.startsWith(prefixo)).reduce((a,d)=>a+Number(d.valor||0), 0);
+      return vigentesNoMes(despesas, prefixo).reduce((a,d)=>a+Number(d.valor||0), 0);
     }
     function receitasNoPrefixoGraos(prefixo){
-      return (recRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).sort((a,b)=>b.data.localeCompare(a.data));
+      return receitasGraos.filter(r=>r.mes===prefixo)
+        .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     }
 
     const mensal = mesesJanela().map(mesStr=>{
       const custoInsumo = custoInsumoNoPrefixo(mesStr);
       const despesaGeral = despesaGeralNoPrefixo(mesStr);
       const receitasDoMes = receitasNoPrefixoGraos(mesStr);
-      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor_total||0), 0);
+      const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0), 0);
       return {
         mes: mesStr, despesa: custoInsumo+despesaGeral, receita, resultado: receita-(custoInsumo+despesaGeral),
         despesaPorCategoria: {custoInsumo, despesaGeral},
-        receitas: receitasDoMes.map(r=>({data:r.data, descricao:'Venda de grãos', valor:Number(r.valor_total||0)})),
+        receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Venda de cereais', valor:Number(r.valor||0)})),
       };
     });
 
@@ -848,6 +878,7 @@ const state = {
   abaFinanceiro: 'despesa',
   erroLancamento: '',
   searchDespesas: '',
+  searchCentros: '',
   filtroMesDespesas: '',
   filtroMesReceitas: '',
   funcionarios: [], // {id, nome, cargo, ativo, dataAdmissao, perfilId, observacao} — sem CPF/salário/Pix
@@ -963,6 +994,7 @@ function render(){
       ${state.page==='resultados' ? PageResultados() : ''}
       ${state.page==='financeiro' ? PageFinanceiro() : ''}
       ${state.page==='fazendas' ? PageFazendas() : ''}
+      ${state.page==='centrosCusto' ? PageCentrosCusto() : ''}
       ${state.page==='funcionarios' ? PageFuncionarios() : ''}
       ${state.page==='usuarios' ? PageUsuarios() : ''}
     `;
@@ -1023,6 +1055,11 @@ const PAGES = [
   {key:'resultados', label:'Resultados', modulo:'matriz_resultados'},
   {key:'financeiro', label:'Financeiro', modulo:'matriz_financeiro'},
   {key:'fazendas', label:'Fazendas', modulo:'matriz_fazendas'},
+  // Centro de custo é cadastro financeiro, então mora junto com o
+  // Financeiro e usa a mesma permissão. Antes ficava no AE Lavoura; saiu de
+  // lá quando o Financeiro veio pra cá, e sem esta tela ninguém mais
+  // conseguiria criar ou corrigir um centro de custo.
+  {key:'centrosCusto', label:'Centros de Custo', modulo:'matriz_financeiro'},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
@@ -1234,14 +1271,23 @@ const MODULOS_PERMISSAO = [
     ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
     ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
   ]],
-  ['Lavoura — Cana e Grãos', [
-    ['cadastros','Cadastros (Fazendas, Talhões, Culturas, Safras...)'],
-    ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
-    ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
-    ['resultados','Resultados de Cana (Receita, Resultado)'],
-    ['operacoes_graos','Operações de Grãos (Plantio, Tratos, Colheita)'],
-    ['financeiro_graos','Financeiro de Grãos (Custo por Talhão, Despesas)'],
-    ['resultados_graos','Resultados de Grãos (Receita, Resultado)'],
+  // Cana e Cereais são dois apps separados desde a divisão do AE Lavoura —
+  // operações em estados diferentes (SP e TO), com equipes e cadastros
+  // próprios. Por isso cada uma tem sua própria permissão de cadastros:
+  // dá para liberar os talhões da cana a alguém sem liberar os do cereal.
+  //
+  // Financeiro e Resultados saíram dos dois apps e vivem aqui no Matriz
+  // (matriz_financeiro / matriz_resultados), então as chaves antigas
+  // 'financeiro', 'resultados', 'financeiro_graos' e 'resultados_graos'
+  // não governam mais nenhuma tela e saíram desta lista. Elas continuam
+  // no banco, sem uso, até a limpeza.
+  ['AE Cana', [
+    ['cana_cadastros','Cadastros (Talhões, Culturas, Safras)'],
+    ['operacoes','Operações (Plantio, Tratos, Colheita, Insumos)'],
+  ]],
+  ['AE Cereais', [
+    ['cereais_cadastros','Cadastros (Talhões, Culturas, Safras)'],
+    ['operacoes_graos','Operações (Plantio, Tratos, Colheita, Insumos)'],
   ]],
   ['Pecuária', [
     ['manejo','Manejo'], ['cadastro','Cadastro'],
@@ -1289,6 +1335,7 @@ function Header(){
     resultados:{eyebrow:'Financeiro', title:'Resultados', desc:'Receita, despesa e resultado por operação — compare mês a mês, por ano ou por safra (maio a abril).'},
     financeiro:{eyebrow:'Lançamentos', title:'Financeiro', desc:'Despesa, receita e investimento de todas as atividades no mesmo lugar. A atividade é um campo do lançamento, não um app separado — é isso que permite comparar custo por hectare entre pecuária, cana e grãos.'},
     fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área total e, pra cada atividade (grãos, cana, pecuária), quantos hectares dela tem ali. AE Lavoura e AE Pecuária só leem esses dados.'},
+    centrosCusto:{eyebrow:'Cadastro', title:'Centros de Custo', desc:'O plano de contas usado em todo lançamento financeiro. Um centro global (sem fazenda) vale para todas — é o caso das contas do Conag, que atendem pecuária, cana e cereais ao mesmo tempo. A atividade é campo do lançamento, não do centro de custo.'},
     funcionarios:{eyebrow:'Cadastro', title:'Funcionários', desc:'Cargo, em quais atividades cada pessoa participa (com % de alocação) e qual login de acesso ela usa. Sem CPF, salário ou Pix — esses dados não entram aqui.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso. Depois da unificação é um login só, que vale para Matriz, Lavoura e Pecuária.'},
   };
@@ -1731,6 +1778,97 @@ function ModalFazenda(){
   </div>`;
 }
 
+/* ===================== CENTROS DE CUSTO =====================
+ * Cadastro que veio do AE Lavoura junto com o Financeiro. É a lista fixa
+ * que substituiu o texto livre da Pecuária — era ele que fazia
+ * "Mão de obra", "Mao-de-obra" e "MAO DE OBRA" virarem três linhas no
+ * relatório.
+ *
+ * Centro GLOBAL (sem fazenda) vale para todas as fazendas. É assim que
+ * estão os 56 do plano de contas do Conag: contas organizadas por natureza
+ * (receita, despesa, investimento, financeiro), não por fazenda nem por
+ * frente. Um centro por fazenda existe para o que é mesmo só dali. */
+// O Matriz nao tinha busca em tela nenhuma, entao nao tinha o icone.
+function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
+function nomeFazendaLavoura(id){
+  const f = state.fazendasLavoura.find(x=>String(x.id)===String(id));
+  return f ? f.nome : '-';
+}
+function centroCustoToRow(c){
+  return {nome:c.nome, frente:c.frente || null,
+          fazenda_id:c.fazendaId ? Number(c.fazendaId) : null,
+          ativo:!!c.ativo};
+}
+function usosDoCentro(id){
+  return state.lancamentos.filter(l=>String(l.centroCustoId)===String(id)).length;
+}
+function PageCentrosCusto(){
+  const busca = (state.searchCentros||'').toLowerCase();
+  const linhas = state.centrosCusto
+    .filter(c => !busca || c.nome.toLowerCase().includes(busca))
+    .sort((a,b)=>a.nome.localeCompare(b.nome, 'pt-BR'));
+  const podeEditar = temPermissao('matriz_financeiro','editar');
+  return `
+  <div class="toolbar">
+    <div class="search">${iconSearch ? iconSearch() : ''}<input type="text" placeholder="Buscar centro de custo..." value="${esc(state.searchCentros||'')}" data-search-centros="1" autocomplete="off"/></div>
+    <span class="hint">${linhas.length} de ${state.centrosCusto.length}</span>
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-centro="1">+ Novo centro de custo</button>` : ''}
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${linhas.length===0 ? Empty('Nenhum centro de custo','Cadastre os centros de custo que a operação usa nos lançamentos.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Fazenda</th><th>Lançamentos</th><th></th></tr></thead>
+      <tbody>
+        ${linhas.map(c=>{
+          const usos = usosDoCentro(c.id);
+          return `
+          <tr${c.ativo===false ? ' style="opacity:.55;"' : ''}>
+            <td><strong>${esc(c.nome)}</strong>${c.ativo===false ? ' <span class="hint">(inativo)</span>' : ''}</td>
+            <td>${c.fazendaId ? esc(nomeFazendaLavoura(c.fazendaId)) : '<span class="hint">Todas (global)</span>'}</td>
+            <td class="mono">${usos>0 ? fmtInt(usos) : '—'}</td>
+            <td style="display:flex; gap:6px;">
+              ${podeEditar ? `
+              <button class="btn-ghost btn-sm" data-editar-centro="${c.id}">Editar</button>
+              ${usos===0 ? `<button class="btn-danger-ghost" data-excluir-centro="${c.id}">Excluir</button>`
+                         : `<span class="hint" title="Tem lançamento usando este centro. Desative em vez de excluir.">em uso</span>`}
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+function ModalCentroCusto(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._editId?'Editar centro de custo':'Novo centro de custo'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nome</label>
+          <input id="f-nomecentro" value="${esc(d.nome||'')}" placeholder="Ex: MANUTENÇÃO DE VEÍCULOS LEVES"/>
+        </div>
+        <div class="field"><label>Fazenda</label>
+          <select id="f-fazendacentro">
+            <option value="">Todas as fazendas (global)</option>
+            ${[...state.fazendasLavoura].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'))
+              .map(f=>`<option value="${f.id}" ${String(d.fazendaId)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
+          </select>
+          <span class="hint">Global é o normal: o mesmo centro serve pecuária, cana e cereais. Escolha uma fazenda só quando a conta for mesmo exclusiva dela.</span>
+        </div>
+        <div class="field"><label><input type="checkbox" id="f-ativocentro" ${d.ativo!==false?'checked':''}/> Ativo</label>
+          <span class="hint">Desativar tira o centro da lista de novos lançamentos, sem mexer nos que já existem. É o caminho certo para uma conta que saiu de uso.</span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="centro">${d._editId?'Salvar alterações':'Salvar centro'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ===================== FUNCIONÁRIOS ===================== */
 // Cadastro de funcionário — cargo, em quais atividades participa (com % de
 // alocação, não precisa somar 100 — dá pra estar "meio" em duas coisas) e
@@ -1940,9 +2078,19 @@ function lancamentosDoTipo(tipo){
 // Despesa com mês próprio substitui a recorrente naquele mês. Agrupa por
 // descrição + centro de custo + atividade para não misturar duas contas que
 // só coincidem de nome.
-function despesasVigentesNoMes(mesStr){
+/* Uma despesa recorrente (sem mês) vale em todo mês que NÃO tenha um
+ * lançamento próprio do mesmo grupo — se tem o do mês, ele substitui o
+ * recorrente em vez de somar com ele.
+ *
+ * Esta regra mora aqui, num lugar só, e é chamada pelo Financeiro, pelo
+ * custo por hectare e pelo Resultados. Ela estar escrita em dois lugares
+ * foi exatamente o que fez o Resultados e o Financeiro mostrarem números
+ * diferentes da mesma despesa. Quem for mexer nela: é uma função pura de
+ * propósito, recebe a lista em vez de ler o state, justamente para o
+ * Resultados poder usá-la com dados que ele mesmo buscou. */
+function vigentesNoMes(despesas, mesStr){
   const grupos = new Map();
-  state.lancamentos.filter(l=>l.tipo==='despesa').forEach(l=>{
+  despesas.forEach(l=>{
     const chave = `${l.descricao}||${l.centroCustoId}||${l.atividade}`;
     if(!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(l);
@@ -1953,6 +2101,9 @@ function despesasVigentesNoMes(mesStr){
     out.push(...(doMes.length>0 ? doMes : rows.filter(l=>!l.mes)));
   });
   return out;
+}
+function despesasVigentesNoMes(mesStr){
+  return vigentesNoMes(state.lancamentos.filter(l=>l.tipo==='despesa'), mesStr);
 }
 
 /* ---- Custo por hectare: como o "Geral" é distribuído ----
@@ -2171,10 +2322,22 @@ function ModalLancamento(){
   const ehDespesa      = d.tipo==='despesa';
   const ehReceita      = d.tipo==='receita';
   const ehPecuaria     = d.atividade==='pecuaria';
-  // Centros de custo da atividade escolhida, mais os gerais — o resto só
-  // atrapalharia a busca.
+  // Centros de custo que fazem sentido para a atividade escolhida.
+  //
+  // Frente NULA entra sempre, e isso não é exceção: é a regra para o plano
+  // de contas do Conag. Os 56 centros dele são organizados por natureza
+  // (receita, despesa, investimento, financeiro) e servem pecuária, cana e
+  // cereais ao mesmo tempo — "MÃO-DE-OBRA DE OPERACIONAL" não é de uma
+  // frente só. Enquanto este filtro exigia frente preenchida, nenhum deles
+  // aparecia aqui: o plano de contas de verdade estava invisível no
+  // formulário, e só dava para escolher os centros que a migração da
+  // pecuária criou.
+  //
+  // A coluna frente é resquício do desenho anterior à unificação. Quem diz
+  // a que atividade o gasto pertence é o campo atividade do lançamento.
   const centros = state.centrosCusto
-    .filter(c=> c.frente===d.atividade || c.frente==='geral')
+    .filter(c=> c.ativo!==false)
+    .filter(c=> !c.frente || c.frente==='geral' || c.frente===d.atividade)
     .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   return `
   <div class="overlay" data-close-overlay="1">
@@ -2373,6 +2536,7 @@ function Empty(title, sub){
 function Modal(){
   if(state.modal.type==='fazenda') return ModalFazenda();
   if(state.modal.type==='lancamento') return ModalLancamento();
+  if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
   if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
   if(state.modal.type==='usuario') return ModalUsuario();
@@ -2530,6 +2694,46 @@ function attachEvents(){
 
   document.querySelectorAll('[data-trocar-senha-abrir]').forEach(el=>{
     el.onclick = ()=>{ editDraft = {senhaAtual:'', novaSenha:'', confirmarSenha:''}; state.modal = {type:'trocarSenha'}; render(); };
+  });
+
+  // ---- centros de custo ----
+  const buscaCentrosEl = document.querySelector('[data-search-centros]');
+  if(buscaCentrosEl){
+    buscaCentrosEl.oninput = (e)=>{
+      state.searchCentros = e.target.value; render();
+      // render() reescreve o HTML inteiro, entao o cursor volta pro
+      // comeco se nao for reposicionado aqui.
+      const s = document.querySelector('[data-search-centros]');
+      if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+    };
+  }
+  const novoCentroBtn = document.querySelector('[data-novo-centro]');
+  if(novoCentroBtn) novoCentroBtn.onclick = ()=>{
+    editDraft = {nome:'', fazendaId:'', ativo:true};
+    state.modal = {type:'centroCusto'}; render();
+  };
+  document.querySelectorAll('[data-editar-centro]').forEach(el=>{
+    el.onclick = ()=>{
+      const c = state.centrosCusto.find(x=>x.id===Number(el.dataset.editarCentro));
+      editDraft = {...c, _editId: c.id};
+      state.modal = {type:'centroCusto'}; render();
+    };
+  });
+  document.querySelectorAll('[data-excluir-centro]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.excluirCentro);
+      // O botao so aparece quando nao ha lancamento usando o centro, mas a
+      // lista pode estar velha se alguem lancou em outra aba. O banco
+      // recusa pela chave estrangeira, e a mensagem abaixo explica.
+      if(!confirm('Excluir este centro de custo? Essa acao nao pode ser desfeita.')) return;
+      const {error} = await db.from('centros_custo').delete().eq('id', id);
+      if(error){
+        alert('Nao foi possivel excluir: ' + error.message
+              + '\n\nSe houver lancamento usando este centro, desative-o em vez de excluir.');
+        return;
+      }
+      await loadAll();
+    };
   });
 
   // ---- fazendas ----
@@ -2814,6 +3018,23 @@ function attachEvents(){
             }
             if(error) break;
           }
+        }
+      } else if(type==='centro'){
+        const nome = document.getElementById('f-nomecentro').value.trim();
+        if(!nome){ alert('Informe o nome do centro de custo.'); return; }
+        const row = centroCustoToRow({
+          nome,
+          fazendaId: document.getElementById('f-fazendacentro').value || '',
+          ativo: document.getElementById('f-ativocentro').checked,
+          // frente e resquicio do desenho anterior a unificacao: hoje quem
+          // diz a que atividade o gasto pertence e o proprio lancamento.
+          // Preservada na edicao para nao apagar o que ja esta gravado.
+          frente: editDraft.frente || null,
+        });
+        if(editDraft._editId){
+          ({error} = await db.from('centros_custo').update(row).eq('id', editDraft._editId));
+        } else {
+          ({error} = await db.from('centros_custo').insert(row));
         }
       } else if(type==='funcionario'){
         const campos = {
