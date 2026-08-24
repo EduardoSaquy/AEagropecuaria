@@ -374,7 +374,7 @@ const db = supabase.createClient(
 const dbLavoura = db;
 
 function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor, unidade:r.unidade, ms:r.ms, pb:r.pb, ndt:r.ndt, precoKg:r.preco_kg, estoqueMin:r.estoque_min, obs:r.obs||''}; }
-function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:i.obs||''}; }
+function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:manter(i.obs)}; }
 function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg, ajuste:!!r.ajuste}; }
 function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade, preco_kg:m.precoKg||null, ajuste:!!m.ajuste}; }
 function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0, consumoDireto:!!r.consumo_direto}; }
@@ -385,14 +385,32 @@ function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, l
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
 function rowToPasto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, dietaId:r.dieta_id, quantidade:r.quantidade, criadoPor:r.criado_por||''}; }
+/* ===================== UPDATE PARCIAL SEM APAGAR O QUE NAO ESTA NA TELA
+ * Varias telas montam o objeto de salvamento SO com os campos do
+ * formulario. Quando o toRow escreve `campo: x.campo || null`, um campo que
+ * o formulario nao tem vira null no banco - e o dado some sem ninguem
+ * pedir.
+ *
+ * Foi o que acontecia com manejo_id: editar uma pesagem ou uma inseminacao
+ * pelas telas de Confinamento/Cria desfazia o vinculo com o Manejo, e a
+ * planilha do manejo passava a mostrar "-" em todas as linhas, apesar dos
+ * pesos individuais continuarem gravados. Sem tela nenhuma para refazer o
+ * vinculo: perda permanente.
+ *
+ * `manter` devolve undefined quando o campo nao foi informado. O
+ * supabase-js serializa em JSON, e JSON.stringify descarta chaves com
+ * undefined - entao a coluna simplesmente NAO entra no update e o banco
+ * preserva o que ja tinha. Informar null continua apagando de proposito. */
+function manter(valor){ return valor === undefined ? undefined : (valor || null); }
+
 function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroVaca:r.numero_vaca||'', racaTouro:r.raca_touro||'', qualInseminacao:r.qual_inseminacao||'', item:r.item, custo:r.custo, criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
-function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, numero_vaca:r.numeroVaca, raca_touro:r.racaTouro, qual_inseminacao:r.qualInseminacao, custo:r.custo, manejo_id:r.manejoId||null}; }
+function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, numero_vaca:r.numeroVaca, raca_touro:r.racaTouro, qual_inseminacao:r.qualInseminacao, custo:r.custo, manejo_id:manter(r.manejoId)}; }
 function rowToDiagnostico(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroVaca:r.numero_vaca||'', resultado:r.resultado, previsaoParto:r.previsao_parto||'', criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
-function diagnosticoToRow(d){ return {data:d.data, lote_id:d.loteId, numero_vaca:d.numeroVaca, resultado:d.resultado, previsao_parto: d.resultado==='prenha' ? (d.previsaoParto||null) : null, manejo_id:d.manejoId||null}; }
+function diagnosticoToRow(d){ return {data:d.data, lote_id:d.loteId, numero_vaca:d.numeroVaca, resultado:d.resultado, previsao_parto: d.resultado==='prenha' ? (d.previsaoParto||null) : null, manejo_id:manter(d.manejoId)}; }
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, racaBezerro:r.raca_bezerro, criadoPor:r.criado_por||''}; }
 function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro, raca_bezerro:p.racaBezerro||null}; }
 function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca:r.raca||'', pesoKg:r.peso_kg, criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
-function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg, manejo_id:d.manejoId||null}; }
+function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg, manejo_id:manter(d.manejoId)}; }
 function rowToManejo(r){ return {id:r.id, data:r.data, loteId:r.lote_id, loteDestinoId:r.lote_destino_id||null, acoes:r.acoes||[], vacinacao:!!r.vacinacao, vermifugacao:!!r.vermifugacao, status:r.status||'aberto', totalAnimais:r.total_animais||0, criadoPor:r.criado_por||''}; }
 function manejoToRow(m){ return {data:m.data, lote_id:m.loteId, lote_destino_id:m.loteDestinoId||null, acoes:m.acoes||[], vacinacao:!!m.vacinacao, vermifugacao:!!m.vermifugacao, status:m.status||'aberto', total_animais:m.totalAnimais||0}; }
 function rowToProtocoloInseminacao(r){ return {id:r.id, manejoId:r.manejo_id, loteId:r.lote_id, numeroAnimal:r.numero_animal, data:r.data, criadoPor:r.criado_por||''}; }
@@ -463,7 +481,7 @@ function parseNumerosAnimais(texto){
   return String(texto||'').split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
 }
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
-function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||'', manejo_id:p.manejoId||null}; }
+function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||'', manejo_id:manter(p.manejoId)}; }
 function rowToPesagemAnimal(r){ return {id:r.id, pesagemId:r.pesagem_id, numeroAnimal:r.numero_animal, pesoKg:r.peso_kg}; }
 function rowToProducaoRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||''}; }
 function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantidade_kg:p.quantidadeKg}; }
@@ -516,6 +534,34 @@ function centrosCustoInvestimentoConhecidos(){
 function rowToFazenda(r){ return {id:r.fazenda_id, nome:r.fazendas?.nome||'', hectares:r.area_ha}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
+/* O .range(0, 19999) que estava aqui era um TETO, nao paginacao: pedia as
+ * 20.000 primeiras de uma vez. Duas falhas.
+ *
+ * A primeira: o PostgREST tem um limite proprio de linhas por resposta
+ * (db-max-rows, 1000 por padrao nos projetos Supabase) que vale
+ * INDEPENDENTEMENTE do Range pedido. Se esse limite ainda estiver no padrao,
+ * o corte silencioso que o comentario abaixo descreve continua acontecendo.
+ *
+ * A segunda: 20.000 e um teto fixo. movimentos ganha uma linha por
+ * ingrediente a cada trato de dieta de consumo direto, e pesagens_animais
+ * uma por animal pesado - as duas alcancam esse numero em poucos anos, e
+ * dali em diante o app passaria a somar errado sem avisar.
+ *
+ * Paginando de verdade, os dois problemas somem: pede de mil em mil ate a
+ * resposta vir incompleta, que e o sinal de que acabou. */
+async function buscarTudo(consulta){
+  const PAGINA = 1000;
+  let todas = [], de = 0;
+  while(true){
+    const { data, error } = await consulta().range(de, de + PAGINA - 1);
+    if(error) return { data: todas, error };
+    todas = todas.concat(data || []);
+    if(!data || data.length < PAGINA) break;
+    de += PAGINA;
+  }
+  return { data: todas, error: null };
+}
+
 async function loadAll(){
   // .range() é obrigatório em toda consulta -- sem ele, o Supabase corta a
   // resposta em 1000 linhas por padrão (a API nem avisa, só devolve as 1000
@@ -524,35 +570,35 @@ async function loadAll(){
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
   const [ing, mov, diet, lot, sr, lc, pt, rc, lanc, cCusto, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim, pesagAnim, manj, protIA] = await Promise.all([
-    db.from('ingredientes').select('*').order('id').range(0, 19999),
-    db.from('movimentos').select('*').order('id').range(0, 19999),
-    db.from('dietas').select('*').order('id').range(0, 19999),
-    db.from('lotes').select('*').order('id').range(0, 19999),
-    db.from('saidas_racao').select('*').order('id').range(0, 19999),
-    db.from('leituras_cocho').select('*').order('id').range(0, 19999),
-    db.from('pasto').select('*').order('id').range(0, 19999),
-    db.from('reproducao_custos').select('*').order('id').range(0, 19999),
+    buscarTudo(()=>db.from('ingredientes').select('*').order('id')),
+    buscarTudo(()=>db.from('movimentos').select('*').order('id')),
+    buscarTudo(()=>db.from('dietas').select('*').order('id')),
+    buscarTudo(()=>db.from('lotes').select('*').order('id')),
+    buscarTudo(()=>db.from('saidas_racao').select('*').order('id')),
+    buscarTudo(()=>db.from('leituras_cocho').select('*').order('id')),
+    buscarTudo(()=>db.from('pasto').select('*').order('id')),
+    buscarTudo(()=>db.from('reproducao_custos').select('*').order('id')),
     // Financeiro agora vem de lancamentos_financeiros, no AE Matriz. Este
     // app so LE — quem lanca despesa, receita avulsa e investimento e o
     // Matriz. A excecao e a receita gerada por uma venda, que continua
     // nascendo aqui porque a venda e uma acao operacional (ver tipo
     // 'venda' em salvarRegistro).
-    db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id').range(0, 19999),
-    db.from('centros_custo').select('id, nome').range(0, 19999),
-    db.from('precos_arroba').select('*').order('id').range(0, 19999),
+    buscarTudo(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id')),
+    buscarTudo(()=>db.from('centros_custo').select('id, nome')),
+    buscarTudo(()=>db.from('precos_arroba').select('*').order('id')),
     db.from('config_financeiro').select('*').eq('id', 1),
-    db.from('profiles').select('*').order('nome').range(0, 19999),
-    dbLavoura.from('fazenda_atividades').select('area_ha, fazenda_id, fazendas(nome)').eq('atividade','pecuaria').order('fazenda_id').range(0, 19999),
-    db.from('partos').select('*').order('id').range(0, 19999),
-    db.from('pesagens').select('*').order('id').range(0, 19999),
-    db.from('producoes_racao').select('*').order('id').range(0, 19999),
-    db.from('abates').select('*').order('id').range(0, 19999),
-    db.from('diagnosticos_gestacionais').select('*').order('id').range(0, 19999),
-    db.from('desmamas').select('*').order('id').range(0, 19999),
-    db.from('animais').select('*').order('id').range(0, 19999),
-    db.from('pesagens_animais').select('*').order('id').range(0, 19999),
-    db.from('manejos').select('*').order('id').range(0, 19999),
-    db.from('protocolos_inseminacao').select('*').order('id').range(0, 19999),
+    buscarTudo(()=>db.from('profiles').select('*').order('nome')),
+    buscarTudo(()=>dbLavoura.from('fazenda_atividades').select('area_ha, fazenda_id, fazendas(nome)').eq('atividade','pecuaria').order('fazenda_id')),
+    buscarTudo(()=>db.from('partos').select('*').order('id')),
+    buscarTudo(()=>db.from('pesagens').select('*').order('id')),
+    buscarTudo(()=>db.from('producoes_racao').select('*').order('id')),
+    buscarTudo(()=>db.from('abates').select('*').order('id')),
+    buscarTudo(()=>db.from('diagnosticos_gestacionais').select('*').order('id')),
+    buscarTudo(()=>db.from('desmamas').select('*').order('id')),
+    buscarTudo(()=>db.from('animais').select('*').order('id')),
+    buscarTudo(()=>db.from('pesagens_animais').select('*').order('id')),
+    buscarTudo(()=>db.from('manejos').select('*').order('id')),
+    buscarTudo(()=>db.from('protocolos_inseminacao').select('*').order('id')),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
@@ -578,6 +624,10 @@ async function loadAll(){
     id:l.id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
     descricao:'', fornecedor:l.fornecedor||'', valorMensal:l.valor,
     mes:l.mes||null, data:l.data||null, areas:l.areas||[], observacao:l.observacao||'',
+    // fazendaId entra na chave de agrupamento do recorrente (ver
+    // custosFixosDoMes); sem ela, conta de uma fazenda apagava a
+    // recorrente de outra no mesmo mês.
+    fazendaId:l.fazenda_id ?? null,
   }));
   state.investimentos = lancamentos.filter(l=>l.tipo==='investimento').map(l=>({
     id:l.id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
@@ -3982,8 +4032,12 @@ function custosFixosDoMes(mesStr){
     // nome e centro de custo mas têm atividades diferentes (ex: Insumos
     // Pecuários indireto vs. Insumos Pecuários — Reprodução, que é direto
     // da Cria).
+    // A chave tem que ser a MESMA do vigentesNoMes() do AE Matriz, senão
+    // as duas telas chegam a totais diferentes do mesmo mês lendo a mesma
+    // tabela. A fazenda entrou por isso: sem ela, lançar uma conta de uma
+    // fazenda apagava a recorrente da outra.
     const chaveAreas = (c.areas||[]).slice().sort().join(',');
-    const chave = `${c.nome}||${c.categoria||''}||${chaveAreas}`;
+    const chave = `${c.nome}||${c.categoria||''}||pecuaria||${c.fazendaId ?? ''}||${chaveAreas}`;
     if(!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(c);
   });
@@ -3997,8 +4051,13 @@ function custosFixosDoMes(mesStr){
 function fixosDoMes(mesStr){
   return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
 }
+// O mês de uma receita vem do campo mes; a data é só reserva para
+// lançamento antigo que não tenha o mes preenchido. Receita de competência
+// mensal (histórico do Conag) tem mes e NÃO tem data — ler r.data direto
+// derrubava a tela inteira com "Cannot read properties of null".
+function mesDaReceita(r){ return r.mes || (r.data || '').slice(0,7); }
 function receitaDoMes(mesStr){
-  return state.receitas.filter(r=>r.data.startsWith(mesStr)).reduce((a,r)=>a+Number(r.valor||0),0);
+  return state.receitas.filter(r=>mesDaReceita(r)===mesStr).reduce((a,r)=>a+Number(r.valor||0),0);
 }
 // Quanto de UMA despesa (já filtrada pro mês) cai em cada atividade —
 // nenhuma atividade marcada (Geral) rateia por cabeça entre as três; uma
@@ -4171,7 +4230,7 @@ function dadosFinanceiro(){
     return a + qtdEmKg(saldo, i.unidade)*i.precoKg;
   }, 0);
 
-  const receitaMes = state.receitas.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+Number(r.valor||0),0);
+  const receitaMes = state.receitas.filter(r=>mesDaReceita(r)===mes).reduce((a,r)=>a+Number(r.valor||0),0);
   // Resultado financeiro (lucro/prejuízo) usa só a despesa cadastrada, não o
   // custo variável de ração/pasto/reprodução -- mesmo critério de comparativoMensal().
   const resultadoMes = receitaMes - fixosMes;
@@ -4508,7 +4567,19 @@ function custoBezerroDesmama(desmama, custosPorLoteList){
   const custoVariavelPorAnimal = lote && lote.numeroAnimais>0 ? (racaoPeriodo+pastoPeriodo)/lote.numeroAnimais : 0;
   const listaCustos = custosPorLoteList || custosDiariosPorLote().custosPorLote;
   const diarioLote = lote ? listaCustos.find(r=>r.lote.id===lote.id) : null;
-  const custoFixoPeriodo = (diarioLote ? diarioLote.fixoAlocado : 0) * dias;
+  // fixoAlocado é o custo fixo diário do LOTE INTEIRO, não por cabeça — a
+  // prova está em custosDiariosPorLote(), que logo depois faz
+  // porAnimal = total/l.numeroAnimais a partir dele.
+  //
+  // Aqui faltava essa divisão. A ração e o pasto acima já eram divididos
+  // por numeroAnimais e o fixo não, então o custo do bezerro vinha
+  // multiplicado exatamente pelo número de animais do lote: num lote de
+  // cria com 100 vacas, um bezerro de 210 dias aparecia com R$ 210.000 em
+  // vez de R$ 2.100. O erro ia junto para o "custo médio por bezerro" e
+  // para a coluna Total da tabela de Reprodução.
+  const custoFixoPeriodo = (lote && lote.numeroAnimais > 0)
+    ? (diarioLote ? diarioLote.fixoAlocado : 0) * dias / lote.numeroAnimais
+    : 0;
   const custoTotal = custoProtocolo + custoVariavelPorAnimal + custoFixoPeriodo;
   return {parto, lote, desmama, dias, custoProtocolo, custoVariavelPorAnimal, custoFixoPeriodo, custoTotal, temInseminacao: !!insem};
 }
@@ -4769,8 +4840,9 @@ function PageFinanceiroCurral(){
 
 /* ---- Financeiro: Receitas ---- */
 function PageResultadosReceitas(){
-  const mesesDisponiveis = [...new Set(state.receitas.map(r=>r.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
-  const list = [...state.receitas].filter(r=> !state.filtroMesReceitas || r.data.startsWith(state.filtroMesReceitas)).sort((a,b)=> b.data.localeCompare(a.data));
+  const mesesDisponiveis = [...new Set(state.receitas.map(r=>r.mes || (r.data||'').slice(0,7)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+  const list = [...state.receitas].filter(r=> !state.filtroMesReceitas || mesDaReceita(r)===state.filtroMesReceitas)
+    .sort((a,b)=> String(b.data||b.mes||'').localeCompare(String(a.data||a.mes||'')));
   return `
   <div class="field" style="max-width:220px; margin-bottom:14px;">
     <select data-filtro-mes-receitas="1">
@@ -7586,7 +7658,15 @@ function attachEvents(){
           // antes de tudo, pro caso de ter trocado pra uma dieta "produzida
           // e guardada" e não sobrar movimento antigo órfão).
           const dieta = state.dietas.find(x=>x.id===dietaId);
-          if(!error) await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
+          // ORDEM IMPORTA: insere os movimentos novos ANTES de apagar os
+          // antigos, e só apaga se o insert tiver dado certo.
+          //
+          // Na ordem inversa, uma falha no insert (rede caindo no meio,
+          // RLS) deixava a saída salva com a quantidade nova e ZERO
+          // movimentos de estoque: o saldo do ingrediente subia como se o
+          // consumo não tivesse acontecido, sem nenhum aviso além do alert
+          // genérico. Assim, o pior caso é um desconto duplicado que ainda
+          // dá para ver e corrigir — melhor que um consumo que sumiu.
           if(!error && dieta && dieta.consumoDireto){
             const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
               const ing = getIng(it.ingredienteId);
@@ -7597,8 +7677,22 @@ function attachEvents(){
               };
             });
             if(movs.length){
-              ({error} = await db.from('movimentos').insert(movs));
+              const res = await db.from('movimentos').insert(movs).select('id');
+              error = res.error;
+              if(!error){
+                // apaga só os ANTIGOS: os recém-inseridos ficam de fora
+                const novos = (res.data||[]).map(m=>m.id);
+                let del = db.from('movimentos').delete().eq('saida_racao_id', saidaId);
+                if(novos.length) del = del.not('id', 'in', `(${novos.join(',')})`);
+                await del;
+              }
+            } else if(!error){
+              await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
             }
+          } else if(!error){
+            // dieta produzida e guardada: não desconta ingrediente cru,
+            // então é só limpar o que tiver sobrado da dieta anterior
+            await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
           }
         } else {
           const resultado = await salvarOuEnfileirar(type, {dietaId, loteId, data, quantidadeKg});
@@ -7753,7 +7847,13 @@ function attachEvents(){
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
             const descricao = `${TIPO_VENDA_LABEL[tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(quantidade)} animais)`;
-            const receitaRow = {data, lote_id:loteId, descricao, arrobas, valor:valorTotal};
+            // mes tem que acompanhar a data: a tabela tem a restricao
+          // mes_bate_com_data. Sem esta linha, mudar a data de uma venda
+          // para outro mes gravava o abate e fazia a receita ser recusada -
+          // e o fluxo nao desfazia o abate. A venda aparecia em agosto e a
+          // receita continuava em julho.
+          const receitaRow = {data, mes: data ? data.slice(0,7) : null,
+                              lote_id:loteId, descricao, arrobas, valor:valorTotal};
             const resReceita = await db.from('lancamentos_financeiros').update(receitaRow).eq('abate_id', vendaId).select();
             error = resReceita.error;
             // .update() com filtro que não bate nenhuma linha "funciona"
@@ -7761,7 +7861,18 @@ function attachEvents(){
             // tinha sumido por algum motivo, recria em vez de deixar a
             // venda editada sem receita nenhuma batendo com ela.
             if(!error && (!resReceita.data || resReceita.data.length===0)){
-              ({error} = await db.from('lancamentos_financeiros').insert({...receitaRow, abate_id:vendaId}));
+              // tipo, atividade e centro_custo_id sao NOT NULL: sem eles o
+            // insert morria com "null value in column tipo", deixando a
+            // venda editada e SEM receita - exatamente o estado que este
+            // bloco existe para evitar.
+            if(state.centroVendasId == null){
+              alert('Não foi possível recriar a receita desta venda: o centro de custo "Vendas" não foi encontrado. A venda não foi alterada.');
+              return;
+            }
+            ({error} = await db.from('lancamentos_financeiros').insert({
+              ...receitaRow, abate_id:vendaId,
+              tipo:'receita', atividade:'pecuaria', centro_custo_id: state.centroVendasId,
+            }));
             }
           }
           if(!error && loteAntigoId && loteAntigoId!==loteId){
