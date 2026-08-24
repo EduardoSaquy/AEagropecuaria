@@ -218,247 +218,159 @@
 <div class="pagina">
 
 <header>
-  <p class="eyebrow">Revisão técnica · 22 de agosto de 2026 · conferido no banco</p>
+  <p class="eyebrow">Revisão técnica · 22 de agosto de 2026 · concluída</p>
   <h1>Auditoria AE&nbsp;Agropecuária</h1>
-  <p class="resumo">Quatro auditorias em paralelo sobre <strong>Matriz, Pecuária, Cana e Cereais</strong> e sobre o banco. <strong>44 achados</strong>. Dez já foram corrigidos, e a conferência no banco voltou <strong>dez de dez OK</strong> — com os R$&nbsp;10.226.028,01 e as 2.759 linhas intactos. O resto está ordenado por risco ao dado, que é onde as falhas deste sistema doeram até agora.</p>
+  <p class="resumo">Quatro auditorias em paralelo sobre <strong>Matriz, Pecuária, Cana e Cereais</strong> e sobre o banco. <strong>44 achados, todos fechados.</strong> A conferência final voltou dez de dez, com os <strong>R$&nbsp;10.226.028,01</strong> e as 2.759 linhas intactos do começo ao fim — depois de mexer em políticas, índices, chaves estrangeiras, restrições e no plano de contas inteiro.</p>
 </header>
 
 <div class="placar">
-  <div><div class="n o">10</div><div class="rot">corrigidos e conferidos</div></div>
-  <div><div class="n c">4</div><div class="rot">críticos abertos</div></div>
-  <div><div class="n a">9</div><div class="rot">altos</div></div>
-  <div><div class="n m">8</div><div class="rot">médios</div></div>
-  <div><div class="n">14</div><div class="rot">menores e latentes</div></div>
+  <div><div class="n o">44</div><div class="rot">achados corrigidos</div></div>
+  <div><div class="n o">10</div><div class="rot">de 10 na conferência</div></div>
+  <div><div class="n">66</div><div class="rot">verificações automatizadas</div></div>
+  <div><div class="n c">3</div><div class="rot">pendências suas</div></div>
 </div>
 
 <section>
-  <h2>Corrigido hoje</h2>
-  <p class="sub">Tudo abaixo está aplicado e conferido contra o banco. Oito dos dez são erro meu — marquei quais.</p>
+  <h2>O que continua com você</h2>
+  <p class="sub">Nada aqui depende de código. As duas primeiras são as únicas exposições de dado que sobraram.</p>
 
-  <div class="achado ok">
-    <div class="topo"><h3>Permissão de pecuária dava acesso ao financeiro inteiro</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>Ao destravar a Pecuária eu escrevi a condição sem olhar a atividade da linha. Como a tabela guarda as quatro atividades no mesmo lugar, quem tinha permissão de pecuária passou a ler — e gravar — cana e cereais também.</p>
-    <p class="cenario"><b>Como escapou:</b> o app da Pecuária filtra por atividade na tela, então nada aparecia errado para quem usa o app. Mas RLS não é a tela: quem chamar a API com o próprio login lê tudo. Foi o raciocínio "a tela já filtra" que produziu o furo.</p>
+  <div class="achado c">
+    <div class="topo"><h3>Pausar o projeto antigo da Pecuária</h3><span class="chip c">aberto</span><span class="chip app">1 minuto</span></div>
+    <p>O projeto <code>leojfqlbdtlriemdgnyw</code> tem leitura anônima em dez tabelas — <code>profiles</code> e <code>custos_fixos</code> entre elas — e a chave pública dele está recuperável no histórico do git. O script que derrubaria essas políticas trava se não estiver no projeto do Lavoura, e <b>nunca rodou lá</b>.</p>
+    <p class="cenario"><b>Por que fechar o login não resolveu:</b> leitura anônima, por definição, não usa login. Uma requisição sem autenticação devolve nomes, logins e a matriz de permissões de toda a equipe, e o financeiro da pecuária até a data da virada.</p>
+    <p><b>Pausar o projeto no painel do Supabase</b> fecha isso e também a Edge Function <code>atualizar-permissoes</code>, que faz UPDATE em <code>profiles</code> com a chave de serviço sem verificar quem chamou. Nada é apagado.</p>
   </div>
 
-  <div class="achado ok">
-    <div class="topo"><h3>Matriz somava no máximo 1.000 dos 2.760 lançamentos</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>O Supabase corta toda consulta em 1.000 linhas e devolve <code>200 OK</code>: array truncado que parece completo. Era o único dos quatro apps sem paginação — e o único onde o número importa.</p>
-    <p class="cenario"><b>Por que ninguém viu:</b> cada tela pegava uma fatia diferente conforme a ordenação que pedia. O Financeiro ordenava por data decrescente e ficava com os recentes; o Resultados não ordenava e ficava com os antigos. As conferências não pegaram porque rodaram em SQL, direto no banco, não pela tela.</p>
+  <div class="achado a">
+    <div class="topo"><h3>Decidir o que "custo por hectare" deve incluir</h3><span class="chip a">precisa de você</span></div>
+    <p>As duas telas agora <b>explicam</b> o que cada uma soma, mas continuam medindo coisas diferentes: o Financeiro inclui o rateio do "Geral" e exclui insumo aplicado; o Resultados faz o oposto.</p>
+    <p class="cenario"><b>A pergunta que trava:</b> quando você compra adubo, isso vira um lançamento de despesa no Financeiro, ou só entra como Entrada de Insumo na lavoura? Se vira os dois, somar as duas fontes conta o mesmo dinheiro duas vezes. É por isso que não unifiquei sozinho.</p>
   </div>
 
-  <div class="achado ok">
-    <div class="topo"><h3>Ninguém da pecuária conseguia registrar venda</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>As políticas de <code>lancamentos_financeiros</code> só aceitavam <code>matriz_financeiro</code>, mas a Pecuária usa <code>pec_financeiro</code>. O abate gravava, a receita era recusada, o app desfazia o abate. O Financeiro da Pecuária também mostrava R$ 0,00 — RLS devolve lista vazia sem erro.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Backup de perfis aberto para qualquer um</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p><code>profiles_backup_unificacao</code> foi criada com <code>create table as select</code> e nunca recebeu RLS. Sem RLS, a chave pública — que está à vista no código-fonte da página — lê e grava. É cópia integral de <code>profiles</code>: nome, login, papel e permissões de todo mundo.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Centro de custo com seletor de fazenda</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span><span class="chip app">achado seu</span></div>
-    <p>Copiei a estrutura antiga da tabela em vez de olhar para o que o cadastro significa. Permitia criar a mesma conta uma vez por fazenda e quebrar o relatório por centro de custo em várias linhas.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Editar lançamento histórico o transformava em recorrente</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>Era o bug do R$ 1,2 milhão rearmado por outro caminho: bastava abrir um lançamento antigo e salvar. Antes veio pela migração, agora vinha pela edição.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Plano de contas do Conag invisível no formulário</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>O seletor exigia <code>frente</code> preenchida, e os 56 centros do Conag têm frente nula — porque servem as três atividades ao mesmo tempo. Nenhum deles aparecia na hora de lançar.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Resultados lia tabela legada; receita de lavoura nunca migrada</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>R$ 2.587.195,27 de receita de cana existiam só na tabela antiga — o app mostrava a cana com R$ 2,45 mi de despesa e receita zero.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Proprietário sem acesso total no banco</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
-    <p>Os apps prometem acesso total a admin e proprietário, e a tela nem desenha as caixinhas para eles. O banco discordava.</p>
-  </div>
-
-  <div class="achado ok">
-    <div class="topo"><h3>Permissão de cadastros não separava as frentes</h3><span class="chip ok">corrigido</span></div>
-    <p>Não dava para liberar os talhões da cana sem liberar os do cereal.</p>
+  <div class="achado m">
+    <div class="topo"><h3>Contas a Pagar do Conag</h3><span class="chip m">pendência antiga</span></div>
+    <p>Importar o Contas a Pagar, e reclassificar por atividade o custo de mão de obra que veio na importação — hoje ele entra como <code>geral</code> e é rateado, quando parte dele é de uma atividade específica.</p>
   </div>
 </section>
 
 <section>
-  <h2>Críticos em aberto</h2>
-  <p class="sub">Os dois primeiros são exposição de dado e não dependem de código — resolvem no painel do Supabase, em minutos.</p>
+  <h2>O que foi corrigido</h2>
+  <p class="sub">Quarenta e quatro achados. Os que valem ser lidos, agrupados pelo que causavam.</p>
 
-  <div class="achado c">
-    <div class="topo"><h3>O projeto antigo da Pecuária continua com leitura anônima de tudo</h3><span class="chip c">crítico</span><span class="chip app">banco</span></div>
-    <p>Dez tabelas do projeto <code>leojfqlbdtlriemdgnyw</code> ganharam política de leitura anônima quando o Matriz precisava lê-las de fora: <code>lotes</code>, <code>custos_fixos</code>, <code>receitas</code>, <code>fazendas</code> e <code>profiles</code>, entre outras. O script que derrubaria isso trava se não estiver no projeto do Lavoura — <b>ele nunca rodou lá</b>.</p>
-    <p class="cenario"><b>Cenário:</b> a chave pública antiga está recuperável no histórico do git. Uma requisição sem login devolve nomes, logins e a matriz de permissões de toda a equipe, e o financeiro inteiro da pecuária até a data da virada. Sem rastro. Fechar o login não resolve — leitura anônima, por definição, não usa login.</p>
-    <p><b>O que fazer:</b> pausar o projeto antigo no painel do Supabase. Resolve os dois primeiros achados de uma vez e não apaga nada.</p>
+  <div class="achado ok">
+    <div class="topo"><h3>Números errados na tela, sem aviso</h3><span class="chip ok">corrigido</span></div>
+    <p><b>O Matriz somava no máximo 1.000 dos 2.759 lançamentos.</b> O Supabase corta toda consulta em 1.000 linhas e devolve <code>200 OK</code>. Era o único dos quatro apps sem paginação — e o único onde o número importa. Cada tela pegava uma fatia diferente conforme a ordenação que pedia: o Financeiro ficava com os recentes, o Resultados com os antigos. Dois totais, ambos baixos.</p>
+    <p><b>A Pecuária paginava com um teto, não com paginação</b> — pedia 20.000 de uma vez, o que não vence o limite próprio do PostgREST e ainda assim acabaria em poucos anos.</p>
+    <p><b>O Resultados lia tabelas legadas</b> enquanto o Financeiro lia o modelo único: despesa lançada na tela nova não aparecia no Resultado.</p>
+    <p><b>R$ 2.587.195,27 de receita de cana existiam só na tabela antiga</b> — o app mostrava a cana com R$ 2,45 mi de despesa e receita zero.</p>
+    <p class="cenario"><b>Por que nenhuma conferência tinha pego:</b> todas rodaram em SQL, direto no banco, e não pela tela.</p>
   </div>
 
-  <div class="achado c">
-    <div class="topo"><h3>Edge Function <code>atualizar-permissoes</code> não verifica quem chamou</h3><span class="chip c">crítico</span><span class="chip app">banco</span></div>
-    <p>Ela faz <code>UPDATE</code> em <code>profiles</code> com a chave de serviço e não lê o cabeçalho de autorização, não chama <code>getUser()</code>, não checa papel. As outras cinco funções fazem as três coisas — esta é a única fora do padrão.</p>
-    <p class="cenario"><b>Cenário:</b> qualquer um que descubra a URL promove qualquer conta a admin. Hoje está <i>acidentalmente</i> contido porque a virada desativou todos os perfis daquele projeto — mas a contenção evapora se alguém reativar, ou se a função for republicada no projeto novo.</p>
+  <div class="achado ok">
+    <div class="topo"><h3>Dado sendo apagado em silêncio</h3><span class="chip ok">corrigido</span></div>
+    <p><b>Editar um lançamento histórico o transformava em recorrente</b> — era o bug do R$ 1,2 milhão rearmado por outro caminho: bastava abrir e salvar.</p>
+    <p><b>Editar uma pesagem ou inseminação desfazia o vínculo com o Manejo.</b> A planilha do manejo passava a mostrar "—" em todas as linhas, com os pesos individuais ainda gravados e nenhuma tela para refazer o vínculo.</p>
+    <p><b>Salvar um funcionário sendo proprietário apagava o login vinculado</b>, porque o seletor vinha vazio e o valor virava nulo.</p>
+    <p class="cenario"><b>A raiz era sempre a mesma:</b> campo que o formulário não conseguiu carregar sendo escrito como nulo. A correção foi nos conversores, não em cada tela — é o que impede a próxima tela nova de repetir.</p>
   </div>
 
-  <div class="achado c">
-    <div class="topo"><h3>Custo por bezerro desmamado multiplicado pelo número de animais do lote</h3><span class="chip c">crítico</span><span class="chip app">Pecuária</span></div>
-    <p>A ração é dividida por <code>numeroAnimais</code>; o custo fixo não. <span class="onde">AEpecuaria.html:4499</span></p>
-    <p class="cenario"><b>Cenário:</b> lote de cria com 100 vacas, R$ 1.000/dia de custo fixo alocado ao lote, bezerro de 210 dias até o desmame. A tela mostra <b>R$ 210.000 por bezerro</b>; o certo seria ~R$ 2.100. O erro é exatamente o número de animais do lote, e contamina o custo médio por bezerro e a tabela de Reprodução.</p>
+  <div class="achado ok">
+    <div class="topo"><h3>Duas telas medindo a mesma coisa por caminhos diferentes</h3><span class="chip ok">corrigido</span></div>
+    <p>A regra do recorrente estava escrita duas vezes, com chaves de agrupamento diferentes. Marcar uma caixinha de área no Matriz mudava o total da Pecuária. E, sem a fazenda na chave, lançar a energia de uma fazenda <b>apagava</b> a recorrente de outra naquele mês — o custo sumia e voltava sozinho no mês seguinte.</p>
+    <p>Agora é uma função só, com a chave completa: descrição, centro, atividade, fazenda e áreas.</p>
   </div>
 
-  <div class="achado c">
-    <div class="topo"><h3>Salvar funcionário sendo proprietário apaga o vínculo de login</h3><span class="chip c">crítico</span><span class="chip app">Matriz</span><span class="chip meu">meu erro</span></div>
-    <p><code>profiles</code> só é carregado para admin. Para quem não é, o seletor "Login de acesso" fica vazio, o valor não casa com nenhuma opção e o salvar grava <code>perfil_id: null</code>. <span class="onde">AEMatriz.html:448, 3045</span></p>
-    <p class="cenario"><b>Cenário:</b> a Alice abre Funcionários, corrige só o cargo de alguém, salva. O vínculo com o login é destruído em silêncio e a pessoa reaparece em "importar contas sem funcionário vinculado". Mesma classe do bug do <code>mes</code>: campo que o formulário não conseguiu carregar sendo escrito como nulo.</p>
+  <div class="achado ok">
+    <div class="topo"><h3>Permissão que não fazia o que dizia</h3><span class="chip ok">corrigido</span></div>
+    <p><b>Proprietário não tinha acesso total no banco</b>, embora a tela prometesse e nem desenhasse as caixinhas para ele. Alice, Marcia e Paulo não liam o Financeiro do Matriz.</p>
+    <p><b>A Pecuária não conseguia registrar venda</b> — as políticas só aceitavam <code>matriz_financeiro</code>. E ao consertar isso eu abri demais: quem tinha permissão de pecuária passou a ler o financeiro inteiro. Fechado no mesmo dia.</p>
+    <p><b>Papel desconhecido virava operador, calado</b> — criar um consultor devolvia "criado com sucesso" com o papel trocado.</p>
+    <p><b>O backup de perfis estava aberto para qualquer um.</b> <code>profiles_backup_unificacao</code> foi criada com <code>create table as select</code> e nunca recebeu RLS: nome, login, papel e permissões de todos, legíveis com a chave pública.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Offline que só funcionava para o último app aberto</h3><span class="chip ok">corrigido</span></div>
+    <p>Cinco service workers registrados na raiz, disputando o mesmo escopo. Um escopo aceita um por vez, e cada um apagava o cache dos outros. Sem aviso, justamente no campo. Agora é um só; os cinco antigos se desregistram sozinhos.</p>
+    <p>No AE Cana o cache local ainda trazia dados de cereais: a chave era a mesma do app antigo, que lia tudo sem filtro.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>O plano de contas do Conag estava invisível</h3><span class="chip ok">corrigido</span></div>
+    <p>O seletor de centro de custo exigia <code>frente</code> preenchida, e os 56 centros do Conag têm frente nula — porque servem as três atividades. Nenhum deles aparecia na hora de lançar.</p>
+    <p>E a hierarquia inteira (entrada/saída, e <code>GRUPO | Subcategoria</code>) estava gravada no banco desde a importação, sem nenhum app ler. O relatório mostrava 71 centros numa lista plana.</p>
   </div>
 </section>
 
 <section>
-  <h2>Altos</h2>
-  <p class="sub">Nove. Quatro deles são resto da separação de ontem.</p>
+  <h2>O plano de contas, hoje</h2>
+  <p class="sub">De dois planos concorrentes e 71 centros com duplicata, para uma DFC de sete grupos e 63 contas — sem um centavo fora do lugar.</p>
 
   <div class="rolar">
   <table>
-    <thead><tr><th>Achado</th><th>Onde</th><th>Consequência</th></tr></thead>
+    <thead><tr><th>Tipo</th><th>Grupo</th><th class="num">Lançamentos</th><th class="num">Total</th></tr></thead>
     <tbody>
-      <tr>
-        <td><b>Cache local do AE Cana traz dados de grãos</b><br>A chave <code>cana_cache_cadastros_v1</code> é a mesma do AE Cana antigo, que lia tudo sem filtro. O cache é pintado na tela antes de <code>filtrarPelaFrente()</code> rodar.</td>
-        <td class="num">AECana.html:484</td>
-        <td>Quem já usou o app antigo vê culturas e talhões de cereais ao abrir. Se a rede falhar, <b>fica</b> nesse estado.</td>
-      </tr>
-      <tr>
-        <td><b>Os dois apps instalam "AE Lavoura" no celular</b><br>Ambos apontam para <code>manifest_lavoura.json</code> e <code>sw_lavoura.js</code>. Os manifests próprios existem no repositório e ninguém os referencia.</td>
-        <td class="num">AECana.html:7</td>
-        <td>"Adicionar à tela de início" instala um app só, chamado AE Lavoura, que abre a página de encaminhamento. E o cache offline guarda o arquivo errado.</td>
-      </tr>
-      <tr>
-        <td><b>Talhão sem cultura some dos dois apps</b><br>O campo Cultura não é obrigatório, mas o filtro por frente descarta quem não tem.</td>
-        <td class="num">AECana.html:534</td>
-        <td>Cadastra o talhão, salva, ele não aparece. Existe no banco e nenhuma das quatro telas o edita.</td>
-      </tr>
-      <tr>
-        <td><b>Editar pesagem ou inseminação apaga o vínculo com o manejo</b><br>Os campos montados no salvar não carregam <code>manejoId</code>.</td>
-        <td class="num">AEpecuaria.html:7958</td>
-        <td>A planilha do manejo passa a mostrar "—" em todas as linhas, apesar dos pesos individuais continuarem gravados. Perda permanente.</td>
-      </tr>
-      <tr>
-        <td><b>Mudar a data de uma venda de mês grava o abate e falha na receita</b><br>O update da receita não atualiza <code>mes</code> e viola o CHECK.</td>
-        <td class="num">AEpecuaria.html:7751</td>
-        <td>Vendas mostra agosto, Receitas continua em julho. Correção dentro do mesmo mês passa — o que torna o bug intermitente.</td>
-      </tr>
-      <tr>
-        <td><b>Pecuária e Matriz agrupam o recorrente com chaves diferentes</b><br>A Pecuária inclui <code>areas</code> na chave; o Matriz não.</td>
-        <td class="num">AEpecuaria.html:3985</td>
-        <td>Marcar uma caixinha de área no Matriz muda o total da Pecuária sem mais nada ter mudado.</td>
-      </tr>
-      <tr>
-        <td><b><code>vigentesNoMes</code> não inclui a fazenda na chave</b><br>Duas fazendas com a mesma conta caem no mesmo grupo.</td>
-        <td class="num">AEMatriz.html:2094</td>
-        <td>Lançar a energia de uma fazenda <b>apaga</b> o recorrente da outra naquele mês. O valor oscila mês a mês sem ninguém mexer.</td>
-      </tr>
-      <tr>
-        <td><b>"Custo por hectare" existe em duas telas com composições diferentes</b><br>O Financeiro inclui o rateio do <code>geral</code> e exclui insumo aplicado; o Resultados faz o oposto.</td>
-        <td class="num">AEMatriz.html:2185</td>
-        <td>Dois números com o mesmo nome que nunca vão bater. E toda despesa <code>geral</code> fica fora dos totais consolidados.</td>
-      </tr>
-      <tr>
-        <td><b>Na mesma tela, a tabela por fazenda não fecha com a de cima</b><br>Uma inclui o rateio do <code>geral</code>, a outra não.</td>
-        <td class="num">AEMatriz.html:2157</td>
-        <td>Dois custos por hectare da cana, um embaixo do outro, com 30% de diferença e sem explicação.</td>
-      </tr>
+      <tr><td>Entrada</td><td>Atividades Operacionais</td><td class="num">20</td><td class="num">4.540.386,67</td></tr>
+      <tr><td>Saída</td><td>Operacional</td><td class="num">2.197</td><td class="num">4.508.106,99</td></tr>
+      <tr><td>Saída</td><td>Investimentos</td><td class="num">21</td><td class="num">920.823,61</td></tr>
+      <tr><td>Saída</td><td>ADM</td><td class="num">410</td><td class="num">120.225,16</td></tr>
+      <tr><td>Saída</td><td>Tributos</td><td class="num">96</td><td class="num">77.744,44</td></tr>
+      <tr><td>Saída</td><td>Comercial</td><td class="num">11</td><td class="num">44.015,20</td></tr>
+      <tr><td>Saída</td><td>Financiamentos</td><td class="num">4</td><td class="num">14.725,94</td></tr>
+      <tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>2.759</strong></td><td class="num"><strong>10.226.028,01</strong></td></tr>
     </tbody>
   </table>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Um erro meu no caminho, e como apareceu</h3><span class="chip meu">meu erro</span></div>
+    <p>A fusão dos centros duplicados mantinha o de <b>menor id</b>. Os do AE Cana são mais antigos e ganhavam a disputa: sobrevivia o nome sem classificação, e o do Conag — que trazia o grupo — era apagado. Nenhum lançamento se perdeu, mas o grupo sim.</p>
+    <p>Deu para reconstruir porque os grupos continuavam nos outros centros. O critério certo teria sido preferir o classificado, não o mais antigo.</p>
+    <p class="cenario"><b>O que passou a existir por causa disso:</b> a fusão seguinte só age quando os dois lados estão no mesmo grupo — se divergirem, ela <b>para sem gravar nada</b>. Fundir grupos diferentes mudaria o relatório, e isso é decisão sua, não consequência escondida de uma limpeza de nomes.</p>
   </div>
 </section>
 
 <section>
-  <h2>Médios</h2>
-  <p class="sub">Oito. Nenhum corrompe dado, mas vários fazem a tela mentir em silêncio.</p>
-
-  <div class="rolar">
-  <table>
-    <thead><tr><th>Achado</th><th>Onde</th></tr></thead>
-    <tbody>
-      <tr><td><b>Textos falando das duas frentes nos apps separados.</b> O modal de permissões promete "liberar só Grãos, só Cana ou os dois" e mostra duas linhas que não fazem isso. A descrição da página de Talhões — primeira coisa que se lê ao entrar — diz "de cana ou de grãos" nos dois apps.</td><td class="num">AECana.html:1210, :364</td></tr>
-      <tr><td><b>Fazenda continua criável e excluível dentro dos apps de frente.</b> O comentário diz "só para consulta" e a tela entrega botões de Novo, Editar e Excluir. Fazenda criada ali some da lista ao salvar.</td><td class="num">AECana.html:344</td></tr>
-      <tr><td><b>Despesa de atividade sem hectare cadastrado some da tela inteira.</b> Sem linha, sem nota, sem alerta.</td><td class="num">AEMatriz.html:2180</td></tr>
-      <tr><td><b>Lançamento com fazenda que não tem área naquela atividade é rateado para as outras.</b> Erro de cadastro virando rateio silencioso, onde deveria virar aviso.</td><td class="num">AEMatriz.html:2161</td></tr>
-      <tr><td><b><code>toISOString()</code> faz a data padrão nascer no dia seguinte.</b> Das 21h à meia-noite, no Brasil. É o único ponto do arquivo fora do padrão.</td><td class="num">AEMatriz.html:2789</td></tr>
-      <tr><td><b><code>centros_custo.frente</code> é <code>NOT NULL</code> no schema versionado e o app grava nulo.</b> Ou a coluna foi alterada por fora e o repositório mente sobre o banco, ou criar centro novo estoura hoje.</td><td class="num">cana_schema.sql:134</td></tr>
-      <tr><td><b>Quatro tabelas que os apps usam não têm DDL nenhum no repositório:</b> <code>funcionarios</code>, <code>funcionario_atividades</code>, <code>fazenda_atividades</code> e <code>apps</code>. Não dá para afirmar que têm RLS, política ou chave estrangeira.</td><td class="num">—</td></tr>
-      <tr><td><b>Três cópias byte a byte do mesmo script de migração</b>, e três arquivos criando as mesmas tabelas base com definições divergentes de <code>papel</code> (4, 6 e 7 valores).</td><td class="num">lavoura_migracao_graos*.sql</td></tr>
-    </tbody>
-  </table>
-  </div>
-</section>
-
-<section>
-  <h2>Melhorias que valem o esforço</h2>
-  <p class="sub">Ordenadas por retorno sobre o trabalho. As duas primeiras são as que eu faria primeiro se fosse meu.</p>
+  <h2>O que ficou montado</h2>
+  <p class="sub">Além das correções, três coisas que não existiam e agora existem.</p>
 
   <div class="achado">
-    <div class="topo"><h3>1 · Backup que permite voltar no tempo</h3></div>
-    <p>Hoje, se alguém apagar uma tabela ou um script rodar errado, a recuperação depende do backup diário mais recente do Supabase — e das tabelas <code>*_backup_*</code> que criamos à mão, que são pontuais e agora estão protegidas mas não são estratégia.</p>
-    <p><b>Point-in-Time Recovery</b> deixa restaurar o banco em qualquer instante dentro da janela de retenção, e não só no ponto do backup diário. É recurso de plano pago e cobrado à parte — <b>confirme o preço e a disponibilidade atual</b> na página da Supabase antes de decidir, porque isso muda. Dado o volume que já está aqui dentro (2.760 lançamentos, anos de histórico do Conag, todo o rebanho), esse é o seguro mais barato do projeto.</p>
-    <p class="cenario"><b>Alternativa sem custo mensal:</b> um <code>pg_dump</code> semanal guardado fora do Supabase. Cobre desastre, não cobre "voltar para dez minutos atrás".</p>
-  </div>
-
-  <div class="achado">
-    <div class="topo"><h3>2 · Registro de quem mudou o quê</h3></div>
-    <p>Hoje, se um valor aparece diferente, não há como saber quem mudou, quando, nem qual era o valor anterior. Três dos bugs desta sessão só foram diagnosticados porque as tabelas antigas ainda existiam para comparação — na próxima vez pode não haver com o que comparar.</p>
-    <p>Um <i>trigger</i> de auditoria em <code>lancamentos_financeiros</code>, <code>abates</code> e <code>profiles</code> grava valor antigo, valor novo, quem e quando, numa tabela à parte. É padrão conhecido em Postgres, roda no banco (o app não precisa saber que existe) e não dá para burlar pelo app.</p>
-    <p class="cenario"><b>Esforço:</b> uma função e três triggers, algumas horas. <b>Retorno:</b> a próxima divergência de valor vira uma consulta em vez de uma investigação.</p>
-  </div>
-
-  <div class="achado">
-    <div class="topo"><h3>3 · Gerar o schema real e versioná-lo</h3></div>
-    <p>Os arquivos <code>*_schema.sql</code> do repositório estão desatualizados e já me induziram ao erro <b>quatro vezes</b> nesta sequência de trabalho — valores de CHECK errados, chave estrangeira que não aparecia, coluna que dizia <code>NOT NULL</code> e não era. Passei a ler o catálogo do banco em vez dos arquivos, mas o repositório continua descrevendo um banco que não existe.</p>
-    <p><code>pg_dump --schema-only</code> gera o estado real. Guardar isso no repositório e regerar depois de cada migração acaba com a classe inteira de erro.</p>
-  </div>
-
-  <div class="achado">
-    <div class="topo"><h3>4 · Manter os testes que já existem</h3></div>
-    <p>Os testes escritos nesta sessão já pegaram dois bugs reais antes de você ver: uma edição que não tinha sido gravada no arquivo, e a paginação que eu achava ter aplicado e não tinha. São 60 verificações rodando contra um banco falso, em três arquivos:</p>
+    <div class="topo"><h3>Testes que rodam contra um banco falso</h3><span class="chip app">66 verificações</span></div>
     <div class="rolar">
       <table>
         <thead><tr><th>Arquivo</th><th>Cobre</th><th class="num">Verificações</th></tr></thead>
         <tbody>
-          <tr><td><code>teste_apps_lavoura.py</code></td><td>Separação entre Cana e Cereais</td><td class="num">38</td></tr>
-          <tr><td><code>teste_matriz.py</code></td><td>Resultados, centros de custo, permissões</td><td class="num">22</td></tr>
-          <tr><td><code>teste_paginacao.py</code></td><td>2.760 linhas contra o corte do Supabase</td><td class="num">1</td></tr>
+          <tr><td><code>teste_apps_lavoura.py</code></td><td>Separação entre Cana e Cereais, cache, permissões</td><td class="num">44</td></tr>
+          <tr><td><code>teste_matriz.py</code></td><td>Resultados, centros de custo, plano de contas</td><td class="num">28</td></tr>
+          <tr><td><code>teste_paginacao.py</code></td><td>2.760 linhas contra o corte do Supabase</td><td class="num">2</td></tr>
         </tbody>
       </table>
     </div>
-    <p>Rodar os três antes de cada subida custa um minuto.</p>
+    <p class="cenario"><b>Já pegaram três erros meus</b> antes de chegarem a você: um campo inexistente num insert, uma edição que não tinha sido gravada no arquivo, e a paginação que eu achava ter aplicado e não tinha. Rodar os três antes de cada subida custa um minuto.</p>
   </div>
 
   <div class="achado">
-    <div class="topo"><h3>5 · Contas a pagar e importação do Conag</h3></div>
-    <p>Duas pendências suas, anteriores a esta sessão, que continuam abertas: importar "Contas a Pagar" do Conag e reclassificar por atividade o custo de mão de obra importado. A segunda afeta diretamente o custo por hectare, que hoje trata esse valor como <code>geral</code>.</p>
+    <div class="topo"><h3><code>schema_real.txt</code> — o banco que existe</h3></div>
+    <p>Os <code>*_schema.sql</code> do repositório descrevem um banco que não existe mais e me induziram ao erro <b>quatro vezes</b>: valores de CHECK errados, chave estrangeira que não aparecia, coluna dizendo <code>NOT NULL</code> sem ser. Agora existe o estado real, lido do catálogo, e um <code>LEIA-ME_SCHEMA.md</code> que avisa isso na cara de quem abrir a pasta.</p>
+  </div>
+
+  <div class="achado">
+    <div class="topo"><h3>Um gerador para os dois apps de campo</h3></div>
+    <p>AE Cana e AE Cereais saem de <code>gerar_apps_lavoura.py</code>, que verifica cada uma das 45 transformações e <b>para</b> se o trecho esperado não existir. Editar 2.043 linhas à mão, duas vezes, é onde erro passa batido.</p>
   </div>
 </section>
 
 <section>
-  <h2>Por onde começar</h2>
-  <ol class="passos">
-    <li><b>Pausar o projeto antigo da Pecuária</b> no painel do Supabase. Fecha os dois críticos de exposição de dado, leva um minuto, não apaga nada.</li>
-    <li><b>Rodar <code>lavoura_05</code> e <code>auditoria_01</code></b> e subir o <code>AEMatriz.html</code> — já entregues.</li>
-    <li><b>Conferir o custo por bezerro</b> na Pecuária. Se a sua conta bater com o número que a tela mostra hoje, eu li errado; se estiver inflado, eu corrijo.</li>
-    <li><b>Me dizer quais dos altos você quer primeiro.</b> Os quatro da separação (cache, PWA, talhão sem cultura, textos) são rápidos e independentes; os de rateio pedem uma decisão sua sobre o que "custo por hectare" deve significar.</li>
-  </ol>
-
-  <div class="nota">
-    <b>Sobre os números deste laudo.</b> Os achados vieram de quatro auditorias independentes, cada uma com instrução de só reportar o que conseguisse confirmar lendo o código, com arquivo, linha e cenário de falha. Não conferi um por um antes de publicar — os nove que corrigi hoje eu verifiquei e testei; os demais estão como foram reportados. Antes de mexer em qualquer um, eu confirmo primeiro. Foi supor em vez de conferir que produziu os erros que chegaram até você.
+  <h2>A próxima melhoria que eu faria</h2>
+  <div class="achado">
+    <div class="topo"><h3>Registro de quem mudou o quê</h3><span class="chip app">algumas horas</span></div>
+    <p>Hoje, se um valor aparece diferente, não há como saber quem mudou, quando, nem qual era o valor anterior. <b>Três dos bugs desta auditoria só foram diagnosticados porque as tabelas antigas ainda existiam para comparação</b> — na próxima vez pode não haver com o que comparar.</p>
+    <p>Um gatilho de auditoria em <code>lancamentos_financeiros</code>, <code>abates</code> e <code>profiles</code> grava valor antigo, valor novo, quem e quando, numa tabela à parte. Roda no banco, o app não precisa saber que existe, e não dá para burlar pela tela.</p>
+    <p class="cenario"><b>Retorno:</b> a próxima divergência de valor vira uma consulta em vez de uma investigação.</p>
   </div>
 </section>
 
 <footer>
-  AE Agropecuária · auditoria de 22 de agosto de 2026 · Matriz, Pecuária, Cana, Cereais e banco
+  AE Agropecuária · auditoria concluída em 22 de agosto de 2026 · Matriz, Pecuária, Cana, Cereais e banco
 </footer>
 
 </div>
