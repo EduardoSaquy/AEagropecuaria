@@ -143,4 +143,7 @@ select
 from lancamentos_financeiros l
 join centros_custo c on c.id = l.centro_custo_id
 group by 1, 2
-order by c.tipo nulls last, 4 desc;
+-- ordena pelas POSICOES das colunas do resultado: c.tipo nao existe aqui,
+-- porque o agrupamento e pela expressao coalesce(c.tipo, ...), nao pela
+-- coluna crua
+order by 1, 4 desc;
