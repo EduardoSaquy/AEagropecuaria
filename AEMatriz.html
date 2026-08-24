@@ -2064,7 +2064,13 @@ function ModalFuncionario(){
               <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-lavoura="1">Cancelar</button>
             </div>
           </div>
-          ` : `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-lavoura="1" style="margin-top:6px;">+ Criar novo login</button>`}
+          ` : (souAdmin()
+              // A Edge Function exige papel admin estrito e devolve 403 para
+              // proprietário. Oferecer o botão a quem o servidor vai recusar
+              // faz a pessoa preencher nome, usuário e senha para levar um
+              // erro no fim — o servidor barra certo, a tela é que mentia.
+              ? `<button type="button" class="btn-ghost btn-sm" data-criar-acesso-lavoura="1" style="margin-top:6px;">+ Criar novo login</button>`
+              : '')}
           ${state.acessoLavouraError ? `<div class="hint" style="color:var(--alerta); margin-top:4px;">${esc(state.acessoLavouraError)}</div>` : ''}
           ${blocoPermissoes(d.perfilId)}
         </div>

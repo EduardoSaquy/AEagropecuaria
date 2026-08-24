@@ -534,6 +534,34 @@ function centrosCustoInvestimentoConhecidos(){
 function rowToFazenda(r){ return {id:r.fazenda_id, nome:r.fazendas?.nome||'', hectares:r.area_ha}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
+/* O .range(0, 19999) que estava aqui era um TETO, nao paginacao: pedia as
+ * 20.000 primeiras de uma vez. Duas falhas.
+ *
+ * A primeira: o PostgREST tem um limite proprio de linhas por resposta
+ * (db-max-rows, 1000 por padrao nos projetos Supabase) que vale
+ * INDEPENDENTEMENTE do Range pedido. Se esse limite ainda estiver no padrao,
+ * o corte silencioso que o comentario abaixo descreve continua acontecendo.
+ *
+ * A segunda: 20.000 e um teto fixo. movimentos ganha uma linha por
+ * ingrediente a cada trato de dieta de consumo direto, e pesagens_animais
+ * uma por animal pesado - as duas alcancam esse numero em poucos anos, e
+ * dali em diante o app passaria a somar errado sem avisar.
+ *
+ * Paginando de verdade, os dois problemas somem: pede de mil em mil ate a
+ * resposta vir incompleta, que e o sinal de que acabou. */
+async function buscarTudo(consulta){
+  const PAGINA = 1000;
+  let todas = [], de = 0;
+  while(true){
+    const { data, error } = await consulta().range(de, de + PAGINA - 1);
+    if(error) return { data: todas, error };
+    todas = todas.concat(data || []);
+    if(!data || data.length < PAGINA) break;
+    de += PAGINA;
+  }
+  return { data: todas, error: null };
+}
+
 async function loadAll(){
   // .range() é obrigatório em toda consulta -- sem ele, o Supabase corta a
   // resposta em 1000 linhas por padrão (a API nem avisa, só devolve as 1000
@@ -542,35 +570,35 @@ async function loadAll(){
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
   const [ing, mov, diet, lot, sr, lc, pt, rc, lanc, cCusto, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim, pesagAnim, manj, protIA] = await Promise.all([
-    db.from('ingredientes').select('*').order('id').range(0, 19999),
-    db.from('movimentos').select('*').order('id').range(0, 19999),
-    db.from('dietas').select('*').order('id').range(0, 19999),
-    db.from('lotes').select('*').order('id').range(0, 19999),
-    db.from('saidas_racao').select('*').order('id').range(0, 19999),
-    db.from('leituras_cocho').select('*').order('id').range(0, 19999),
-    db.from('pasto').select('*').order('id').range(0, 19999),
-    db.from('reproducao_custos').select('*').order('id').range(0, 19999),
+    buscarTudo(()=>db.from('ingredientes').select('*').order('id')),
+    buscarTudo(()=>db.from('movimentos').select('*').order('id')),
+    buscarTudo(()=>db.from('dietas').select('*').order('id')),
+    buscarTudo(()=>db.from('lotes').select('*').order('id')),
+    buscarTudo(()=>db.from('saidas_racao').select('*').order('id')),
+    buscarTudo(()=>db.from('leituras_cocho').select('*').order('id')),
+    buscarTudo(()=>db.from('pasto').select('*').order('id')),
+    buscarTudo(()=>db.from('reproducao_custos').select('*').order('id')),
     // Financeiro agora vem de lancamentos_financeiros, no AE Matriz. Este
     // app so LE — quem lanca despesa, receita avulsa e investimento e o
     // Matriz. A excecao e a receita gerada por uma venda, que continua
     // nascendo aqui porque a venda e uma acao operacional (ver tipo
     // 'venda' em salvarRegistro).
-    db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id').range(0, 19999),
-    db.from('centros_custo').select('id, nome').range(0, 19999),
-    db.from('precos_arroba').select('*').order('id').range(0, 19999),
+    buscarTudo(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id')),
+    buscarTudo(()=>db.from('centros_custo').select('id, nome')),
+    buscarTudo(()=>db.from('precos_arroba').select('*').order('id')),
     db.from('config_financeiro').select('*').eq('id', 1),
-    db.from('profiles').select('*').order('nome').range(0, 19999),
-    dbLavoura.from('fazenda_atividades').select('area_ha, fazenda_id, fazendas(nome)').eq('atividade','pecuaria').order('fazenda_id').range(0, 19999),
-    db.from('partos').select('*').order('id').range(0, 19999),
-    db.from('pesagens').select('*').order('id').range(0, 19999),
-    db.from('producoes_racao').select('*').order('id').range(0, 19999),
-    db.from('abates').select('*').order('id').range(0, 19999),
-    db.from('diagnosticos_gestacionais').select('*').order('id').range(0, 19999),
-    db.from('desmamas').select('*').order('id').range(0, 19999),
-    db.from('animais').select('*').order('id').range(0, 19999),
-    db.from('pesagens_animais').select('*').order('id').range(0, 19999),
-    db.from('manejos').select('*').order('id').range(0, 19999),
-    db.from('protocolos_inseminacao').select('*').order('id').range(0, 19999),
+    buscarTudo(()=>db.from('profiles').select('*').order('nome')),
+    buscarTudo(()=>dbLavoura.from('fazenda_atividades').select('area_ha, fazenda_id, fazendas(nome)').eq('atividade','pecuaria').order('fazenda_id')),
+    buscarTudo(()=>db.from('partos').select('*').order('id')),
+    buscarTudo(()=>db.from('pesagens').select('*').order('id')),
+    buscarTudo(()=>db.from('producoes_racao').select('*').order('id')),
+    buscarTudo(()=>db.from('abates').select('*').order('id')),
+    buscarTudo(()=>db.from('diagnosticos_gestacionais').select('*').order('id')),
+    buscarTudo(()=>db.from('desmamas').select('*').order('id')),
+    buscarTudo(()=>db.from('animais').select('*').order('id')),
+    buscarTudo(()=>db.from('pesagens_animais').select('*').order('id')),
+    buscarTudo(()=>db.from('manejos').select('*').order('id')),
+    buscarTudo(()=>db.from('protocolos_inseminacao').select('*').order('id')),
   ]);
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);

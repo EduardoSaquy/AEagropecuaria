@@ -145,8 +145,9 @@ with sync_playwright() as pw:
     page.wait_for_timeout(400)
     corpo = page.locator("body").inner_text()
     conf("INSUMOS AGRICOLAS" in corpo, "lista os centros de custo")
-    conf("Todas (global)" in corpo, "mostra centro global como 'Todas'")
-    conf("Faz. Palhadao" in corpo, "mostra a fazenda do centro específico")
+    conf(True, "(coluna Fazenda removida da tela)")
+    conf("Fazenda" not in corpo.split("Centros de Custo")[-1][:400],
+         "tela de centros não fala mais em fazenda")
     conf("em uso" in corpo, "centro com lançamento não oferece excluir")
     conf("inativo" in corpo, "mostra centro inativo")
 

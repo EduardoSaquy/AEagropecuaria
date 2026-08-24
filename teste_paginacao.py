@@ -38,6 +38,25 @@ STUB_CORTE = Path('/tmp/lav_test/stub.js').read_text().replace(
     " return Promise.resolve({ data: r.slice(0,1000), error: null }).then(res); },"
 )
 
+def medir(pw, arquivo, expr_n, expr_total, extra_db=None):
+    """Abre o app com o stub que imita o teto do PostgREST e devolve o que
+    ele conseguiu carregar."""
+    b = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+    page = b.new_page()
+    page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
+    page.add_init_script(STUB_CORTE)
+    db = dict(DB, **(extra_db or {}))
+    page.add_init_script(f"window.__DB__={json.dumps(db)};"
+                         "window.__SESSAO__={user:{id:'u1'},access_token:'x'};")
+    page.goto("file:///home/claude/AEagropecuaria/" + arquivo)
+    page.wait_for_timeout(3000)
+    n = page.evaluate(expr_n)
+    total = page.evaluate(expr_total)
+    truncou = page.evaluate("() => !!window.__TRUNCOU__")
+    b.close()
+    return n, total, truncou
+
+
 with sync_playwright() as pw:
     b = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
     page = b.new_page()
@@ -56,9 +75,46 @@ with sync_playwright() as pw:
 
 esperado = N * VALOR
 ok = n == N and abs(total - esperado) < 0.01
-print(f"\n  linhas carregadas : {n} de {N}")
+print(f"\n  AE Matriz")
+print(f"  linhas carregadas : {n} de {N}")
 print(f"  total somado      : R$ {total:,.2f}  (esperado R$ {esperado:,.2f})")
 print(f"  páginas pedidas   : {paginas}")
 print(f"  alguma consulta sem paginação foi truncada: {'SIM' if truncou else 'não'}")
-print(f"\n  {'ok — paginação funciona' if ok else 'FALHOU — ainda está cortando'}")
-sys.exit(0 if ok else 1)
+print(f"  {'ok — Matriz pagina' if ok else 'FALHOU — Matriz ainda corta'}")
+
+# ---- AE Pecuaria: mesma prova, contra custos_fixos remapeados ----
+DB_PEC = dict(DB)
+DB_PEC.update({
+    "custos_fixos": [], "receitas": [], "investimentos": [],
+    "ingredientes": [], "movimentos": [], "dietas": [], "lotes": [],
+    "saidas_racao": [], "pasto": [], "reproducao_custos": [],
+    "precos_arroba": [], "config_financeiro": [], "partos": [], "pesagens": [],
+    "producao_racao": [], "abates": [], "diagnosticos_gestacionais": [],
+    "desmamas": [], "animais": [], "pesagens_animais": [], "manejos": [],
+    "protocolos_inseminacao": [], "config_fazenda": [],
+})
+with sync_playwright() as pw:
+    n2, total2, truncou2 = medir(
+        pw, "AEpecuaria.html",
+        "() => state.custosFixos.length",
+        "() => state.custosFixos.reduce((a,l)=>a+Number(l.valorMensal),0)",
+        DB_PEC)
+
+# os 2760 lancamentos do DB sao todos atividade='cana' no teste do Matriz;
+# para a pecuaria o stub filtra por atividade, entao o esperado e 0 - o que
+# nao prova nada. Refaz com lancamentos de pecuaria.
+lanc_pec = [dict(l, atividade="pecuaria", tipo="despesa") for l in lanc]
+with sync_playwright() as pw:
+    n3, total3, truncou3 = medir(
+        pw, "AEpecuaria.html",
+        "() => state.custosFixos.length",
+        "() => state.custosFixos.reduce((a,l)=>a+Number(l.valorMensal),0)",
+        dict(DB_PEC, lancamentos_financeiros=lanc_pec))
+
+ok_pec = n3 == N and abs(total3 - esperado) < 0.01
+print(f"\n  AE Pecuária")
+print(f"  linhas carregadas : {n3} de {N}")
+print(f"  total somado      : R$ {total3:,.2f}  (esperado R$ {esperado:,.2f})")
+print(f"  {'ok — Pecuária pagina' if ok_pec else 'FALHOU — Pecuária ainda corta'}")
+
+sys.exit(0 if (ok and ok_pec) else 1)
