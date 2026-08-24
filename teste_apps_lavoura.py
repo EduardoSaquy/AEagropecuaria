@@ -144,6 +144,47 @@ def testar(browser, arquivo, rotulo, cfg):
          c2[:90].replace("\n", " "))
     p2.close()
 
+    # ---- fazenda e so consulta: sem Novo, Editar nem Excluir ----
+    p4, _ = abrir(browser, arquivo, PERFIS["admin"])
+    p4.locator('[data-subnav="fazendas"]').click()
+    p4.wait_for_timeout(300)
+    novos = p4.locator('[data-novo-cadastro="fazendas"]').count()
+    edits = p4.locator('[data-edit-cadastro^="fazendas:"]').count()
+    dels  = p4.locator('[data-del-cadastro^="fazendas:"]').count()
+    conf(novos == 0 and edits == 0 and dels == 0,
+         "fazenda não oferece criar, editar nem excluir",
+         f"novo={novos} editar={edits} excluir={dels}")
+
+    # ---- cultura obrigatoria no talhao ----
+    p4.locator('[data-subnav="talhoes"]').click()
+    p4.wait_for_timeout(300)
+    obrig = p4.evaluate("() => CADASTROS.talhoes.fields"
+                        ".find(f=>f.key==='culturaId').required === true")
+    conf(obrig, "cultura é obrigatória no talhão (senão ele sumiria dos dois apps)")
+
+    # ---- o cache local tambem passa pelo filtro de frente ----
+    # Escreve no localStorage um snapshot com dado da OUTRA frente, como o
+    # app antigo deixava, e confere que ele nao chega a tela.
+    chave = p4.evaluate("() => CACHE_LOCAL_KEY")
+    sujo = {
+        "culturas": [{"id": 10, "nome": "Cana planta", "frente": "cana", "ativo": True},
+                     {"id": 11, "nome": "Soja", "frente": "graos", "ativo": True}],
+        "talhoes": [{"id": 30, "nome": "TALHAO CANA A", "fazendaId": 1, "culturaId": 10, "ativo": True},
+                    {"id": 31, "nome": "TALHAO SOJA B", "fazendaId": 2, "culturaId": 11, "ativo": True}],
+        "fazendas": [{"id": 1, "nome": "Faz. Palhadao", "ativo": True},
+                     {"id": 2, "nome": "Faz. Invernada", "ativo": True}],
+        "safras": [],
+    }
+    p4.evaluate("([k, v]) => localStorage.setItem(k, JSON.stringify(v))", [chave, sujo])
+    p4.evaluate("() => { carregarCacheLocal(); render(); }")
+    p4.wait_for_timeout(300)
+    corpo4 = p4.locator("body").inner_text()
+    conf(cfg["insumoAlheio"] not in corpo4 and
+         all(nome not in corpo4 for nome, deve in cfg["talhoes"].items() if not deve),
+         "cache local não traz dado da outra frente",
+         corpo4[:120].replace("\n", " "))
+    p4.close()
+
     p3, _ = abrir(browser, arquivo, cfg["perfilProprio"])
     abas3 = " | ".join(p3.locator("[data-nav-group]").all_inner_texts())
     conf("Cadastros" in abas3, "usuário da própria frente vê os módulos", f"abas: {abas3}")
