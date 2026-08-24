@@ -1921,6 +1921,13 @@ function contasNaoVinculadas(){
     .filter(p=>!perfilIdsUsados.has(p.id))
     .map(p=>({nome:p.nome, usuario:p.usuario, ref:p.id}));
 }
+// O nome do login vinculado, para quem não pode listar todos os logins.
+// Cai no id quando a lista não veio: melhor mostrar o identificador do que
+// dar a entender que não há vínculo.
+function nomeDoPerfilVinculado(perfilId){
+  const p = state.perfis.find(x=>String(x.id)===String(perfilId));
+  return p ? `${p.nome} (${p.usuario})` : 'Login vinculado';
+}
 function PageFuncionarios(){
   const linhas = [...state.funcionarios].sort((a,b)=>a.nome.localeCompare(b.nome, 'pt-BR'));
   const pendentes = contasNaoVinculadas();
@@ -2023,11 +2030,18 @@ function ModalFuncionario(){
           <span class="hint">Quanto do tempo/trabalho da pessoa vai pra cada atividade — não precisa somar 100%.</span>
         </div>
         <div class="field"><label>Login de acesso</label>
+          ${souAdmin() ? `
           <select id="f-perfilfuncionario">
             <option value="">— Nenhum —</option>
             ${state.perfis.map(p=>`<option value="${p.id}" ${d.perfilId===p.id?'selected':''}>${esc(p.nome)} (${esc(p.usuario)})</option>`).join('')}
           </select>
           <span class="hint">Um login só, que serve para Lavoura, Matriz e Pecuária. Vincule uma conta que já existe ou crie uma nova abaixo.</span>
+          ` : `
+          <div style="padding:9px 11px; border:1px solid var(--linha); border-radius:8px; background:var(--cinza-fundo,#f5f6f5);">
+            ${d.perfilId ? esc(nomeDoPerfilVinculado(d.perfilId)) : '<span class="hint">Sem login vinculado</span>'}
+          </div>
+          <span class="hint">Só administrador vincula ou troca o login de acesso. O vínculo atual é preservado ao salvar.</span>
+          `}
           ${d._criandoAcessoLavoura ? `
           <div style="border:1px solid var(--linha); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">
             <span class="hint">Cria a conta de acesso (mesma Edge Function usada na tela de Usuários).</span>
@@ -3063,7 +3077,16 @@ function attachEvents(){
           cargo: lerCargo('f-cargofuncionario', 'f-cargooutrofuncionario'),
           dataAdmissao: document.getElementById('f-admissaofuncionario').value || '',
           ativo: document.getElementById('f-ativofuncionario').checked,
-          perfilId: document.getElementById('f-perfilfuncionario').value || '',
+          // Só o admin carrega a lista de logins (a RLS de profiles só
+          // devolve a própria linha para os demais). Sem esta guarda, quem
+          // não é admin abria o funcionário, o seletor vinha vazio, e
+          // salvar gravava perfil_id = null: o vínculo com o login era
+          // destruído em silêncio ao corrigir, por exemplo, só o cargo.
+          // Mesma classe do bug do mes — campo que o formulário não
+          // conseguiu carregar sendo escrito como nulo.
+          perfilId: document.getElementById('f-perfilfuncionario')
+                      ? (document.getElementById('f-perfilfuncionario').value || '')
+                      : (editDraft.perfilId || ''),
           observacao: document.getElementById('f-obsfuncionario').value.trim(),
         };
         const row = funcionarioToRow(campos);
@@ -3245,7 +3268,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_matriz.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
 }
 </script>
 </body>

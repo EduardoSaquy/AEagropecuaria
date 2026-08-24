@@ -4508,7 +4508,19 @@ function custoBezerroDesmama(desmama, custosPorLoteList){
   const custoVariavelPorAnimal = lote && lote.numeroAnimais>0 ? (racaoPeriodo+pastoPeriodo)/lote.numeroAnimais : 0;
   const listaCustos = custosPorLoteList || custosDiariosPorLote().custosPorLote;
   const diarioLote = lote ? listaCustos.find(r=>r.lote.id===lote.id) : null;
-  const custoFixoPeriodo = (diarioLote ? diarioLote.fixoAlocado : 0) * dias;
+  // fixoAlocado é o custo fixo diário do LOTE INTEIRO, não por cabeça — a
+  // prova está em custosDiariosPorLote(), que logo depois faz
+  // porAnimal = total/l.numeroAnimais a partir dele.
+  //
+  // Aqui faltava essa divisão. A ração e o pasto acima já eram divididos
+  // por numeroAnimais e o fixo não, então o custo do bezerro vinha
+  // multiplicado exatamente pelo número de animais do lote: num lote de
+  // cria com 100 vacas, um bezerro de 210 dias aparecia com R$ 210.000 em
+  // vez de R$ 2.100. O erro ia junto para o "custo médio por bezerro" e
+  // para a coluna Total da tabela de Reprodução.
+  const custoFixoPeriodo = (lote && lote.numeroAnimais > 0)
+    ? (diarioLote ? diarioLote.fixoAlocado : 0) * dias / lote.numeroAnimais
+    : 0;
   const custoTotal = custoProtocolo + custoVariavelPorAnimal + custoFixoPeriodo;
   return {parto, lote, desmama, dias, custoProtocolo, custoVariavelPorAnimal, custoFixoPeriodo, custoTotal, temInseminacao: !!insem};
 }
