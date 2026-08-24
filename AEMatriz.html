@@ -727,38 +727,18 @@ async function carregarResultadoPecuaria(){
   render();
 }
 
-// Resultado da Cana, lido do banco do Lavoura (db) — mesma lógica de preço
-// médio ponderado e custo por talhão que o próprio AELavoura.html usa em
-// Financeiro/Estoque — se aquela lógica mudar lá, precisa atualizar aqui
-// também.
+// Resultado da Cana. Fonte única: lancamentos_financeiros. Não lê estoque
+// nem aplicações — o custo do insumo já está na despesa lançada quando ele
+// foi comprado; a aplicação no talhão serve para repartir esse custo entre
+// talhões, nunca para somar ao total.
 async function carregarResultadoCana(){
   state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
   render();
   try{
-    const [insRes, entRes, aplRes, lancRes] = await Promise.all([
-      db.from('insumos_cana').select('id'),
-      db.from('entradas_insumo_cana').select('insumo_id, quantidade, preco_pago'),
-      fetchAllRows(()=>db.from('aplicacoes_cana').select('data, insumo_id, quantidade').order('id')),
-      fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','cana').order('id')),
-    ]);
-    for(const r of [insRes, entRes, aplRes, lancRes]) if(r.error) throw r.error;
+    const lancRes = await fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','cana').order('id'));
+    if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
-    const precoMedioPorInsumo = new Map();
-    (insRes.data||[]).forEach(i=>{
-      const entradas = (entRes.data||[]).filter(e=>e.insumo_id===i.id && e.preco_pago!=null && e.preco_pago!=='');
-      const qtd = entradas.reduce((a,e)=>a+Number(e.quantidade||0),0);
-      if(qtd>0){
-        const valor = entradas.reduce((a,e)=>a+Number(e.quantidade||0)*Number(e.preco_pago||0),0);
-        precoMedioPorInsumo.set(i.id, valor/qtd);
-      }
-    });
-    function custoInsumoNoPrefixo(prefixo){
-      return (aplRes.data||[]).filter(a=>a.data && a.data.startsWith(prefixo)).reduce((acc,a)=>{
-        const preco = precoMedioPorInsumo.get(a.insumo_id);
-        return acc + (preco!=null ? Number(a.quantidade||0)*preco : 0);
-      }, 0);
-    }
     // Despesa e receita vêm do modelo único, a MESMA fonte que o Financeiro
     // e o custo por hectare usam. Antes esta tela lia despesas_cana e
     // receitas_cana direto: a despesa lançada na tela nova não aparecia
@@ -774,14 +754,27 @@ async function carregarResultadoCana(){
         .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     }
 
+    // QUANTO CUSTOU vem SÓ do lançamento financeiro.
+    //
+    // A compra do insumo já entra como despesa lançada. Somar aqui também o
+    // insumo aplicado (aplicações × preço médio) contaria o mesmo dinheiro
+    // duas vezes — e era o que este cálculo fazia.
+    //
+    // Hoje isso não estava inflando nada, porque o custo do insumo aplicado
+    // dá zero: as entradas de insumo não têm preço pago registrado, então o
+    // preço médio é zero. O defeito estava armado, não disparado: bastaria
+    // alguém preencher o preço de uma entrada para o custo da cana começar
+    // a subir sozinho.
+    //
+    // A aplicação no talhão continua valendo — mas para REPARTIR entre
+    // talhões um custo que já existe, nunca para somar ao total.
     const mensal = mesesJanela().map(mesStr=>{
-      const custoInsumo = custoInsumoNoPrefixo(mesStr);
       const despesaGeral = despesaGeralNoPrefixo(mesStr);
       const receitasDoMes = receitasNoPrefixoCana(mesStr);
       const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0), 0);
       return {
-        mes: mesStr, despesa: custoInsumo+despesaGeral, receita, resultado: receita-(custoInsumo+despesaGeral),
-        despesaPorCategoria: {custoInsumo, despesaGeral},
+        mes: mesStr, despesa: despesaGeral, receita, resultado: receita-despesaGeral,
+        despesaPorCategoria: {despesaGeral},
         receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Venda de cana', valor:Number(r.valor||0)})),
       };
     });
@@ -802,30 +795,10 @@ async function carregarResultadoCereais(){
   state.resultados.cereais = {...state.resultados.cereais, loading:true, erro:''};
   render();
   try{
-    const [insRes, entRes, aplRes, lancRes] = await Promise.all([
-      db.from('insumos_graos').select('id'),
-      db.from('entradas_insumo_graos').select('insumo_id, quantidade, preco_pago'),
-      fetchAllRows(()=>db.from('aplicacoes_graos').select('data, insumo_id, quantidade').order('id')),
-      fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','graos').order('id')),
-    ]);
-    for(const r of [insRes, entRes, aplRes, lancRes]) if(r.error) throw r.error;
+    const lancRes = await fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','graos').order('id'));
+    if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
-    const precoMedioPorInsumo = new Map();
-    (insRes.data||[]).forEach(i=>{
-      const entradas = (entRes.data||[]).filter(e=>e.insumo_id===i.id && e.preco_pago!=null && e.preco_pago!=='');
-      const qtd = entradas.reduce((a,e)=>a+Number(e.quantidade||0),0);
-      if(qtd>0){
-        const valor = entradas.reduce((a,e)=>a+Number(e.quantidade||0)*Number(e.preco_pago||0),0);
-        precoMedioPorInsumo.set(i.id, valor/qtd);
-      }
-    });
-    function custoInsumoNoPrefixo(prefixo){
-      return (aplRes.data||[]).filter(a=>a.data && a.data.startsWith(prefixo)).reduce((acc,a)=>{
-        const preco = precoMedioPorInsumo.get(a.insumo_id);
-        return acc + (preco!=null ? Number(a.quantidade||0)*preco : 0);
-      }, 0);
-    }
     // Mesma fonte única do Financeiro — ver o comentário em
     // carregarResultadoCana().
     const despesas = lanc.filter(l=>l.tipo==='despesa');
@@ -838,14 +811,15 @@ async function carregarResultadoCereais(){
         .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     }
 
+    // QUANTO CUSTOU vem SO do lancamento financeiro - ver o comentario
+    // em carregarResultadoCana().
     const mensal = mesesJanela().map(mesStr=>{
-      const custoInsumo = custoInsumoNoPrefixo(mesStr);
       const despesaGeral = despesaGeralNoPrefixo(mesStr);
       const receitasDoMes = receitasNoPrefixoGraos(mesStr);
       const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0), 0);
       return {
-        mes: mesStr, despesa: custoInsumo+despesaGeral, receita, resultado: receita-(custoInsumo+despesaGeral),
-        despesaPorCategoria: {custoInsumo, despesaGeral},
+        mes: mesStr, despesa: despesaGeral, receita, resultado: receita-despesaGeral,
+        despesaPorCategoria: {despesaGeral},
         receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Venda de cereais', valor:Number(r.valor||0)})),
       };
     });
@@ -856,7 +830,7 @@ async function carregarResultadoCereais(){
   }
   render();
 }
-const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', custoInsumo:'Insumo (Tratos culturais)', despesaGeral:'Despesas gerais (Cana/Cereais)'};
+const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', despesaGeral:'Despesas gerais (Cana/Cereais)'};
 // Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
 // fora da janela carregada (ex: período futuro) simplesmente não têm
 // correspondência e contam como zero — sem precisar recortar antes.
