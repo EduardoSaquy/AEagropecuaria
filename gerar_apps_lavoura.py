@@ -94,11 +94,14 @@ APPS = {
         perm_cadastros="cana_cadastros",
         perm_operacoes="operacoes",
         icone_grupo="iconPlantio()",
-        cache="cana_cache_cadastros_v1",
+        cache="cana_cache_v2",
+        manifest="manifest_cana.json",
+        icone="icon-cana-192.png",
         cor="#eb6834",
         unidade="tonelada",
         categorias="CATEGORIAS_INSUMO_CANA",
         operacoes_label="Operações · Cana",
+        rotulo_frente="cana",
     ),
     "cereais": dict(
         arquivo="AECereais.html",
@@ -110,11 +113,14 @@ APPS = {
         perm_cadastros="cereais_cadastros",
         perm_operacoes="operacoes_graos",
         icone_grupo="iconGrao()",
-        cache="cereais_cache_cadastros_v1",
+        cache="cereais_cache_v2",
+        manifest="manifest_cereais.json",
+        icone="icon-cereais-192.png",
         cor="#1baf7a",
         unidade="saca",
         categorias="CATEGORIAS_INSUMO_GRAOS",
         operacoes_label="Operações · Cereais",
+        rotulo_frente="cereais",
     ),
 }
 
@@ -371,6 +377,163 @@ function headerHtml""".format(
          " * com o Financeiro para o Matriz. */"),
         rotulo="comentario de CADASTROS",
     )
+
+    # ---------- 11a) Talhao sem cultura nao pode mais ser criado
+    #
+    # A frente de um talhao vem da cultura dele. Sem cultura, ele nao
+    # pertence a nenhuma das duas frentes e some dos DOIS apps: da para
+    # cadastrar, salvar, e ele nao aparecer na lista - existindo no banco,
+    # invisivel em todas as telas. Enquanto era um app so isso era um estado
+    # aceitavel; com a separacao, deixou de ser.
+    ed.troca(
+        "      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', "
+        "filter:c=>c.frente==='cana'||c.frente==='graos'},",
+        "      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},",
+        rotulo="cultura obrigatoria no talhao")
+
+    # Os demais filtros de cultura tambem nao precisam mais citar as duas
+    # frentes: state.culturas ja chega cortado por filtrarPelaFrente().
+    ed.troca_todas(", required:true, filter:c=>c.frente==='cana'||c.frente==='graos'}",
+                   ", required:true}", rotulo="filtro de cultura na safra")
+
+    # ---------- 11b) Fazenda e so consulta aqui
+    #
+    # O cadastro de fazenda foi centralizado no AE Matriz. Aqui a tela existe
+    # para consultar e para agrupar os talhoes - mas continuava oferecendo
+    # Novo, Editar e Excluir. Fazenda criada por aqui nem aparecia na lista
+    # depois de salvar (nao tem atividade nem talhao desta frente ainda), e o
+    # Excluir apagava uma fazenda compartilhada com os outros dois apps.
+    ed.troca(
+        "    table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'matriz_fazendas',",
+        "    table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'matriz_fazendas',\n"
+        "    somenteLeitura:true,",
+        rotulo="fazendas somente leitura")
+    ed.troca(
+        "  const podeEditar = temPermissao(cfg.modulo||'{cad}','editar') "
+        "|| (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));".format(
+            cad=cfg["perm_cadastros"]),
+        "  const podeEditar = !cfg.somenteLeitura\n"
+        "    && (temPermissao(cfg.modulo||'{cad}','editar')\n"
+        "        || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar')));".format(
+            cad=cfg["perm_cadastros"]),
+        rotulo="PageCadastro respeita somenteLeitura")
+    ed.troca(
+        "    desc:'Unidades produtivas da empresa, com estado e área total.',",
+        "    desc:'As fazendas desta operação e os talhões de cada uma. "
+        "O cadastro de fazenda é feito no AE Matriz.',",
+        rotulo="descricao de fazendas")
+
+    # ---------- 11c) PWA: manifest, icone e service worker corretos
+    #
+    # Os dois apps herdaram do AELavoura o manifest e o icone dele, entao
+    # "adicionar a tela de inicio" instalava um app so, chamado AE Lavoura,
+    # que abria a pagina de encaminhamento em vez do app.
+    ed.troca('<link rel="manifest" href="manifest_lavoura.json">',
+             f'<link rel="manifest" href="{cfg["manifest"]}">', rotulo="manifest")
+    ed.troca_todas('href="icon-lavoura-192.png"', f'href="{cfg["icone"]}"',
+                   rotulo="icone")
+    # Um service worker so para todos os apps: cinco disputavam o mesmo
+    # escopo e cada um apagava o cache dos outros - ver o cabecalho do sw.js.
+    ed.troca("navigator.serviceWorker.register('sw_lavoura.js')",
+             "navigator.serviceWorker.register('sw.js')", rotulo="service worker")
+
+    # ---------- 11d) Cache local: filtrar tambem o que vem do localStorage
+    #
+    # carregarCacheLocal() pinta a tela ANTES de loadAll() rodar, e nao
+    # passava por filtrarPelaFrente(). No AE Cana isso vazava de verdade: a
+    # chave era a mesma do AE Cana antigo, servido na mesma URL, que lia as
+    # culturas todas sem filtro nenhum. Quem ja usou o app antigo abria o
+    # novo vendo cultura e talhao de cereais - e, se a rede falhasse, ficava
+    # nesse estado, que e justamente o proposito do cache.
+    #
+    # A chave tambem muda de v1 para v2, para nao reaproveitar o que o app
+    # antigo deixou gravado.
+    ed.troca(
+        """    const snapshot = JSON.parse(raw);
+    Object.keys(snapshot).forEach(k=>{ if(CADASTROS[k]) state[k] = snapshot[k]; });""",
+        """    const snapshot = JSON.parse(raw);
+    Object.keys(snapshot).forEach(k=>{ if(CADASTROS[k]) state[k] = snapshot[k]; });
+    // O cache tambem tem que passar pelo corte por frente: ele e pintado na
+    // tela antes de loadAll() rodar. Sem fazendaAtividades gravada, o corte
+    // usa so os talhoes - que ja bastam, porque toda fazenda desta frente
+    // tem talhao dela.
+    filtrarPelaFrente(snapshot.__fazendaAtividades || []);""",
+        rotulo="cache passa pelo filtro")
+
+    ed.troca(
+        """    const snapshot = {};
+    CADASTRO_KEYS.forEach(k=>{ snapshot[k] = state[k]; });""",
+        """    const snapshot = {};
+    CADASTRO_KEYS.forEach(k=>{ snapshot[k] = state[k]; });
+    // Guarda tambem as atividades das fazendas: sem elas o corte por frente
+    // na abertura offline nao teria como saber quais fazendas sao desta
+    // frente, e cairia so nos talhoes.
+    snapshot.__fazendaAtividades = state.fazendaAtividades || [];""",
+        rotulo="cache guarda fazenda_atividades")
+
+    ed.troca(
+        "  filtrarPelaFrente((results[CADASTRO_KEYS.length+1].data)||[]);",
+        """  state.fazendaAtividades = (results[CADASTRO_KEYS.length+1].data) || [];
+  filtrarPelaFrente(state.fazendaAtividades);""",
+        rotulo="guarda fazendaAtividades no state")
+
+    # ---------- 11e) Textos que ainda falavam das duas frentes
+    #
+    # O gerador reescreveu a estrutura e deixou a prosa para tras. Sao os
+    # textos que a pessoa le na tela, entao contradizem o que ela ve.
+    ed.troca(
+        "    desc:'Talhões de lavoura desta fazenda — de cana ou de grãos, "
+        "conforme a Cultura escolhida.',",
+        "    desc:'Talhões de {rotulo} desta fazenda. A Cultura define a safra "
+        "e o histórico de cada um.',".format(rotulo=cfg["rotulo_frente"]),
+        rotulo="descricao de talhoes")
+
+    ed.regex(
+        r'<p class="hint">Administrador tem acesso total.*?enxerga\.</p>',
+        '<p class="hint">Administrador e proprietário têm acesso total. '
+        'Cada módulo abaixo é independente: dá para liberar só os cadastros, '
+        'só as operações, ou os dois. <strong>Visualizar</strong> deixa ver '
+        'sem mexer; <strong>Editar</strong> deixa criar, alterar e excluir. '
+        'Financeiro e resultados ficam no AE Matriz, com permissão própria '
+        'de lá.</p>',
+        rotulo="texto do modal de permissoes")
+
+    ed.troca(
+        "Vale para o AE Cana antigo também (mesma conta, mesmo banco).",
+        "A mesma conta vale para todos os apps da AE Agropecuária.",
+        rotulo="hint do novo usuario")
+
+    ed.troca(
+        "\'Defina a Cultura deste talhão em Cadastros > Talhões (Cana ou Grãos) "
+        "para ver o histórico.\'",
+        "\'Defina a Cultura deste talhão em Cadastros > Talhões para ver o histórico.\'",
+        rotulo="texto do historico do talhao")
+
+    ed.troca(
+        "        Seu login foi reconhecido, mas ainda não há um perfil de acesso "
+        "liberado para esta conta.",
+        "        Seu login foi reconhecido, mas ainda não há acesso liberado para "
+        "esta conta no {t}.".format(t=cfg["titulo"]),
+        rotulo="texto de aguardando liberacao")
+
+    # ---------- 11f) Codigo morto que sobrou da separacao
+    #
+    # Funcoes que so eram chamadas pelas telas de Financeiro e Resultados, e
+    # que referenciam estado da OUTRA frente - que nao existe mais neste
+    # arquivo. Nenhuma e alcancavel hoje, mas sao a proxima armadilha para
+    # quem for mexer aqui: parecem funcionar e estouram na primeira chamada.
+    for fn in ["custoInsumosTalhao", "talhaoEmProducao", "areaTotalEmProducao",
+               "producaoTotalTalhao", "culturaDoTalhaoNome", "paginaVisivel"]:
+        ed.texto = remove_funcao(ed.texto, fn, cfg["arquivo"])
+
+    ed.regex(r"\n  despesaFiltroMes: \'\',\n  despesaFiltroCentro: \'\',"
+             r"\n  despesaGruposAbertos: \{\},", "", rotulo="estado do financeiro")
+    ed.regex(r"\n  FRENTES_GERAL: \[[^\]]*\],", "", rotulo="FRENTES_GERAL")
+    ed.regex(r"\n *const *FRENTE_KEYS *= *\[[^\]]*\];", "", rotulo="FRENTE_KEYS")
+    ed.remove_bloco(
+        "  const despesaMesEl = document.querySelector('[data-despesa-filtro-mes]');",
+        "  document.querySelectorAll('[data-del-cadastro]')",
+        rotulo="handlers do filtro de despesa")
 
     # ---------- 12) Identidade do app
     ed.troca("<title>AE Lavoura</title>", f"<title>{cfg['titulo']}</title>",
