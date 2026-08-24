@@ -18,7 +18,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const DOMINIO_LOGIN = 'aeagropecuaria.local'
-const PAPEIS_VALIDOS = ['admin', 'proprietario', 'gestor', 'encarregado', 'colaborador', 'operador']
+// Tem que bater com a restricao profiles_papel_check do banco. 'consultor'
+// faltava aqui e existe la desde a unificacao (unificacao_04): criar um
+// consultor por esta funcao devolvia um OPERADOR, calado - ver o motivo
+// logo abaixo.
+const PAPEIS_VALIDOS = ['admin', 'proprietario', 'gestor', 'encarregado', 'colaborador', 'consultor', 'operador']
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,7 +67,17 @@ Deno.serve(async (req) => {
     if (String(senha).length < 6) {
       return resposta({ error: 'A senha precisa ter pelo menos 6 caracteres' }, 400)
     }
-    const papelFinal = PAPEIS_VALIDOS.includes(papel) ? papel : 'operador'
+    // Papel desconhecido vira ERRO, e nao mais 'operador' silencioso.
+    //
+    // O padrao calado e pior que a recusa: quem escolhia um papel que a
+    // funcao nao conhecia recebia a conta criada com sucesso, com o papel
+    // trocado, e so descobria quando a pessoa reclamasse de nao conseguir
+    // ver alguma tela. Papel em branco continua caindo em 'operador', que e
+    // o menos privilegiado e o padrao certo para quem nao escolheu.
+    if (papel && !PAPEIS_VALIDOS.includes(papel)) {
+      return resposta({ error: `Papel inválido: "${papel}". Válidos: ${PAPEIS_VALIDOS.join(', ')}.` }, 400)
+    }
+    const papelFinal = papel || 'operador'
 
     const usuarioNormalizado = String(usuario).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
     if (!usuarioNormalizado) return resposta({ error: 'Usuário inválido' }, 400)
