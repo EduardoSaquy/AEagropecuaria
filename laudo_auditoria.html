@@ -218,13 +218,13 @@
 <div class="pagina">
 
 <header>
-  <p class="eyebrow">Revisão técnica · 22 de agosto de 2026</p>
+  <p class="eyebrow">Revisão técnica · 22 de agosto de 2026 · conferido no banco</p>
   <h1>Auditoria AE&nbsp;Agropecuária</h1>
-  <p class="resumo">Quatro auditorias em paralelo sobre <strong>Matriz, Pecuária, Cana e Cereais</strong> e sobre o banco. <strong>44 achados</strong>. Nove já foram corrigidos e testados hoje; o resto está ordenado por risco ao dado — que é onde as falhas deste sistema doeram até agora.</p>
+  <p class="resumo">Quatro auditorias em paralelo sobre <strong>Matriz, Pecuária, Cana e Cereais</strong> e sobre o banco. <strong>44 achados</strong>. Dez já foram corrigidos, e a conferência no banco voltou <strong>dez de dez OK</strong> — com os R$&nbsp;10.226.028,01 e as 2.759 linhas intactos. O resto está ordenado por risco ao dado, que é onde as falhas deste sistema doeram até agora.</p>
 </header>
 
 <div class="placar">
-  <div><div class="n o">9</div><div class="rot">corrigidos hoje</div></div>
+  <div><div class="n o">10</div><div class="rot">corrigidos e conferidos</div></div>
   <div><div class="n c">4</div><div class="rot">críticos abertos</div></div>
   <div><div class="n a">9</div><div class="rot">altos</div></div>
   <div><div class="n m">8</div><div class="rot">médios</div></div>
@@ -233,7 +233,13 @@
 
 <section>
   <h2>Corrigido hoje</h2>
-  <p class="sub">Tudo abaixo está testado e nos arquivos que já te entreguei. Sete dos nove são erro meu — marquei quais.</p>
+  <p class="sub">Tudo abaixo está aplicado e conferido contra o banco. Oito dos dez são erro meu — marquei quais.</p>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Permissão de pecuária dava acesso ao financeiro inteiro</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>Ao destravar a Pecuária eu escrevi a condição sem olhar a atividade da linha. Como a tabela guarda as quatro atividades no mesmo lugar, quem tinha permissão de pecuária passou a ler — e gravar — cana e cereais também.</p>
+    <p class="cenario"><b>Como escapou:</b> o app da Pecuária filtra por atividade na tela, então nada aparecia errado para quem usa o app. Mas RLS não é a tela: quem chamar a API com o próprio login lê tudo. Foi o raciocínio "a tela já filtra" que produziu o furo.</p>
+  </div>
 
   <div class="achado ok">
     <div class="topo"><h3>Matriz somava no máximo 1.000 dos 2.760 lançamentos</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
