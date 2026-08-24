@@ -424,7 +424,34 @@ function lancamentoToRow(l){
           talhao_id:l.talhaoId || null, lote_id:l.loteId || null,
           areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas)};
 }
-function rowToCentroCusto(r){ return {id:r.id, nome:r.nome, frente:r.frente, fazendaId:r.fazenda_id, ativo:r.ativo}; }
+/* O plano de contas do Conag é hierárquico, e essa hierarquia já está
+ * gravada — só não era lida por nenhum app:
+ *
+ *   tipo          'entrada' ou 'saida'
+ *   subcategoria  'GRUPO | Subcategoria' nas saídas, e o nome da atividade
+ *                 da DFC nas entradas (Atividades Operacionais, de
+ *                 Investimento, de Financiamento, Variações não
+ *                 operacionais de caixa)
+ *
+ * Sem ler isso, o relatório mostrava 71 centros numa lista plana, enquanto
+ * a contabilidade trabalha com os grupos. */
+function rowToCentroCusto(r){
+  return {id:r.id, nome:r.nome, frente:r.frente, fazendaId:r.fazenda_id, ativo:r.ativo,
+          tipo:r.tipo||'', subcategoria:r.subcategoria||''};
+}
+// 'ADM | DESPESAS COM ADMINISTRAÇÃO' -> grupo 'ADM', detalhe 'DESPESAS...'.
+// Sem a barra, o texto todo é o grupo — é o caso das entradas.
+function grupoDoCentro(c){
+  const s = (c && c.subcategoria) || '';
+  if(!s) return 'Sem classificação';
+  const i = s.indexOf('|');
+  return i < 0 ? s.trim() : s.slice(0, i).trim();
+}
+function subgrupoDoCentro(c){
+  const s = (c && c.subcategoria) || '';
+  const i = s.indexOf('|');
+  return i < 0 ? '' : s.slice(i+1).trim();
+}
 const ATIVIDADES_LANC = [['pecuaria','Pecuária'],['cana','Cana-de-açúcar'],['graos','Grãos'],['geral','Geral / administrativo']];
 const TIPO_LABEL = {despesa:'despesa', receita:'receita', investimento:'investimento'};
 function rowToLotePec(r){ return {id:r.id, nome:r.nome}; }
@@ -1832,8 +1859,16 @@ function ModalFazenda(){
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function centroCustoToRow(c){
   return {nome:c.nome, frente:c.frente || null,
+          tipo:c.tipo || null, subcategoria:c.subcategoria || null,
           fazenda_id:c.fazendaId ? Number(c.fazendaId) : null,
           ativo:!!c.ativo};
+}
+// Os grupos que já existem no plano de contas. Oferecer a lista em vez de
+// um campo livre é o que impede o mesmo grupo virar três por diferença de
+// grafia — o mesmo problema que os centros de custo tiveram.
+function subcategoriasExistentes(){
+  return [...new Set(state.centrosCusto.map(c=>c.subcategoria).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'pt-BR'));
 }
 function usosDoCentro(id){
   return state.lancamentos.filter(l=>String(l.centroCustoId)===String(id)).length;
@@ -1841,35 +1876,65 @@ function usosDoCentro(id){
 function PageCentrosCusto(){
   const busca = (state.searchCentros||'').toLowerCase();
   const linhas = state.centrosCusto
-    .filter(c => !busca || c.nome.toLowerCase().includes(busca))
+    .filter(c => !busca || c.nome.toLowerCase().includes(busca)
+              || (c.subcategoria||'').toLowerCase().includes(busca))
     .sort((a,b)=>a.nome.localeCompare(b.nome, 'pt-BR'));
   const podeEditar = temPermissao('matriz_financeiro','editar');
+  const semClassificacao = state.centrosCusto.filter(c=>!c.subcategoria).length;
+
+  // Agrupa pela hierarquia do plano de contas: entrada/saída, depois o
+  // grupo (ADM, OPERACIONAL, FINANCIAMENTOS...), depois os centros.
+  const porGrupo = new Map();
+  linhas.forEach(c=>{
+    const chave = `${c.tipo||'zz'}||${grupoDoCentro(c)}`;
+    if(!porGrupo.has(chave)) porGrupo.set(chave, {tipo:c.tipo||'', grupo:grupoDoCentro(c), centros:[]});
+    porGrupo.get(chave).centros.push(c);
+  });
+  const grupos = [...porGrupo.values()].sort((a,b)=>
+    (a.tipo==='entrada'?0:a.tipo==='saida'?1:2) - (b.tipo==='entrada'?0:b.tipo==='saida'?1:2)
+    || a.grupo.localeCompare(b.grupo,'pt-BR'));
+
   return `
   <div class="toolbar">
-    <div class="search">${iconSearch ? iconSearch() : ''}<input type="text" placeholder="Buscar centro de custo..." value="${esc(state.searchCentros||'')}" data-search-centros="1" autocomplete="off"/></div>
+    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar por nome ou grupo..." value="${esc(state.searchCentros||'')}" data-search-centros="1" autocomplete="off"/></div>
     <span class="hint">${linhas.length} de ${state.centrosCusto.length}</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-centro="1">+ Novo centro de custo</button>` : ''}
   </div>
+  ${semClassificacao > 0 ? `
+  <div class="card" style="margin-bottom:14px; border-left:3px solid var(--alerta,#B3462F);">
+    <div class="hint"><strong>${fmtInt(semClassificacao)} centro(s) sem classificação.</strong>
+    Eles aparecem em "Sem classificação" no fim da lista e ficam de fora do agrupamento do relatório.
+    A maioria veio da migração da Pecuária, que só tinha o nome da conta. Edite cada um e escolha o grupo.</div>
+  </div>` : ''}
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhum centro de custo','Cadastre os centros de custo que a operação usa nos lançamentos.') : `
     <table>
       <thead><tr><th>Nome</th><th>Lançamentos</th><th></th></tr></thead>
       <tbody>
-        ${linhas.map(c=>{
-          const usos = usosDoCentro(c.id);
-          return `
-          <tr${c.ativo===false ? ' style="opacity:.55;"' : ''}>
-            <td><strong>${esc(c.nome)}</strong>${c.ativo===false ? ' <span class="hint">(inativo)</span>' : ''}</td>
-            <td class="mono">${usos>0 ? fmtInt(usos) : '—'}</td>
-            <td style="display:flex; gap:6px;">
-              ${podeEditar ? `
-              <button class="btn-ghost btn-sm" data-editar-centro="${c.id}">Editar</button>
-              ${usos===0 ? `<button class="btn-danger-ghost" data-excluir-centro="${c.id}">Excluir</button>`
-                         : `<span class="hint" title="Tem lançamento usando este centro. Desative em vez de excluir.">em uso</span>`}
-              ` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
+        ${grupos.map(g=>`
+          <tr><td colspan="3" style="background:var(--cinza-fundo,#f5f6f5); font-weight:600; font-size:12px; letter-spacing:.04em;">
+            ${g.tipo ? `<span class="pill ${g.tipo==='entrada'?'pill-ok':'pill-cat'}">${g.tipo==='entrada'?'Entrada':'Saída'}</span> ` : ''}
+            ${esc(g.grupo)}
+            <span class="hint" style="font-weight:400;"> · ${g.centros.length} centro(s)</span>
+          </td></tr>
+          ${g.centros.map(c=>{
+            const usos = usosDoCentro(c.id);
+            const sub = subgrupoDoCentro(c);
+            return `
+            <tr${c.ativo===false ? ' style="opacity:.55;"' : ''}>
+              <td style="padding-left:22px;"><strong>${esc(c.nome)}</strong>${c.ativo===false ? ' <span class="hint">(inativo)</span>' : ''}
+                ${sub ? `<div class="hint">${esc(sub)}</div>` : ''}</td>
+              <td class="mono">${usos>0 ? fmtInt(usos) : '—'}</td>
+              <td style="display:flex; gap:6px;">
+                ${podeEditar ? `
+                <button class="btn-ghost btn-sm" data-editar-centro="${c.id}">Editar</button>
+                ${usos===0 ? `<button class="btn-danger-ghost" data-excluir-centro="${c.id}">Excluir</button>`
+                           : `<span class="hint" title="Tem lançamento usando este centro. Desative em vez de excluir.">em uso</span>`}
+                ` : ''}
+              </td>
+            </tr>`;
+          }).join('')}
+        `).join('')}
       </tbody>
     </table>`}
   </div>`;
@@ -1885,6 +1950,20 @@ function ModalCentroCusto(){
           <input id="f-nomecentro" value="${esc(d.nome||'')}" placeholder="Ex: MANUTENÇÃO DE VEÍCULOS LEVES"/>
         </div>
         <p class="hint" style="margin:-4px 0 14px;">Todo centro de custo vale para <strong>todas as fazendas e todas as atividades</strong>. De onde o gasto é quem diz são os campos Fazenda e Atividade do lançamento, não o centro.</p>
+        <div class="field"><label>Entrada ou saída</label>
+          <select id="f-tipocentro">
+            <option value="" ${!d.tipo?'selected':''}>Sem classificação</option>
+            <option value="entrada" ${d.tipo==='entrada'?'selected':''}>Entrada (dinheiro entrando)</option>
+            <option value="saida" ${d.tipo==='saida'?'selected':''}>Saída (dinheiro saindo)</option>
+          </select>
+        </div>
+        <div class="field"><label>Grupo do plano de contas</label>
+          <select id="f-subcategoriacentro">
+            <option value="" ${!d.subcategoria?'selected':''}>Sem classificação</option>
+            ${subcategoriasExistentes().map(s=>`<option value="${esc(s)}" ${d.subcategoria===s?'selected':''}>${esc(s)}</option>`).join('')}
+          </select>
+          <span class="hint">A lista vem dos grupos que já existem no seu plano de contas do Conag. É o que agrupa o relatório — centro sem grupo fica de fora do agrupamento.</span>
+        </div>
         <div class="field"><label><input type="checkbox" id="f-ativocentro" ${d.ativo!==false?'checked':''}/> Ativo</label>
           <span class="hint">Desativar tira o centro da lista de novos lançamentos, sem mexer nos que já existem. É o caminho certo para uma conta que saiu de uso.</span>
         </div>
@@ -2300,6 +2379,45 @@ function BlocoCustoHectare(){
                return rateado > 0.005 ? `<p class="hint" style="margin-top:6px;">A tabela de cima soma R$ ${fmt(rateado)} a mais: é a parte das despesas lançadas como <strong>Geral</strong> que cabe a esta atividade. O rateio por fazenda usa só o que foi lançado direto nela.</p>` : ''; })()}`;
   }).join('')}`;
 }
+/* Quebra do mês pelos grupos do plano de contas do Conag.
+ *
+ * A hierarquia (tipo entrada/saída, e 'GRUPO | Subcategoria') já estava
+ * gravada em centros_custo e nenhum app lia: o relatório mostrava os 71
+ * centros numa lista plana, enquanto a contabilidade trabalha por grupo.
+ * Aqui ela finalmente aparece.
+ *
+ * Centro sem classificação vai para um grupo próprio no fim, em vez de
+ * sumir — é o que torna visível o que ainda falta classificar. */
+function BlocoPorGrupo(lancamentos, total){
+  if(!lancamentos.length) return '';
+  const porGrupo = new Map();
+  lancamentos.forEach(l=>{
+    const c = state.centrosCusto.find(x=>String(x.id)===String(l.centroCustoId));
+    const g = grupoDoCentro(c);
+    porGrupo.set(g, (porGrupo.get(g)||0) + Number(l.valor||0));
+  });
+  const linhas = [...porGrupo.entries()]
+    .sort((a,b)=> (a[0]==='Sem classificação') - (b[0]==='Sem classificação') || b[1]-a[1]);
+  if(linhas.length < 2) return '';
+  return `
+  <div style="margin-top:14px; border-top:1px solid var(--linha,#E3E6E1); padding-top:12px;">
+    <div class="hint" style="margin-bottom:8px;">Por grupo do plano de contas</div>
+    <table style="width:100%; font-size:13px;">
+      <tbody>
+        ${linhas.map(([grupo, valor])=>{
+          const pct = total > 0 ? (valor/total*100) : 0;
+          const semClass = grupo === 'Sem classificação';
+          return `
+          <tr${semClass ? ' style="opacity:.7;"' : ''}>
+            <td style="padding:5px 0;">${esc(grupo)}${semClass ? ' <span class="hint">(classifique em Centros de Custo)</span>' : ''}</td>
+            <td class="mono" style="text-align:right; padding:5px 10px; white-space:nowrap;">R$ ${fmt(valor)}</td>
+            <td class="mono hint" style="text-align:right; width:52px; white-space:nowrap;">${fmt(pct,1)}%</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
 function PageFinanceiro(){
   const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos'],['custoha','Custo por hectare']];
   if(state.abaFinanceiro==='custoha'){
@@ -2335,6 +2453,7 @@ function PageFinanceiro(){
     <div class="hint">Despesas vigentes em ${mesLabel(mesAtual)}${state.filtroAtividade?` · ${rotuloAtividade(state.filtroAtividade)}`:''}</div>
     <div style="font-size:26px; font-weight:700; margin-top:4px;">R$ ${fmt(totalMes)}</div>
     <div class="hint" style="margin-top:6px;">Cada conta usa o valor lançado para ${mesLabel(mesAtual)} quando existe; senão, o valor recorrente.</div>
+    ${BlocoPorGrupo(vigentes, totalMes)}
   </div>` : ''}
 
   <div class="toolbar">
@@ -3124,6 +3243,8 @@ function attachEvents(){
           // diz a que atividade o gasto pertence e o proprio lancamento.
           // Preservada na edicao para nao apagar o que ja esta gravado.
           frente: editDraft.frente || null,
+          tipo: document.getElementById('f-tipocentro')?.value || '',
+          subcategoria: document.getElementById('f-subcategoriacentro')?.value || '',
         });
         if(editDraft._editId){
           ({error} = await db.from('centros_custo').update(row).eq('id', editDraft._editId));
