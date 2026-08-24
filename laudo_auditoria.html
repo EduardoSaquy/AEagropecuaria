@@ -1,0 +1,458 @@
+<title>Auditoria AE Agropecuária</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  /* Paleta herdada dos próprios apps (AEMatriz/AECana/AEpecuaria):
+     verde-escuro #1B4332, cinza #6E756C, fundo #F7F8F6, e as cores de
+     severidade tiradas do DONUT_PALETTE que já é usado nos relatórios. */
+  :root{
+    --tinta:#1A1F1B;
+    --tinta-2:#3D453E;
+    --cinza:#6E756C;
+    --cinza-fraco:#8A9089;
+    --linha:#DFE3DD;
+    --linha-forte:#C9CFC6;
+    --fundo:#F7F8F6;
+    --papel:#FFFFFF;
+    --papel-2:#F2F4F0;
+
+    --verde:#1B4332;
+    --verde-claro:#2D6A4F;
+
+    --critico:#B3462F;
+    --critico-fundo:rgba(179,70,47,.09);
+    --alto:#C98A2B;
+    --alto-fundo:rgba(201,138,43,.11);
+    --medio:#4A5A7A;
+    --medio-fundo:rgba(74,90,122,.10);
+    --ok:#2D6A4F;
+    --ok-fundo:rgba(45,106,79,.10);
+
+    --cana:#EB6834;
+    --cereais:#1BAF7A;
+    --pecuaria:#2A78D6;
+    --matriz:#6E7BA6;
+
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --tinta:#E8EBE6;
+      --tinta-2:#BCC3BA;
+      --cinza:#969D94;
+      --cinza-fraco:#767D74;
+      --linha:#2C332D;
+      --linha-forte:#3D453E;
+      --fundo:#12160F;
+      --papel:#1A1F1B;
+      --papel-2:#222822;
+
+      --verde:#95D5B2;
+      --verde-claro:#74C69D;
+
+      --critico:#E08A72;
+      --critico-fundo:rgba(224,138,114,.13);
+      --alto:#E0A458;
+      --alto-fundo:rgba(224,164,88,.13);
+      --medio:#93A3C4;
+      --medio-fundo:rgba(147,163,196,.13);
+      --ok:#74C69D;
+      --ok-fundo:rgba(116,198,157,.13);
+
+      --cana:#F08A5C;
+      --cereais:#4FD1A0;
+      --pecuaria:#6BA6E8;
+      --matriz:#9AA6CC;
+    }
+  }
+  :root[data-theme="dark"]{
+    --tinta:#E8EBE6; --tinta-2:#BCC3BA; --cinza:#969D94; --cinza-fraco:#767D74;
+    --linha:#2C332D; --linha-forte:#3D453E;
+    --fundo:#12160F; --papel:#1A1F1B; --papel-2:#222822;
+    --verde:#95D5B2; --verde-claro:#74C69D;
+    --critico:#E08A72; --critico-fundo:rgba(224,138,114,.13);
+    --alto:#E0A458; --alto-fundo:rgba(224,164,88,.13);
+    --medio:#93A3C4; --medio-fundo:rgba(147,163,196,.13);
+    --ok:#74C69D; --ok-fundo:rgba(116,198,157,.13);
+    --cana:#F08A5C; --cereais:#4FD1A0; --pecuaria:#6BA6E8; --matriz:#9AA6CC;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    background:var(--fundo);
+    color:var(--tinta);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:0 20px 100px;
+  }
+  .pagina{max-width:840px; margin:0 auto;}
+
+  /* ---------- cabeçalho ---------- */
+  header{padding:72px 0 40px; border-bottom:2px solid var(--tinta); margin-bottom:0;}
+  .eyebrow{
+    font-size:11.5px; font-weight:600; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--cinza); margin-bottom:14px;
+  }
+  h1{
+    font-family:'Fraunces',Georgia,serif; font-weight:600;
+    font-size:clamp(34px,6vw,50px); line-height:1.08; letter-spacing:-.015em;
+    text-wrap:balance; margin-bottom:16px;
+  }
+  .resumo{font-size:17px; color:var(--tinta-2); max-width:62ch;}
+  .resumo strong{color:var(--tinta); font-weight:600;}
+
+  /* ---------- placar ---------- */
+  .placar{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:1px; background:var(--linha);
+    border:1px solid var(--linha); border-top:none;
+    margin-bottom:56px;
+  }
+  .placar div{background:var(--papel); padding:20px 18px;}
+  .placar .n{
+    font-family:'Fraunces',Georgia,serif; font-size:32px; font-weight:600;
+    line-height:1; font-variant-numeric:tabular-nums; margin-bottom:6px;
+  }
+  .placar .rot{font-size:12px; color:var(--cinza); line-height:1.4;}
+  .n.c{color:var(--critico);} .n.a{color:var(--alto);}
+  .n.m{color:var(--medio);}   .n.o{color:var(--ok);}
+
+  /* ---------- seções ---------- */
+  section{margin-bottom:60px;}
+  h2{
+    font-family:'Fraunces',Georgia,serif; font-weight:600;
+    font-size:25px; letter-spacing:-.01em; margin-bottom:8px; text-wrap:balance;
+  }
+  .sub{font-size:14.5px; color:var(--cinza); margin-bottom:26px; max-width:62ch;}
+
+  /* ---------- achados ---------- */
+  .achado{
+    background:var(--papel);
+    border:1px solid var(--linha);
+    border-left:3px solid var(--linha-forte);
+    padding:20px 22px; margin-bottom:12px;
+  }
+  .achado.c{border-left-color:var(--critico);}
+  .achado.a{border-left-color:var(--alto);}
+  .achado.m{border-left-color:var(--medio);}
+  .achado.ok{border-left-color:var(--ok); background:var(--papel-2);}
+
+  .topo{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:9px;}
+  .achado h3{
+    font-size:16px; font-weight:600; line-height:1.35; flex:1 1 320px;
+    letter-spacing:-.005em;
+  }
+  .chip{
+    font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
+    padding:3px 8px; border-radius:3px; white-space:nowrap;
+  }
+  .chip.c{background:var(--critico-fundo); color:var(--critico);}
+  .chip.a{background:var(--alto-fundo); color:var(--alto);}
+  .chip.m{background:var(--medio-fundo); color:var(--medio);}
+  .chip.ok{background:var(--ok-fundo); color:var(--ok);}
+  .chip.app{background:transparent; border:1px solid var(--linha-forte); color:var(--cinza); font-weight:500;}
+  .chip.meu{background:transparent; border:1px dashed var(--critico); color:var(--critico); font-weight:500;}
+
+  .achado p{font-size:14.5px; color:var(--tinta-2); margin-bottom:10px;}
+  .achado p:last-child{margin-bottom:0;}
+  .achado .onde{
+    font-family:var(--mono); font-size:12px; color:var(--cinza);
+    background:var(--papel-2); padding:2px 6px; border-radius:3px;
+  }
+  .achado.ok .onde{background:var(--papel);}
+  code{
+    font-family:var(--mono); font-size:.88em;
+    background:var(--papel-2); padding:1px 5px; border-radius:3px; color:var(--tinta);
+  }
+  .achado.ok code{background:var(--papel);}
+  .cenario{
+    font-size:13.5px; color:var(--tinta-2);
+    border-left:2px solid var(--linha-forte); padding-left:13px; margin-top:11px;
+  }
+  .cenario b{color:var(--tinta); font-weight:600;}
+
+  /* ---------- tabela ---------- */
+  .rolar{overflow-x:auto; margin:22px 0; border:1px solid var(--linha);}
+  table{width:100%; border-collapse:collapse; background:var(--papel); font-size:13.5px;}
+  th{
+    text-align:left; padding:11px 14px; font-size:11px; font-weight:600;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--cinza);
+    border-bottom:1px solid var(--linha-forte); white-space:nowrap;
+  }
+  td{padding:11px 14px; border-bottom:1px solid var(--linha); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
+
+  /* ---------- passos ---------- */
+  ol.passos{list-style:none; counter-reset:p; margin-top:8px;}
+  ol.passos li{
+    counter-increment:p; position:relative; padding-left:38px;
+    margin-bottom:14px; font-size:14.5px; color:var(--tinta-2);
+  }
+  ol.passos li::before{
+    content:counter(p); position:absolute; left:0; top:1px;
+    width:24px; height:24px; border-radius:50%;
+    background:var(--verde); color:var(--fundo);
+    font-size:12px; font-weight:700; font-family:var(--mono);
+    display:flex; align-items:center; justify-content:center;
+  }
+  ol.passos li b{color:var(--tinta); font-weight:600;}
+
+  .nota{
+    background:var(--papel-2); border:1px solid var(--linha);
+    padding:16px 18px; font-size:14px; color:var(--tinta-2); margin-top:24px;
+  }
+  .nota b{color:var(--tinta);}
+
+  footer{
+    margin-top:70px; padding-top:24px; border-top:1px solid var(--linha);
+    font-size:13px; color:var(--cinza-fraco);
+  }
+  a{color:var(--verde-claro);}
+  a:focus-visible, summary:focus-visible{outline:2px solid var(--verde-claro); outline-offset:2px;}
+</style>
+
+<div class="pagina">
+
+<header>
+  <p class="eyebrow">Revisão técnica · 22 de agosto de 2026</p>
+  <h1>Auditoria AE&nbsp;Agropecuária</h1>
+  <p class="resumo">Quatro auditorias em paralelo sobre <strong>Matriz, Pecuária, Cana e Cereais</strong> e sobre o banco. <strong>44 achados</strong>. Nove já foram corrigidos e testados hoje; o resto está ordenado por risco ao dado — que é onde as falhas deste sistema doeram até agora.</p>
+</header>
+
+<div class="placar">
+  <div><div class="n o">9</div><div class="rot">corrigidos hoje</div></div>
+  <div><div class="n c">4</div><div class="rot">críticos abertos</div></div>
+  <div><div class="n a">9</div><div class="rot">altos</div></div>
+  <div><div class="n m">8</div><div class="rot">médios</div></div>
+  <div><div class="n">14</div><div class="rot">menores e latentes</div></div>
+</div>
+
+<section>
+  <h2>Corrigido hoje</h2>
+  <p class="sub">Tudo abaixo está testado e nos arquivos que já te entreguei. Sete dos nove são erro meu — marquei quais.</p>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Matriz somava no máximo 1.000 dos 2.760 lançamentos</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>O Supabase corta toda consulta em 1.000 linhas e devolve <code>200 OK</code>: array truncado que parece completo. Era o único dos quatro apps sem paginação — e o único onde o número importa.</p>
+    <p class="cenario"><b>Por que ninguém viu:</b> cada tela pegava uma fatia diferente conforme a ordenação que pedia. O Financeiro ordenava por data decrescente e ficava com os recentes; o Resultados não ordenava e ficava com os antigos. As conferências não pegaram porque rodaram em SQL, direto no banco, não pela tela.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Ninguém da pecuária conseguia registrar venda</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>As políticas de <code>lancamentos_financeiros</code> só aceitavam <code>matriz_financeiro</code>, mas a Pecuária usa <code>pec_financeiro</code>. O abate gravava, a receita era recusada, o app desfazia o abate. O Financeiro da Pecuária também mostrava R$ 0,00 — RLS devolve lista vazia sem erro.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Backup de perfis aberto para qualquer um</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p><code>profiles_backup_unificacao</code> foi criada com <code>create table as select</code> e nunca recebeu RLS. Sem RLS, a chave pública — que está à vista no código-fonte da página — lê e grava. É cópia integral de <code>profiles</code>: nome, login, papel e permissões de todo mundo.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Centro de custo com seletor de fazenda</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span><span class="chip app">achado seu</span></div>
+    <p>Copiei a estrutura antiga da tabela em vez de olhar para o que o cadastro significa. Permitia criar a mesma conta uma vez por fazenda e quebrar o relatório por centro de custo em várias linhas.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Editar lançamento histórico o transformava em recorrente</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>Era o bug do R$ 1,2 milhão rearmado por outro caminho: bastava abrir um lançamento antigo e salvar. Antes veio pela migração, agora vinha pela edição.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Plano de contas do Conag invisível no formulário</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>O seletor exigia <code>frente</code> preenchida, e os 56 centros do Conag têm frente nula — porque servem as três atividades ao mesmo tempo. Nenhum deles aparecia na hora de lançar.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Resultados lia tabela legada; receita de lavoura nunca migrada</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>R$ 2.587.195,27 de receita de cana existiam só na tabela antiga — o app mostrava a cana com R$ 2,45 mi de despesa e receita zero.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Proprietário sem acesso total no banco</h3><span class="chip ok">corrigido</span><span class="chip meu">meu erro</span></div>
+    <p>Os apps prometem acesso total a admin e proprietário, e a tela nem desenha as caixinhas para eles. O banco discordava.</p>
+  </div>
+
+  <div class="achado ok">
+    <div class="topo"><h3>Permissão de cadastros não separava as frentes</h3><span class="chip ok">corrigido</span></div>
+    <p>Não dava para liberar os talhões da cana sem liberar os do cereal.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Críticos em aberto</h2>
+  <p class="sub">Os dois primeiros são exposição de dado e não dependem de código — resolvem no painel do Supabase, em minutos.</p>
+
+  <div class="achado c">
+    <div class="topo"><h3>O projeto antigo da Pecuária continua com leitura anônima de tudo</h3><span class="chip c">crítico</span><span class="chip app">banco</span></div>
+    <p>Dez tabelas do projeto <code>leojfqlbdtlriemdgnyw</code> ganharam política de leitura anônima quando o Matriz precisava lê-las de fora: <code>lotes</code>, <code>custos_fixos</code>, <code>receitas</code>, <code>fazendas</code> e <code>profiles</code>, entre outras. O script que derrubaria isso trava se não estiver no projeto do Lavoura — <b>ele nunca rodou lá</b>.</p>
+    <p class="cenario"><b>Cenário:</b> a chave pública antiga está recuperável no histórico do git. Uma requisição sem login devolve nomes, logins e a matriz de permissões de toda a equipe, e o financeiro inteiro da pecuária até a data da virada. Sem rastro. Fechar o login não resolve — leitura anônima, por definição, não usa login.</p>
+    <p><b>O que fazer:</b> pausar o projeto antigo no painel do Supabase. Resolve os dois primeiros achados de uma vez e não apaga nada.</p>
+  </div>
+
+  <div class="achado c">
+    <div class="topo"><h3>Edge Function <code>atualizar-permissoes</code> não verifica quem chamou</h3><span class="chip c">crítico</span><span class="chip app">banco</span></div>
+    <p>Ela faz <code>UPDATE</code> em <code>profiles</code> com a chave de serviço e não lê o cabeçalho de autorização, não chama <code>getUser()</code>, não checa papel. As outras cinco funções fazem as três coisas — esta é a única fora do padrão.</p>
+    <p class="cenario"><b>Cenário:</b> qualquer um que descubra a URL promove qualquer conta a admin. Hoje está <i>acidentalmente</i> contido porque a virada desativou todos os perfis daquele projeto — mas a contenção evapora se alguém reativar, ou se a função for republicada no projeto novo.</p>
+  </div>
+
+  <div class="achado c">
+    <div class="topo"><h3>Custo por bezerro desmamado multiplicado pelo número de animais do lote</h3><span class="chip c">crítico</span><span class="chip app">Pecuária</span></div>
+    <p>A ração é dividida por <code>numeroAnimais</code>; o custo fixo não. <span class="onde">AEpecuaria.html:4499</span></p>
+    <p class="cenario"><b>Cenário:</b> lote de cria com 100 vacas, R$ 1.000/dia de custo fixo alocado ao lote, bezerro de 210 dias até o desmame. A tela mostra <b>R$ 210.000 por bezerro</b>; o certo seria ~R$ 2.100. O erro é exatamente o número de animais do lote, e contamina o custo médio por bezerro e a tabela de Reprodução.</p>
+  </div>
+
+  <div class="achado c">
+    <div class="topo"><h3>Salvar funcionário sendo proprietário apaga o vínculo de login</h3><span class="chip c">crítico</span><span class="chip app">Matriz</span><span class="chip meu">meu erro</span></div>
+    <p><code>profiles</code> só é carregado para admin. Para quem não é, o seletor "Login de acesso" fica vazio, o valor não casa com nenhuma opção e o salvar grava <code>perfil_id: null</code>. <span class="onde">AEMatriz.html:448, 3045</span></p>
+    <p class="cenario"><b>Cenário:</b> a Alice abre Funcionários, corrige só o cargo de alguém, salva. O vínculo com o login é destruído em silêncio e a pessoa reaparece em "importar contas sem funcionário vinculado". Mesma classe do bug do <code>mes</code>: campo que o formulário não conseguiu carregar sendo escrito como nulo.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Altos</h2>
+  <p class="sub">Nove. Quatro deles são resto da separação de ontem.</p>
+
+  <div class="rolar">
+  <table>
+    <thead><tr><th>Achado</th><th>Onde</th><th>Consequência</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Cache local do AE Cana traz dados de grãos</b><br>A chave <code>cana_cache_cadastros_v1</code> é a mesma do AE Cana antigo, que lia tudo sem filtro. O cache é pintado na tela antes de <code>filtrarPelaFrente()</code> rodar.</td>
+        <td class="num">AECana.html:484</td>
+        <td>Quem já usou o app antigo vê culturas e talhões de cereais ao abrir. Se a rede falhar, <b>fica</b> nesse estado.</td>
+      </tr>
+      <tr>
+        <td><b>Os dois apps instalam "AE Lavoura" no celular</b><br>Ambos apontam para <code>manifest_lavoura.json</code> e <code>sw_lavoura.js</code>. Os manifests próprios existem no repositório e ninguém os referencia.</td>
+        <td class="num">AECana.html:7</td>
+        <td>"Adicionar à tela de início" instala um app só, chamado AE Lavoura, que abre a página de encaminhamento. E o cache offline guarda o arquivo errado.</td>
+      </tr>
+      <tr>
+        <td><b>Talhão sem cultura some dos dois apps</b><br>O campo Cultura não é obrigatório, mas o filtro por frente descarta quem não tem.</td>
+        <td class="num">AECana.html:534</td>
+        <td>Cadastra o talhão, salva, ele não aparece. Existe no banco e nenhuma das quatro telas o edita.</td>
+      </tr>
+      <tr>
+        <td><b>Editar pesagem ou inseminação apaga o vínculo com o manejo</b><br>Os campos montados no salvar não carregam <code>manejoId</code>.</td>
+        <td class="num">AEpecuaria.html:7958</td>
+        <td>A planilha do manejo passa a mostrar "—" em todas as linhas, apesar dos pesos individuais continuarem gravados. Perda permanente.</td>
+      </tr>
+      <tr>
+        <td><b>Mudar a data de uma venda de mês grava o abate e falha na receita</b><br>O update da receita não atualiza <code>mes</code> e viola o CHECK.</td>
+        <td class="num">AEpecuaria.html:7751</td>
+        <td>Vendas mostra agosto, Receitas continua em julho. Correção dentro do mesmo mês passa — o que torna o bug intermitente.</td>
+      </tr>
+      <tr>
+        <td><b>Pecuária e Matriz agrupam o recorrente com chaves diferentes</b><br>A Pecuária inclui <code>areas</code> na chave; o Matriz não.</td>
+        <td class="num">AEpecuaria.html:3985</td>
+        <td>Marcar uma caixinha de área no Matriz muda o total da Pecuária sem mais nada ter mudado.</td>
+      </tr>
+      <tr>
+        <td><b><code>vigentesNoMes</code> não inclui a fazenda na chave</b><br>Duas fazendas com a mesma conta caem no mesmo grupo.</td>
+        <td class="num">AEMatriz.html:2094</td>
+        <td>Lançar a energia de uma fazenda <b>apaga</b> o recorrente da outra naquele mês. O valor oscila mês a mês sem ninguém mexer.</td>
+      </tr>
+      <tr>
+        <td><b>"Custo por hectare" existe em duas telas com composições diferentes</b><br>O Financeiro inclui o rateio do <code>geral</code> e exclui insumo aplicado; o Resultados faz o oposto.</td>
+        <td class="num">AEMatriz.html:2185</td>
+        <td>Dois números com o mesmo nome que nunca vão bater. E toda despesa <code>geral</code> fica fora dos totais consolidados.</td>
+      </tr>
+      <tr>
+        <td><b>Na mesma tela, a tabela por fazenda não fecha com a de cima</b><br>Uma inclui o rateio do <code>geral</code>, a outra não.</td>
+        <td class="num">AEMatriz.html:2157</td>
+        <td>Dois custos por hectare da cana, um embaixo do outro, com 30% de diferença e sem explicação.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Médios</h2>
+  <p class="sub">Oito. Nenhum corrompe dado, mas vários fazem a tela mentir em silêncio.</p>
+
+  <div class="rolar">
+  <table>
+    <thead><tr><th>Achado</th><th>Onde</th></tr></thead>
+    <tbody>
+      <tr><td><b>Textos falando das duas frentes nos apps separados.</b> O modal de permissões promete "liberar só Grãos, só Cana ou os dois" e mostra duas linhas que não fazem isso. A descrição da página de Talhões — primeira coisa que se lê ao entrar — diz "de cana ou de grãos" nos dois apps.</td><td class="num">AECana.html:1210, :364</td></tr>
+      <tr><td><b>Fazenda continua criável e excluível dentro dos apps de frente.</b> O comentário diz "só para consulta" e a tela entrega botões de Novo, Editar e Excluir. Fazenda criada ali some da lista ao salvar.</td><td class="num">AECana.html:344</td></tr>
+      <tr><td><b>Despesa de atividade sem hectare cadastrado some da tela inteira.</b> Sem linha, sem nota, sem alerta.</td><td class="num">AEMatriz.html:2180</td></tr>
+      <tr><td><b>Lançamento com fazenda que não tem área naquela atividade é rateado para as outras.</b> Erro de cadastro virando rateio silencioso, onde deveria virar aviso.</td><td class="num">AEMatriz.html:2161</td></tr>
+      <tr><td><b><code>toISOString()</code> faz a data padrão nascer no dia seguinte.</b> Das 21h à meia-noite, no Brasil. É o único ponto do arquivo fora do padrão.</td><td class="num">AEMatriz.html:2789</td></tr>
+      <tr><td><b><code>centros_custo.frente</code> é <code>NOT NULL</code> no schema versionado e o app grava nulo.</b> Ou a coluna foi alterada por fora e o repositório mente sobre o banco, ou criar centro novo estoura hoje.</td><td class="num">cana_schema.sql:134</td></tr>
+      <tr><td><b>Quatro tabelas que os apps usam não têm DDL nenhum no repositório:</b> <code>funcionarios</code>, <code>funcionario_atividades</code>, <code>fazenda_atividades</code> e <code>apps</code>. Não dá para afirmar que têm RLS, política ou chave estrangeira.</td><td class="num">—</td></tr>
+      <tr><td><b>Três cópias byte a byte do mesmo script de migração</b>, e três arquivos criando as mesmas tabelas base com definições divergentes de <code>papel</code> (4, 6 e 7 valores).</td><td class="num">lavoura_migracao_graos*.sql</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Melhorias que valem o esforço</h2>
+  <p class="sub">Ordenadas por retorno sobre o trabalho. As duas primeiras são as que eu faria primeiro se fosse meu.</p>
+
+  <div class="achado">
+    <div class="topo"><h3>1 · Backup que permite voltar no tempo</h3></div>
+    <p>Hoje, se alguém apagar uma tabela ou um script rodar errado, a recuperação depende do backup diário mais recente do Supabase — e das tabelas <code>*_backup_*</code> que criamos à mão, que são pontuais e agora estão protegidas mas não são estratégia.</p>
+    <p><b>Point-in-Time Recovery</b> deixa restaurar o banco em qualquer instante dentro da janela de retenção, e não só no ponto do backup diário. É recurso de plano pago e cobrado à parte — <b>confirme o preço e a disponibilidade atual</b> na página da Supabase antes de decidir, porque isso muda. Dado o volume que já está aqui dentro (2.760 lançamentos, anos de histórico do Conag, todo o rebanho), esse é o seguro mais barato do projeto.</p>
+    <p class="cenario"><b>Alternativa sem custo mensal:</b> um <code>pg_dump</code> semanal guardado fora do Supabase. Cobre desastre, não cobre "voltar para dez minutos atrás".</p>
+  </div>
+
+  <div class="achado">
+    <div class="topo"><h3>2 · Registro de quem mudou o quê</h3></div>
+    <p>Hoje, se um valor aparece diferente, não há como saber quem mudou, quando, nem qual era o valor anterior. Três dos bugs desta sessão só foram diagnosticados porque as tabelas antigas ainda existiam para comparação — na próxima vez pode não haver com o que comparar.</p>
+    <p>Um <i>trigger</i> de auditoria em <code>lancamentos_financeiros</code>, <code>abates</code> e <code>profiles</code> grava valor antigo, valor novo, quem e quando, numa tabela à parte. É padrão conhecido em Postgres, roda no banco (o app não precisa saber que existe) e não dá para burlar pelo app.</p>
+    <p class="cenario"><b>Esforço:</b> uma função e três triggers, algumas horas. <b>Retorno:</b> a próxima divergência de valor vira uma consulta em vez de uma investigação.</p>
+  </div>
+
+  <div class="achado">
+    <div class="topo"><h3>3 · Gerar o schema real e versioná-lo</h3></div>
+    <p>Os arquivos <code>*_schema.sql</code> do repositório estão desatualizados e já me induziram ao erro <b>quatro vezes</b> nesta sequência de trabalho — valores de CHECK errados, chave estrangeira que não aparecia, coluna que dizia <code>NOT NULL</code> e não era. Passei a ler o catálogo do banco em vez dos arquivos, mas o repositório continua descrevendo um banco que não existe.</p>
+    <p><code>pg_dump --schema-only</code> gera o estado real. Guardar isso no repositório e regerar depois de cada migração acaba com a classe inteira de erro.</p>
+  </div>
+
+  <div class="achado">
+    <div class="topo"><h3>4 · Manter os testes que já existem</h3></div>
+    <p>Os testes escritos nesta sessão já pegaram dois bugs reais antes de você ver: uma edição que não tinha sido gravada no arquivo, e a paginação que eu achava ter aplicado e não tinha. São 60 verificações rodando contra um banco falso, em três arquivos:</p>
+    <div class="rolar">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Cobre</th><th class="num">Verificações</th></tr></thead>
+        <tbody>
+          <tr><td><code>teste_apps_lavoura.py</code></td><td>Separação entre Cana e Cereais</td><td class="num">38</td></tr>
+          <tr><td><code>teste_matriz.py</code></td><td>Resultados, centros de custo, permissões</td><td class="num">22</td></tr>
+          <tr><td><code>teste_paginacao.py</code></td><td>2.760 linhas contra o corte do Supabase</td><td class="num">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Rodar os três antes de cada subida custa um minuto.</p>
+  </div>
+
+  <div class="achado">
+    <div class="topo"><h3>5 · Contas a pagar e importação do Conag</h3></div>
+    <p>Duas pendências suas, anteriores a esta sessão, que continuam abertas: importar "Contas a Pagar" do Conag e reclassificar por atividade o custo de mão de obra importado. A segunda afeta diretamente o custo por hectare, que hoje trata esse valor como <code>geral</code>.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Por onde começar</h2>
+  <ol class="passos">
+    <li><b>Pausar o projeto antigo da Pecuária</b> no painel do Supabase. Fecha os dois críticos de exposição de dado, leva um minuto, não apaga nada.</li>
+    <li><b>Rodar <code>lavoura_05</code> e <code>auditoria_01</code></b> e subir o <code>AEMatriz.html</code> — já entregues.</li>
+    <li><b>Conferir o custo por bezerro</b> na Pecuária. Se a sua conta bater com o número que a tela mostra hoje, eu li errado; se estiver inflado, eu corrijo.</li>
+    <li><b>Me dizer quais dos altos você quer primeiro.</b> Os quatro da separação (cache, PWA, talhão sem cultura, textos) são rápidos e independentes; os de rateio pedem uma decisão sua sobre o que "custo por hectare" deve significar.</li>
+  </ol>
+
+  <div class="nota">
+    <b>Sobre os números deste laudo.</b> Os achados vieram de quatro auditorias independentes, cada uma com instrução de só reportar o que conseguisse confirmar lendo o código, com arquivo, linha e cenário de falha. Não conferi um por um antes de publicar — os nove que corrigi hoje eu verifiquei e testei; os demais estão como foram reportados. Antes de mexer em qualquer um, eu confirmo primeiro. Foi supor em vez de conferir que produziu os erros que chegaram até você.
+  </div>
+</section>
+
+<footer>
+  AE Agropecuária · auditoria de 22 de agosto de 2026 · Matriz, Pecuária, Cana, Cereais e banco
+</footer>
+
+</div>
