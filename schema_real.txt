@@ -1,0 +1,477 @@
+ESTADO REAL DO BANCO — projeto kmkystqgpvmzrccxvyaz (Lavoura/Matriz/Pecuária)
+Gerado em 22/08/2026, pela última consulta do auditoria_04_pendencias_do_banco.sql.
+
+ESTE arquivo é a referência, e NÃO os *_schema.sql da pasta — ver LEIA-ME_SCHEMA.md.
+Regere depois de cada migração.
+
+------------------------------------------------------------
+abates.id bigint NOT NULL
+abates.data date NOT NULL
+abates.lote_id bigint
+abates.quantidade numeric NOT NULL
+abates.peso_medio_kg numeric
+abates.valor_arroba numeric
+abates.observacao text default ''::text
+abates.criado_por text
+abates.criado_em timestamp with time zone default now()
+abates.tipo_venda text NOT NULL default 'arroba'::text
+abates.valor_por_animal numeric
+abates.valor_kg numeric
+animais.id bigint NOT NULL
+animais.numero text NOT NULL
+animais.lote_id bigint
+animais.sexo text
+animais.raca text
+animais.criado_por text
+animais.criado_em timestamp with time zone default now()
+animais.status text NOT NULL default 'ativo'::text
+animais.data_morte date
+aplicacoes_cana.id bigint NOT NULL
+aplicacoes_cana.talhao_id bigint NOT NULL
+aplicacoes_cana.insumo_id bigint NOT NULL
+aplicacoes_cana.data date NOT NULL
+aplicacoes_cana.tipo_operacao text NOT NULL
+aplicacoes_cana.quantidade numeric(12,2) NOT NULL
+aplicacoes_cana.observacao text
+aplicacoes_cana.created_at timestamp with time zone NOT NULL default now()
+aplicacoes_cana.created_by uuid default auth.uid()
+aplicacoes_cana.updated_at timestamp with time zone NOT NULL default now()
+aplicacoes_cana.updated_by uuid
+aplicacoes_graos.id bigint NOT NULL
+aplicacoes_graos.talhao_id bigint NOT NULL
+aplicacoes_graos.insumo_id bigint NOT NULL
+aplicacoes_graos.data date NOT NULL
+aplicacoes_graos.tipo_operacao text NOT NULL
+aplicacoes_graos.quantidade numeric(12,2) NOT NULL
+aplicacoes_graos.observacao text
+aplicacoes_graos.created_at timestamp with time zone NOT NULL default now()
+aplicacoes_graos.created_by uuid default auth.uid()
+aplicacoes_graos.updated_at timestamp with time zone NOT NULL default now()
+aplicacoes_graos.updated_by uuid
+centros_custo.id bigint NOT NULL
+centros_custo.fazenda_id bigint
+centros_custo.nome text NOT NULL
+centros_custo.frente text
+centros_custo.ativo boolean NOT NULL default true
+centros_custo.created_at timestamp with time zone NOT NULL default now()
+centros_custo.created_by uuid default auth.uid()
+centros_custo.updated_at timestamp with time zone NOT NULL default now()
+centros_custo.updated_by uuid
+centros_custo.tipo text
+centros_custo.subcategoria text
+colheitas_cana.id bigint NOT NULL
+colheitas_cana.talhao_id bigint NOT NULL
+colheitas_cana.safra_id bigint
+colheitas_cana.data date NOT NULL
+colheitas_cana.corte integer
+colheitas_cana.toneladas numeric(12,2) NOT NULL
+colheitas_cana.observacao text
+colheitas_cana.created_at timestamp with time zone NOT NULL default now()
+colheitas_cana.created_by uuid default auth.uid()
+colheitas_cana.updated_at timestamp with time zone NOT NULL default now()
+colheitas_cana.updated_by uuid
+colheitas_graos.id bigint NOT NULL
+colheitas_graos.talhao_id bigint NOT NULL
+colheitas_graos.safra_id bigint
+colheitas_graos.cultura_id bigint
+colheitas_graos.data date NOT NULL
+colheitas_graos.sacas numeric(12,2) NOT NULL
+colheitas_graos.observacao text
+colheitas_graos.created_at timestamp with time zone NOT NULL default now()
+colheitas_graos.created_by uuid default auth.uid()
+colheitas_graos.updated_at timestamp with time zone NOT NULL default now()
+colheitas_graos.updated_by uuid
+config_fazenda.id bigint NOT NULL
+config_fazenda.hectares numeric
+config_financeiro.id bigint NOT NULL
+config_financeiro.meta_margem_pct numeric
+culturas.id bigint NOT NULL
+culturas.nome text NOT NULL
+culturas.frente text NOT NULL
+culturas.ativo boolean NOT NULL default true
+culturas.created_at timestamp with time zone NOT NULL default now()
+culturas.created_by uuid default auth.uid()
+culturas.updated_at timestamp with time zone NOT NULL default now()
+culturas.updated_by uuid
+custos_fixos.id bigint NOT NULL
+custos_fixos.nome text NOT NULL
+custos_fixos.categoria text
+custos_fixos.valor_mensal numeric default 0
+custos_fixos.mes text
+custos_fixos.diluir_por_lote boolean NOT NULL default true
+custos_fixos.area text
+custos_fixos.data date
+custos_fixos.observacao text
+custos_fixos.areas text[] NOT NULL default '{}'::text[]
+custos_fixos.descricao text
+custos_fixos.fornecedor text
+desmamas.id bigint NOT NULL
+desmamas.parto_id bigint
+desmamas.data date NOT NULL
+desmamas.raca text
+desmamas.peso_kg numeric NOT NULL
+desmamas.criado_por text
+desmamas.manejo_id bigint
+despesas_cana.id bigint NOT NULL
+despesas_cana.fazenda_id bigint NOT NULL
+despesas_cana.talhao_id bigint
+despesas_cana.centro_custo_id bigint
+despesas_cana.data date NOT NULL
+despesas_cana.categoria text NOT NULL
+despesas_cana.descricao text NOT NULL
+despesas_cana.valor numeric(12,2) NOT NULL
+despesas_cana.observacao text
+despesas_cana.created_at timestamp with time zone NOT NULL default now()
+despesas_cana.created_by uuid default auth.uid()
+despesas_cana.updated_at timestamp with time zone NOT NULL default now()
+despesas_cana.updated_by uuid
+despesas_graos.id bigint NOT NULL
+despesas_graos.fazenda_id bigint NOT NULL
+despesas_graos.talhao_id bigint
+despesas_graos.centro_custo_id bigint
+despesas_graos.data date NOT NULL
+despesas_graos.categoria text NOT NULL
+despesas_graos.descricao text NOT NULL
+despesas_graos.valor numeric(12,2) NOT NULL
+despesas_graos.observacao text
+despesas_graos.created_at timestamp with time zone NOT NULL default now()
+despesas_graos.created_by uuid default auth.uid()
+despesas_graos.updated_at timestamp with time zone NOT NULL default now()
+despesas_graos.updated_by uuid
+diagnosticos_gestacionais.id bigint NOT NULL
+diagnosticos_gestacionais.data date NOT NULL
+diagnosticos_gestacionais.lote_id bigint
+diagnosticos_gestacionais.numero_vaca text
+diagnosticos_gestacionais.resultado text NOT NULL
+diagnosticos_gestacionais.previsao_parto date
+diagnosticos_gestacionais.criado_por text
+diagnosticos_gestacionais.manejo_id bigint
+dietas.id bigint NOT NULL
+dietas.nome text NOT NULL
+dietas.categoria_animal text
+dietas.kg_animal_dia numeric default 0
+dietas.itens jsonb default '[]'::jsonb
+dietas.tipo text default 'confinamento'::text
+dietas.estoque_min_pronta numeric NOT NULL default 0
+dietas.consumo_direto boolean NOT NULL default false
+entradas_insumo_cana.id bigint NOT NULL
+entradas_insumo_cana.insumo_id bigint NOT NULL
+entradas_insumo_cana.data date NOT NULL
+entradas_insumo_cana.quantidade numeric(12,2) NOT NULL
+entradas_insumo_cana.preco_pago numeric(12,4)
+entradas_insumo_cana.fornecedor text
+entradas_insumo_cana.observacao text
+entradas_insumo_cana.created_at timestamp with time zone NOT NULL default now()
+entradas_insumo_cana.created_by uuid default auth.uid()
+entradas_insumo_cana.updated_at timestamp with time zone NOT NULL default now()
+entradas_insumo_cana.updated_by uuid
+entradas_insumo_graos.id bigint NOT NULL
+entradas_insumo_graos.insumo_id bigint NOT NULL
+entradas_insumo_graos.data date NOT NULL
+entradas_insumo_graos.quantidade numeric(12,2) NOT NULL
+entradas_insumo_graos.preco_pago numeric(12,4)
+entradas_insumo_graos.fornecedor text
+entradas_insumo_graos.observacao text
+entradas_insumo_graos.created_at timestamp with time zone NOT NULL default now()
+entradas_insumo_graos.created_by uuid default auth.uid()
+entradas_insumo_graos.updated_at timestamp with time zone NOT NULL default now()
+entradas_insumo_graos.updated_by uuid
+fazenda_atividades.id bigint NOT NULL
+fazenda_atividades.fazenda_id bigint NOT NULL
+fazenda_atividades.atividade text NOT NULL
+fazenda_atividades.area_ha numeric NOT NULL
+fazendas.id bigint NOT NULL
+fazendas.nome text NOT NULL
+fazendas.estado text NOT NULL
+fazendas.area_ha numeric(12,2)
+fazendas.ativo boolean NOT NULL default true
+fazendas.created_at timestamp with time zone NOT NULL default now()
+fazendas.created_by uuid default auth.uid()
+fazendas.updated_at timestamp with time zone NOT NULL default now()
+fazendas.updated_by uuid
+fazendas.atividades text[] default '{}'::text[]      -- LEGADO: substituída por fazenda_atividades
+funcionario_atividades.id bigint NOT NULL
+funcionario_atividades.funcionario_id bigint NOT NULL
+funcionario_atividades.atividade text NOT NULL
+funcionario_atividades.percentual numeric NOT NULL
+funcionarios.id bigint NOT NULL
+funcionarios.nome text NOT NULL
+funcionarios.cargo text
+funcionarios.ativo boolean NOT NULL default true
+funcionarios.data_admissao date
+funcionarios.perfil_id uuid
+funcionarios.usuario_pecuaria text                   -- LEGADO: vínculo por texto, antes da unificação
+funcionarios.observacao text
+funcionarios.created_at timestamp with time zone NOT NULL default now()
+funcionarios_backup_limpeza.*                        -- BACKUP da limpeza de funcionários (RLS ligada)
+ingredientes.id bigint NOT NULL
+ingredientes.nome text NOT NULL
+ingredientes.categoria text
+ingredientes.fornecedor text
+ingredientes.unidade text default 'kg'::text
+ingredientes.ms numeric default 0
+ingredientes.pb numeric default 0
+ingredientes.ndt numeric default 0
+ingredientes.preco_kg numeric default 0
+ingredientes.estoque_min numeric default 0
+ingredientes.obs text default ''::text
+insumos_cana.id bigint NOT NULL
+insumos_cana.nome text NOT NULL
+insumos_cana.categoria text NOT NULL
+insumos_cana.unidade text NOT NULL default 'L'::text
+insumos_cana.estoque_minimo numeric(12,2)
+insumos_cana.ativo boolean NOT NULL default true
+insumos_cana.created_at timestamp with time zone NOT NULL default now()
+insumos_cana.created_by uuid default auth.uid()
+insumos_cana.updated_at timestamp with time zone NOT NULL default now()
+insumos_cana.updated_by uuid
+insumos_graos.id bigint NOT NULL
+insumos_graos.nome text NOT NULL
+insumos_graos.categoria text NOT NULL
+insumos_graos.unidade text NOT NULL default 'L'::text
+insumos_graos.estoque_minimo numeric(12,2)
+insumos_graos.ativo boolean NOT NULL default true
+insumos_graos.created_at timestamp with time zone NOT NULL default now()
+insumos_graos.created_by uuid default auth.uid()
+insumos_graos.updated_at timestamp with time zone NOT NULL default now()
+insumos_graos.updated_by uuid
+investimentos.id bigint NOT NULL
+investimentos.nome text NOT NULL
+investimentos.categoria text
+investimentos.valor numeric default 0
+investimentos.data date
+investimentos.fornecedor text
+lancamentos_financeiros.id bigint NOT NULL
+lancamentos_financeiros.tipo text NOT NULL
+lancamentos_financeiros.atividade text NOT NULL
+lancamentos_financeiros.fazenda_id bigint
+lancamentos_financeiros.centro_custo_id bigint NOT NULL
+lancamentos_financeiros.descricao text NOT NULL
+lancamentos_financeiros.valor numeric(12,2) NOT NULL
+lancamentos_financeiros.data date
+lancamentos_financeiros.mes text
+lancamentos_financeiros.fornecedor text
+lancamentos_financeiros.observacao text
+lancamentos_financeiros.talhao_id bigint
+lancamentos_financeiros.lote_id bigint
+lancamentos_financeiros.areas text[] NOT NULL default '{}'::text[]
+lancamentos_financeiros.arrobas numeric
+lancamentos_financeiros.abate_id bigint
+lancamentos_financeiros.created_at timestamp with time zone NOT NULL default now()
+lancamentos_financeiros.criado_por text
+lancamentos_financeiros.quantidade numeric
+lancamentos_financeiros.unidade text
+lancamentos_financeiros.safra_id bigint
+lancamentos_financeiros.cultura_id bigint
+leituras_cocho.id bigint NOT NULL
+leituras_cocho.data date NOT NULL
+leituras_cocho.lote_id bigint
+leituras_cocho.nota smallint NOT NULL
+leituras_cocho.observacao text default ''::text
+leituras_cocho.criado_por text
+lotes.id bigint NOT NULL
+lotes.nome text NOT NULL
+lotes.numero_animais numeric default 0
+lotes.data_inicio date
+lotes.data_fim date
+lotes.destino text NOT NULL default 'pasto'::text
+lotes.dieta_id bigint
+lotes.sexo text
+manejos.id bigint NOT NULL
+manejos.data date NOT NULL
+manejos.lote_id bigint
+manejos.lote_destino_id bigint
+manejos.acoes text[] NOT NULL default '{}'::text[]
+manejos.vacinacao boolean NOT NULL default false
+manejos.vermifugacao boolean NOT NULL default false
+manejos.status text NOT NULL default 'aberto'::text
+manejos.total_animais integer NOT NULL default 0
+manejos.criado_por text
+manejos.criado_em timestamp with time zone default now()
+movimentos.id bigint NOT NULL
+movimentos.data date NOT NULL
+movimentos.ingrediente_id bigint
+movimentos.tipo text NOT NULL
+movimentos.quantidade numeric default 0
+movimentos.saida_racao_id bigint
+movimentos.pasto_id bigint
+movimentos.preco_kg numeric
+movimentos.producao_racao_id bigint
+movimentos.ajuste boolean NOT NULL default false
+partos.id bigint NOT NULL
+partos.data date NOT NULL
+partos.lote_id bigint
+partos.numero_mae text
+partos.sexo_bezerro text
+partos.criado_por text
+partos.raca_bezerro text
+pasto.id bigint NOT NULL
+pasto.data date NOT NULL
+pasto.lote_id bigint
+pasto.ingrediente_id bigint
+pasto.quantidade numeric default 0
+pasto.dieta_id bigint
+pasto.criado_por text
+pesagens.id bigint NOT NULL
+pesagens.lote_id bigint
+pesagens.data date NOT NULL
+pesagens.peso_medio_kg numeric NOT NULL
+pesagens.observacao text
+pesagens.criado_por text
+pesagens.manejo_id bigint
+pesagens_animais.id bigint NOT NULL
+pesagens_animais.pesagem_id bigint
+pesagens_animais.numero_animal text
+pesagens_animais.peso_kg numeric NOT NULL
+plantios_cana.id bigint NOT NULL
+plantios_cana.talhao_id bigint NOT NULL
+plantios_cana.safra_id bigint
+plantios_cana.variedade text NOT NULL
+plantios_cana.data_plantio date NOT NULL
+plantios_cana.data_reforma_prevista date
+plantios_cana.observacao text
+plantios_cana.ativo boolean NOT NULL default true
+plantios_cana.created_at timestamp with time zone NOT NULL default now()
+plantios_cana.created_by uuid default auth.uid()
+plantios_cana.updated_at timestamp with time zone NOT NULL default now()
+plantios_cana.updated_by uuid
+plantios_graos.id bigint NOT NULL
+plantios_graos.talhao_id bigint NOT NULL
+plantios_graos.safra_id bigint
+plantios_graos.cultura_id bigint
+plantios_graos.cultivar text NOT NULL
+plantios_graos.data_plantio date NOT NULL
+plantios_graos.data_previsao_colheita date
+plantios_graos.observacao text
+plantios_graos.ativo boolean NOT NULL default true
+plantios_graos.created_at timestamp with time zone NOT NULL default now()
+plantios_graos.created_by uuid default auth.uid()
+plantios_graos.updated_at timestamp with time zone NOT NULL default now()
+plantios_graos.updated_by uuid
+precos_arroba.id bigint NOT NULL
+precos_arroba.data date NOT NULL
+precos_arroba.valor numeric default 0
+precos_arroba.sexo text NOT NULL default 'macho'::text
+producoes_racao.id bigint NOT NULL
+producoes_racao.data date NOT NULL
+producoes_racao.dieta_id bigint
+producoes_racao.quantidade_kg numeric NOT NULL
+producoes_racao.criado_por text
+producoes_racao.criado_em timestamp with time zone default now()
+profiles.id uuid NOT NULL
+profiles.nome text NOT NULL
+profiles.usuario text NOT NULL
+profiles.papel text NOT NULL default 'operador'::text
+profiles.permissoes jsonb NOT NULL default '{}'::jsonb
+profiles.ativo boolean NOT NULL default true
+profiles.created_at timestamp with time zone NOT NULL default now()
+profiles_backup_unificacao.*                         -- BACKUP da unificação (RLS ligada)
+protocolos_inseminacao.id bigint NOT NULL
+protocolos_inseminacao.manejo_id bigint
+protocolos_inseminacao.lote_id bigint
+protocolos_inseminacao.numero_animal text
+protocolos_inseminacao.data date NOT NULL
+protocolos_inseminacao.criado_por text
+protocolos_inseminacao.criado_em timestamp with time zone default now()
+receitas.id bigint NOT NULL
+receitas.data date NOT NULL
+receitas.lote_id bigint
+receitas.descricao text NOT NULL
+receitas.arrobas numeric
+receitas.valor numeric default 0
+receitas.observacao text
+receitas.abate_id bigint
+receitas_cana.id bigint NOT NULL
+receitas_cana.fazenda_id bigint NOT NULL
+receitas_cana.talhao_id bigint
+receitas_cana.safra_id bigint
+receitas_cana.data date NOT NULL
+receitas_cana.toneladas numeric(12,2)
+receitas_cana.valor_total numeric(12,2) NOT NULL
+receitas_cana.observacao text
+receitas_cana.created_at timestamp with time zone NOT NULL default now()
+receitas_cana.created_by uuid default auth.uid()
+receitas_cana.updated_at timestamp with time zone NOT NULL default now()
+receitas_cana.updated_by uuid
+receitas_cana.centro_custo_id bigint
+receitas_graos.id bigint NOT NULL
+receitas_graos.fazenda_id bigint NOT NULL
+receitas_graos.talhao_id bigint
+receitas_graos.safra_id bigint
+receitas_graos.cultura_id bigint
+receitas_graos.data date NOT NULL
+receitas_graos.sacas numeric(12,2)
+receitas_graos.valor_total numeric(12,2) NOT NULL
+receitas_graos.observacao text
+receitas_graos.created_at timestamp with time zone NOT NULL default now()
+receitas_graos.created_by uuid default auth.uid()
+receitas_graos.updated_at timestamp with time zone NOT NULL default now()
+receitas_graos.updated_by uuid
+receitas_graos.centro_custo_id bigint
+reproducao_custos.id bigint NOT NULL
+reproducao_custos.data date NOT NULL
+reproducao_custos.lote_id bigint
+reproducao_custos.item text
+reproducao_custos.custo numeric default 0
+reproducao_custos.criado_por text
+reproducao_custos.numero_vaca text
+reproducao_custos.raca_touro text
+reproducao_custos.qual_inseminacao text
+reproducao_custos.manejo_id bigint
+safras.id bigint NOT NULL
+safras.fazenda_id bigint NOT NULL
+safras.cultura_id bigint NOT NULL
+safras.nome text NOT NULL
+safras.data_inicio date
+safras.data_fim date
+safras.ativo boolean NOT NULL default true
+safras.created_at timestamp with time zone NOT NULL default now()
+safras.created_by uuid default auth.uid()
+safras.updated_at timestamp with time zone NOT NULL default now()
+safras.updated_by uuid
+saidas_racao.id bigint NOT NULL
+saidas_racao.data date NOT NULL
+saidas_racao.dieta_id bigint
+saidas_racao.lote_id bigint
+saidas_racao.quantidade_kg numeric default 0
+saidas_racao.criado_por text
+saidas_racao.criado_em timestamp with time zone
+talhoes_areas.id bigint NOT NULL
+talhoes_areas.fazenda_id bigint NOT NULL
+talhoes_areas.nome text NOT NULL
+talhoes_areas.tipo text NOT NULL
+talhoes_areas.area_ha numeric(12,2)
+talhoes_areas.cultura_id bigint
+talhoes_areas.ativo boolean NOT NULL default true
+talhoes_areas.created_at timestamp with time zone NOT NULL default now()
+talhoes_areas.created_by uuid default auth.uid()
+talhoes_areas.updated_at timestamp with time zone NOT NULL default now()
+talhoes_areas.updated_by uuid
+zz_limpeza_relatorio.item text
+zz_limpeza_relatorio.detalhe text
+
+------------------------------------------------------------
+OBSERVAÇÕES DE QUEM LEU ESTE DUMP EM 22/08/2026
+
+1. centros_custo.frente e reproducao_custos.item já aceitam nulo — o
+   auditoria_04 pegou o estado certo. As telas gravam nulo de propósito.
+
+2. centros_custo.tipo e centros_custo.subcategoria EXISTEM e nenhum app lê.
+   Vêm do plano de contas do Conag, que é hierárquico
+   (Centro Gerencial > SubCategoria > Centro de Custo). Hoje o relatório
+   financeiro mostra 71 centros numa lista plana. Agrupar pela hierarquia
+   que já está no banco é a melhoria de relatório mais barata disponível —
+   o dado está lá, só não é usado.
+
+3. Não existe tabela `apps`. O APPS_REGISTRO do Matriz é fixo no código,
+   e está certo assim: é lista de aplicativos, não de dados da fazenda.
+
+4. Legado que segue no banco sem uso: fazendas.atividades (substituída por
+   fazenda_atividades), funcionarios.usuario_pecuaria (vínculo por texto de
+   antes da unificação), custos_fixos.diluir_por_lote e custos_fixos.area.
+   Nenhum atrapalha; ficam registrados para não confundirem quem for mexer.
+
+5. As tabelas de backup (profiles_backup_unificacao,
+   funcionarios_backup_limpeza, zz_limpeza_relatorio) continuam existindo,
+   agora com RLS ligada. Podem ser apagadas quando o projeto antigo da
+   Pecuária for descartado.
