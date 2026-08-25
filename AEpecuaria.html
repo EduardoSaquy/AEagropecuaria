@@ -1452,6 +1452,26 @@ function loteTipo(lote){
   return lote.destino==='cria' ? 'reproducao' : (lote.destino||'pasto');
 }
 
+/* LOTE QUE PODE RECEBER LANÇAMENTO
+ *
+ * Um lote encerrado (com data de fim) ou zerado (sem animal) não come
+ * ração, não tem leitura de cocho e não recebe suplementação no pasto.
+ * Antes, só a tela de Venda checava isso — ração, cocho e pasto listavam
+ * qualquer lote do tipo certo, então dava para lançar ração para um lote
+ * encerrado e o custo ia parar num lote que não existe mais.
+ *
+ * ao editar: o lote já gravado continua na lista mesmo se hoje não
+ * qualificaria. Sem isso, abrir para corrigir a data de um lançamento
+ * antigo trocaria o lote dele calado, para o primeiro da lista.
+ */
+function lotesQueRecebem(tipo, loteJaEscolhido){
+  return state.lotes.filter(l =>
+    loteTipo(l)===tipo && (
+      (!l.dataFim && Number(l.numeroAnimais||0) > 0)
+      || (loteJaEscolhido != null && String(l.id) === String(loteJaEscolhido))
+    ));
+}
+
 // Lote de Cria é sempre elegível pra parto (só tem vaca). Lote de
 // Confinamento também vira elegível quando o sexo dele é cadastrado como
 // Fêmeas -- casos de vaca de cria alocada no Confinamento em vez do Cria.
@@ -1744,23 +1764,23 @@ function openNewModal(type){
     editDraft = {numero:'', loteId: lotesAtivos[0].id, sexo:'', raca:''};
     state.modal = {type:'animal'};
   } else if(type==='saidaRacao'){
-    const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
+    const lotesConf = lotesQueRecebem('confinamento');
     if(state.dietas.length===0 || lotesConf.length===0){
-      alert('Cadastre ao menos uma dieta e um lote com destino Confinamento (aba Lotes) antes de registrar uma saída de ração.');
+      alert('Não há lote de Confinamento ativo e com animais para receber ração. Confira em Lotes: o lote pode estar encerrado ou com zero cabeças.');
       return false;
     }
     editDraft = {dietaId: lotesConf[0]?.dietaId||'', loteId: lotesConf[0]?.id||'', data:hojeStr(), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
   } else if(type==='saidaRacaoCria'){
-    const lotesCria = state.lotes.filter(l=>loteTipo(l)==='reproducao');
+    const lotesCria = lotesQueRecebem('reproducao');
     if(state.dietas.length===0 || lotesCria.length===0){
-      alert('Cadastre ao menos uma dieta e um lote com destino Cria (aba Lotes) antes de registrar uma saída de ração para a Cria.');
+      alert('Não há lote de Cria ativo e com animais para receber ração. Confira em Lotes: o lote pode estar encerrado ou com zero cabeças.');
       return false;
     }
     editDraft = {dietaId: lotesCria[0]?.dietaId||'', loteId: lotesCria[0]?.id||'', data:hojeStr(), quantidadeKg:''};
     state.modal = {type:'saidaRacaoCria'};
   } else if(type==='cocho'){
-    const lotesConf = state.lotes.filter(l=>loteTipo(l)==='confinamento');
+    const lotesConf = lotesQueRecebem('confinamento');
     if(lotesConf.length===0){
       alert('Cadastre ao menos um lote com destino Confinamento (aba Lotes) antes de registrar uma leitura de cocho.');
       return false;
@@ -1768,7 +1788,7 @@ function openNewModal(type){
     editDraft = {loteId: lotesConf[0]?.id||'', data:hojeStr(), nota:2, observacao:''};
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
-    const lotesPasto = state.lotes.filter(l=>loteTipo(l)==='pasto');
+    const lotesPasto = lotesQueRecebem('pasto');
     if(lotesPasto.length===0 || state.dietas.length===0){
       alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta antes de registrar uma saída de ração (pasto).');
       return false;
@@ -5524,7 +5544,7 @@ function ModalSaidaRacao(){
         <div class="field-row">
           <div class="field"><label>Lote de destino (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${lotesQueRecebem('confinamento', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Dieta</label>
@@ -5560,7 +5580,7 @@ function ModalSaidaRacaoCria(){
         <div class="field-row">
           <div class="field"><label>Lote de destino (Cria)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${lotesQueRecebem('reproducao', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Dieta</label>
@@ -5596,7 +5616,7 @@ function ModalCocho(){
         <div class="field-row">
           <div class="field"><label>Curral (Confinamento)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='confinamento').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${lotesQueRecebem('confinamento', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
@@ -5631,7 +5651,7 @@ function ModalPasto(){
         <div class="field-row">
           <div class="field"><label>Lote (Pasto)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='pasto').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${lotesQueRecebem('pasto', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Dieta</label>
@@ -5667,7 +5687,7 @@ function ModalReproducaoCusto(){
         <div class="field-row">
           <div class="field"><label>Lote (Cria)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${lotesQueRecebem('reproducao', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128"/></div>
@@ -5725,7 +5745,7 @@ function ModalDiagnostico(){
         <div class="field-row">
           <div class="field"><label>Lote (Cria)</label>
             <select id="f-lote">
-              ${state.lotes.filter(l=>loteTipo(l)==='reproducao').map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${lotesQueRecebem('reproducao', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128"/></div>
