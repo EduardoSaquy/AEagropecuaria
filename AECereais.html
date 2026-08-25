@@ -359,6 +359,9 @@ const CADASTROS = {
     desc:'Talhões de cereais desta fazenda. A Cultura define a safra e o histórico de cada um.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
+    // Pelos plantios, nao pelo cultura_id do talhao: um talhao roda soja num
+    // ano e milho no outro, e o campo do cadastro so guarda um.
+    filtroCultura: (item, culturaId) => talhaoEDaCultura(item, culturaId),
     historico: true,
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
@@ -388,6 +391,7 @@ const CADASTROS = {
     desc:'Registro do plantio de cada talhão de grãos — cultura, cultivar e data de plantio. Uma linha por safra plantada (grão é cultura anual, pode repetir no mesmo ano — ex: soja no verão, milho safrinha em seguida).',
     emptyHint:'Cadastre um talhão de grãos antes de registrar um plantio.',
     orderBy:'data_plantio', orderDesc:true, semBusca:true,
+    filtroCultura: (item, culturaId) => String(item.culturaId)===String(culturaId),
     fields:[
       {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='graos'},
       {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
@@ -404,6 +408,7 @@ const CADASTROS = {
     desc:'Registro da colheita de cada talhão de grãos — sacas colhidas (60kg) e produtividade (sc/ha).',
     emptyHint:'Cadastre um talhão de grãos antes de registrar uma colheita.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    filtroCultura: (item, culturaId) => String(item.culturaId)===String(culturaId),
     fields:[
       {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='graos'},
       {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
@@ -447,6 +452,12 @@ const CADASTROS = {
     desc:'Lançamento de trato cultural em campo (grãos) — desconta o insumo do estoque na quantidade aplicada.',
     emptyHint:'Cadastre um talhão e um insumo de grãos antes de lançar uma aplicação.',
     orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    // A aplicacao nao guarda cultura: ela e do talhao. Entao filtra pelo
+    // talhao, que por sua vez se define pelos plantios dele.
+    filtroCultura: (item, culturaId) => {
+      const tal = state.talhoes.find(x=>String(x.id)===String(item.talhaoId));
+      return !!tal && talhaoEDaCultura(tal, culturaId);
+    },
     fields:[
       {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='graos'},
       {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumosGraos', required:true},
@@ -615,9 +626,12 @@ function render(){
   attachEvents();
 }
 function paginaCustom(page){
-  if(page==='adminUsuarios') return PageAdminUsuarios();
-  if(page==='estoqueInsumosGraos') return PageEstoqueInsumos('Graos');
-  return PageCadastro(page);
+  // cult7_plantiosGraos -> guarda a cultura 7 e desenha a tela de plantio.
+  // Uma tela so serve todas as culturas; o que muda e o filtro.
+  const tela = telaDaPagina(page);
+  if(tela==='adminUsuarios') return PageAdminUsuarios();
+  if(tela==='estoqueInsumosGraos') return PageEstoqueInsumos('Graos');
+  return PageCadastro(tela);
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES =====================
@@ -742,37 +756,98 @@ function AguardandoLiberacao(){
 }
 
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
-const GROUPS = {
-  cadastros: {label:'Cadastros', icon:iconFazenda(), pages:[
-    {key:'talhoes', label:'Talhões'},
-    {key:'fazendas', label:'Fazendas'},
-    {key:'culturas', label:'Culturas'},
-    {key:'safras', label:'Safras'},
-  ]},
-  operacoes: {label:'Operações', icon:iconGrao(), pages:[
-    {key:'plantiosGraos', label:'Plantio'},
-    {key:'colheitasGraos', label:'Colheita'},
-    {key:'insumosGraos', label:'Insumos'},
-    {key:'entradasInsumoGraos', label:'Entradas'},
-    {key:'estoqueInsumosGraos', label:'Estoque'},
-    {key:'aplicacoesGraos', label:'Aplicações'},
-  ]},
-  admin: {label:'Administração', icon:iconAdmin(), pages:[
+/* ===================== MENU POR CULTURA =====================
+ *
+ * Antes existia uma "Operações" só, com plantio, colheita e aplicações de
+ * TODAS as culturas na mesma lista. Agora cada cultura tem seu grupo, como
+ * Confinamento, Pasto e Cria fazem na Pecuária: soja é um lugar, milho é
+ * outro.
+ *
+ * OS GRUPOS SAEM DO CADASTRO, não do código. Cadastrou Feno em Cadastros >
+ * Culturas, o grupo Feno aparece; desativou, some. Sem isso, cada cultura
+ * nova exigiria editar o app e subir o arquivo de novo.
+ *
+ * O QUE NÃO SE DIVIDE: insumo, entrada e estoque. O armazém é um só — o
+ * mesmo saco de adubo serve soja e milho, e separar por cultura faria o
+ * mesmo saco aparecer em dois lugares.
+ *
+ * A chave da página vira `cult<id>_<tela>` (ex: cult7_plantiosGraos), e
+ * paginaCustom() reconhece o prefixo, guarda a cultura e chama a tela
+ * normal. Assim uma tela só serve todas as culturas.
+ */
+const TELAS_DA_CULTURA = [
+  ['talhoes', 'Talhões'],
+  ['plantiosGraos', 'Plantio'],
+  ['colheitasGraos', 'Colheita'],
+  ['aplicacoesGraos', 'Aplicações'],
+];
+function culturasDoMenu(){
+  return state.culturas
+    .filter(c => c.frente==='graos' && c.ativo!==false)
+    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'));
+}
+function gruposAtuais(){
+  const g = {
+    cadastros: {label:'Cadastros', icon:iconFazenda(), pages:[
+      {key:'fazendas', label:'Fazendas'},
+      {key:'culturas', label:'Culturas'},
+      {key:'safras', label:'Safras'},
+      {key:'talhoes', label:'Todos os talhões'},
+    ]},
+    insumos: {label:'Insumos', icon:iconGrao(), pages:[
+      {key:'insumosGraos', label:'Insumos'},
+      {key:'entradasInsumoGraos', label:'Entradas'},
+      {key:'estoqueInsumosGraos', label:'Estoque'},
+    ]},
+  };
+  culturasDoMenu().forEach(c=>{
+    g['cult'+c.id] = {label: c.nome, icon: iconGrao(), pages:
+      TELAS_DA_CULTURA.map(([tela,rotulo])=>({key:`cult${c.id}_${tela}`, label:rotulo}))};
+  });
+  g.admin = {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
-  ]},
-};
-function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
+  ]};
+  return g;
+}
+// Cultura da tela aberta, quando a chave tem o prefixo cult<id>_.
+function culturaDaPagina(page){
+  const m = /^cult(\d+)_/.exec(page || state.page || '');
+  return m ? Number(m[1]) : null;
+}
+function telaDaPagina(page){
+  const p = page || state.page || '';
+  const m = /^cult\d+_(.+)$/.exec(p);
+  return m ? m[1] : p;
+}
+/* Um talhão pertence a uma cultura NUMA SAFRA — não para sempre. A cultura
+ * dele vem dos plantios, que já guardam cultura_id e safra_id desde antes.
+ * O campo cultura_id do próprio talhão fixaria uma cultura só e brigaria
+ * com a rotação: soja num ano, milho no outro.
+ *
+ * Enquanto o talhão não tiver nenhum plantio, ele aparece pela cultura do
+ * cadastro — senão um talhão recém-criado sumiria de todos os grupos. */
+function talhaoEDaCultura(talhao, culturaId){
+  const plantios = state.plantiosGraos.filter(p => String(p.talhaoId)===String(talhao.id));
+  if(plantios.length === 0) return String(talhao.culturaId)===String(culturaId);
+  return plantios.some(p => String(p.culturaId)===String(culturaId));
+}
+function currentGroupKey(){
+  const g = gruposAtuais();
+  return Object.keys(g).find(k=>g[k].pages.some(p=>p.key===state.page));
+}
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  if(key==='operacoes') return temPermissao('operacoes_graos','visualizar');
+  // Cada cultura e um grupo de operacao: quem ve operacoes ve todas.
+  if(key==='insumos' || key.startsWith('cult')) return temPermissao('operacoes_graos','visualizar');
   return temPermissao('cereais_cadastros','visualizar');
 }
 function paginaAcessivel(page){
-  const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
+  const g = gruposAtuais();
+  const grupo = Object.entries(g).find(([,gr])=>gr.pages.some(p=>p.key===page));
   if(!grupo) return false;
   return grupoVisivel(grupo[0]);
 }
-function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
+function gruposVisiveis(){ return Object.entries(gruposAtuais()).filter(([key])=>grupoVisivel(key)); }
 function primeiraPaginaVisivel(){
   for(const [,g] of gruposVisiveis()){
     if(g.pages[0]) return g.pages[0].key;
@@ -805,7 +880,7 @@ function TabsRow(){
   </div>`;
 }
 function SubTabs(){
-  const group = GROUPS[currentGroupKey()];
+  const group = gruposAtuais()[currentGroupKey()];
   const paginas = group ? group.pages : [];
   if(paginas.length<2) return '';
   return `
@@ -820,9 +895,20 @@ function Header(){
   if(state.page==='estoqueInsumosGraos'){
     return headerHtml('Operações · Cereais','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
   }
-  const cfg = CADASTROS[state.page];
-  const eyebrow = (cfg.modulo==='operacoes_graos') ? 'Operações · Cereais' : 'Cadastro';
-  return headerHtml(eyebrow, cfg.label, cfg.desc);
+  // A chave da pagina pode vir com o prefixo da cultura (cult7_plantiosGraos);
+  // o cadastro e o pedaco depois do prefixo.
+  const cfg = CADASTROS[telaDaPagina()];
+  if(!cfg) return headerHtml('Cereais','', '');
+  const cultId = culturaDaPagina();
+  const nome = cultId != null
+    ? (state.culturas.find(c=>String(c.id)===String(cultId))?.nome || '')
+    : '';
+  const eyebrow = nome ? `Cereais · ${nome}`
+    : ((cfg.modulo==='operacoes_graos') ? 'Operações · Cereais' : 'Cadastro');
+  const desc = nome && cfg.modulo==='operacoes_graos'
+    ? `${cfg.desc} Aqui aparece só o de ${nome}.`
+    : cfg.desc;
+  return headerHtml(eyebrow, cfg.label, desc);
 }
 function headerHtml(eyebrow,title,desc){
   return `<div class="page-header"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="page-desc">${desc}</p></div></div>`;
@@ -870,7 +956,13 @@ function PageCadastro(key){
     && (temPermissao(cfg.modulo||'cereais_cadastros','editar')
         || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar')));
   const termo = state.search.toLowerCase();
-  const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
+  let base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
+  // Dentro de um grupo de cultura, a lista mostra so o daquela cultura.
+  // Fora dele (Cadastros > Todos os talhoes) nao filtra nada.
+  const cultAberta = culturaDaPagina();
+  if(cultAberta != null && cfg.filtroCultura){
+    base = base.filter(item => cfg.filtroCultura(item, cultAberta));
+  }
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
   const colunas = cfg.fields.filter(f=>f.list!==false);
   const colspanTotal = colunas.length + (cfg.semStatus?0:1) + 1;
@@ -955,6 +1047,13 @@ function novoCadastroDraft(key){
 }
 function abrirNovoCadastro(key, presets){
   editDraft = novoCadastroDraft(key);
+  // Dentro do grupo da Soja, um plantio novo ja vem com Soja escolhida.
+  // Sem isso a pessoa entra em Soja > Plantio e ainda precisa dizer que e
+  // soja - a tela ja sabia.
+  const cultAberta = culturaDaPagina();
+  if(cultAberta != null && CADASTROS[key]?.fields?.some(f=>f.key==='culturaId')){
+    editDraft.culturaId = cultAberta;
+  }
   if(presets) Object.assign(editDraft, presets);
   state.cadastroError = '';
   state.modal = {type:'cadastro', key};
@@ -1437,7 +1536,7 @@ function attachEvents(){
   }
   document.querySelectorAll('[data-nav-group]').forEach(el=>{
     el.onclick = ()=>{
-      const group = GROUPS[el.dataset.navGroup];
+      const group = gruposAtuais()[el.dataset.navGroup];
       if(!group.pages.some(p=>p.key===state.page)){
         state.page = group.pages[0].key;
       }

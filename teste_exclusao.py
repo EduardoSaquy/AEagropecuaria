@@ -122,6 +122,10 @@ with sync_playwright() as pw:
             telas = page.evaluate("""() => {
               if (typeof PAGES !== 'undefined')
                 return PAGES.map(p => p.key);
+              // O AE Cereais monta os grupos a partir do cadastro de
+              // culturas, entao nao existe mais um GROUPS constante nele.
+              if (typeof gruposAtuais === 'function')
+                return Object.values(gruposAtuais()).flatMap(g => (g.pages||[]).map(p => p.key));
               if (typeof GROUPS !== 'undefined')
                 return Object.values(GROUPS).flatMap(g => (g.pages||[]).map(p => p.key));
               return [];
