@@ -76,20 +76,20 @@ with sync_playwright() as pw:
     print("\n  -- as tres formas de vender --")
     casos = [
         # abate: 30 animais, 270 kg de carcaca, R$ 320/@  ->  30*270/15 = 540 @
-        ({"tipoVenda": "arroba", "quantidade": 30, "pesoMedioKg": "270", "valorArroba": "320"},
+        ({"tipoVenda": "arroba", "qtdAnimais": 30, "pesoMedioKg": "270", "valorArroba": "320"},
          540 * 320, "abate: 30 x 270 kg carcaca a R$ 320/@"),
         # cabeca: 25 animais a R$ 2.800
-        ({"tipoVenda": "cabeca", "quantidade": 25, "valorPorAnimal": "2800"},
+        ({"tipoVenda": "cabeca", "qtdAnimais": 25, "valorPorAnimal": "2800"},
          25 * 2800, "por cabeca: 25 x R$ 2.800"),
         # kg vivo: 40 animais, 420 kg, R$ 11,50/kg
-        ({"tipoVenda": "kg", "quantidade": 40, "pesoMedioKg": "420", "valorKg": "11,50"},
+        ({"tipoVenda": "kg", "qtdAnimais": 40, "pesoMedioKg": "420", "valorKg": "11,50"},
          40 * 420 * 11.5, "por kg vivo: 40 x 420 kg a R$ 11,50"),
     ]
     for entrada, esperado, rotulo in casos:
         got = page.evaluate("(d) => valorDaVenda(d)", entrada)
         conf(abs(got - esperado) < 0.01, f"{rotulo} = R$ {esperado:,.2f}", f"deu {got}")
 
-    conf(abs(page.evaluate("() => arrobasDaVenda({quantidade:30, pesoMedioKg:'270'})") - 540) < 0.01,
+    conf(abs(page.evaluate("() => arrobasDaVenda({qtdAnimais:30, pesoMedioKg:'270'})") - 540) < 0.01,
          "30 animais de 270 kg de carcaca dao 540 @")
     conf(page.evaluate("() => numDecimal('11,50')") == 11.5,
          "aceita virgula (teclado do celular manda 11,50)")
@@ -109,7 +109,7 @@ with sync_playwright() as pw:
       state.page='financeiro'; state.abaFinanceiro='receita'; state.erroLancamento='';
       editDraft = {tipo:'receita', atividade:'pecuaria', fazendaId:'', centroCustoId:92,
                    descricao:'Venda de boi gordo', valor:'', data:'2026-09-10',
-                   ehVenda:true, tipoVenda:'arroba', loteId:1, quantidade:30,
+                   ehVenda:true, tipoVenda:'arroba', loteId:1, qtdAnimais:30,
                    pesoMedioKg:'270', valorArroba:'320', areas:[]};
       state.modal = {type:'lancamento'}; render();
     }""")
@@ -155,7 +155,7 @@ with sync_playwright() as pw:
       window.__ESCRITAS__ = [];
       editDraft = {tipo:'receita', atividade:'pecuaria', fazendaId:'', centroCustoId:92,
                    descricao:'Venda total', valor:'', data:'2026-09-20',
-                   ehVenda:true, tipoVenda:'cabeca', loteId:1, quantidade:100,
+                   ehVenda:true, tipoVenda:'cabeca', loteId:1, qtdAnimais:100,
                    valorPorAnimal:'2800', areas:[]};
       state.modal = {type:'lancamento'}; render();
     }""")
@@ -177,7 +177,7 @@ with sync_playwright() as pw:
       window.__ESCRITAS__ = []; state.erroLancamento='';
       editDraft = {tipo:'receita', atividade:'pecuaria', fazendaId:'', centroCustoId:92,
                    descricao:'Venda demais', valor:'', data:'2026-09-20',
-                   ehVenda:true, tipoVenda:'cabeca', loteId:1, quantidade:150,
+                   ehVenda:true, tipoVenda:'cabeca', loteId:1, qtdAnimais:150,
                    valorPorAnimal:'2800', areas:[]};
       state.modal = {type:'lancamento'}; render();
     }""")

@@ -428,7 +428,14 @@ function lancamentoToRow(l){
           mes: l.data ? l.data.slice(0,7) : (l.mes || null),
           fornecedor:l.fornecedor || null, observacao:l.observacao || null,
           talhao_id:l.talhaoId || null, lote_id:l.loteId || null,
-          areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas)};
+          areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas),
+          // undefined faz o JSON.stringify sumir com a chave, e o banco
+          // preserva a coluna. Sem isso, editar um lancamento cuja tela nao
+          // mostra estes campos zeraria a quantidade que veio da migracao
+          // das receitas da lavoura.
+          quantidade: l.quantidade===undefined ? undefined
+                      : (l.quantidade===''||l.quantidade==null ? null : numDecimal(l.quantidade)),
+          unidade:    l.unidade===undefined ? undefined : (l.unidade || null)};
 }
 /* O plano de contas do Conag é hierárquico, e essa hierarquia já está
  * gravada — só não era lida por nenhum app:
@@ -3351,7 +3358,7 @@ function ligarEventosContas(){
       editDraft = d; render();
     };
   });
-  document.querySelectorAll('[data-recalcula-venda]').forEach(el=>{
+  document.querySelectorAll('[data-recalcula-venda],[data-recalcula-lanc]').forEach(el=>{
     el.onchange = ()=>{ editDraft = lerLancamentoCompleto(editDraft); render(); };
   });
   document.querySelectorAll('[data-recalcula-parcela]').forEach(el=>{
@@ -3405,6 +3412,89 @@ function ligarEventosContas(){
 }
 
 
+
+/* ===================== QUANTO FOI ENTREGUE =====================
+ *
+ * Toda receita passa a poder registrar QUANTO saiu, na unidade da
+ * atividade. Sem isso o app sabe quanto entrou de dinheiro mas nao sabe a
+ * que preco - e preco por unidade e o numero que se compara entre safras,
+ * entre fazendas e com o mercado.
+ *
+ * As unidades sao as do mercado brasileiro:
+ *   tonelada  cana (a usina paga por tonelada, com ATR)
+ *   saca      graos - 60 kg em soja, milho, cafe, trigo, feijao e sorgo;
+ *             arroz e a excecao, 50 kg
+ *   arroba    boi - 15 kg de CARCACA, nao de peso vivo
+ *
+ * As colunas quantidade e unidade ja existiam em lancamentos_financeiros
+ * desde a migracao das receitas da lavoura, mas nenhum formulario as
+ * preenchia: chegavam preenchidas na importacao e ficavam vazias em tudo
+ * que era lancado pelo app.
+ */
+const UNIDADES = {
+  t:    {rotulo:'Tonelada',            curto:'t'},
+  sc:   {rotulo:'Saca de 60 kg',       curto:'sc'},
+  sc50: {rotulo:'Saca de 50 kg (arroz)', curto:'sc'},
+  '@':  {rotulo:'Arroba (15 kg de carcaça)', curto:'@'},
+  cab:  {rotulo:'Cabeça',              curto:'cab'},
+  kg:   {rotulo:'Quilo',               curto:'kg'},
+  l:    {rotulo:'Litro',               curto:'L'},
+  un:   {rotulo:'Unidade',             curto:'un'},
+};
+// O que faz sentido oferecer em cada atividade, na ordem do mais provavel.
+const UNIDADES_DA_ATIVIDADE = {
+  cana:     ['t', 'kg'],
+  graos:    ['sc', 'sc50', 't', 'kg'],
+  pecuaria: ['@', 'cab', 'kg'],
+  geral:    ['un', 't', 'sc', 'kg', 'l', '@', 'cab'],
+};
+function unidadesPara(atividade){
+  return UNIDADES_DA_ATIVIDADE[atividade] || UNIDADES_DA_ATIVIDADE.geral;
+}
+function unidadePadrao(atividade){ return unidadesPara(atividade)[0]; }
+function unidadeCurta(u){ return UNIDADES[u]?.curto || u || ''; }
+
+/* Na venda de animais a quantidade nao e digitada: ela sai da forma de
+ * venda, senao existiriam dois numeros dizendo quanto foi vendido.
+ *   abate    arrobas de carcaca
+ *   cabeca   numero de animais
+ *   kg       quilos de peso vivo
+ */
+function quantidadeDaVenda(d){
+  const qtd = Number(d.qtdAnimais||0);
+  if(d.tipoVenda==='cabeca') return {quantidade: qtd, unidade: 'cab'};
+  if(d.tipoVenda==='kg')     return {quantidade: qtd * numDecimal(d.pesoMedioKg), unidade: 'kg'};
+  return {quantidade: arrobasDaVenda(d), unidade: '@'};
+}
+
+// Preco por unidade — o numero que se compara entre safras e com o mercado.
+function precoUnitario(valor, quantidade){
+  const q = Number(quantidade||0);
+  return q > 0 ? Number(valor||0) / q : null;
+}
+
+function BlocoQuantidade(d){
+  const unidades = unidadesPara(d.atividade);
+  const u = d.unidade || unidadePadrao(d.atividade);
+  const qtd = Number(d.quantidade||0);
+  const preco = precoUnitario(d.valor, qtd);
+  return `
+  <div class="field-row">
+    <div class="field"><label>Quantidade entregue (opcional)</label>
+      <input id="f-qtdlanc" type="text" inputmode="decimal" value="${d.quantidade ?? ''}"
+             data-recalcula-lanc="1" autocomplete="off" placeholder="Ex: 1250"/>
+    </div>
+    <div class="field"><label>Unidade</label>
+      <select id="f-unidadelanc" data-recalcula-lanc="1">
+        ${unidades.map(k=>`<option value="${k}" ${u===k?'selected':''}>${UNIDADES[k].rotulo}</option>`).join('')}
+      </select>
+    </div>
+  </div>
+  ${preco!=null ? `<p class="hint" style="margin-top:-6px;">
+    <strong>R$ ${fmt(preco)}</strong> por ${unidadeCurta(u)} — é este número que se compara entre safras e com o mercado.
+  </p>` : `<p class="hint" style="margin-top:-6px;">Informe a quantidade para o app calcular o preço por ${unidadeCurta(u)}.</p>`}`;
+}
+
 /* ===================== VENDA DE ANIMAIS =====================
  *
  * Portado do AE Pecuaria, onde a venda era uma tela propria. Aqui ela e um
@@ -3440,11 +3530,17 @@ function numDecimal(v){
   if(v==null || v==='') return 0;
   return Number(String(v).replace(',','.')) || 0;
 }
+/* qtdAnimais, nao quantidade.
+ *
+ * As duas coisas moravam no mesmo campo: numero de animais vendidos e
+ * quantidade entregue do lancamento (que na venda e em @). Depois do
+ * primeiro recalculo as 540 @ viravam "540 animais" e o app recusava
+ * vender 540 de um lote de 100 cabecas. */
 function arrobasDaVenda(d){
-  return (numDecimal(d.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(d.quantidade||0);
+  return (numDecimal(d.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(d.qtdAnimais||0);
 }
 function valorDaVenda(d){
-  const qtd = Number(d.quantidade||0);
+  const qtd = Number(d.qtdAnimais||0);
   if(d.tipoVenda==='cabeca') return qtd * numDecimal(d.valorPorAnimal);
   if(d.tipoVenda==='kg')     return qtd * numDecimal(d.pesoMedioKg) * numDecimal(d.valorKg);
   return arrobasDaVenda(d) * numDecimal(d.valorArroba);
@@ -3463,7 +3559,7 @@ function lotesVendaveis(loteJaEscolhido){
 function BlocoVendaAnimais(d){
   const tipoVenda = d.tipoVenda || 'arroba';
   const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
-  const qtd = Number(d.quantidade||0);
+  const qtd = Number(d.qtdAnimais||0);
   const total = valorDaVenda(d);
   const arrobas = arrobasDaVenda(d);
   const disponiveis = Number(lote?.numeroAnimais||0);
@@ -3481,7 +3577,7 @@ function BlocoVendaAnimais(d){
     </div>
     <div class="field"><label>Quantidade de animais</label>
       <input id="f-qtdvenda" type="number" step="1" min="1" ${lote?`max="${disponiveis}"`:''}
-             value="${d.quantidade ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
+             value="${d.qtdAnimais ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
       ${lote?`<span class="hint">O lote tem ${fmtInt(disponiveis)} ${disponiveis===1?'cabeça':'cabeças'}.${zeraOLote?' Esta venda zera o lote e ele será encerrado.':''}</span>`:''}
     </div>
     <div class="field"><label>Forma da venda</label>
@@ -3529,7 +3625,7 @@ function BlocoVendaAnimais(d){
  */
 async function salvarVendaAnimais(campos, row){
   const lote = state.lotesPec.find(l=>String(l.id)===String(campos.loteId));
-  const qtd = Number(campos.quantidade||0);
+  const qtd = Number(campos.qtdAnimais||0);
 
   const abateRow = {
     data: campos.data,
@@ -3574,7 +3670,7 @@ function lerVendaDoFormulario(base){
   return {
     ...base,
     loteId:         v('f-lotevenda'),
-    quantidade:     v('f-qtdvenda'),
+    qtdAnimais:     v('f-qtdvenda'),
     tipoVenda:      v('f-tipovenda') || 'arroba',
     pesoMedioKg:    document.getElementById('f-pesovenda') ? v('f-pesovenda') : (base.pesoMedioKg ?? ''),
     valorArroba:    document.getElementById('f-valorarrobavenda') ? v('f-valorarrobavenda') : (base.valorArroba ?? ''),
@@ -3587,7 +3683,7 @@ function lerVendaDoFormulario(base){
 function faltandoNaVenda(d){
   const faltando = [];
   const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
-  const qtd = Number(d.quantidade||0);
+  const qtd = Number(d.qtdAnimais||0);
   if(!d.loteId) faltando.push('lote vendido');
   if(!(qtd > 0)) faltando.push('quantidade de animais');
   else if(lote && qtd > Number(lote.numeroAnimais||0)){
@@ -3709,6 +3805,8 @@ function lerLancamentoDoFormulario(base){
     loteId:        document.getElementById('f-lotelanc') ? v('f-lotelanc') : (base.loteId||''),
     arrobas:       document.getElementById('f-arrobaslanc') ? v('f-arrobaslanc') : (base.arrobas??''),
     ehVenda:       document.getElementById('f-ehvenda') ? document.getElementById('f-ehvenda').checked : (base.ehVenda===true),
+    quantidade:    document.getElementById('f-qtdlanc') ? v('f-qtdlanc') : base.quantidade,
+    unidade:       document.getElementById('f-unidadelanc') ? v('f-unidadelanc') : base.unidade,
   };
 }
 // Le lancamento E venda. O valor da venda e sempre recalculado dos campos
@@ -3716,7 +3814,12 @@ function lerLancamentoDoFormulario(base){
 // duas verdades sobre quanto a venda valeu.
 function lerLancamentoCompleto(base){
   const d = lerVendaDoFormulario(lerLancamentoDoFormulario(base));
-  return d.ehVenda ? {...d, valor: Math.round(valorDaVenda(d)*100)/100} : d;
+  if(!d.ehVenda) return d;
+  // Na venda o quanto nao e digitado: sai da forma escolhida. Dois campos
+  // dizendo quanto foi vendido acabariam discordando.
+  const q = quantidadeDaVenda(d);
+  return {...d, valor: Math.round(valorDaVenda(d)*100)/100,
+          quantidade: Math.round(q.quantidade*1000)/1000, unidade: q.unidade};
 }
 function ModalLancamento(){
   const d = editDraft;
@@ -3736,9 +3839,22 @@ function ModalLancamento(){
   //
   // A coluna frente é resquício do desenho anterior à unificação. Quem diz
   // a que atividade o gasto pertence é o campo atividade do lançamento.
+  // So o lado certo do plano de contas: receita e 'entrada', despesa e
+  // investimento sao 'saida'.
+  //
+  // Sem isto o formulario de RECEITA oferecia centro de custo de compra -
+  // dava para lancar uma venda de boi contra AQUISICAO DE MAQUINAS. O
+  // valor ficava certo e o grupo errado, e o DFC mostrava receita dentro
+  // de INVESTIMENTOS. Foi o que o Eduardo viu como "na venda estao os
+  // custos de compra".
+  //
+  // Centro ainda sem classificacao aparece nos dois: barrar deixaria a
+  // pessoa sem opcao nenhuma.
+  const ladoDoCentro = ehReceita ? 'entrada' : 'saida';
   const centros = state.centrosCusto
     .filter(c=> c.ativo!==false)
     .filter(c=> !c.frente || c.frente==='geral' || c.frente===d.atividade)
+    .filter(c=> !c.tipo || c.tipo===ladoDoCentro)
     .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   return `
   <div class="overlay" data-close-overlay="1">
@@ -3785,6 +3901,7 @@ function ModalLancamento(){
           </div>
           <span class="hint">Uma marcada leva o valor inteiro; duas ou três rateiam por número de animais entre as marcadas; nenhuma rateia entre as três.</span>
         </div>` : ''}
+        ${ehReceita && !(ehPecuaria && d.ehVenda) ? BlocoQuantidade(d) : ''}
         ${ehReceita && ehPecuaria ? `
         <div class="field">
           <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
@@ -4215,7 +4332,14 @@ function attachEvents(){
   // Trocar a atividade muda quais campos e quais centros de custo aparecem.
   const selAtivLanc = document.getElementById('f-atividadelanc');
   if(selAtivLanc) selAtivLanc.onchange = (e)=>{
-    editDraft = {...lerLancamentoDoFormulario(editDraft), atividade: e.target.value};
+    const nova = e.target.value;
+    const d = {...lerLancamentoCompleto(editDraft), atividade: nova};
+    // Trocar de atividade troca a unidade sugerida: quem muda de Cana para
+    // Cereais quer saca, nao a tonelada que estava selecionada. So troca se
+    // a unidade atual nao servir na atividade nova - o que a pessoa
+    // escolheu de proposito fica.
+    if(!unidadesPara(nova).includes(d.unidade)) d.unidade = unidadePadrao(nova);
+    editDraft = d;
     render();
   };
   document.querySelectorAll('[data-edit-lancamento]').forEach(el=>{
