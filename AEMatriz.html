@@ -1085,6 +1085,20 @@ function render(){
   // perde a cada re-render (ex: abrir o formulário de criar acesso jogava a
   // tela pro topo). Guarda antes e restaura depois.
   const scrollModalAntes = document.querySelector('.modal-body')?.scrollTop;
+  // Guarda também qual campo estava em edição e onde estava o cursor.
+  //
+  // Formulários que recalculam ao mudar um campo (o de título, com o aviso
+  // de quanto falta ratear) chamam render(), e render() troca o DOM
+  // inteiro. Sem isto, o foco volta pro nada: a pessoa digita o valor,
+  // muda de campo, a tela se redesenha e ela precisa clicar de novo pra
+  // continuar — e o que estava digitado e ainda não confirmado se perde.
+  const focoAntes = (()=>{
+    const el = document.activeElement;
+    if(!el || !el.id || !document.querySelector('.modal')) return null;
+    if(!['INPUT','TEXTAREA','SELECT'].includes(el.tagName)) return null;
+    const podeSelecionar = el.tagName!=='SELECT' && ['text','search','url','tel','password'].includes(el.type);
+    return {id: el.id, ini: podeSelecionar ? el.selectionStart : null, fim: podeSelecionar ? el.selectionEnd : null};
+  })();
   root.innerHTML = `
     <div class="app">
       ${Topbar()}
@@ -1103,6 +1117,13 @@ function render(){
       // e de novo no próximo frame, pra vencer o ajuste automático de
       // rolagem que o Chrome faz quando conteúdo entra acima da posição.
       requestAnimationFrame(()=>{ corpoModal.scrollTop = scrollModalAntes; });
+    }
+  }
+  if(focoAntes){
+    const el = document.getElementById(focoAntes.id);
+    if(el){
+      el.focus();
+      if(focoAntes.ini!=null){ try{ el.setSelectionRange(focoAntes.ini, focoAntes.fim); }catch(e){} }
     }
   }
   attachEvents();
