@@ -460,7 +460,13 @@ function subgrupoDoCentro(c){
 }
 const ATIVIDADES_LANC = [['pecuaria','Pecuária'],['cana','Cana-de-açúcar'],['graos','Grãos'],['geral','Geral / administrativo']];
 const TIPO_LABEL = {despesa:'despesa', receita:'receita', investimento:'investimento'};
-function rowToLotePec(r){ return {id:r.id, nome:r.nome}; }
+// Antes so id e nome, que bastava para vincular uma receita a um lote. A
+// venda de animais precisa de mais: quantas cabecas tem (para nao vender
+// mais do que existe) e se o lote esta encerrado.
+function rowToLotePec(r){
+  return {id:r.id, nome:r.nome, numeroAnimais:Number(r.numero_animais||0),
+          destino:r.destino||'pasto', dataFim:r.data_fim||null};
+}
 
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo, permissoes:r.permissoes||{}}; }
@@ -518,7 +524,7 @@ async function loadAll(){
     // nao teria como mostrar nem reativar o que foi desativado. Quem filtra
     // por ativo e o seletor do lancamento, logo abaixo.
     temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome').order('nome') : Promise.resolve({data:[]}),
+    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, data_fim').order('nome') : Promise.resolve({data:[]}),
   ]);
   // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
   // devolve vazio e a consulta e desperdicio de rede.
@@ -3345,6 +3351,9 @@ function ligarEventosContas(){
       editDraft = d; render();
     };
   });
+  document.querySelectorAll('[data-recalcula-venda]').forEach(el=>{
+    el.onchange = ()=>{ editDraft = lerLancamentoCompleto(editDraft); render(); };
+  });
   document.querySelectorAll('[data-recalcula-parcela]').forEach(el=>{
     // Anota QUAIS linhas a pessoa mexeu. Sem isso nao da para saber: todas
     // ja vem preenchidas com a divisao igual, entao "tem valor" nao
@@ -3393,6 +3402,207 @@ function ligarEventosContas(){
       render();
     };
   }
+}
+
+
+/* ===================== VENDA DE ANIMAIS =====================
+ *
+ * Portado do AE Pecuaria, onde a venda era uma tela propria. Aqui ela e um
+ * modo do lancamento de RECEITA: escolher atividade Pecuaria e marcar
+ * "venda de animais" abre os campos do rebanho.
+ *
+ * Por que virou parte do lancamento: a venda sempre foi uma receita. Ter
+ * uma tela separada obrigava a manter duas portas de entrada para o mesmo
+ * dado, e a da Pecuaria escrevia direto no financeiro sem passar pelo
+ * plano de contas.
+ *
+ * O QUE ELA FAZ ALEM DE LANCAR
+ *   grava o abate (o registro zootecnico da venda)
+ *   desconta os animais vendidos do lote
+ *   encerra o lote quando a venda zera o rebanho dele
+ *
+ * As tres formas de vender, iguais as do app antigo:
+ *   arroba  abate      arrobas de CARCACA x valor da arroba paga
+ *   cabeca  em pe      valor fechado por animal x quantidade
+ *   kg      em pe      peso vivo x quantidade x valor do kg
+ */
+const KG_POR_ARROBA_CARCACA = 15;
+const TIPO_VENDA_LABEL = {
+  arroba: 'Abate — valor da arroba (peso de carcaça)',
+  cabeca: 'Em pé — valor fechado por cabeça',
+  kg:     'Em pé — valor por kg de peso vivo',
+};
+
+// Aceita virgula: no celular o teclado numerico brasileiro entrega "12,5" e
+// Number("12,5") e NaN.
+function numDecimal(v){
+  if(typeof v === 'number') return v;
+  if(v==null || v==='') return 0;
+  return Number(String(v).replace(',','.')) || 0;
+}
+function arrobasDaVenda(d){
+  return (numDecimal(d.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(d.quantidade||0);
+}
+function valorDaVenda(d){
+  const qtd = Number(d.quantidade||0);
+  if(d.tipoVenda==='cabeca') return qtd * numDecimal(d.valorPorAnimal);
+  if(d.tipoVenda==='kg')     return qtd * numDecimal(d.pesoMedioKg) * numDecimal(d.valorKg);
+  return arrobasDaVenda(d) * numDecimal(d.valorArroba);
+}
+
+/* Lote que pode ser vendido: ativo e com animais. Mesma regra do AE
+ * Pecuaria (lotesQueRecebem) - se ela mudar la, muda aqui.
+ * O lote ja gravado continua na lista ao editar, senao corrigir a data de
+ * uma venda antiga trocaria o lote dela calado. */
+function lotesVendaveis(loteJaEscolhido){
+  return state.lotesPec.filter(l =>
+    (!l.dataFim && Number(l.numeroAnimais||0) > 0)
+    || (loteJaEscolhido != null && String(l.id) === String(loteJaEscolhido)));
+}
+
+function BlocoVendaAnimais(d){
+  const tipoVenda = d.tipoVenda || 'arroba';
+  const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
+  const qtd = Number(d.quantidade||0);
+  const total = valorDaVenda(d);
+  const arrobas = arrobasDaVenda(d);
+  const disponiveis = Number(lote?.numeroAnimais||0);
+  const zeraOLote = lote && qtd >= disponiveis && qtd > 0;
+  const lotes = lotesVendaveis(d.loteId);
+
+  return `
+  <div class="card" style="padding:12px; margin:4px 0 10px; background:var(--cinza-bg);">
+    <div class="field"><label>Lote vendido</label>
+      <select id="f-lotevenda" data-recalcula-venda="1">
+        <option value="">— Selecione o lote —</option>
+        ${lotes.map(l=>`<option value="${l.id}" ${String(d.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}${l.numeroAnimais!=null?` — ${fmtInt(l.numeroAnimais)} cab.`:''}</option>`).join('')}
+      </select>
+      ${lotes.length===0?`<span class="hint" style="color:var(--alerta);">Nenhum lote ativo com animais. Confira em AE Pecuária &gt; Lotes.</span>`:''}
+    </div>
+    <div class="field"><label>Quantidade de animais</label>
+      <input id="f-qtdvenda" type="number" step="1" min="1" ${lote?`max="${disponiveis}"`:''}
+             value="${d.quantidade ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
+      ${lote?`<span class="hint">O lote tem ${fmtInt(disponiveis)} ${disponiveis===1?'cabeça':'cabeças'}.${zeraOLote?' Esta venda zera o lote e ele será encerrado.':''}</span>`:''}
+    </div>
+    <div class="field"><label>Forma da venda</label>
+      <select id="f-tipovenda" data-recalcula-venda="1">
+        ${Object.entries(TIPO_VENDA_LABEL).map(([k,l])=>`<option value="${k}" ${tipoVenda===k?'selected':''}>${l}</option>`).join('')}
+      </select>
+    </div>
+    ${tipoVenda==='arroba'?`
+    <div class="field"><label>Peso de carcaça por animal (kg)</label>
+      <input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
+      <span class="hint">Peso de carcaça, não peso vivo — é o que o frigorífico paga. 1 @ = ${KG_POR_ARROBA_CARCACA} kg.</span></div>
+    <div class="field"><label>Valor da arroba paga (R$/@)</label>
+      <input id="f-valorarrobavenda" type="text" inputmode="decimal" value="${d.valorArroba ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
+    ${tipoVenda==='cabeca'?`
+    <div class="field"><label>Valor por animal (R$)</label>
+      <input id="f-valorporanimalvenda" type="text" inputmode="decimal" value="${d.valorPorAnimal ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
+    ${tipoVenda==='kg'?`
+    <div class="field"><label>Peso vivo por animal (kg)</label>
+      <input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>
+    <div class="field"><label>Valor do kg (R$/kg)</label>
+      <input id="f-valorkgvenda" type="text" inputmode="decimal" value="${d.valorKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
+
+    <div style="display:flex; justify-content:space-between; align-items:baseline; padding-top:8px; border-top:1px solid var(--cinza-claro);">
+      <span class="hint">${tipoVenda==='arroba' ? `${fmt(arrobas,2)} @ de carcaça` : `${fmtInt(qtd)} ${qtd===1?'animal':'animais'}`}</span>
+      <strong style="font-size:18px;">R$ ${fmt(total)}</strong>
+    </div>
+    <p class="hint" style="margin-top:6px;">
+      O valor da receita é calculado por aqui — o campo Valor acima fica travado.
+      Ao salvar, ${fmtInt(qtd)} ${qtd===1?'animal é descontado':'animais são descontados'} do lote${zeraOLote?' e o lote é encerrado':''}.
+    </p>
+  </div>`;
+}
+
+/* Grava a venda: abate, lancamento e baixa no lote, nessa ordem, com
+ * desfazer em cada passo.
+ *
+ * A ordem importa. O abate vem primeiro porque e ele que da o abate_id ao
+ * lancamento; a baixa no lote vem por ultimo porque e a unica que altera
+ * dado que ja existia. Se o lancamento falhar, o abate e apagado; se a
+ * baixa falhar, os dois sao apagados. Sem isso sobraria abate sem receita
+ * (venda pela metade) ou receita sem baixa (lote com animal que ja foi
+ * vendido, comendo racao).
+ *
+ * Mesma sequencia do AE Pecuaria - portada, nao reinventada.
+ */
+async function salvarVendaAnimais(campos, row){
+  const lote = state.lotesPec.find(l=>String(l.id)===String(campos.loteId));
+  const qtd = Number(campos.quantidade||0);
+
+  const abateRow = {
+    data: campos.data,
+    lote_id: Number(campos.loteId),
+    quantidade: qtd,
+    tipo_venda: campos.tipoVenda || 'arroba',
+    peso_medio_kg: campos.tipoVenda==='cabeca' ? null : numDecimal(campos.pesoMedioKg),
+    valor_arroba: campos.tipoVenda==='arroba' ? numDecimal(campos.valorArroba) : null,
+    valor_por_animal: campos.tipoVenda==='cabeca' ? numDecimal(campos.valorPorAnimal) : null,
+    valor_kg: campos.tipoVenda==='kg' ? numDecimal(campos.valorKg) : null,
+    observacao: campos.observacao || null,
+    criado_por: state.perfil?.nome || null,
+  };
+  const {data: abate, error: errAbate} =
+    await db.from('abates').insert(abateRow).select('id').single();
+  if(errAbate) return {error: errAbate};
+
+  const {error: errLanc} = await db.from('lancamentos_financeiros')
+    .insert({...row, abate_id: abate.id, arrobas: campos.tipoVenda==='arroba' ? arrobasDaVenda(campos) : null});
+  if(errLanc){
+    await db.from('abates').delete().eq('id', abate.id);
+    return {error: errLanc};
+  }
+
+  const restante = Math.max(0, Number(lote?.numeroAnimais||0) - qtd);
+  const upd = {numero_animais: restante};
+  if(restante === 0 && !lote?.dataFim) upd.data_fim = campos.data;
+  const {error: errLote} = await db.from('lotes').update(upd).eq('id', Number(campos.loteId));
+  if(errLote){
+    await db.from('lancamentos_financeiros').delete().eq('abate_id', abate.id);
+    await db.from('abates').delete().eq('id', abate.id);
+    return {error: errLote};
+  }
+  return {};
+}
+
+// Le os campos da venda. Separado do lerLancamentoDoFormulario para o
+// lancamento comum nao carregar campo que nao existe na tela dele.
+function lerVendaDoFormulario(base){
+  const v = (id)=> document.getElementById(id)?.value ?? '';
+  if(!document.getElementById('f-lotevenda')) return base;
+  return {
+    ...base,
+    loteId:         v('f-lotevenda'),
+    quantidade:     v('f-qtdvenda'),
+    tipoVenda:      v('f-tipovenda') || 'arroba',
+    pesoMedioKg:    document.getElementById('f-pesovenda') ? v('f-pesovenda') : (base.pesoMedioKg ?? ''),
+    valorArroba:    document.getElementById('f-valorarrobavenda') ? v('f-valorarrobavenda') : (base.valorArroba ?? ''),
+    valorPorAnimal: document.getElementById('f-valorporanimalvenda') ? v('f-valorporanimalvenda') : (base.valorPorAnimal ?? ''),
+    valorKg:        document.getElementById('f-valorkgvenda') ? v('f-valorkgvenda') : (base.valorKg ?? ''),
+  };
+}
+
+// O que barra o salvamento de uma venda. Devolve a lista do que falta.
+function faltandoNaVenda(d){
+  const faltando = [];
+  const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
+  const qtd = Number(d.quantidade||0);
+  if(!d.loteId) faltando.push('lote vendido');
+  if(!(qtd > 0)) faltando.push('quantidade de animais');
+  else if(lote && qtd > Number(lote.numeroAnimais||0)){
+    faltando.push(`quantidade menor ou igual às ${fmtInt(lote.numeroAnimais)} cabeças do lote`);
+  }
+  if(d.tipoVenda==='arroba'){
+    if(!(numDecimal(d.pesoMedioKg) > 0)) faltando.push('peso de carcaça');
+    if(!(numDecimal(d.valorArroba) > 0)) faltando.push('valor da arroba');
+  } else if(d.tipoVenda==='cabeca'){
+    if(!(numDecimal(d.valorPorAnimal) > 0)) faltando.push('valor por animal');
+  } else {
+    if(!(numDecimal(d.pesoMedioKg) > 0)) faltando.push('peso vivo');
+    if(!(numDecimal(d.valorKg) > 0)) faltando.push('valor do kg');
+  }
+  return faltando;
 }
 
 function PageFinanceiro(){
@@ -3498,7 +3708,15 @@ function lerLancamentoDoFormulario(base){
     areas:         document.getElementById('f-arealanc-confinamento') ? areas : (base.areas||[]),
     loteId:        document.getElementById('f-lotelanc') ? v('f-lotelanc') : (base.loteId||''),
     arrobas:       document.getElementById('f-arrobaslanc') ? v('f-arrobaslanc') : (base.arrobas??''),
+    ehVenda:       document.getElementById('f-ehvenda') ? document.getElementById('f-ehvenda').checked : (base.ehVenda===true),
   };
+}
+// Le lancamento E venda. O valor da venda e sempre recalculado dos campos
+// dela: o campo Valor fica travado na tela justamente para nao existirem
+// duas verdades sobre quanto a venda valeu.
+function lerLancamentoCompleto(base){
+  const d = lerVendaDoFormulario(lerLancamentoDoFormulario(base));
+  return d.ehVenda ? {...d, valor: Math.round(valorDaVenda(d)*100)/100} : d;
 }
 function ModalLancamento(){
   const d = editDraft;
@@ -3547,7 +3765,12 @@ function ModalLancamento(){
           <span class="hint">Cadastre novos centros de custo no AE Lavoura, em Cadastros.</span>
         </div>
         <div class="field"><label>Descrição</label><input id="f-descricaolanc" value="${esc(d.descricao||'')}" placeholder="${ehReceita?'Ex: Venda de boi gordo':'Ex: Mão de obra do curral'}" autocomplete="off"/></div>
-        <div class="field"><label>Valor (R$)</label><input id="f-valorlanc" type="number" step="0.01" min="0" value="${d.valor ?? ''}" autocomplete="off"/></div>
+        <div class="field"><label>Valor (R$)</label>
+          <input id="f-valorlanc" type="number" step="0.01" min="0"
+                 value="${d.ehVenda ? (Math.round(valorDaVenda(d)*100)/100) : (d.valor ?? '')}"
+                 ${d.ehVenda?'readonly style="background:var(--cinza-bg); cursor:not-allowed;"':''} autocomplete="off"/>
+          ${d.ehVenda?`<span class="hint">Calculado pelos campos da venda, logo abaixo.</span>`:''}
+        </div>
         <div class="field"><label>Data${ehDespesa?' (deixe vazia para recorrente)':''}</label><input id="f-datalanc" type="date" value="${d.data||''}"/>
           ${ehDespesa?`<span class="hint">Sem data, vale como valor mensal padrão para qualquer mês sem lançamento próprio.</span>`:''}
         </div>
@@ -3563,13 +3786,21 @@ function ModalLancamento(){
           <span class="hint">Uma marcada leva o valor inteiro; duas ou três rateiam por número de animais entre as marcadas; nenhuma rateia entre as três.</span>
         </div>` : ''}
         ${ehReceita && ehPecuaria ? `
+        <div class="field">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+            <input id="f-ehvenda" type="checkbox" style="width:auto;" ${d.ehVenda?'checked':''} data-recalcula-venda="1"/>
+            É venda de animais
+          </label>
+          <span class="hint">Marque para informar lote, quantidade e a forma da venda. O app desconta os animais do lote e guarda o registro do abate.</span>
+        </div>
+        ${d.ehVenda ? BlocoVendaAnimais(d) : `
         <div class="field"><label>Lote (opcional)</label>
           <select id="f-lotelanc">
             <option value="">— Não vinculada a um lote —</option>
             ${state.lotesPec.map(l=>`<option value="${l.id}" ${String(d.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobaslanc" type="number" step="0.01" value="${d.arrobas ?? ''}" autocomplete="off"/></div>` : ''}
+        <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobaslanc" type="number" step="0.01" value="${d.arrobas ?? ''}" autocomplete="off"/></div>`}` : ''}
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obslanc" rows="2">${esc(d.observacao||'')}</textarea></div>
         ${state.erroLancamento ? `<div class="login-error">${esc(state.erroLancamento)}</div>` : ''}
       </div>
@@ -4288,7 +4519,14 @@ function attachEvents(){
           if(erroPerm) alert('Funcionário salvo, mas as permissões não foram gravadas: ' + erroPerm.message);
         }
       } else if(type==='lancamento'){
-        const campos = lerLancamentoDoFormulario(editDraft);
+        const campos = lerLancamentoCompleto(editDraft);
+        if(campos.ehVenda){
+          const faltaVenda = faltandoNaVenda(campos);
+          if(faltaVenda.length){
+            state.erroLancamento = 'Preencha: ' + faltaVenda.join(', ') + '.';
+            editDraft = campos; render(); return;
+          }
+        }
         // Obrigatórios de verdade: sem eles o lançamento não serve pra
         // nenhum relatório depois. Melhor barrar aqui do que descobrir na
         // hora de fechar o custo por hectare.
@@ -4306,6 +4544,17 @@ function attachEvents(){
         }
         state.erroLancamento = '';
         const row = lancamentoToRow(campos);
+        // Venda nova passa pelo caminho proprio: alem do lancamento, ela
+        // grava o abate e desconta os animais do lote. Editar uma venda
+        // existente continua sendo so o lancamento - mexer no lote de novo
+        // descontaria os mesmos animais duas vezes.
+        if(campos.ehVenda && !editDraft._editId){
+          const res = await salvarVendaAnimais(campos, row);
+          if(res.error){ alert('Não foi possível registrar a venda: ' + res.error.message); return; }
+          state.modal = null; editDraft = null;
+          await loadAll();
+          return;
+        }
         if(editDraft._editId){
           ({error} = await db.from('lancamentos_financeiros').update(row).eq('id', editDraft._editId));
         } else {
