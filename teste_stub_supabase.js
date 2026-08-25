@@ -25,7 +25,19 @@ window.supabase = {
           return r;
         },
         then(res) { return Promise.resolve({ data: this._aplicar(), error: null }).then(res); },
-        insert(v) { window.__ESCRITAS__.push({ tabela: nome, op: 'insert', v }); return Promise.resolve({ data: null, error: null }); },
+        insert(v) {
+          window.__ESCRITAS__.push({ tabela: nome, op: 'insert', v });
+          // insert().select('id').single() e usado pelo Contas a Pagar para
+          // pegar o id do titulo recem-criado. Devolve um id crescente.
+          window.__PROXIMO_ID__ = (window.__PROXIMO_ID__ || 1000) + 1;
+          const id = window.__PROXIMO_ID__;
+          const r = {
+            select() { return this; },
+            single() { return Promise.resolve({ data: { id }, error: null }); },
+            then(res) { return Promise.resolve({ data: [{ id }], error: null }).then(res); },
+          };
+          return r;
+        },
         update(v) { window.__ESCRITAS__.push({ tabela: nome, op: 'update', v }); return this; },
         delete() { window.__ESCRITAS__.push({ tabela: nome, op: 'delete' }); return this; },
       };

@@ -514,6 +514,15 @@ async function loadAll(){
     temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome').order('nome') : Promise.resolve({data:[]}),
   ]);
+  // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
+  // devolve vazio e a consulta e desperdicio de rede.
+  const [ents, ctas, tits, rats, bxs] = podeVerContas() ? await Promise.all([
+    db.from('entidades').select('*').order('nome'),
+    db.from('contas_bancarias').select('*').order('nome'),
+    fetchAllRows(()=>db.from('titulos').select('*').order('vencimento').order('id')),
+    fetchAllRows(()=>db.from('titulo_rateios').select('*').order('id')),
+    fetchAllRows(()=>db.from('titulo_baixas').select('*').order('id')),
+  ]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]}];
   // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
   // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
   // apresentado com a mesma confiança de um número real.
@@ -532,6 +541,11 @@ async function loadAll(){
   state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
   state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
   state.lotesPec     = (lotPec.data||[]).map(rowToLotePec);
+  state.entidades       = (ents.data||[]).map(rowToEntidade);
+  state.contasBancarias = (ctas.data||[]).map(rowToContaBancaria);
+  state.titulos         = (tits.data||[]).map(rowToTitulo);
+  state.rateios         = (rats.data||[]).map(rowToRateio);
+  state.baixas          = (bxs.data||[]).map(rowToBaixa);
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
@@ -917,6 +931,16 @@ const state = {
   filtroAtividade: '',
   lotesPec: [],       // só id e nome, pra vincular receita a um lote
   abaFinanceiro: 'despesa',
+  // Contas a pagar / a receber
+  entidades: [],        // {id, nome, documento, papel, ativo}
+  contasBancarias: [],  // {id, nome, banco, agencia, conta, ativo}
+  titulos: [],          // o boleto
+  rateios: [],          // onde cada titulo pesa
+  baixas: [],           // cada pagamento
+  abaContas: 'pagar',
+  filtroContas: 'abertos',
+  searchContas: '',
+  erroTitulo: '',
   erroLancamento: '',
   searchDespesas: '',
   searchCentros: '',
@@ -1036,6 +1060,7 @@ function render(){
       ${state.page==='financeiro' ? PageFinanceiro() : ''}
       ${state.page==='fazendas' ? PageFazendas() : ''}
       ${state.page==='centrosCusto' ? PageCentrosCusto() : ''}
+      ${state.page==='contas' ? PageContas() : ''}
       ${state.page==='funcionarios' ? PageFuncionarios() : ''}
       ${state.page==='usuarios' ? PageUsuarios() : ''}
     `;
@@ -1101,6 +1126,10 @@ const PAGES = [
   // lá quando o Financeiro veio pra cá, e sem esta tela ninguém mais
   // conseguiria criar ou corrigir um centro de custo.
   {key:'centrosCusto', label:'Centros de Custo', modulo:'matriz_financeiro'},
+  // Contas a Pagar exige a chave propria 'contas' ALEM do financeiro - a
+  // RLS do banco pede as duas. Aqui basta pedir 'contas': quem nao tem
+  // matriz_financeiro nao chega a ver dado nenhum de qualquer forma.
+  {key:'contas', label:'Contas a Pagar', modulo:'contas'},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
@@ -1309,6 +1338,7 @@ const MODULOS_PERMISSAO = [
     ['matriz_painel','Painel (indicadores de cada app)'],
     ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
     ['matriz_financeiro','Financeiro (lançar despesa, receita e investimento)'],
+    ['contas','Contas a Pagar e a Receber (exige também o Financeiro acima)'],
     ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
     ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
   ]],
@@ -1377,6 +1407,7 @@ function Header(){
     financeiro:{eyebrow:'Lançamentos', title:'Financeiro', desc:'Despesa, receita e investimento de todas as atividades no mesmo lugar. A atividade é um campo do lançamento, não um app separado — é isso que permite comparar custo por hectare entre pecuária, cana e grãos.'},
     fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área total e, pra cada atividade (grãos, cana, pecuária), quantos hectares dela tem ali. AE Lavoura e AE Pecuária só leem esses dados.'},
     centrosCusto:{eyebrow:'Cadastro', title:'Centros de Custo', desc:'O plano de contas usado em todo lançamento financeiro. Um centro global (sem fazenda) vale para todas — é o caso das contas do Conag, que atendem pecuária, cana e cereais ao mesmo tempo. A atividade é campo do lançamento, não do centro de custo.'},
+    contas:{eyebrow:'Financeiro', title:'Contas a Pagar e a Receber', desc:'O boleto antes de virar dinheiro: quem, quanto, quando vence e onde pesa. Um título pode ser dividido entre fazendas e atividades. Só entra no Financeiro quando é baixado, com a data do pagamento.'},
     funcionarios:{eyebrow:'Cadastro', title:'Funcionários', desc:'Cargo, em quais atividades cada pessoa participa (com % de alocação) e qual login de acesso ela usa. Sem CPF, salário ou Pix — esses dados não entram aqui.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso. Depois da unificação é um login só, que vale para Matriz, Lavoura e Pecuária.'},
   };
@@ -2392,6 +2423,785 @@ function BlocoPorGrupo(lancamentos, total){
     </table>
   </div>`;
 }
+
+/* ===================== CONTAS A PAGAR E A RECEBER =====================
+ *
+ * Copia a separacao que o Conag faz entre Financeiro (o boleto) e
+ * Gerencial (o rateio). Um titulo pode pesar em mais de uma fazenda e
+ * atividade — um lancamento sozinho nao representa isso.
+ *
+ * REGIME DE CAIXA. O titulo nao aparece no Financeiro nem nos Resultados
+ * enquanto nao for pago. Quem cria os lancamentos e o gatilho do banco,
+ * na hora da baixa, com a data do pagamento — a tela NAO replica essa
+ * regra. Uma regra, uma implementacao.
+ */
+const SITUACAO_LABEL = {aberto:'Em aberto', parcial:'Parcial', pago:'Pago', cancelado:'Cancelado'};
+const FORMAS_PAGAMENTO = [
+  'Boleto bancário','PIX','Transferência','Débito em conta','Dinheiro',
+  'Cheque','Cartão de crédito','Cartão de débito','Depósito','Barter / troca','Outro',
+];
+
+function rowToEntidade(r){
+  return {id:r.id, nome:r.nome||'', documento:r.documento||'', papel:r.papel||'fornecedor',
+          observacao:r.observacao||'', ativo:r.ativo!==false};
+}
+function rowToContaBancaria(r){
+  return {id:r.id, nome:r.nome||'', banco:r.banco||'', agencia:r.agencia||'',
+          conta:r.conta||'', ativo:r.ativo!==false};
+}
+function rowToTitulo(r){
+  return {id:r.id, tipo:r.tipo, entidadeId:r.entidade_id||null, descricao:r.descricao||'',
+          documento:r.documento||'', formaPagamento:r.forma_pagamento||'',
+          contaBancariaId:r.conta_bancaria_id||null,
+          valor:Number(r.valor||0), vencimento:r.vencimento||null,
+          parcela:r.parcela||1, parcelas:r.parcelas||1, grupo:r.grupo||null,
+          previsao:r.previsao===true, cancelado:r.cancelado===true,
+          valorBaixado:Number(r.valor_baixado||0), situacao:r.situacao||'aberto',
+          observacao:r.observacao||''};
+}
+function rowToRateio(r){
+  return {id:r.id, tituloId:r.titulo_id, fazendaId:r.fazenda_id||null, atividade:r.atividade,
+          centroCustoId:r.centro_custo_id, competencia:r.competencia||'',
+          valor:Number(r.valor||0), talhaoId:r.talhao_id||null, observacao:r.observacao||''};
+}
+function rowToBaixa(r){
+  return {id:r.id, tituloId:r.titulo_id, data:r.data, valor:Number(r.valor||0),
+          contaBancariaId:r.conta_bancaria_id||null, observacao:r.observacao||''};
+}
+
+function podeVerContas(){ return temPermissao('contas','visualizar'); }
+function podeEditarContas(){ return temPermissao('contas','editar'); }
+// Excluir e so de admin ou proprietario — a mesma regra que o banco aplica
+// em pode_excluir(). Aqui e so para nao mostrar um botao que vai falhar.
+function podeExcluir(){ return acessoTotal(); }
+
+function nomeEntidade(id){
+  if(!id) return '—';
+  const e = state.entidades.find(x=>x.id===id);
+  return e ? e.nome : '—';
+}
+function nomeContaBancaria(id){
+  if(!id) return '';
+  const c = state.contasBancarias.find(x=>x.id===id);
+  return c ? c.nome : '';
+}
+function rateiosDoTitulo(id){ return state.rateios.filter(r=>r.tituloId===id); }
+function baixasDoTitulo(id){ return state.baixas.filter(b=>b.tituloId===id); }
+function saldoDoTitulo(t){ return Math.max(0, Number(t.valor||0) - Number(t.valorBaixado||0)); }
+
+/* Vencido depende do dia de hoje, entao nao fica guardado no banco — e
+ * calculado aqui. hojeStr() e local; toISOString devolveria o dia seguinte
+ * depois das 21h no Brasil. */
+function estadoDoVencimento(t){
+  if(t.cancelado) return 'cancelado';
+  if(t.situacao==='pago') return 'pago';
+  const hoje = hojeStr();
+  if(!t.vencimento) return 'aberto';
+  if(t.vencimento < hoje) return 'vencido';
+  if(t.vencimento === hoje) return 'hoje';
+  return 'aberto';
+}
+function PillSituacao(t){
+  const e = estadoDoVencimento(t);
+  if(e==='pago')      return `<span class="pill pill-ok">Pago</span>`;
+  if(e==='cancelado') return `<span class="pill">Cancelado</span>`;
+  if(e==='vencido')   return `<span class="pill pill-alerta">Vencido</span>`;
+  if(e==='hoje')      return `<span class="pill pill-warn">Vence hoje</span>`;
+  return t.situacao==='parcial'
+    ? `<span class="pill pill-warn">Parcial</span>`
+    : `<span class="pill">Em aberto</span>`;
+}
+function dataBr(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
+
+function titulosFiltrados(){
+  const tipo = state.abaContas;
+  const busca = (state.searchContas||'').trim().toLowerCase();
+  return state.titulos
+    .filter(t=>t.tipo===tipo)
+    .filter(t=>{
+      const f = state.filtroContas;
+      if(f==='todos') return true;
+      const e = estadoDoVencimento(t);
+      if(f==='vencidos') return e==='vencido';
+      if(f==='hoje')     return e==='hoje';
+      if(f==='abertos')  return e==='aberto' || e==='hoje' || e==='vencido';
+      if(f==='pagos')    return e==='pago';
+      if(f==='previsao') return t.previsao===true;
+      return true;
+    })
+    .filter(t=>{
+      if(!busca) return true;
+      const rat = rateiosDoTitulo(t.id);
+      const alvo = [
+        t.descricao, t.documento, nomeEntidade(t.entidadeId),
+        ...rat.map(r=>nomeCentroCusto(r.centroCustoId)),
+        ...rat.map(r=>nomeFazendaLanc(r.fazendaId)),
+      ].join(' ').toLowerCase();
+      return alvo.includes(busca);
+    })
+    .sort((a,b)=>{
+      // vencido primeiro, depois por vencimento mais proximo
+      const pa = estadoDoVencimento(a)==='vencido' ? 0 : 1;
+      const pb = estadoDoVencimento(b)==='vencido' ? 0 : 1;
+      if(pa!==pb) return pa-pb;
+      return String(a.vencimento||'').localeCompare(String(b.vencimento||''));
+    });
+}
+
+
+function PageContas(){
+  const tipo = state.abaContas;
+  const daAba = state.titulos.filter(t=>t.tipo===tipo && !t.cancelado);
+  const emAberto = daAba.filter(t=>t.situacao!=='pago');
+  const totalAberto  = emAberto.reduce((a,t)=>a+saldoDoTitulo(t), 0);
+  const vencidos     = emAberto.filter(t=>estadoDoVencimento(t)==='vencido');
+  const totalVencido = vencidos.reduce((a,t)=>a+saldoDoTitulo(t), 0);
+  const hoje = hojeStr();
+  const em30 = new Date(hoje+'T12:00:00'); em30.setDate(em30.getDate()+30);
+  const limite30 = em30.toISOString().slice(0,10);
+  const proximos = emAberto.filter(t=>t.vencimento >= hoje && t.vencimento <= limite30);
+  const total30  = proximos.reduce((a,t)=>a+saldoDoTitulo(t), 0);
+
+  const lista = titulosFiltrados();
+  const rotulo = tipo==='pagar' ? 'conta a pagar' : 'conta a receber';
+  const filtros = [
+    ['abertos','Em aberto'], ['vencidos',`Vencidos (${vencidos.length})`],
+    ['hoje','Vence hoje'], ['previsao','Previsão'], ['pagos','Pagos'], ['todos','Todos'],
+  ];
+
+  return `
+  <div class="toolbar" style="gap:8px;">
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      ${[['pagar','A Pagar'],['receber','A Receber']].map(([k,l])=>`
+        <button class="${tipo===k?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-aba-contas="${k}">${l}</button>
+      `).join('')}
+    </div>
+    ${podeEditarContas() ? `<button class="btn btn-primary btn-sm" data-novo-titulo="${tipo}">+ Nova ${rotulo}</button>` : ''}
+  </div>
+
+  <div class="stat-row" style="grid-template-columns:repeat(3,1fr); margin-bottom:14px;">
+    <div class="stat-card">
+      <div class="stat-label">Em aberto</div>
+      <div class="stat-value">R$ ${fmt(totalAberto)}</div>
+      <div class="hint">${emAberto.length} ${emAberto.length===1?'título':'títulos'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Vencido</div>
+      <div class="stat-value" style="${totalVencido>0?'color:var(--alerta);':''}">R$ ${fmt(totalVencido)}</div>
+      <div class="hint">${vencidos.length} ${vencidos.length===1?'título':'títulos'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Vence em 30 dias</div>
+      <div class="stat-value">R$ ${fmt(total30)}</div>
+      <div class="hint">${proximos.length} ${proximos.length===1?'título':'títulos'}</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      ${filtros.map(([k,l])=>`
+        <button class="${state.filtroContas===k?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-filtro-contas="${k}">${l}</button>
+      `).join('')}
+    </div>
+    <input type="text" placeholder="Buscar por fornecedor, descrição, centro de custo..." value="${esc(state.searchContas)}" data-search-contas="1" style="max-width:340px;" autocomplete="off"/>
+  </div>
+
+  <div class="card" style="overflow-x:auto;">
+    ${lista.length===0 ? Empty('Nenhum título aqui', podeEditarContas()?'Use o botão acima para lançar. O filtro também pode estar escondendo linhas.':'O filtro pode estar escondendo linhas.') : `
+    <table>
+      <thead><tr>
+        <th>Vencimento</th><th>${tipo==='pagar'?'Fornecedor':'Cliente'}</th><th>Descrição</th>
+        <th>Onde pesa</th><th>Valor</th><th>Saldo</th><th>Situação</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${lista.map(t=>{
+          const rat = rateiosDoTitulo(t.id);
+          const saldo = saldoDoTitulo(t);
+          return `
+          <tr>
+            <td class="mono">${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}</td>
+            <td>${esc(nomeEntidade(t.entidadeId))}</td>
+            <td><strong>${esc(t.descricao)}</strong>
+              ${t.documento?`<div class="hint">doc ${esc(t.documento)}</div>`:''}
+              ${t.previsao?`<div class="hint"><span class="pill pill-warn">Previsão</span></div>`:''}</td>
+            <td>${rat.length===0
+                  ? `<span class="pill pill-alerta">sem rateio</span>`
+                  : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(r.competencia)} · R$ ${fmt(r.valor)}</div>`).join('')}</td>
+            <td class="mono">R$ ${fmt(t.valor)}</td>
+            <td class="mono">${saldo>0?`R$ ${fmt(saldo)}`:'<span class="hint">—</span>'}</td>
+            <td>${PillSituacao(t)}</td>
+            <td style="display:flex; gap:6px; flex-wrap:wrap;">
+              ${podeEditarContas() && saldo>0 && !t.cancelado ? `<button class="btn btn-primary btn-sm" data-baixar-titulo="${t.id}">Baixar</button>` : ''}
+              ${podeEditarContas() ? `<button class="btn-ghost btn-sm" data-edit-titulo="${t.id}">Editar</button>` : ''}
+              ${baixasDoTitulo(t.id).length>0 ? `<button class="btn-ghost btn-sm" data-ver-baixas="${t.id}">Baixas</button>` : ''}
+              ${podeExcluir() ? `<button class="btn-danger-ghost" data-del-titulo="${t.id}">Excluir</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+        <tr>
+          <td colspan="4" style="text-align:right; font-weight:600;">Total listado</td>
+          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+Number(t.valor||0),0))}</td>
+          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>`}
+  </div>
+
+  <p class="hint" style="margin-top:14px;">
+    O título só entra no Financeiro e nos Resultados quando é baixado, com a data do pagamento — regime de caixa,
+    igual ao resto do app. Quem cria o lançamento é o banco, na hora da baixa, repartindo pelo rateio.
+    Apagar uma baixa desfaz os lançamentos que ela criou.
+  </p>`;
+}
+
+
+/* Le o formulario do titulo. Usado ao salvar e tambem ao mexer nos
+ * rateios, que redesenha a tela — sem isto o que ja foi digitado sumiria.
+ * Mesmo motivo do lerLancamentoDoFormulario. */
+function lerTituloDoFormulario(base){
+  const v = (id)=> document.getElementById(id)?.value ?? '';
+  const rateios = (base.rateios||[]).map((r,i)=>({
+    ...r,
+    fazendaId:     document.getElementById(`f-rat-fazenda-${i}`)   ? v(`f-rat-fazenda-${i}`)   : r.fazendaId,
+    atividade:     document.getElementById(`f-rat-atividade-${i}`) ? v(`f-rat-atividade-${i}`) : r.atividade,
+    centroCustoId: document.getElementById(`f-rat-centro-${i}`)    ? v(`f-rat-centro-${i}`)    : r.centroCustoId,
+    competencia:   document.getElementById(`f-rat-comp-${i}`)      ? v(`f-rat-comp-${i}`)      : r.competencia,
+    valor:         document.getElementById(`f-rat-valor-${i}`)     ? v(`f-rat-valor-${i}`)     : r.valor,
+  }));
+  return {
+    ...base,
+    entidadeNome:    v('f-tit-entidade').trim(),
+    descricao:       v('f-tit-descricao').trim(),
+    documento:       v('f-tit-documento').trim(),
+    valor:           v('f-tit-valor'),
+    vencimento:      v('f-tit-vencimento'),
+    parcelas:        v('f-tit-parcelas') || '1',
+    intervaloDias:   v('f-tit-intervalo') || '',
+    formaPagamento:  v('f-tit-forma'),
+    contaBancariaId: v('f-tit-conta'),
+    previsao:        document.getElementById('f-tit-previsao')?.checked === true,
+    observacao:      v('f-tit-obs').trim(),
+    rateios,
+  };
+}
+
+function ModalTitulo(){
+  const d = editDraft;
+  const ehPagar = d.tipo==='pagar';
+  const total = Number(d.valor||0);
+  const somaRateios = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
+  const falta = Math.round((total - somaRateios) * 100) / 100;
+  const nParcelas = Math.max(1, Number(d.parcelas||1));
+  const editando = !!d._editId;
+
+  const centrosPara = (atividade)=> state.centrosCusto
+    .filter(c=> c.ativo!==false)
+    .filter(c=> !c.frente || c.frente==='geral' || c.frente===atividade)
+    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal modal-lg" data-stop="1">
+      <div class="modal-head">
+        <h3>${editando?'Editar':'Nova'} ${ehPagar?'conta a pagar':'conta a receber'}</h3>
+        <button class="modal-close" data-close="1">&times;</button>
+      </div>
+      <div class="modal-body">
+
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:0 0 8px;">Financeiro</h4>
+        <p class="hint" style="margin-top:0;">O papel: quem, quanto, quando vence.</p>
+
+        <div class="field"><label>${ehPagar?'Fornecedor':'Cliente'}</label>
+          <input id="f-tit-entidade" list="lista-entidades" value="${esc(d.entidadeNome||'')}" placeholder="Comece a digitar..." autocomplete="off"/>
+          <datalist id="lista-entidades">
+            ${state.entidades.filter(e=>e.ativo).map(e=>`<option value="${esc(e.nome)}"></option>`).join('')}
+          </datalist>
+          <span class="hint">Se o nome ainda não existir, ele é cadastrado ao salvar.</span>
+        </div>
+        <div class="field"><label>Descrição</label>
+          <input id="f-tit-descricao" value="${esc(d.descricao||'')}" placeholder="${ehPagar?'Ex: Adubo 20-05-20, 12 toneladas':'Ex: Venda de boi gordo'}" autocomplete="off"/></div>
+        <div class="field"><label>Documento (nota ou boleto, opcional)</label>
+          <input id="f-tit-documento" value="${esc(d.documento||'')}" autocomplete="off"/></div>
+        <div class="field"><label>Valor total (R$)</label>
+          <input id="f-tit-valor" type="number" step="0.01" min="0" value="${d.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/>
+          ${nParcelas>1?`<span class="hint">Serão criados ${nParcelas} títulos de R$ ${fmt(total/nParcelas)} (o último absorve o arredondamento).</span>`:''}</div>
+        <div class="field"><label>Vencimento${nParcelas>1?' da 1ª parcela':''}</label>
+          <input id="f-tit-vencimento" type="date" value="${d.vencimento||''}"/></div>
+
+        ${editando ? '' : `
+        <div class="field"><label>Nº de parcelas</label>
+          <input id="f-tit-parcelas" type="number" step="1" min="1" max="120" value="${d.parcelas||1}" data-recalcula-titulo="1"/></div>
+        ${nParcelas>1?`
+        <div class="field"><label>Intervalo entre parcelas</label>
+          <select id="f-tit-intervalo">
+            <option value="" ${!d.intervaloDias?'selected':''}>Mensal (mesmo dia do mês seguinte)</option>
+            <option value="30" ${d.intervaloDias==='30'?'selected':''}>A cada 30 dias</option>
+            <option value="15" ${d.intervaloDias==='15'?'selected':''}>A cada 15 dias</option>
+            <option value="7"  ${d.intervaloDias==='7'?'selected':''}>A cada 7 dias</option>
+          </select></div>`:''}`}
+
+        <div class="field"><label>Forma de pagamento</label>
+          <select id="f-tit-forma">
+            <option value="">— Não informada —</option>
+            ${FORMAS_PAGAMENTO.map(f=>`<option value="${esc(f)}" ${d.formaPagamento===f?'selected':''}>${esc(f)}</option>`).join('')}
+          </select></div>
+        <div class="field"><label>Conta bancária</label>
+          <select id="f-tit-conta">
+            <option value="">— Não informada —</option>
+            ${state.contasBancarias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${String(d.contaBancariaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+          </select></div>
+        <div class="field">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+            <input id="f-tit-previsao" type="checkbox" style="width:auto;" ${d.previsao?'checked':''}/> É previsão
+          </label>
+          <span class="hint">Marque quando o valor é esperado mas ainda não tem boleto firme. Aparece na lista separado.</span>
+        </div>
+
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:18px 0 8px;">Gerencial</h4>
+        <p class="hint" style="margin-top:0;">
+          Onde o dinheiro pesa. Pode dividir entre fazendas e atividades — é o que um lançamento sozinho não consegue.
+          A competência é independente do vencimento: um boleto que vence em setembro pode ser competência de julho.
+        </p>
+
+        ${(d.rateios||[]).map((r,i)=>`
+        <div class="card" style="padding:12px; margin-bottom:10px; background:var(--cinza-bg);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="font-size:13px;">Rateio ${i+1} de ${(d.rateios||[]).length}</strong>
+            ${(d.rateios||[]).length>1?`<button class="btn-danger-ghost btn-sm" data-remove-rateio="${i}">Remover</button>`:''}
+          </div>
+          <div class="field"><label>Atividade</label>
+            <select id="f-rat-atividade-${i}" data-recalcula-titulo="1">
+              ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${r.atividade===k?'selected':''}>${l}</option>`).join('')}
+            </select></div>
+          <div class="field"><label>Fazenda</label>
+            <select id="f-rat-fazenda-${i}">
+              <option value="" ${!r.fazendaId?'selected':''}>Geral / toda a empresa</option>
+              ${state.fazendasLavoura.map(f=>`<option value="${f.id}" ${String(r.fazendaId)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
+            </select></div>
+          <div class="field"><label>Centro de custo</label>
+            <select id="f-rat-centro-${i}">
+              <option value="">— Selecione —</option>
+              ${centrosPara(r.atividade).map(c=>`<option value="${c.id}" ${String(r.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+            </select></div>
+          <div class="field"><label>Competência</label>
+            <input id="f-rat-comp-${i}" type="month" value="${esc(r.competencia||'')}"/>
+            <span class="hint">Em que mês este gasto pertence, independente de quando vence ou é pago.</span></div>
+          <div class="field"><label>Valor deste rateio (R$)</label>
+            <input id="f-rat-valor-${i}" type="number" step="0.01" min="0" value="${r.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/></div>
+        </div>`).join('')}
+
+        <button class="btn-ghost btn-sm" data-add-rateio="1" style="margin-bottom:10px;">+ Dividir em outro centro de custo / fazenda</button>
+
+        ${total>0 ? (Math.abs(falta)<0.005
+          ? `<div class="hint" style="color:var(--verde-vivo-escuro); font-weight:600;">O rateio fecha com o valor do título.</div>`
+          : `<div class="login-error">Falta distribuir R$ ${fmt(Math.abs(falta))}${falta<0?' (o rateio passou do valor do título)':''}. A soma dos rateios tem que dar R$ ${fmt(total)}.</div>`) : ''}
+
+        <div class="field" style="margin-top:12px;"><label>Observação (opcional)</label>
+          <textarea id="f-tit-obs" rows="2">${esc(d.observacao||'')}</textarea></div>
+
+        ${state.erroTitulo ? `<div class="login-error">${esc(state.erroTitulo)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="titulo">${editando?'Salvar alterações':(nParcelas>1?`Gerar ${nParcelas} parcelas`:'Salvar')}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+
+function ModalBaixa(){
+  const d = editDraft;
+  const t = state.titulos.find(x=>x.id===d._tituloId);
+  if(!t) return '';
+  const saldo = saldoDoTitulo(t);
+  const rat = rateiosDoTitulo(t.id);
+  const valorInformado = Number(d.valor||0);
+  const proporcao = valorInformado>0 && t.valor>0 ? valorInformado / t.valor : 0;
+
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head">
+        <h3>${t.tipo==='pagar'?'Baixar pagamento':'Registrar recebimento'}</h3>
+        <button class="modal-close" data-close="1">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="card" style="background:var(--cinza-bg); padding:12px; margin-bottom:12px;">
+          <strong>${esc(t.descricao)}</strong>
+          <div class="hint">${esc(nomeEntidade(t.entidadeId))} · vence ${dataBr(t.vencimento)}${t.parcelas>1?` · parcela ${t.parcela}/${t.parcelas}`:''}</div>
+          <div class="hint">Valor do título R$ ${fmt(t.valor)}${t.valorBaixado>0?` · já baixado R$ ${fmt(t.valorBaixado)}`:''}</div>
+          <div style="font-size:18px; font-weight:700; margin-top:6px;">Saldo: R$ ${fmt(saldo)}</div>
+        </div>
+
+        <div class="field"><label>Data do pagamento</label>
+          <input id="f-bx-data" type="date" value="${d.data||hojeStr()}"/>
+          <span class="hint">É esta data que vai para o Financeiro. O mês do lançamento é o mês do pagamento.</span></div>
+        <div class="field"><label>Valor pago (R$)</label>
+          <input id="f-bx-valor" type="number" step="0.01" min="0" max="${saldo}" value="${d.valor ?? saldo}" data-recalcula-baixa="1" autocomplete="off"/>
+          <span class="hint">Deixe o saldo inteiro para quitar, ou informe menos para uma baixa parcial.</span></div>
+        <div class="field"><label>Conta bancária</label>
+          <select id="f-bx-conta">
+            <option value="">— Não informada —</option>
+            ${state.contasBancarias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${String(d.contaBancariaId ?? t.contaBancariaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+          </select></div>
+        <div class="field"><label>Observação (opcional)</label>
+          <textarea id="f-bx-obs" rows="2">${esc(d.observacao||'')}</textarea></div>
+
+        ${rat.length>0 && valorInformado>0 ? `
+        <div class="card" style="padding:12px; background:var(--cinza-bg);">
+          <div class="hint" style="margin-bottom:6px;"><strong>Vai gerar ${rat.length} ${rat.length===1?'lançamento':'lançamentos'} no Financeiro:</strong></div>
+          ${rat.map((r,i)=>{
+            const parte = i===rat.length-1
+              ? valorInformado - rat.slice(0,-1).reduce((a,x)=>a+Math.round(valorInformado*(x.valor/t.valor)*100)/100, 0)
+              : Math.round(valorInformado * (r.valor/t.valor) * 100)/100;
+            return `<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} → <strong>R$ ${fmt(parte)}</strong></div>`;
+          }).join('')}
+          ${proporcao<0.999?`<div class="hint" style="margin-top:6px;">Baixa parcial: cada rateio recebe ${fmt(proporcao*100,1)}% do que lhe cabe.</div>`:''}
+        </div>` : ''}
+        ${rat.length===0 ? `<div class="login-error">Este título não tem rateio. Edite o título e defina onde a despesa pesa antes de baixar.</div>` : ''}
+
+        ${state.erroTitulo ? `<div class="login-error">${esc(state.erroTitulo)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="baixa" ${rat.length===0?'disabled':''}>Confirmar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalVerBaixas(){
+  const t = state.titulos.find(x=>x.id===state.modal.tituloId);
+  if(!t) return '';
+  const lista = baixasDoTitulo(t.id).sort((a,b)=>String(b.data).localeCompare(String(a.data)));
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Baixas — ${esc(t.descricao)}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint">Título de R$ ${fmt(t.valor)} · já baixado R$ ${fmt(t.valorBaixado)} · saldo R$ ${fmt(saldoDoTitulo(t))}</p>
+        <table>
+          <thead><tr><th>Data</th><th>Valor</th><th>Conta</th><th></th></tr></thead>
+          <tbody>
+            ${lista.map(b=>`
+              <tr>
+                <td class="mono">${dataBr(b.data)}</td>
+                <td class="mono">R$ ${fmt(b.valor)}</td>
+                <td>${esc(nomeContaBancaria(b.contaBancariaId)) || '<span class="hint">—</span>'}</td>
+                <td>${podeExcluir() ? `<button class="btn-danger-ghost btn-sm" data-del-baixa="${b.id}">Desfazer</button>` : ''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="hint" style="margin-top:10px;">Desfazer uma baixa apaga os lançamentos que ela criou no Financeiro e devolve o saldo ao título.</p>
+      </div>
+      <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
+    </div>
+  </div>`;
+}
+
+/* Gera as parcelas. Mensal soma meses de verdade (nao 30 dias), entao um
+ * boleto que vence dia 31 cai no ultimo dia do mes seguinte em vez de
+ * pular para o mes subsequente. */
+function vencimentoDaParcela(primeiro, i, intervaloDias){
+  const base = new Date(primeiro + 'T12:00:00');
+  if(intervaloDias){
+    base.setDate(base.getDate() + Number(intervaloDias) * i);
+    return base.toISOString().slice(0,10);
+  }
+  const dia = base.getDate();
+  const d = new Date(base.getFullYear(), base.getMonth() + i, 1, 12, 0, 0);
+  const ultimoDiaDoMes = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(dia, ultimoDiaDoMes));
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/* Reparte um valor em n partes de 2 casas cuja soma bate exatamente. O
+ * resto vai na ultima — mesma regra do gatilho do banco, para a tela nunca
+ * mostrar um numero diferente do que o banco vai gravar. */
+function repartir(total, n){
+  const t = Math.round(Number(total)*100);
+  const base = Math.floor(t/n);
+  const partes = Array.from({length:n}, ()=>base);
+  partes[n-1] = t - base*(n-1);
+  return partes.map(c=>c/100);
+}
+
+
+/* Acha a entidade pelo nome ou cria. O indice unico do banco e por
+ * lower(btrim(nome)), entao a comparacao aqui usa a mesma regra — senao a
+ * tela tentaria criar "Agrosaquy" tendo "AGROSAQUY" e tomaria erro. */
+async function acharOuCriarEntidade(nome){
+  const limpo = (nome||'').trim();
+  if(!limpo) return {id:null};
+  const achou = state.entidades.find(e=>e.nome.trim().toLowerCase() === limpo.toLowerCase());
+  if(achou) return {id:achou.id};
+  const {data, error} = await db.from('entidades')
+    .insert({nome: limpo, papel: 'fornecedor', criado_por: state.perfil?.nome || null})
+    .select('id').single();
+  if(error) return {error};
+  return {id: data.id};
+}
+
+async function salvarTitulo(){
+  const d = lerTituloDoFormulario(editDraft);
+  const total = Number(d.valor||0);
+  const nParcelas = Math.max(1, Number(d.parcelas||1));
+
+  const faltando = [];
+  if(!d.descricao) faltando.push('descrição');
+  if(!(total > 0)) faltando.push('valor (maior que zero)');
+  if(!d.vencimento) faltando.push('vencimento');
+  if(!(d.rateios||[]).length) faltando.push('pelo menos um rateio');
+  (d.rateios||[]).forEach((r,i)=>{
+    if(!r.centroCustoId) faltando.push(`centro de custo do rateio ${i+1}`);
+    if(!r.competencia)   faltando.push(`competência do rateio ${i+1}`);
+    if(!(Number(r.valor) > 0)) faltando.push(`valor do rateio ${i+1}`);
+  });
+  const soma = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
+  if(faltando.length===0 && Math.abs(soma - total) > 0.005){
+    faltando.push(`a soma dos rateios (R$ ${fmt(soma)}) tem que fechar com o valor do título (R$ ${fmt(total)})`);
+  }
+  if(faltando.length){
+    state.erroTitulo = 'Preencha: ' + faltando.join('; ') + '.';
+    editDraft = d; render(); return;
+  }
+  state.erroTitulo = '';
+
+  const ent = await acharOuCriarEntidade(d.entidadeNome);
+  if(ent.error){ alert('Não foi possível cadastrar o fornecedor: ' + ent.error.message); return; }
+
+  const comum = {
+    tipo: d.tipo,
+    entidade_id: ent.id,
+    descricao: d.descricao,
+    documento: d.documento || null,
+    forma_pagamento: d.formaPagamento || null,
+    conta_bancaria_id: d.contaBancariaId ? Number(d.contaBancariaId) : null,
+    previsao: d.previsao === true,
+    observacao: d.observacao || null,
+  };
+
+  if(d._editId){
+    // Editar mexe num titulo so. Os rateios sao trocados por inteiro: e
+    // mais simples e mais seguro do que casar linha a linha, e o gatilho
+    // que confere o fechamento e "deferrable", entao a troca acontece
+    // dentro da mesma transacao sem acusar diferenca no meio do caminho.
+    const {error: e1} = await db.from('titulos')
+      .update({...comum, valor: total, vencimento: d.vencimento}).eq('id', d._editId);
+    if(e1){ alert('Não foi possível salvar: ' + e1.message); return; }
+    const {error: e2} = await db.from('titulo_rateios').delete().eq('titulo_id', d._editId);
+    if(e2){ alert('Não foi possível atualizar o rateio: ' + e2.message); return; }
+    const {error: e3} = await db.from('titulo_rateios').insert((d.rateios||[]).map(r=>({
+      titulo_id: d._editId,
+      fazenda_id: r.fazendaId ? Number(r.fazendaId) : null,
+      atividade: r.atividade,
+      centro_custo_id: Number(r.centroCustoId),
+      competencia: r.competencia,
+      valor: Number(r.valor),
+    })));
+    if(e3){ alert('Não foi possível salvar o rateio: ' + e3.message); return; }
+  } else {
+    const grupo = nParcelas > 1
+      ? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2))
+      : null;
+    const valoresParcela = repartir(total, nParcelas);
+
+    for(let p = 0; p < nParcelas; p++){
+      const vp = valoresParcela[p];
+      const {data: novo, error: e1} = await db.from('titulos').insert({
+        ...comum,
+        valor: vp,
+        vencimento: vencimentoDaParcela(d.vencimento, p, d.intervaloDias),
+        parcela: p + 1,
+        parcelas: nParcelas,
+        grupo,
+        criado_por: state.perfil?.nome || null,
+      }).select('id').single();
+      if(e1){ alert('Não foi possível salvar: ' + e1.message); return; }
+
+      // Cada parcela recebe o rateio na mesma proporcao do titulo cheio, e
+      // a ultima linha absorve o arredondamento para a soma fechar exata —
+      // o banco recusa rateio que nao fecha.
+      const rat = d.rateios || [];
+      let acumulado = 0;
+      const linhas = rat.map((r, i)=>{
+        const parte = (i === rat.length - 1)
+          ? Math.round((vp - acumulado) * 100) / 100
+          : Math.round((vp * (Number(r.valor) / total)) * 100) / 100;
+        if(i < rat.length - 1) acumulado += parte;
+        return {
+          titulo_id: novo.id,
+          fazenda_id: r.fazendaId ? Number(r.fazendaId) : null,
+          atividade: r.atividade,
+          centro_custo_id: Number(r.centroCustoId),
+          competencia: r.competencia,
+          valor: parte,
+        };
+      }).filter(l=>l.valor > 0);
+
+      const {error: e2} = await db.from('titulo_rateios').insert(linhas);
+      if(e2){ alert('Não foi possível salvar o rateio: ' + e2.message); return; }
+    }
+  }
+
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+async function salvarBaixa(){
+  const d = editDraft;
+  const t = state.titulos.find(x=>x.id===d._tituloId);
+  if(!t) return;
+  const data  = document.getElementById('f-bx-data')?.value || '';
+  const valor = Number(document.getElementById('f-bx-valor')?.value || 0);
+  const conta = document.getElementById('f-bx-conta')?.value || '';
+  const obs   = document.getElementById('f-bx-obs')?.value.trim() || '';
+
+  if(!data){ state.erroTitulo = 'Informe a data do pagamento.'; render(); return; }
+  if(!(valor > 0)){ state.erroTitulo = 'Informe um valor maior que zero.'; render(); return; }
+  if(valor > saldoDoTitulo(t) + 0.005){
+    state.erroTitulo = `O valor passa do saldo (R$ ${fmt(saldoDoTitulo(t))}).`; render(); return;
+  }
+  state.erroTitulo = '';
+
+  // A tela so insere a baixa. Quem cria os lancamentos e reparte pelo
+  // rateio e o gatilho do banco — replicar isso aqui seria a segunda
+  // implementacao da mesma regra.
+  const {error} = await db.from('titulo_baixas').insert({
+    titulo_id: t.id,
+    data,
+    valor,
+    conta_bancaria_id: conta ? Number(conta) : null,
+    observacao: obs || null,
+    criado_por: state.perfil?.nome || null,
+  });
+  if(error){ alert('Não foi possível registrar a baixa: ' + error.message); return; }
+
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+function rateioVazio(){
+  return {fazendaId:'', atividade:'geral', centroCustoId:'', competencia: mesAtualStr(), valor:''};
+}
+
+
+function ligarEventosContas(){
+  document.querySelectorAll('[data-aba-contas]').forEach(el=>{
+    el.onclick = ()=>{ state.abaContas = el.dataset.abaContas; render(); };
+  });
+  document.querySelectorAll('[data-filtro-contas]').forEach(el=>{
+    el.onclick = ()=>{ state.filtroContas = el.dataset.filtroContas; render(); };
+  });
+  const buscaContas = document.querySelector('[data-search-contas]');
+  if(buscaContas){
+    buscaContas.oninput = ()=>{ state.searchContas = buscaContas.value; render();
+      const novo = document.querySelector('[data-search-contas]');
+      if(novo){ novo.focus(); novo.setSelectionRange(novo.value.length, novo.value.length); } };
+  }
+  document.querySelectorAll('[data-novo-titulo]').forEach(el=>{
+    el.onclick = ()=>{
+      state.erroTitulo = '';
+      editDraft = {tipo: el.dataset.novoTitulo, valor:'', vencimento: hojeStr(), parcelas:1,
+                   intervaloDias:'', previsao:false, rateios:[rateioVazio()]};
+      state.modal = {type:'titulo'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-edit-titulo]').forEach(el=>{
+    el.onclick = ()=>{
+      const t = state.titulos.find(x=>x.id===Number(el.dataset.editTitulo));
+      if(!t) return;
+      state.erroTitulo = '';
+      const rat = rateiosDoTitulo(t.id).map(r=>({
+        fazendaId: r.fazendaId ?? '', atividade: r.atividade, centroCustoId: r.centroCustoId,
+        competencia: r.competencia, valor: r.valor,
+      }));
+      editDraft = {
+        _editId: t.id, tipo: t.tipo, entidadeNome: nomeEntidade(t.entidadeId)==='—'?'':nomeEntidade(t.entidadeId),
+        descricao: t.descricao, documento: t.documento, valor: t.valor, vencimento: t.vencimento,
+        parcelas: t.parcelas, intervaloDias:'', formaPagamento: t.formaPagamento,
+        contaBancariaId: t.contaBancariaId ?? '', previsao: t.previsao, observacao: t.observacao,
+        rateios: rat.length ? rat : [rateioVazio()],
+      };
+      state.modal = {type:'titulo'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-baixar-titulo]').forEach(el=>{
+    el.onclick = ()=>{
+      const t = state.titulos.find(x=>x.id===Number(el.dataset.baixarTitulo));
+      if(!t) return;
+      state.erroTitulo = '';
+      editDraft = {_tituloId: t.id, data: hojeStr(), valor: saldoDoTitulo(t),
+                   contaBancariaId: t.contaBancariaId ?? '', observacao:''};
+      state.modal = {type:'baixa'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-ver-baixas]').forEach(el=>{
+    el.onclick = ()=>{ state.modal = {type:'verBaixas', tituloId: Number(el.dataset.verBaixas)}; render(); };
+  });
+  document.querySelectorAll('[data-del-titulo]').forEach(el=>{
+    el.onclick = async ()=>{
+      const t = state.titulos.find(x=>x.id===Number(el.dataset.delTitulo));
+      if(!t) return;
+      const temBaixa = baixasDoTitulo(t.id).length > 0;
+      const aviso = temBaixa
+        ? `"${t.descricao}" já tem baixa registrada. Excluir o título apaga também os lançamentos que a baixa criou no Financeiro. Continuar?`
+        : `Excluir "${t.descricao}"? Essa ação não pode ser desfeita.`;
+      if(!confirm(aviso)) return;
+      const {error} = await db.from('titulos').delete().eq('id', t.id);
+      if(error){ alert('Não foi possível excluir: ' + error.message); return; }
+      await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-del-baixa]').forEach(el=>{
+    el.onclick = async ()=>{
+      if(!confirm('Desfazer esta baixa? Os lançamentos que ela criou no Financeiro serão apagados.')) return;
+      const {error} = await db.from('titulo_baixas').delete().eq('id', Number(el.dataset.delBaixa));
+      if(error){ alert('Não foi possível desfazer: ' + error.message); return; }
+      state.modal = null;
+      await loadAll();
+    };
+  });
+
+  // ---- dentro do formulário de título ----
+  document.querySelectorAll('[data-recalcula-titulo]').forEach(el=>{
+    el.onchange = ()=>{ editDraft = lerTituloDoFormulario(editDraft); render(); };
+  });
+  const addRateio = document.querySelector('[data-add-rateio]');
+  if(addRateio){
+    addRateio.onclick = ()=>{
+      const d = lerTituloDoFormulario(editDraft);
+      // O rateio novo já vem com o que falta para fechar: quase sempre é o
+      // valor que a pessoa ia digitar de qualquer jeito.
+      const falta = Math.round((Number(d.valor||0) - (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0),0)) * 100)/100;
+      d.rateios = [...(d.rateios||[]), {...rateioVazio(), valor: falta > 0 ? falta : ''}];
+      editDraft = d; render();
+    };
+  }
+  document.querySelectorAll('[data-remove-rateio]').forEach(el=>{
+    el.onclick = ()=>{
+      const d = lerTituloDoFormulario(editDraft);
+      d.rateios = (d.rateios||[]).filter((_,i)=> i !== Number(el.dataset.removeRateio));
+      editDraft = d; render();
+    };
+  });
+  const bxValor = document.querySelector('[data-recalcula-baixa]');
+  if(bxValor){
+    bxValor.onchange = ()=>{
+      editDraft = {...editDraft, valor: bxValor.value,
+                   data: document.getElementById('f-bx-data')?.value || editDraft.data};
+      render();
+    };
+  }
+}
+
 function PageFinanceiro(){
   const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos'],['custoha','Custo por hectare']];
   if(state.abaFinanceiro==='custoha'){
@@ -2716,6 +3526,9 @@ function Empty(title, sub){
 function Modal(){
   if(state.modal.type==='fazenda') return ModalFazenda();
   if(state.modal.type==='lancamento') return ModalLancamento();
+  if(state.modal.type==='titulo') return ModalTitulo();
+  if(state.modal.type==='baixa') return ModalBaixa();
+  if(state.modal.type==='verBaixas') return ModalVerBaixas();
   if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
   if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
@@ -2989,6 +3802,8 @@ function attachEvents(){
       state.modal = {type:'lancamento'}; render();
     };
   });
+  ligarEventosContas();
+
   document.querySelectorAll('[data-del-lancamento]').forEach(el=>{
     el.onclick = async ()=>{
       const l = state.lancamentos.find(x=>x.id===Number(el.dataset.delLancamento));
@@ -3303,6 +4118,10 @@ function attachEvents(){
         } else {
           ({error} = await db.from('lancamentos_financeiros').insert(row));
         }
+      } else if(type==='titulo'){
+        await salvarTitulo(); return;
+      } else if(type==='baixa'){
+        await salvarBaixa(); return;
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;
