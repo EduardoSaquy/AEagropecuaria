@@ -435,7 +435,12 @@ function lancamentoToRow(l){
           // das receitas da lavoura.
           quantidade: l.quantidade===undefined ? undefined
                       : (l.quantidade===''||l.quantidade==null ? null : numDecimal(l.quantidade)),
-          unidade:    l.unidade===undefined ? undefined : (l.unidade || null)};
+          unidade:    l.unidade===undefined ? undefined : (l.unidade || null),
+          // Qual cereal. Mesma regra do undefined: a tela so mostra este
+          // campo para graos, e editar um lancamento de outra atividade nao
+          // pode apagar a cultura de um lancamento que ja a tinha.
+          cultura_id: l.culturaId===undefined ? undefined
+                      : (l.culturaId==='' || l.culturaId==null ? null : Number(l.culturaId))};
 }
 /* O plano de contas do Conag é hierárquico, e essa hierarquia já está
  * gravada — só não era lida por nenhum app:
@@ -522,7 +527,7 @@ async function loadAll(){
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
     fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id')),
-    db.from('culturas').select('id, frente'),
+    db.from('culturas').select('id, nome, frente, ativo'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
@@ -3454,6 +3459,28 @@ function unidadesPara(atividade){
 function unidadePadrao(atividade){ return unidadesPara(atividade)[0]; }
 function unidadeCurta(u){ return UNIDADES[u]?.curto || u || ''; }
 
+/* Culturas de cereais, para o lancamento dizer QUAL cereal.
+ *
+ * Cultura e uma dimensao propria, nao um centro de custo. Se soja, milho e
+ * sorgo virassem centros, o ADUBOS E FERTILIZANTES teria que virar ADUBOS
+ * DA SOJA, ADUBOS DO MILHO, ADUBOS DO SORGO - e o mesmo para combustivel,
+ * mao de obra e manutencao. O plano de contas recem-limpo de 71 para 63
+ * contas multiplicaria.
+ *
+ * Separados, os dois se cruzam: quanto de adubo foi para a soja. Juntos,
+ * so respondendo com uma conta para cada combinacao.
+ */
+function culturasDeCereais(){
+  return state.culturas
+    .filter(c => c.frente==='graos' && c.ativo!==false)
+    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'));
+}
+function nomeCultura(id){
+  if(!id) return '';
+  const c = state.culturas.find(x=>String(x.id)===String(id));
+  return c ? (c.nome||'') : '';
+}
+
 /* Na venda de animais a quantidade nao e digitada: ela sai da forma de
  * venda, senao existiriam dois numeros dizendo quanto foi vendido.
  *   abate    arrobas de carcaca
@@ -3767,7 +3794,9 @@ function PageFinanceiro(){
             <td>${rotuloAtividade(l.atividade)}</td>
             <td>${l.fazendaId ? esc(nomeFazendaLanc(l.fazendaId)) : `<span class="hint">Geral</span>`}</td>
             <td>${esc(nomeCentroCusto(l.centroCustoId))}</td>
-            <td><strong>${esc(l.descricao)}</strong>${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}</td>
+            <td><strong>${esc(l.descricao)}</strong>
+              ${l.culturaId?`<div class="hint" style="margin-top:2px;"><span class="pill pill-cat">${esc(nomeCultura(l.culturaId))}</span></div>`:''}
+              ${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}</td>
             ${ehDespesa?`<td>${l.atividade==='pecuaria' ? areasLabel(l.areas) : '—'}</td>`:''}
             <td class="mono">R$ ${fmt(l.valor)}</td>
             <td style="display:flex; gap:6px;">
@@ -3807,6 +3836,7 @@ function lerLancamentoDoFormulario(base){
     ehVenda:       document.getElementById('f-ehvenda') ? document.getElementById('f-ehvenda').checked : (base.ehVenda===true),
     quantidade:    document.getElementById('f-qtdlanc') ? v('f-qtdlanc') : base.quantidade,
     unidade:       document.getElementById('f-unidadelanc') ? v('f-unidadelanc') : base.unidade,
+    culturaId:     document.getElementById('f-culturalanc') ? v('f-culturalanc') : base.culturaId,
   };
 }
 // Le lancamento E venda. O valor da venda e sempre recalculado dos campos
@@ -3880,6 +3910,14 @@ function ModalLancamento(){
           </select>
           <span class="hint">Cadastre novos centros de custo no AE Lavoura, em Cadastros.</span>
         </div>
+        ${d.atividade==='graos' ? `
+        <div class="field"><label>Cultura</label>
+          <select id="f-culturalanc">
+            <option value="" ${!d.culturaId?'selected':''}>— Todas / não específico —</option>
+            ${culturasDeCereais().map(c=>`<option value="${c.id}" ${String(d.culturaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+          </select>
+          <span class="hint">Qual cereal. Fica separado do centro de custo de propósito: assim dá para cruzar os dois — quanto de adubo foi para a soja — sem precisar de uma conta para cada combinação.</span>
+        </div>` : ''}
         <div class="field"><label>Descrição</label><input id="f-descricaolanc" value="${esc(d.descricao||'')}" placeholder="${ehReceita?'Ex: Venda de boi gordo':'Ex: Mão de obra do curral'}" autocomplete="off"/></div>
         <div class="field"><label>Valor (R$)</label>
           <input id="f-valorlanc" type="number" step="0.01" min="0"
@@ -3901,7 +3939,6 @@ function ModalLancamento(){
           </div>
           <span class="hint">Uma marcada leva o valor inteiro; duas ou três rateiam por número de animais entre as marcadas; nenhuma rateia entre as três.</span>
         </div>` : ''}
-        ${ehReceita && !(ehPecuaria && d.ehVenda) ? BlocoQuantidade(d) : ''}
         ${ehReceita && ehPecuaria ? `
         <div class="field">
           <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
