@@ -287,6 +287,79 @@ with sync_playwright() as pw:
     conf("data da parcela 2" in page.evaluate("() => state.erroTitulo"),
          "e diz qual parcela esta sem data", page.evaluate("() => state.erroTitulo"))
 
+    # ---- valor de cada parcela e editavel (entrada / balao) ----
+    # Pedido do Eduardo: "as vezes tem entrada ou pagamento maior na
+    # ultima". Vem dividido por igual, mas tem que dar para editar.
+    def abrir_valores(total="60000", parc=6, rat=None):
+        page.evaluate("""(a) => { state.page='contas'; state.erroTitulo='';
+          editDraft={tipo:'pagar', descricao:'Trator', valor:a.total, vencimento:'2026-08-31',
+            parcelas:a.parc, intervaloTipo:'mensal', intervaloDias:'', previsao:false,
+            rateios: a.rat || [{fazendaId:'',atividade:'cana',centroCustoId:90,
+                                competencia:'2026-08',valor:Number(a.total)}]};
+          state.modal={type:'titulo'}; render(); }""",
+          {"total": total, "parc": parc, "rat": rat})
+        page.wait_for_timeout(300)
+    valores = lambda: [float(v or 0) for v in page.evaluate(
+        "() => [...document.querySelectorAll('[id^=f-tit-valorparc-]')].map(e=>e.value)")]
+
+    abrir_valores()
+    conf(valores() == [10000.0]*6, "vem dividido por igual", str(valores()))
+
+    preencher(page, "#f-tit-valorparc-0", "20000")
+    conf("As parcelas somam" in page.inner_text(".modal"),
+         "avisa quando as parcelas param de somar o total")
+
+    page.click("[data-distribuir-resto]"); page.wait_for_timeout(300)
+    conf(valores() == [20000.0, 8000.0, 8000.0, 8000.0, 8000.0, 8000.0],
+         "entrada de 20.000 e o resto dividido nas 5 seguintes", str(valores()))
+
+    abrir_valores()
+    preencher(page, "#f-tit-valorparc-5", "30000")
+    page.click("[data-distribuir-resto]"); page.wait_for_timeout(300)
+    conf(valores() == [6000.0]*5 + [30000.0],
+         "balao de 30.000 na ultima e o resto dividido nas 5 primeiras", str(valores()))
+
+    abrir_valores("1000.01", 3)
+    preencher(page, "#f-tit-valorparc-0", "500")
+    page.click("[data-distribuir-resto]"); page.wait_for_timeout(300)
+    conf(round(sum(valores()), 2) == 1000.01,
+         "com centavo quebrado a soma ainda fecha exata", str(valores()))
+
+    # parcelas que nao somam o total NAO podem ser salvas
+    abrir_valores()
+    preencher(page, "#f-tit-valorparc-0", "20000")
+    page.evaluate("() => { window.__ESCRITAS__ = []; }")
+    page.click("[data-save='titulo']"); page.wait_for_timeout(500)
+    conf(page.evaluate("() => window.__ESCRITAS__.filter(e=>e.tabela==='titulos').length") == 0,
+         "parcelas que nao somam o total nao sao salvas")
+    conf("as parcelas somam" in page.evaluate("() => state.erroTitulo"),
+         "e o erro diz o quanto sobrou ou faltou",
+         page.evaluate("() => state.erroTitulo"))
+
+    # PIOR CASO: parcelas desiguais + rateio quebrado.
+    # O rateio de CADA parcela tem que fechar com o valor DAQUELA parcela,
+    # senao a restricao do banco recusa a insercao.
+    abrir_valores("1000.01", 3, rat=[
+        {"fazendaId": "", "atividade": "cana", "centroCustoId": 90,
+         "competencia": "2026-08", "valor": 333.34},
+        {"fazendaId": "", "atividade": "pecuaria", "centroCustoId": 91,
+         "competencia": "2026-08", "valor": 666.67}])
+    preencher(page, "#f-tit-valorparc-0", "500")
+    page.click("[data-distribuir-resto]"); page.wait_for_timeout(300)
+    page.evaluate("() => { window.__ESCRITAS__ = []; }")
+    page.click("[data-save='titulo']"); page.wait_for_timeout(900)
+    esc = page.evaluate("() => window.__ESCRITAS__")
+    parcelas = [float(e["v"]["valor"]) for e in esc if e["tabela"] == "titulos"]
+    grupos = [e["v"] for e in esc if e["tabela"] == "titulo_rateios"]
+    conf(round(sum(parcelas), 2) == 1000.01,
+         "parcelas desiguais somam o total ao salvar", str(parcelas))
+    conf(len(grupos) == len(parcelas), "cada parcela recebeu seu rateio")
+    for i, g in enumerate(grupos):
+        soma = round(sum(float(l["valor"]) for l in g), 2)
+        conf(soma == parcelas[i],
+             f"rateio da parcela {i+1} fecha com o valor dela",
+             f"rateio somou {soma}, parcela vale {parcelas[i]}")
+
     # ---- os cartoes de rateio nao podem ser esmagados ----
     # .modal-body e flex-column e .card tem overflow-x:auto: um item flex
     # com rolagem propria resolve min-height como 0 e o flex-shrink esmaga
