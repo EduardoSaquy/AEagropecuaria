@@ -45,15 +45,17 @@ order by valor desc;
 -- ------------------------------------------------------------
 -- 2. PERMISSOES: quem hoje enxerga o financeiro
 -- ------------------------------------------------------------
+-- as permissoes ficam em profiles, nao em funcionarios
 select
   nome,
   usuario,
   papel,
-  permissoes ->> 'matriz_financeiro' as financeiro_matriz,
-  permissoes ->> 'pec_financeiro'    as financeiro_pecuaria,
-  permissoes ->> 'cana_financeiro'   as financeiro_cana,
-  permissoes ->> 'cereais_financeiro' as financeiro_cereais
-from funcionarios
+  permissoes ->> 'matriz_financeiro'   as financeiro_matriz,
+  permissoes ->> 'pec_financeiro'      as financeiro_pecuaria,
+  permissoes ->> 'cana_financeiro'     as financeiro_cana,
+  permissoes ->> 'cereais_financeiro'  as financeiro_cereais,
+  ativo
+from profiles
 order by papel, nome;
 
 
