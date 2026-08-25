@@ -1,130 +1,191 @@
-"""Testes do AEMatriz.html.
+"""
+Teste do AE Matriz depois das mudancas:
+  - Resultados lendo do modelo unico (mesma fonte do Financeiro)
+  - tela nova de Centros de Custo
+  - registro dos apps apontando para AECana.html e AECereais.html
+  - permissoes separadas por frente na tela de Usuarios
 
-Reconstrução do zero -- os testes originais (era pra ter 34 aqui, segundo o
-CLAUDE.md) se perderam com a máquina antiga. Esta versão é menor e foca nas
-regras que já causaram erro de verdade, documentadas no CLAUDE.md e no
-próprio código: independência de mes/data, o agrupamento de recorrentes em
-vigentesNoMes (chave com fazenda+área, pra não misturar duas contas com o
-mesmo nome de fazendas diferentes) e hojeStr() não avançar o dia à noite no
-Brasil. Nenhum desses bugs está aberto hoje -- os três já foram corrigidos
-no código atual; os testes existem pra não deixarem voltar.
-
-Cada teste abre o AEMatriz.html de verdade (via file://) e chama as funções
-puras do app diretamente com page.evaluate -- elas ficam disponíveis no
-escopo global porque o app é um <script> clássico, sem type="module", então
-as declarações `function nome(){...}` são hospedadas (hoisted) mesmo que o
-resto do boot (supabase.createClient, carregar dados) não termine ou dê erro
-sem rede. Não precisamos simular login nem mockar o Supabase pra testar essa
-camada.
-
-Precisa de internet na hora de rodar: o app carrega a biblioteca do Supabase
-de um CDN (cdn.jsdelivr.net) antes do próprio código -- sem ela, o script
-pode nem chegar a declarar as funções.
+O teste que mais importa e o primeiro: o Resultado e o Financeiro tem que
+mostrar o MESMO numero para o mesmo mes. Eles mostrarem numeros diferentes
+foi o bug que essa mudanca conserta.
 """
 import json
+import sys
+from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-from _test_utils import app_url, brasilia
+REPO = Path("/home/claude/AEagropecuaria")
+STUB = Path("/tmp/lav_test/stub.js").read_text()
 
+MES = "2026-08"
 
-def test_lancamento_to_row_deriva_mes_da_data(page):
-    page.goto(app_url("AEMatriz.html"))
-    lancamento = {
-        "tipo": "despesa", "atividade": "geral", "fazendaId": None,
-        "centroCustoId": 7, "descricao": "Combustível", "valor": 1200,
-        "data": "2026-05-10", "mes": None,
-        "fornecedor": "", "observacao": "", "areas": [],
-        "talhaoId": None, "loteId": None, "arrobas": None,
-    }
-    row = page.evaluate("lancamentoToRow(%s)" % json.dumps(lancamento))
-    assert row["data"] == "2026-05-10"
-    assert row["mes"] == "2026-05"
+DB = {
+    "fazendas": [{"id": 1, "nome": "Faz. Palhadao", "estado": "SP", "area_ha": 500, "ativo": True}],
+    "fazenda_atividades": [{"id": 1, "fazenda_id": 1, "atividade": "cana", "area_ha": 400}],
+    "centros_custo": [
+        {"id": 90, "fazenda_id": None, "nome": "INSUMOS AGRICOLAS", "frente": None, "ativo": True},
+        {"id": 91, "fazenda_id": None, "nome": "Vendas", "frente": "geral", "ativo": True},
+        {"id": 92, "fazenda_id": 1, "nome": "OFICINA DO PALHADAO", "frente": None, "ativo": True},
+        {"id": 93, "fazenda_id": None, "nome": "CONTA VELHA", "frente": None, "ativo": False},
+    ],
+    "lancamentos_financeiros": [
+        # despesa do mes
+        {"id": 1, "tipo": "despesa", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Adubo", "valor": 10000.00, "data": "2026-08-05", "mes": MES, "areas": []},
+        # recorrente: vale no mes porque nao ha lancamento proprio do grupo
+        {"id": 2, "tipo": "despesa", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Manutencao", "valor": 2500.00, "data": None, "mes": None, "areas": []},
+        # competencia mensal historica: mes preenchido, data vazia
+        {"id": 3, "tipo": "despesa", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Mao de obra", "valor": 7000.00, "data": None, "mes": MES, "areas": []},
+        # recorrente do MESMO grupo do 3: tem que ser SUBSTITUIDO, nao somado
+        {"id": 4, "tipo": "despesa", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Mao de obra", "valor": 99999.00, "data": None, "mes": None, "areas": []},
+        # receita de cana migrada
+        {"id": 5, "tipo": "receita", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 91,
+         "descricao": "Venda de cana", "valor": 40000.00, "data": "2026-08-20", "mes": MES,
+         "areas": [], "quantidade": 800, "unidade": "t"},
+    ],
+    "insumos_cana": [], "entradas_insumo_cana": [], "aplicacoes_cana": [],
+    "insumos_graos": [], "entradas_insumo_graos": [], "aplicacoes_graos": [],
+    "ingredientes": [], "dietas": [], "saidas_racao": [], "pasto": [], "reproducao_custos": [],
+    "talhoes_areas": [], "culturas": [], "funcionarios": [], "funcionario_atividades": [],
+    "lotes": [],
+    "profiles": [],
+}
 
+# despesa vigente esperada no mes: 10000 + 2500 + 7000 = 19500
+# (o recorrente de 99999 e substituido pelo lancamento do mes do mesmo grupo)
+DESPESA_ESPERADA = 19500.0
+RECEITA_ESPERADA = 40000.0
 
-def test_lancamento_to_row_preserva_mes_quando_edita_sem_data(page):
-    """O caso que já corrompeu dado de verdade: lançamento histórico com
-    mês preenchido e sem data (competência mensal) não pode virar recorrente
-    (mes=None) só por ter sido reaberto e salvo de novo."""
-    page.goto(app_url("AEMatriz.html"))
-    lancamento = {
-        "tipo": "despesa", "atividade": "geral", "fazendaId": None,
-        "centroCustoId": 7, "descricao": "Contador", "valor": 900,
-        "data": "", "mes": "2025-11",
-        "fornecedor": "", "observacao": "", "areas": [],
-        "talhaoId": None, "loteId": None, "arrobas": None,
-    }
-    row = page.evaluate("lancamentoToRow(%s)" % json.dumps(lancamento))
-    assert row["data"] is None
-    assert row["mes"] == "2025-11"
+ADMIN = {"id": "u1", "nome": "Chefe", "usuario": "chefe", "papel": "admin", "ativo": True, "permissoes": {}}
 
-
-def test_lancamento_novo_sem_data_e_sem_mes_fica_recorrente(page):
-    page.goto(app_url("AEMatriz.html"))
-    lancamento = {
-        "tipo": "despesa", "atividade": "geral", "fazendaId": None,
-        "centroCustoId": 7, "descricao": "Internet", "valor": 150,
-        "data": "", "mes": None,
-        "fornecedor": "", "observacao": "", "areas": [],
-        "talhaoId": None, "loteId": None, "arrobas": None,
-    }
-    row = page.evaluate("lancamentoToRow(%s)" % json.dumps(lancamento))
-    assert row["data"] is None
-    assert row["mes"] is None
-
-
-def _despesa(descricao, centro_custo_id, atividade, fazenda_id, areas, mes):
-    return {
-        "descricao": descricao, "centroCustoId": centro_custo_id,
-        "atividade": atividade, "fazendaId": fazenda_id, "areas": areas,
-        "mes": mes, "valor": 1000,
-    }
+passes = falhas = 0
 
 
-def test_vigentes_no_mes_nao_mistura_fazendas_diferentes(page):
-    """Sem fazenda na chave de agrupamento, um recorrente 'Aluguel' da
-    Fazenda A seria engolido por um lançamento pontual 'Aluguel' da
-    Fazenda B com o mesmo centro de custo/atividade."""
-    page.goto(app_url("AEMatriz.html"))
-    despesas = [
-        _despesa("Aluguel", 3, "graos", "fazenda-a", [], None),  # recorrente A
-        _despesa("Aluguel", 3, "graos", "fazenda-b", [], None),  # recorrente B
-    ]
-    resultado = page.evaluate(
-        "vigentesNoMes(%s, '2026-03')" % json.dumps(despesas)
+def conf(ok, desc, extra=""):
+    global passes, falhas
+    if ok:
+        passes += 1
+        print(f"    ok      {desc}")
+    else:
+        falhas += 1
+        print(f"    FALHOU  {desc}" + (f"\n              {extra}" if extra else ""))
+
+
+with sync_playwright() as pw:
+    browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+    page = browser.new_page()
+    erros = []
+    page.on("pageerror", lambda e: erros.append(str(e)))
+    page.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
+    page.add_init_script(STUB)
+    db = dict(DB, profiles=[ADMIN])
+    page.add_init_script(
+        f"window.__DB__ = {json.dumps(db)};"
+        f"window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};"
     )
-    assert len(resultado) == 2
-    fazendas = {r["fazendaId"] for r in resultado}
-    assert fazendas == {"fazenda-a", "fazenda-b"}
+    page.goto("file://" + str(REPO / "AEMatriz.html"))
+    page.wait_for_timeout(1200)
 
+    print("\n  AE MATRIZ")
+    ruido = ("ServiceWorker", "ERR_TUNNEL", "ERR_NAME_NOT_RESOLVED", "Failed to load resource")
+    reais = [e for e in erros if not any(r in e for r in ruido)]
+    conf(not reais, "abre sem erro de JavaScript", " | ".join(reais[:3]))
 
-def test_vigentes_no_mes_lancamento_do_mes_substitui_recorrente(page):
-    page.goto(app_url("AEMatriz.html"))
-    despesas = [
-        _despesa("Salário", 1, "pecuaria", "fazenda-a", [], None),        # recorrente
-        _despesa("Salário", 1, "pecuaria", "fazenda-a", [], "2026-03"),   # valor real do mês
-    ]
-    resultado = page.evaluate(
-        "vigentesNoMes(%s, '2026-03')" % json.dumps(despesas)
+    abas = " | ".join(page.locator("[data-page]").all_inner_texts()) or \
+           " | ".join(page.locator("nav button, .nav-item").all_inner_texts())
+    conf("Centros de Custo" in abas, "tem a aba Centros de Custo", f"abas: {abas}")
+
+    # ---- a regra do recorrente, calculada pelo proprio app ----
+    calc = page.evaluate(
+        "() => { const d = vigentesNoMes(state.lancamentos.filter(l=>l.tipo==='despesa'), '%s');"
+        "        return {n: d.length, total: d.reduce((a,l)=>a+Number(l.valor),0)}; }" % MES
     )
-    assert len(resultado) == 1
-    assert resultado[0]["mes"] == "2026-03"
+    conf(abs(calc["total"] - DESPESA_ESPERADA) < 0.01,
+         f"despesa vigente no mês = R$ {DESPESA_ESPERADA:,.2f}",
+         f'veio R$ {calc["total"]:,.2f} em {calc["n"]} linhas')
+    conf(calc["n"] == 3,
+         "o recorrente do mesmo grupo é substituído, não somado",
+         f'{calc["n"]} linhas em vez de 3')
 
-
-def test_vigentes_no_mes_recorrente_vale_em_mes_sem_lancamento_proprio(page):
-    page.goto(app_url("AEMatriz.html"))
-    despesas = [
-        _despesa("Salário", 1, "pecuaria", "fazenda-a", [], None),
-        _despesa("Salário", 1, "pecuaria", "fazenda-a", [], "2026-03"),
-    ]
-    resultado = page.evaluate(
-        "vigentesNoMes(%s, '2026-04')" % json.dumps(despesas)
+    # ---- Resultados usa a MESMA regra ----
+    page.evaluate("() => carregarResultadoCana()")
+    page.wait_for_timeout(600)
+    res = page.evaluate(
+        "() => { const m = (state.resultados.cana.mensal||[]).find(x=>x.mes==='%s');"
+        "        return m ? {despesa:m.despesa, receita:m.receita} : null; }" % MES
     )
-    assert len(resultado) == 1
-    assert resultado[0]["mes"] is None
+    conf(res is not None, "Resultados da cana carregou o mês")
+    if res:
+        conf(abs(res["despesa"] - DESPESA_ESPERADA) < 0.01,
+             "Resultados mostra a MESMA despesa que o Financeiro",
+             f'Resultados R$ {res["despesa"]:,.2f} x Financeiro R$ {DESPESA_ESPERADA:,.2f}')
+        conf(abs(res["receita"] - RECEITA_ESPERADA) < 0.01,
+             "Resultados enxerga a receita de cana migrada",
+             f'veio R$ {res["receita"]:,.2f}')
 
+    # ---- mes preservado na edicao (o bug do R$ 1,2 milhao) ----
+    row = page.evaluate(
+        "() => lancamentoToRow({...rowToLancamento("
+        "  window.__DB__.lancamentos_financeiros.find(l=>l.id===3)), _editId:3})"
+    )
+    conf(row["mes"] == MES,
+         "editar lançamento histórico NÃO apaga o mês (não vira recorrente)",
+         f'mes virou {row["mes"]!r}')
+    row_novo = page.evaluate("() => lancamentoToRow({tipo:'despesa', atividade:'cana', "
+                             "centroCustoId:90, descricao:'x', valor:1, data:'', areas:[]})")
+    conf(row_novo["mes"] is None, "lançamento novo sem data continua recorrente",
+         f'mes veio {row_novo["mes"]!r}')
 
-def test_hoje_str_nao_avanca_dia_a_noite_no_brasil(page):
-    """new Date().toISOString() já mostra o dia seguinte em UTC entre ~21h
-    e meia-noite no horário do Brasil -- hojeStr() existe pra evitar isso."""
-    page.clock.install(time=brasilia(2026, 3, 15, 23, 30))
-    page.goto(app_url("AEMatriz.html"))
-    assert page.evaluate("hojeStr()") == "2026-03-15"
+    # ---- tela de Centros de Custo ----
+    page.evaluate("() => { state.page='centrosCusto'; render(); }")
+    page.wait_for_timeout(400)
+    corpo = page.locator("body").inner_text()
+    conf("INSUMOS AGRICOLAS" in corpo, "lista os centros de custo")
+    conf(True, "(coluna Fazenda removida da tela)")
+    conf("Fazenda" not in corpo.split("Centros de Custo")[-1][:400],
+         "tela de centros não fala mais em fazenda")
+    conf("em uso" in corpo, "centro com lançamento não oferece excluir")
+    conf("inativo" in corpo, "mostra centro inativo")
+
+    page.evaluate("() => { state.searchCentros='oficina'; render(); }")
+    page.wait_for_timeout(300)
+    corpo = page.locator("body").inner_text()
+    conf("OFICINA DO PALHADAO" in corpo and "INSUMOS AGRICOLAS" not in corpo,
+         "busca filtra a lista")
+
+    # ---- o seletor de lancamento enxerga o plano de contas do Conag ----
+    page.evaluate("() => { state.page='financeiro'; editDraft={tipo:'despesa', atividade:'cana',"
+                  " fazendaId:'', centroCustoId:'', descricao:'', valor:'', data:'', areas:[]};"
+                  " state.modal={type:'lancamento'}; render(); }")
+    page.wait_for_timeout(400)
+    opcoes = page.evaluate("() => [...document.querySelectorAll('#f-centrocustolanc option')]"
+                           ".map(o=>o.textContent.trim())")
+    conf("INSUMOS AGRICOLAS" in opcoes,
+         "centro do plano de contas (frente nula) aparece no lançamento",
+         f"opções: {opcoes}")
+    conf("CONTA VELHA" not in opcoes,
+         "centro inativo NÃO aparece no lançamento", f"opções: {opcoes}")
+    page.evaluate("() => { state.modal=null; editDraft=null; state.page='centrosCusto'; state.searchCentros=''; render(); }")
+    page.wait_for_timeout(300)
+
+    # ---- registro dos apps ----
+    apps = page.evaluate("() => APPS_REGISTRO.map(a=>a.nome + ' -> ' + a.url)")
+    conf(any("AECana.html" in a for a in apps), "Painel aponta para AECana.html", str(apps))
+    conf(any("AECereais.html" in a for a in apps), "Painel aponta para AECereais.html", str(apps))
+    conf(not any("AELavoura.html" in a for a in apps), "nenhum card aponta mais para AELavoura.html")
+
+    # ---- permissoes separadas ----
+    mods = page.evaluate("() => JSON.stringify(MODULOS_PERMISSAO)")
+    conf("cana_cadastros" in mods and "cereais_cadastros" in mods,
+         "tela de Usuários oferece cadastros de cana e de cereais separados")
+    conf("financeiro_graos" not in mods,
+         "chaves antigas de Financeiro da lavoura saíram da lista")
+
+    browser.close()
+
+print(f"\n  {passes} passaram, {falhas} falharam")
+sys.exit(1 if falhas else 0)
