@@ -9,6 +9,14 @@ def app_url(nome_arquivo):
     return (REPO / nome_arquivo).as_uri()
 
 
+@pytest.fixture(autouse=True)
+def dispensa_alertas(page):
+    # Os apps chamam alert() em vários caminhos de erro (ex.: falha ao
+    # carregar dados). Sem isso, um alert() disparado durante o boot da
+    # página trava a suíte inteira esperando um clique que nunca vem.
+    page.on("dialog", lambda dialog: dialog.dismiss())
+
+
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
     # Os apps assumem fuso do Brasil pra "hoje" (ver hojeStr/mesAtualStr em
