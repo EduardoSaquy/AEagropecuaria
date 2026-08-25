@@ -819,6 +819,26 @@ function render(){
     ${modalHtml}
     ${!semModulos ? FabMenu() : ''}
   `;
+
+  // EXCLUIR E SO DE ADMIN OU PROPRIETARIO, em todo o app - a mesma regra
+  // que o banco aplica em pode_excluir().
+  //
+  // Varre o DOM depois de montar, em vez de condicionar cada botao um a
+  // um. Sao dezenas de botoes espalhados; um esquecido viraria um clique
+  // que NAO da erro nenhum: a RLS nega o delete em silencio (apaga zero
+  // linhas sem reclamar), a tela recarrega e o registro continua la. A
+  // pessoa clica de novo achando que nao pegou.
+  //
+  // As linhas que o app apaga por conta propria (movimentos ao editar uma
+  // saida de racao, desfazer um manejo que falhou) nao passam por botao,
+  // entao continuam funcionando para quem nao e dono.
+  if(!podeExcluir()){
+    root.querySelectorAll('[class*="danger"], button, a').forEach(el=>{
+      for(const attr of el.attributes){
+        if(attr.name.startsWith('data-del-')){ el.remove(); return; }
+      }
+    });
+  }
   attachEvents();
   ultimaPaginaRenderizada = state.page;
   // Mesma página (ex: expandiu um grupo, abriu um modal) -- restaura o
@@ -871,6 +891,12 @@ function acaoManejoPermitida(acao, lote){
 
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
+// Excluir e so de admin ou proprietario, em todo o app. Mesma regra que o
+// banco aplica em pode_excluir(); aqui e so para nao mostrar um botao que
+// vai falhar - e falhar calado, porque a RLS nega delete sem dar erro.
+function podeExcluir(){
+  return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario';
+}
 // Colaborador pode editar (quando tiver permissão do módulo), mas nunca
 // pode excluir nada -- o botão Excluir some pra esse papel em toda a tela,
 // mesmo onde antes aparecia junto com o Editar.
