@@ -2696,15 +2696,27 @@ function lerTituloDoFormulario(base){
     competencia:   document.getElementById(`f-rat-comp-${i}`)      ? v(`f-rat-comp-${i}`)      : r.competencia,
     valor:         document.getElementById(`f-rat-valor-${i}`)     ? v(`f-rat-valor-${i}`)     : r.valor,
   }));
+  const nParc = Math.max(1, Number(v('f-tit-parcelas') || base.parcelas || 1));
+  const vencimentos = Array.from({length: nParc}, (_, i)=>{
+    const campo = document.getElementById(`f-tit-venc-${i}`);
+    return campo ? campo.value : (base.vencimentos||[])[i] || '';
+  });
+  const valoresParcela = Array.from({length: nParc}, (_, i)=>{
+    const campo = document.getElementById(`f-tit-valorparc-${i}`);
+    return campo ? campo.value : (base.valoresParcela||[])[i] ?? '';
+  });
   return {
     ...base,
+    vencimentos,
+    valoresParcela,
     entidadeNome:    v('f-tit-entidade').trim(),
     descricao:       v('f-tit-descricao').trim(),
     documento:       v('f-tit-documento').trim(),
     valor:           v('f-tit-valor'),
     vencimento:      v('f-tit-vencimento'),
     parcelas:        v('f-tit-parcelas') || '1',
-    intervaloDias:   v('f-tit-intervalo') || '',
+    intervaloTipo:   v('f-tit-intervalo-tipo') || 'mensal',
+    intervaloDias:   v('f-tit-intervalo-dias') || '',
     formaPagamento:  v('f-tit-forma'),
     contaBancariaId: v('f-tit-conta'),
     previsao:        document.getElementById('f-tit-previsao')?.checked === true,
@@ -2713,8 +2725,30 @@ function lerTituloDoFormulario(base){
   };
 }
 
+/* Recalcula as datas das parcelas quando a REGRA muda (1o vencimento, nº de
+ * parcelas ou intervalo) e preserva o que foi ajustado a mao quando nao
+ * mudou. Sem a chave de regra, qualquer re-render desfaria a data que a
+ * pessoa acabou de corrigir. */
+function ajustarParcelas(d){
+  const n = Math.max(1, Number(d.parcelas||1));
+  const dias = d.intervaloTipo==='dias' ? (Number(d.intervaloDias)||30) : '';
+  const total = Number(d.valor||0);
+  // O valor total entra na chave: mudar o total tem que refazer a divisao,
+  // senao as parcelas continuariam somando o valor antigo.
+  const chave = `${d.vencimento}|${n}|${d.intervaloTipo||'mensal'}|${dias}|${total}`;
+  const jaTem = (d.vencimentos||[]).length === n && (d.valoresParcela||[]).length === n;
+  if(d._regraChave === chave && jaTem) return d;
+  const base = d.vencimento || hojeStr();
+  return {...d, _regraChave: chave,
+          vencimentos: Array.from({length:n}, (_,i)=> vencimentoDaParcela(base, i, dias)),
+          valoresParcela: repartir(total, n)};
+}
+
 function ModalTitulo(){
-  const d = editDraft;
+  // Garante que a tabela de datas exista e esteja coerente com a regra
+  // antes de desenhar. Guardar de volta em editDraft e o que faz a data
+  // ajustada a mao sobreviver ao proximo re-render.
+  const d = editDraft = ajustarParcelas(editDraft);
   const ehPagar = d.tipo==='pagar';
   const total = Number(d.valor||0);
   const somaRateios = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
@@ -2725,6 +2759,8 @@ function ModalTitulo(){
   // e pior do que nao dizer nada.
   const rateiosCompletos = (d.rateios||[]).every(r =>
     r.centroCustoId && r.competencia && Number(r.valor) > 0);
+  const somaParcelas = (d.valoresParcela||[]).reduce((a,v)=>a+Number(v||0), 0);
+  const faltaParcelas = Math.round((total - somaParcelas) * 100) / 100;
   const nParcelas = Math.max(1, Number(d.parcelas||1));
   const editando = !!d._editId;
 
@@ -2767,12 +2803,43 @@ function ModalTitulo(){
           <input id="f-tit-parcelas" type="number" step="1" min="1" max="120" value="${d.parcelas||1}" data-recalcula-titulo="1"/></div>
         ${nParcelas>1?`
         <div class="field"><label>Intervalo entre parcelas</label>
-          <select id="f-tit-intervalo">
-            <option value="" ${!d.intervaloDias?'selected':''}>Mensal (mesmo dia do mês seguinte)</option>
-            <option value="30" ${d.intervaloDias==='30'?'selected':''}>A cada 30 dias</option>
-            <option value="15" ${d.intervaloDias==='15'?'selected':''}>A cada 15 dias</option>
-            <option value="7"  ${d.intervaloDias==='7'?'selected':''}>A cada 7 dias</option>
-          </select></div>`:''}`}
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="f-tit-intervalo-tipo" data-recalcula-titulo="1" style="flex:1;">
+              <option value="mensal" ${d.intervaloTipo!=='dias'?'selected':''}>Mensal (mesmo dia do mês seguinte)</option>
+              <option value="dias" ${d.intervaloTipo==='dias'?'selected':''}>A cada N dias</option>
+            </select>
+            ${d.intervaloTipo==='dias'?`
+            <input id="f-tit-intervalo-dias" type="number" step="1" min="1" max="365"
+                   value="${d.intervaloDias||30}" data-recalcula-titulo="1"
+                   style="width:110px;" placeholder="dias"/>`:''}
+          </div>
+          <span class="hint">Isto só preenche as datas abaixo. Qualquer uma pode ser corrigida à mão.</span>
+        </div>
+
+        <div class="field"><label>Parcelas</label>
+          <table style="width:100%;">
+            <thead><tr><th style="width:52px;">Parc.</th><th>Vencimento</th><th style="width:120px;">Valor (R$)</th></tr></thead>
+            <tbody>
+              ${Array.from({length:nParcelas}, (_,i)=>`
+                <tr>
+                  <td class="mono">${i+1}/${nParcelas}</td>
+                  <td><input id="f-tit-venc-${i}" type="date" value="${(d.vencimentos||[])[i]||''}" style="width:100%;"/></td>
+                  <td><input id="f-tit-valorparc-${i}" type="number" step="0.01" min="0"
+                             value="${(d.valoresParcela||[])[i] ?? ''}" data-recalcula-parcela="1"
+                             style="width:100%;" autocomplete="off"/></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+          ${Math.abs(faltaParcelas)<0.005
+            ? `<span class="hint" style="color:var(--verde-vivo-escuro);">As parcelas somam o valor total.</span>`
+            : `<div class="login-error" style="margin-top:6px;">
+                 As parcelas somam R$ ${fmt(somaParcelas)}, e o total é R$ ${fmt(total)}.
+                 ${faltaParcelas>0?`Faltam R$ ${fmt(faltaParcelas)}.`:`Passou R$ ${fmt(-faltaParcelas)}.`}
+                 <button class="btn-ghost btn-sm" data-distribuir-resto="1" style="margin-top:6px;">Distribuir a diferença nas demais</button>
+               </div>`}
+          <span class="hint">Vem dividido por igual, que é o caso comum. Edite quando houver entrada maior ou um valor diferente na última.
+          Mudar o total, o nº de parcelas ou o intervalo refaz a tabela; editar uma linha isolada não mexe nas outras.</span>
+        </div>`:''}`}
 
         <div class="field"><label>Forma de pagamento</label>
           <select id="f-tit-forma">
@@ -2992,6 +3059,16 @@ async function salvarTitulo(){
   if(!d.descricao) faltando.push('descrição');
   if(!(total > 0)) faltando.push('valor (maior que zero)');
   if(!d.vencimento) faltando.push('vencimento');
+  // Com parcelas, cada data e escolhida na tabela; uma vazia geraria um
+  // titulo sem vencimento, que some dos filtros de vencido e a vencer.
+  if(!d._editId && nParcelas > 1){
+    (d.vencimentos||[]).forEach((v,i)=>{ if(!v) faltando.push(`data da parcela ${i+1}`); });
+    (d.valoresParcela||[]).forEach((v,i)=>{ if(!(Number(v) > 0)) faltando.push(`valor da parcela ${i+1}`); });
+    const somaParc = (d.valoresParcela||[]).reduce((a,v)=>a+Number(v||0), 0);
+    if(Math.abs(somaParc - total) > 0.005){
+      faltando.push(`as parcelas somam R$ ${fmt(somaParc)} e o total é R$ ${fmt(total)}`);
+    }
+  }
   if(!(d.rateios||[]).length) faltando.push('pelo menos um rateio');
   (d.rateios||[]).forEach((r,i)=>{
     if(!r.centroCustoId) faltando.push(`centro de custo do rateio ${i+1}`);
@@ -3045,14 +3122,21 @@ async function salvarTitulo(){
     const grupo = nParcelas > 1
       ? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2))
       : null;
-    const valoresParcela = repartir(total, nParcelas);
+    // Os valores vem da tabela que a pessoa viu e pode ter ajustado
+    // (entrada maior, balao na ultima). A validacao acima ja garantiu que
+    // somam o total.
+    const valoresParcela = (d.valoresParcela||[]).length === nParcelas
+      ? (d.valoresParcela||[]).map(v=>Number(v))
+      : repartir(total, nParcelas);
 
     for(let p = 0; p < nParcelas; p++){
       const vp = valoresParcela[p];
       const {data: novo, error: e1} = await db.from('titulos').insert({
         ...comum,
         valor: vp,
-        vencimento: vencimentoDaParcela(d.vencimento, p, d.intervaloDias),
+        // A data vem da tabela que a pessoa viu e pode ter corrigido — nao
+        // da regra. Se a tabela nao existir (1 parcela), cai no vencimento.
+        vencimento: (d.vencimentos||[])[p] || d.vencimento,
         parcela: p + 1,
         parcelas: nParcelas,
         grupo,
@@ -3229,6 +3313,46 @@ function ligarEventosContas(){
       editDraft = d; render();
     };
   });
+  document.querySelectorAll('[data-recalcula-parcela]').forEach(el=>{
+    // Anota QUAIS linhas a pessoa mexeu. Sem isso nao da para saber: todas
+    // ja vem preenchidas com a divisao igual, entao "tem valor" nao
+    // distingue o que foi digitado do que veio pronto. Foi assim que a
+    // primeira versao do botao de distribuir nao fez nada.
+    el.onchange = ()=>{
+      const i = Number(el.id.replace('f-tit-valorparc-',''));
+      const d = lerTituloDoFormulario(editDraft);
+      editDraft = {...d, _parcelasEditadas: [...new Set([...(d._parcelasEditadas||[]), i])]};
+      render();
+    };
+  });
+  const distribuir = document.querySelector('[data-distribuir-resto]');
+  if(distribuir){
+    distribuir.onclick = ()=>{
+      const dd = lerTituloDoFormulario(editDraft);
+      const total = Number(dd.valor||0);
+      const vals = (dd.valoresParcela||[]).map(v=>Number(v||0));
+      // As linhas que a pessoa digitou ficam como estao; a diferenca e
+      // repartida por igual entre as que ela NAO mexeu. E o caso real:
+      // digitar a entrada e querer o resto dividido no que sobrou.
+      const mexidas = new Set(dd._parcelasEditadas||[]);
+      const livres = vals.map((_,i)=>i).filter(i=>!mexidas.has(i));
+      if(livres.length === 0){
+        alert('Você ajustou todas as parcelas à mão, então não há onde distribuir a diferença. Corrija uma das linhas.');
+        return;
+      }
+      const somaFixas = vals.reduce((a,v,i)=> mexidas.has(i) ? a+v : a, 0);
+      const resto = Math.round((total - somaFixas) * 100)/100;
+      if(resto <= 0){
+        alert('O que você digitou já passa do valor total. Diminua alguma parcela ou aumente o total.');
+        return;
+      }
+      const pedacos = repartir(resto, livres.length);
+      const novos = [...vals];
+      livres.forEach((idx, k)=>{ novos[idx] = pedacos[k]; });
+      editDraft = {...dd, valoresParcela: novos};
+      render();
+    };
+  }
   const bxValor = document.querySelector('[data-recalcula-baixa]');
   if(bxValor){
     bxValor.onchange = ()=>{
