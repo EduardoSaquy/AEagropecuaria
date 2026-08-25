@@ -30,6 +30,10 @@ DB = {
          "ativo": True, "tipo": "saida", "subcategoria": "OPERACIONAL | INSUMOS"},
         {"id": 91, "fazenda_id": None, "nome": "NUTRICAO ANIMAL", "frente": None,
          "ativo": True, "tipo": "saida", "subcategoria": "OPERACIONAL | INSUMOS"},
+        {"id": 92, "fazenda_id": None, "nome": "VENDAS", "frente": None,
+         "ativo": True, "tipo": "entrada", "subcategoria": "ATIVIDADES OPERACIONAIS"},
+        {"id": 93, "fazenda_id": None, "nome": "SEM CLASSIFICAR", "frente": None,
+         "ativo": True, "tipo": None, "subcategoria": None},
     ],
     "lancamentos_financeiros": [],
     "lotes": [], "funcionarios": [], "funcionario_atividades": [],
@@ -286,6 +290,34 @@ with sync_playwright() as pw:
          "parcela sem data nao e salva")
     conf("data da parcela 2" in page.evaluate("() => state.erroTitulo"),
          "e diz qual parcela esta sem data", page.evaluate("() => state.erroTitulo"))
+
+    # ---- centro de custo do lado certo do plano de contas ----
+    # Sem este filtro dava para lancar uma venda de cana contra ADUBOS E
+    # FERTILIZANTES: valor certo, grupo errado, e o DFC mostrando receita
+    # dentro de OPERACIONAL.
+    def centros_oferecidos(tipo):
+        page.evaluate("""(tp) => { state.page='contas';
+          editDraft={tipo:tp, descricao:'X', valor:'100', vencimento:'2026-12-01',
+            parcelas:1, intervaloTipo:'mensal', intervaloDias:'', previsao:false,
+            rateios:[rateioVazio()]};
+          state.modal={type:'titulo'}; render(); }""", tipo)
+        page.wait_for_timeout(250)
+        return page.evaluate(
+            "() => [...document.querySelectorAll('#f-rat-centro-0 option')]"
+            ".map(o => o.textContent.trim()).filter(x => x && !x.startsWith('—'))")
+
+    op = centros_oferecidos("pagar")
+    conf("ADUBOS E FERTILIZANTES" in op, "conta a pagar oferece centro de saida", str(op))
+    conf("VENDAS" not in op, "conta a pagar NAO oferece centro de entrada", str(op))
+
+    orc = centros_oferecidos("receber")
+    conf("VENDAS" in orc, "conta a receber oferece centro de entrada", str(orc))
+    conf("ADUBOS E FERTILIZANTES" not in orc,
+         "conta a receber NAO oferece centro de saida", str(orc))
+
+    conf("SEM CLASSIFICAR" in op and "SEM CLASSIFICAR" in orc,
+         "centro ainda sem classificacao aparece nos dois (barrar deixaria sem opcao)",
+         f"pagar={op} receber={orc}")
 
     # ---- valor de cada parcela e editavel (entrada / balao) ----
     # Pedido do Eduardo: "as vezes tem entrada ou pagamento maior na
