@@ -36,7 +36,13 @@ DB = {
     "lancamentos_financeiros": [],
     "lotes": [{"id": 1, "nome": "Curral 1", "numero_animais": 100,
                "destino": "confinamento", "data_fim": None}],
-    "funcionarios": [], "funcionario_atividades": [], "talhoes_areas": [], "culturas": [],
+    "funcionarios": [], "funcionario_atividades": [], "talhoes_areas": [],
+    "culturas": [
+        {"id": 7, "nome": "Soja",   "frente": "graos", "ativo": True},
+        {"id": 8, "nome": "Milho",  "frente": "graos", "ativo": True},
+        {"id": 9, "nome": "Sorgo",  "frente": "graos", "ativo": False},
+        {"id": 1, "nome": "Cana",   "frente": "cana",  "ativo": True},
+    ],
     "entidades": [], "contas_bancarias": [], "titulos": [], "titulo_rateios": [],
     "titulo_baixas": [], "abates": [],
 }
@@ -129,25 +135,30 @@ with sync_playwright() as pw:
 
     # ---- o bloco de quantidade na tela, e o que e salvo ----
     print("\n  -- lancar receita de cana com tonelada --")
-    page.evaluate("""() => { window.__ESCRITAS__=[];
-      state.page='financeiro'; state.erroLancamento='';
+    # A quantidade saiu do lancamento comum: quem lanca tonelada de cana e
+    # saca de cereal e o app da frente, na colheita. No Matriz sobra o
+    # valor - e a quantidade da venda de animais, que sai sozinha.
+    page.evaluate("""() => { state.page='financeiro'; state.erroLancamento='';
       editDraft={tipo:'receita', atividade:'cana', fazendaId:1, centroCustoId:92,
         descricao:'Venda de cana', valor:'180000', data:'2026-09-10',
-        quantidade:'1500', unidade:'t', areas:[], ehVenda:false};
+        areas:[], ehVenda:false};
       state.modal={type:'lancamento'}; render(); }""")
     page.wait_for_timeout(250)
-    corpo = page.inner_text(".modal")
-    conf("120,00" in corpo and "por t" in corpo,
-         "mostra R$ 120,00 por t na tela", corpo[-300:])
-    page.click("[data-save='lancamento']")
-    page.wait_for_timeout(600)
-    lancs = [e["v"] for e in page.evaluate("() => window.__ESCRITAS__")
-             if e["tabela"] == "lancamentos_financeiros" and e["op"] == "insert"]
-    conf(len(lancs) == 1, "salvou o lancamento")
-    if lancs:
-        conf(float(lancs[0].get("quantidade")) == 1500.0,
-             "grava a quantidade", str(lancs[0].get("quantidade")))
-        conf(lancs[0].get("unidade") == "t", "grava a unidade", str(lancs[0].get("unidade")))
+    conf(page.locator("#f-qtdlanc").count() == 0,
+         "receita de cana nao pede quantidade (isso e do AE Cana)")
+    conf(page.locator("#f-culturalanc").count() == 0,
+         "e nem cultura, porque cana e uma so")
+
+    # Sorgo esta inativo no cadastro: nao pode aparecer para lancamento novo,
+    # senao a lista cresce com o que a fazenda parou de plantar.
+    page.evaluate("""() => { editDraft={tipo:'despesa', atividade:'graos', fazendaId:1,
+        centroCustoId:90, descricao:'X', valor:'1', data:'2026-09-10',
+        culturaId:'', areas:[], ehVenda:false};
+      state.modal={type:'lancamento'}; render(); }""")
+    page.wait_for_timeout(200)
+    op_sorgo = page.evaluate(
+        "() => [...document.querySelectorAll('#f-culturalanc option')].map(o => o.textContent.trim())")
+    conf("Sorgo" not in op_sorgo, "cultura inativa nao aparece", str(op_sorgo))
 
     # ---- a venda de animais grava @ ----
     print("\n  -- venda de animais grava arrobas --")
@@ -170,6 +181,38 @@ with sync_playwright() as pw:
         conf(False, "a venda grava 540 @", "nao salvou")
 
     # ---- editar lancamento sem os campos preserva o que existia ----
+    # ---- qual cereal ----
+    print("\n  -- qual cereal (cereais) --")
+    page.evaluate("""() => { window.__ESCRITAS__=[]; state.erroLancamento='';
+      editDraft={tipo:'despesa', atividade:'graos', fazendaId:1, centroCustoId:90,
+        descricao:'Adubo de plantio', valor:'50000', data:'2026-09-10',
+        culturaId:'', areas:[], ehVenda:false};
+      state.modal={type:'lancamento'}; render(); }""")
+    page.wait_for_timeout(250)
+    opcoes = page.evaluate(
+        "() => [...document.querySelectorAll('#f-culturalanc option')]"
+        ".map(o => o.textContent.trim())")
+    conf("Soja" in opcoes and "Milho" in opcoes,
+         "despesa de cereais oferece as culturas de graos", str(opcoes))
+    conf("Cana" not in opcoes, "e nao oferece a cana", str(opcoes))
+    conf(any("Todas" in o for o in opcoes),
+         "com opcao de nao especificar (custo que serve a todas)", str(opcoes))
+
+    page.select_option("#f-culturalanc", label="Soja")
+    page.wait_for_timeout(120)
+    page.click("[data-save='lancamento']")
+    page.wait_for_timeout(600)
+    gravados = [e["v"] for e in page.evaluate("() => window.__ESCRITAS__")
+                if e["tabela"] == "lancamentos_financeiros" and e["op"] == "insert"]
+    conf(len(gravados) == 1 and gravados[0].get("cultura_id") == 7,
+         "grava qual cereal no lancamento",
+         str(gravados[0] if gravados else "nao salvou"))
+
+    # centro de custo NAO se multiplica por cultura
+    rec_graos = centros("despesa", "graos")
+    conf(not any("SOJA" in c.upper() or "MILHO" in c.upper() for c in rec_graos),
+         "o plano de contas nao ganhou uma conta por cultura", str(rec_graos))
+
     print("\n  -- preservacao ao editar --")
     # O que importa e o que o Supabase ENVIA, e ele serializa com
     # JSON.stringify - que descarta chave de valor undefined. Ler as chaves
