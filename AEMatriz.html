@@ -2784,9 +2784,21 @@ function ModalTitulo(){
   const nParcelas = Math.max(1, Number(d.parcelas||1));
   const editando = !!d._editId;
 
+  // So oferece centro do lado certo do plano de contas: 'entrada' para
+  // conta a receber, 'saida' para conta a pagar.
+  //
+  // Sem isto dava para lancar uma venda de cana contra ADUBOS E
+  // FERTILIZANTES. O lancamento ficaria com valor certo e grupo errado, e
+  // o DFC mostraria receita dentro de OPERACIONAL - o tipo de erro que so
+  // aparece quando alguem estranha o relatorio meses depois.
+  //
+  // Centro sem tipo (ainda nao classificado) continua aparecendo: barrar
+  // seria pior, deixaria a pessoa sem opcao nenhuma.
+  const tipoEsperado = ehPagar ? 'saida' : 'entrada';
   const centrosPara = (atividade)=> state.centrosCusto
     .filter(c=> c.ativo!==false)
     .filter(c=> !c.frente || c.frente==='geral' || c.frente===atividade)
+    .filter(c=> !c.tipo || c.tipo===tipoEsperado)
     .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
 
   return `
