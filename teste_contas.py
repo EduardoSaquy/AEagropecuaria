@@ -225,6 +225,68 @@ with sync_playwright() as pw:
     page.wait_for_timeout(150)
     conf("sem rateio" in page.inner_text("body"),
          "titulo sem rateio aparece marcado (a baixa dele falharia)")
+    # ---- datas das parcelas: regra preenche, pessoa corrige ----
+    # O Eduardo pediu intervalo livre (28 dias, por exemplo) e poder
+    # escolher a data de cada parcela. A regra so PREENCHE; o que vale e o
+    # que esta na tabela na hora de salvar.
+    def abrir_parcelado(parc, tipo="mensal", dias=""):
+        page.evaluate("""(a) => { state.page='contas';
+          editDraft={tipo:'pagar', descricao:'Trator', valor:'10000', vencimento:'2026-01-31',
+            parcelas:a.parc, intervaloTipo:a.tipo, intervaloDias:a.dias, previsao:false,
+            rateios:[{fazendaId:'',atividade:'cana',centroCustoId:90,competencia:'2026-01',valor:10000}]};
+          state.modal={type:'titulo'}; render(); }""", {"parc": parc, "tipo": tipo, "dias": dias})
+        page.wait_for_timeout(250)
+    datas = lambda: page.evaluate("() => [...document.querySelectorAll('[id^=f-tit-venc-]')].map(e=>e.value)")
+
+    abrir_parcelado(4)
+    conf(datas() == ['2026-01-31','2026-02-28','2026-03-31','2026-04-30'],
+         "mensal a partir do dia 31 cai no ultimo dia de cada mes", str(datas()))
+
+    abrir_parcelado(3, "dias", "28")
+    conf(datas() == ['2026-01-31','2026-02-28','2026-03-28'],
+         "intervalo livre de 28 dias", str(datas()))
+
+    abrir_parcelado(3, "dias", "45")
+    conf(datas() == ['2026-01-31','2026-03-17','2026-05-01'],
+         "intervalo livre de 45 dias", str(datas()))
+
+    # corrigir UMA data nao pode mexer nas outras
+    abrir_parcelado(3, "dias", "28")
+    antes = datas()
+    page.locator("#f-tit-venc-1").fill("2026-03-09")
+    page.keyboard.press("Tab"); page.wait_for_timeout(250)
+    dep = datas()
+    conf(dep[0] == antes[0] and dep[2] == antes[2] and dep[1] == "2026-03-09",
+         "corrigir uma data a mao nao mexe nas outras", f"{antes} -> {dep}")
+
+    # mas mudar a REGRA refaz tudo
+    page.locator("#f-tit-intervalo-dias").fill("30")
+    page.keyboard.press("Tab"); page.wait_for_timeout(250)
+    conf(datas() == ['2026-01-31','2026-03-02','2026-04-01'],
+         "mudar o intervalo refaz todas as datas", str(datas()))
+
+    # e o que e salvo e a data da TABELA, nao a da regra
+    abrir_parcelado(2, "dias", "28")
+    page.locator("#f-tit-venc-1").fill("2026-06-15")
+    page.keyboard.press("Tab"); page.wait_for_timeout(200)
+    page.evaluate("() => { window.__ESCRITAS__ = []; }")
+    page.click("[data-save='titulo']"); page.wait_for_timeout(600)
+    salvos = page.evaluate(
+        "() => window.__ESCRITAS__.filter(e=>e.tabela==='titulos')"
+        ".map(e=>e.v.vencimento+'|'+e.v.valor)")
+    conf(salvos == ['2026-01-31|5000', '2026-06-15|5000'],
+         "salva a data corrigida na tabela, nao a que a regra tinha posto", str(salvos))
+
+    # data de parcela em branco tem que barrar
+    abrir_parcelado(2, "dias", "28")
+    page.evaluate("() => { document.getElementById('f-tit-venc-1').value=''; }")
+    page.evaluate("() => { window.__ESCRITAS__ = []; }")
+    page.click("[data-save='titulo']"); page.wait_for_timeout(400)
+    conf(page.evaluate("() => window.__ESCRITAS__.filter(e=>e.tabela==='titulos').length") == 0,
+         "parcela sem data nao e salva")
+    conf("data da parcela 2" in page.evaluate("() => state.erroTitulo"),
+         "e diz qual parcela esta sem data", page.evaluate("() => state.erroTitulo"))
+
     # ---- os cartoes de rateio nao podem ser esmagados ----
     # .modal-body e flex-column e .card tem overflow-x:auto: um item flex
     # com rolagem propria resolve min-height como 0 e o flex-shrink esmaga
