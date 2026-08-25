@@ -225,6 +225,49 @@ with sync_playwright() as pw:
     page.wait_for_timeout(150)
     conf("sem rateio" in page.inner_text("body"),
          "titulo sem rateio aparece marcado (a baixa dele falharia)")
+    # ---- os cartoes de rateio nao podem ser esmagados ----
+    # .modal-body e flex-column e .card tem overflow-x:auto: um item flex
+    # com rolagem propria resolve min-height como 0 e o flex-shrink esmaga
+    # o cartao. Aconteceu de verdade — 26px de altura para 358px de
+    # conteudo, com os campos invisiveis. So aparece dentro do modal.
+    page.evaluate("""() => { state.page='contas';
+      editDraft={tipo:'pagar',valor:'1000',vencimento:'2026-12-10',parcelas:1,intervaloDias:'',
+                 previsao:false, rateios:[rateioVazio(), {...rateioVazio(), valor:1000}]};
+      state.modal={type:'titulo'}; render(); }""")
+    page.wait_for_timeout(250)
+    cartoes = page.evaluate("""() => [...document.querySelectorAll('.modal-body > .card')].map(c => ({
+        altura: Math.round(c.getBoundingClientRect().height), conteudo: c.scrollHeight }))""")
+    conf(len(cartoes) >= 2, "os dois cartoes de rateio existem", str(cartoes))
+    for i, c in enumerate(cartoes):
+        conf(c["altura"] >= c["conteudo"] - 2,
+             f"cartao de rateio {i+1} mostra o conteudo inteiro",
+             f"desenhado com {c['altura']}px tendo {c['conteudo']}px de conteudo")
+    campos_visiveis = page.evaluate(
+        "() => ['f-rat-centro-0','f-rat-comp-0','f-rat-valor-0']"
+        ".every(id => { const e = document.getElementById(id);"
+        "               return e && e.getBoundingClientRect().height > 10; })")
+    conf(campos_visiveis, "os campos do rateio 1 tem altura visivel")
+
+    # ---- a mensagem verde nao pode contradizer o erro vermelho ----
+    # Um rateio com o valor inteiro e outro vazio faz a SOMA fechar. Antes
+    # a tela dizia "o rateio fecha" em verde e "preencha o rateio 1" em
+    # vermelho ao mesmo tempo.
+    corpo_modal = page.inner_text(".modal")
+    conf("O rateio fecha com o valor do título" not in corpo_modal,
+         "nao diz que fecha enquanto falta preencher rateio",
+         corpo_modal[-400:])
+    conf("ainda falta preencher" in corpo_modal,
+         "avisa que a soma fecha mas falta preencher", corpo_modal[-400:])
+
+    # com tudo preenchido, ai sim diz que fecha
+    page.evaluate("""() => {
+      editDraft.rateios = [{fazendaId:'', atividade:'cana', centroCustoId:90,
+                            competencia:'2026-12', valor:1000}];
+      render(); }""")
+    page.wait_for_timeout(200)
+    conf("O rateio fecha com o valor do título" in page.inner_text(".modal"),
+         "com tudo preenchido, confirma que fecha")
+
     # ---- fornecedor novo e cadastrado no proprio lancamento ----
     # O Eduardo pediu isto explicitamente. Em vez de afirmar que funciona,
     # o teste preenche o formulario com um nome que NAO existe em entidades
