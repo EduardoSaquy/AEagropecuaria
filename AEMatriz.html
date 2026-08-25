@@ -1132,6 +1132,26 @@ function render(){
       if(focoAntes.ini!=null){ try{ el.setSelectionRange(focoAntes.ini, focoAntes.fim); }catch(e){} }
     }
   }
+
+  // EXCLUIR E SO DE ADMIN OU PROPRIETARIO, em todo o app - a mesma regra
+  // que o banco aplica em pode_excluir().
+  //
+  // Varre o DOM depois de montar, em vez de condicionar cada botao um a
+  // um. Sao dezenas de botoes espalhados; um esquecido viraria um clique
+  // que NAO da erro nenhum: a RLS nega o delete em silencio (apaga zero
+  // linhas sem reclamar), a tela recarrega e o registro continua la. A
+  // pessoa clica de novo achando que nao pegou.
+  //
+  // As linhas que o app apaga por conta propria (movimentos ao editar uma
+  // saida de racao, desfazer um manejo que falhou) nao passam por botao,
+  // entao continuam funcionando para quem nao e dono.
+  if(!podeExcluir()){
+    root.querySelectorAll('[class*="danger"], button, a').forEach(el=>{
+      for(const attr of el.attributes){
+        if(attr.name.startsWith('data-del-')){ el.remove(); return; }
+      }
+    });
+  }
   attachEvents();
 }
 
