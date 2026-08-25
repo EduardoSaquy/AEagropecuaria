@@ -2732,6 +2732,8 @@ function lerTituloDoFormulario(base){
     atividade:     document.getElementById(`f-rat-atividade-${i}`) ? v(`f-rat-atividade-${i}`) : r.atividade,
     centroCustoId: document.getElementById(`f-rat-centro-${i}`)    ? v(`f-rat-centro-${i}`)    : r.centroCustoId,
     competencia:   document.getElementById(`f-rat-comp-${i}`)      ? v(`f-rat-comp-${i}`)      : r.competencia,
+    // Com uma parte so o campo de valor nem existe: manter o que ja estava
+    // (que o normalizarRateios deixou igual ao total).
     valor:         document.getElementById(`f-rat-valor-${i}`)     ? v(`f-rat-valor-${i}`)     : r.valor,
   }));
   const nParc = Math.max(1, Number(v('f-tit-parcelas') || base.parcelas || 1));
@@ -2782,13 +2784,27 @@ function ajustarParcelas(d){
           valoresParcela: repartir(total, n)};
 }
 
+/* Com UMA parte, o valor dela e o total do titulo - nao ha o que dividir.
+ * A tela nem pergunta; esta funcao garante que o dado gravado bata. */
+function normalizarRateios(d){
+  const rat = d.rateios || [];
+  if(rat.length !== 1) return d;
+  const total = Number(d.valor||0);
+  if(Number(rat[0].valor||0) === total) return d;
+  return {...d, rateios: [{...rat[0], valor: total}]};
+}
+
 function ModalTitulo(){
   // Garante que a tabela de datas exista e esteja coerente com a regra
   // antes de desenhar. Guardar de volta em editDraft e o que faz a data
   // ajustada a mao sobreviver ao proximo re-render.
-  const d = editDraft = ajustarParcelas(editDraft);
+  const d = editDraft = normalizarRateios(ajustarParcelas(editDraft));
   const ehPagar = d.tipo==='pagar';
   const total = Number(d.valor||0);
+  // Uma parte so e o caso comum: o titulo inteiro pertence a uma fazenda e
+  // um centro. So quando a pessoa DIVIDE e que os valores por parte passam
+  // a existir e a precisar fechar.
+  const dividido = (d.rateios||[]).length > 1;
   const somaRateios = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
   const falta = Math.round((total - somaRateios) * 100) / 100;
   // A soma fechar nao basta: com dois rateios, um pode estar com o valor
@@ -2908,18 +2924,17 @@ function ModalTitulo(){
           <span class="hint">Marque quando o valor é esperado mas ainda não tem boleto firme. Aparece na lista separado.</span>
         </div>
 
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:18px 0 8px;">Gerencial</h4>
+        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:18px 0 8px;">
+          ${ehPagar ? 'Onde o custo pesa' : 'De onde vem o dinheiro'}
+        </h4>
         <p class="hint" style="margin-top:0;">
-          Onde o dinheiro pesa. Pode dividir entre fazendas e atividades — é o que um lançamento sozinho não consegue.
-          A competência é independente do vencimento: um boleto que vence em setembro pode ser competência de julho.
+          ${ehPagar
+            ? 'A que operação este custo pertence. A competência é independente do vencimento: um boleto que vence em setembro pode ser competência de julho.'
+            : 'De qual operação vem esta receita. A competência é independente do vencimento: um recebimento que cai em setembro pode ser competência de julho.'}
         </p>
 
-        ${(d.rateios||[]).map((r,i)=>`
-        <div class="card" style="padding:12px; margin-bottom:10px; background:var(--cinza-bg);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong style="font-size:13px;">Rateio ${i+1} de ${(d.rateios||[]).length}</strong>
-            ${(d.rateios||[]).length>1?`<button class="btn-danger-ghost btn-sm" data-remove-rateio="${i}">Remover</button>`:''}
-          </div>
+        ${(d.rateios||[]).map((r,i)=>{
+          const campos = `
           <div class="field"><label>Atividade</label>
             <select id="f-rat-atividade-${i}" data-recalcula-titulo="1">
               ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${r.atividade===k?'selected':''}>${l}</option>`).join('')}
@@ -2927,23 +2942,39 @@ function ModalTitulo(){
           <div class="field"><label>Fazenda</label>
             <select id="f-rat-fazenda-${i}">
               <option value="" ${!r.fazendaId?'selected':''}>Geral / toda a empresa</option>
-              ${state.fazendasLavoura.map(f=>`<option value="${f.id}" ${String(r.fazendaId)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
+              ${state.fazendasLavoura.map(fz=>`<option value="${fz.id}" ${String(r.fazendaId)===String(fz.id)?'selected':''}>${esc(fz.nome)}</option>`).join('')}
             </select></div>
-          <div class="field"><label>Centro de custo</label>
+          <div class="field"><label>${ehPagar ? 'Centro de custo' : 'Origem da receita'}</label>
             <select id="f-rat-centro-${i}">
               <option value="">— Selecione —</option>
               ${centrosPara(r.atividade).map(c=>`<option value="${c.id}" ${String(r.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
             </select></div>
           <div class="field"><label>Competência</label>
             <input id="f-rat-comp-${i}" type="month" value="${esc(r.competencia||'')}"/>
-            <span class="hint">Em que mês este gasto pertence, independente de quando vence ou é pago.</span></div>
-          <div class="field"><label>Valor deste rateio (R$)</label>
-            <input id="f-rat-valor-${i}" type="number" step="0.01" min="0" value="${r.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/></div>
-        </div>`).join('')}
+            <span class="hint">Em que mês este valor pertence, independente de quando vence ou é ${ehPagar?'pago':'recebido'}.</span></div>`;
+          // Com UMA parte, os campos vão soltos no formulário: sem cartão,
+          // sem "Rateio 1 de 1" e sem pedir o valor. O valor de uma parte
+          // única é o total do título — perguntar de novo era obrigar a
+          // digitar o mesmo número duas vezes para provar que é igual a ele
+          // mesmo, ao lado de um "Falta distribuir" que assustava à toa.
+          if(!dividido) return campos;
+          return `
+          <div class="card" style="padding:12px; margin-bottom:10px; background:var(--cinza-bg);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:13px;">Parte ${i+1} de ${(d.rateios||[]).length}</strong>
+              <button class="btn-danger-ghost btn-sm" data-remove-rateio="${i}">Remover</button>
+            </div>
+            ${campos}
+            <div class="field"><label>Valor desta parte (R$)</label>
+              <input id="f-rat-valor-${i}" type="number" step="0.01" min="0" value="${r.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/></div>
+          </div>`;
+        }).join('')}
 
-        <button class="btn-ghost btn-sm" data-add-rateio="1" style="margin-bottom:10px;">+ Dividir em outro centro de custo / fazenda</button>
+        <button class="btn-ghost btn-sm" data-add-rateio="1" style="margin-bottom:10px;">
+          ${dividido ? '+ Dividir em mais uma parte' : `Dividir entre mais de uma fazenda ou ${ehPagar?'centro de custo':'origem'}`}
+        </button>
 
-        ${total>0 ? (
+        ${dividido && total>0 ? (
           Math.abs(falta)>=0.005
             ? `<div class="login-error">Falta distribuir R$ ${fmt(Math.abs(falta))}${falta<0?' (o rateio passou do valor do título)':''}. A soma dos rateios tem que dar R$ ${fmt(total)}.</div>`
           : !rateiosCompletos
@@ -3120,13 +3151,17 @@ async function salvarTitulo(){
     }
   }
   if(!(d.rateios||[]).length) faltando.push('pelo menos um rateio');
+  const varias = (d.rateios||[]).length > 1;
   (d.rateios||[]).forEach((r,i)=>{
-    if(!r.centroCustoId) faltando.push(`centro de custo do rateio ${i+1}`);
-    if(!r.competencia)   faltando.push(`competência do rateio ${i+1}`);
-    if(!(Number(r.valor) > 0)) faltando.push(`valor do rateio ${i+1}`);
+    // Com uma parte so, nao ha "parte 1" para citar - o erro fala do
+    // formulario, nao de um item numerado que a pessoa nem viu.
+    const onde = varias ? ` da parte ${i+1}` : '';
+    if(!r.centroCustoId) faltando.push(`${d.tipo==='pagar'?'centro de custo':'origem da receita'}${onde}`);
+    if(!r.competencia)   faltando.push(`competência${onde}`);
+    if(varias && !(Number(r.valor) > 0)) faltando.push(`valor da parte ${i+1}`);
   });
   const soma = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
-  if(faltando.length===0 && Math.abs(soma - total) > 0.005){
+  if(faltando.length===0 && (d.rateios||[]).length > 1 && Math.abs(soma - total) > 0.005){
     faltando.push(`a soma dos rateios (R$ ${fmt(soma)}) tem que fechar com o valor do título (R$ ${fmt(total)})`);
   }
   if(faltando.length){
@@ -3351,8 +3386,14 @@ function ligarEventosContas(){
       const d = lerTituloDoFormulario(editDraft);
       // O rateio novo já vem com o que falta para fechar: quase sempre é o
       // valor que a pessoa ia digitar de qualquer jeito.
-      const falta = Math.round((Number(d.valor||0) - (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0),0)) * 100)/100;
-      d.rateios = [...(d.rateios||[]), {...rateioVazio(), valor: falta > 0 ? falta : ''}];
+      // Dividindo pela primeira vez: a parte 1 fica com o total (era o
+      // valor implicito dela) e a nova comeca vazia, para a pessoa dizer
+      // quanto vai para onde.
+      const rat = (d.rateios||[]).length === 1
+        ? [{...d.rateios[0], valor: Number(d.valor||0)}]
+        : (d.rateios||[]);
+      const falta = Math.round((Number(d.valor||0) - rat.reduce((a,r)=>a+Number(r.valor||0),0)) * 100)/100;
+      d.rateios = [...rat, {...rateioVazio(), valor: falta > 0 ? falta : ''}];
       editDraft = d; render();
     };
   }
@@ -3360,6 +3401,8 @@ function ligarEventosContas(){
     el.onclick = ()=>{
       const d = lerTituloDoFormulario(editDraft);
       d.rateios = (d.rateios||[]).filter((_,i)=> i !== Number(el.dataset.removeRateio));
+      // Voltando a uma parte so, ela passa a valer o total de novo.
+      if(d.rateios.length === 1) d.rateios = [{...d.rateios[0], valor: Number(d.valor||0)}];
       editDraft = d; render();
     };
   });

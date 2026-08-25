@@ -319,6 +319,60 @@ with sync_playwright() as pw:
          "centro ainda sem classificacao aparece nos dois (barrar deixaria sem opcao)",
          f"pagar={op} receber={orc}")
 
+    # ---- a linguagem muda entre pagar e receber ----
+    # O Eduardo abriu "Nova conta a receber" e o bloco inteiro falava como
+    # despesa: "Onde o dinheiro pesa", "Centro de custo", "em que mes este
+    # GASTO pertence". Numa receita, centro de custo e a ORIGEM do dinheiro.
+    def texto_do_modal(tipo):
+        page.evaluate("""(tp) => { state.page='contas'; state.erroTitulo='';
+          editDraft={tipo:tp, descricao:'X', valor:'1000', vencimento:'2026-12-01',
+            parcelas:1, intervaloTipo:'mensal', intervaloDias:'', previsao:false,
+            rateios:[rateioVazio()]};
+          state.modal={type:'titulo'}; render(); }""", tipo)
+        page.wait_for_timeout(250)
+        return page.inner_text(".modal")
+
+    tx_pagar = texto_do_modal("pagar")
+    conf("Onde o custo pesa" in tx_pagar, "a pagar: 'Onde o custo pesa'", tx_pagar[:300])
+    conf("Centro de custo" in tx_pagar, "a pagar: campo 'Centro de custo'")
+    conf("é pago" in tx_pagar, "a pagar: fala em pago")
+
+    tx_receber = texto_do_modal("receber")
+    conf("De onde vem o dinheiro" in tx_receber,
+         "a receber: 'De onde vem o dinheiro'", tx_receber[:300])
+    conf("Origem da receita" in tx_receber,
+         "a receber: campo 'Origem da receita', nao 'Centro de custo'", tx_receber[:400])
+    conf("gasto" not in tx_receber.lower(),
+         "a receber: nao fala em gasto em lugar nenhum", tx_receber[:400])
+    conf("é recebido" in tx_receber, "a receber: fala em recebido")
+    conf("Onde o custo pesa" not in tx_receber, "a receber: nao fala em custo pesando")
+
+    # ---- dividir e voltar ----
+    print("\n  -- dividir em partes --")
+    page.evaluate("""() => { state.page='contas'; state.erroTitulo='';
+      editDraft={tipo:'pagar', descricao:'Boleto', valor:'1000', vencimento:'2026-12-01',
+        parcelas:1, intervaloTipo:'mensal', intervaloDias:'', previsao:false,
+        rateios:[{fazendaId:'', atividade:'cana', centroCustoId:90,
+                  competencia:'2026-12', valor:1000}]};
+      state.modal={type:'titulo'}; render(); }""")
+    page.wait_for_timeout(250)
+    conf(page.locator("#f-rat-valor-0").count() == 0, "uma parte: sem campo de valor")
+    page.click("[data-add-rateio]")
+    page.wait_for_timeout(250)
+    conf(page.locator("#f-rat-valor-0").count() == 1,
+         "ao dividir, os campos de valor aparecem")
+    v0 = page.evaluate("() => document.getElementById('f-rat-valor-0')?.value")
+    conf(float(v0 or 0) == 1000.0,
+         "e a parte 1 fica com o total, que era o valor implicito dela", str(v0))
+    conf("Parte 1 de 2" in page.inner_text(".modal"), "as partes sao numeradas")
+    page.click("[data-remove-rateio='1']")
+    page.wait_for_timeout(250)
+    conf(page.locator("#f-rat-valor-0").count() == 0,
+         "removendo, volta a uma parte sem campo de valor")
+    valor_guardado = page.evaluate("() => editDraft.rateios[0].valor")
+    conf(float(valor_guardado) == 1000.0,
+         "e o valor gravado dela volta a ser o total", str(valor_guardado))
+
     # ---- valor de cada parcela e editavel (entrada / balao) ----
     # Pedido do Eduardo: "as vezes tem entrada ou pagamento maior na
     # ultima". Vem dividido por igual, mas tem que dar para editar.
@@ -410,7 +464,7 @@ with sync_playwright() as pw:
              f"cartao de rateio {i+1} mostra o conteudo inteiro",
              f"desenhado com {c['altura']}px tendo {c['conteudo']}px de conteudo")
     campos_visiveis = page.evaluate(
-        "() => ['f-rat-centro-0','f-rat-comp-0','f-rat-valor-0']"
+        "() => ['f-rat-centro-0','f-rat-comp-0']"
         ".every(id => { const e = document.getElementById(id);"
         "               return e && e.getBoundingClientRect().height > 10; })")
     conf(campos_visiveis, "os campos do rateio 1 tem altura visivel")
@@ -421,7 +475,7 @@ with sync_playwright() as pw:
     # vermelho ao mesmo tempo.
     corpo_modal = page.inner_text(".modal")
     conf("O rateio fecha com o valor do título" not in corpo_modal,
-         "nao diz que fecha enquanto falta preencher rateio",
+         "nao diz que fecha enquanto falta preencher parte",
          corpo_modal[-400:])
     conf("ainda falta preencher" in corpo_modal,
          "avisa que a soma fecha mas falta preencher", corpo_modal[-400:])
@@ -432,8 +486,17 @@ with sync_playwright() as pw:
                             competencia:'2026-12', valor:1000}];
       render(); }""")
     page.wait_for_timeout(200)
-    conf("O rateio fecha com o valor do título" in page.inner_text(".modal"),
-         "com tudo preenchido, confirma que fecha")
+    # Com UMA parte so, nao existe conferencia de soma nem campo de valor:
+    # o valor da parte unica e o total do titulo.
+    page.evaluate("""() => { editDraft.rateios = [{fazendaId:'', atividade:'cana',
+        centroCustoId:90, competencia:'2026-12', valor:1000}]; render(); }""")
+    page.wait_for_timeout(200)
+    m = page.inner_text(".modal")
+    conf("Falta distribuir" not in m and "ainda falta preencher" not in m,
+         "com uma parte so, nao cobra distribuicao", m[-300:])
+    conf(page.locator("#f-rat-valor-0").count() == 0,
+         "e nem pede o valor dela (e o total do titulo)")
+    conf("Rateio 1 de 1" not in m, "e nao mostra 'Rateio 1 de 1'", m[-300:])
 
     # ---- fornecedor novo e cadastrado no proprio lancamento ----
     # O Eduardo pediu isto explicitamente. Em vez de afirmar que funciona,
@@ -455,7 +518,6 @@ with sync_playwright() as pw:
     preencher(page, "#f-tit-valor", "1500")
     page.select_option("#f-rat-centro-0", "90")
     preencher(page, "#f-rat-comp-0", "2026-12")
-    preencher(page, "#f-rat-valor-0", "1500")
     page.click("[data-save='titulo']")
     page.wait_for_timeout(400)
 
@@ -486,7 +548,6 @@ with sync_playwright() as pw:
     preencher(page, "#f-tit-valor", "200")
     page.select_option("#f-rat-centro-0", "90")
     preencher(page, "#f-rat-comp-0", "2026-12")
-    preencher(page, "#f-rat-valor-0", "200")
     page.click("[data-save='titulo']")
     page.wait_for_timeout(400)
     escritas2 = page.evaluate("() => window.__ESCRITAS__")
