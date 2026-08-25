@@ -74,6 +74,12 @@ Resultados já somou as duas coisas — foi corrigido. Não reintroduzir.
   consulta que pode passar de mil linhas usa `fetchAllRows(...)`.
 - **Nada de acentos em comentário de SQL.** O separador de statements do editor
   do Supabase não ignora comentários e quebra o arquivo.
+- **Uma consulta por arquivo de conferência.** O editor do Supabase mostra
+  o resultado de uma consulta por vez. Um arquivo com quatro `select` faz o
+  Eduardo mandar sempre o mesmo resultado, sem conseguir chegar nos outros.
+  Junte tudo num `union all` com colunas `item / valor / situacao`, e faça
+  cada linha dizer `OK` ou o que está errado — não peça para ele comparar
+  números de cabeça.
 - **Teste o arquivo SQL inteiro de uma vez.** O editor manda tudo como uma
   transação implícita: um erro no fim desfaz o começo. Testar bloco a bloco já
   deixou passar dois erros de sintaxe.
