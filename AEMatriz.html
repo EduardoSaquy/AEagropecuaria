@@ -159,12 +159,6 @@
   .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
   .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
   .field{display:flex; flex-direction:column; gap:5px;}
-  /* .modal-body e flex-column, e .card tem overflow-x:auto. Um item flex
-     com rolagem propria resolve min-height como 0 em vez da altura do
-     conteudo, e o flex-shrink padrao esmaga o cartao — o de rateio ficava
-     com 26px de altura tendo 358px de conteudo, escondendo os campos.
-     Cartao dentro de modal nao encolhe e nao precisa de rolagem lateral. */
-  .modal-body > .card{flex-shrink:0; overflow-x:visible; min-height:auto;}
   .field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   label{font-size:12px; font-weight:600; color:var(--grafite);}
   input, select, textarea{
@@ -428,19 +422,7 @@ function lancamentoToRow(l){
           mes: l.data ? l.data.slice(0,7) : (l.mes || null),
           fornecedor:l.fornecedor || null, observacao:l.observacao || null,
           talhao_id:l.talhaoId || null, lote_id:l.loteId || null,
-          areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas),
-          // undefined faz o JSON.stringify sumir com a chave, e o banco
-          // preserva a coluna. Sem isso, editar um lancamento cuja tela nao
-          // mostra estes campos zeraria a quantidade que veio da migracao
-          // das receitas da lavoura.
-          quantidade: l.quantidade===undefined ? undefined
-                      : (l.quantidade===''||l.quantidade==null ? null : numDecimal(l.quantidade)),
-          unidade:    l.unidade===undefined ? undefined : (l.unidade || null),
-          // Qual cereal. Mesma regra do undefined: a tela so mostra este
-          // campo para graos, e editar um lancamento de outra atividade nao
-          // pode apagar a cultura de um lancamento que ja a tinha.
-          cultura_id: l.culturaId===undefined ? undefined
-                      : (l.culturaId==='' || l.culturaId==null ? null : Number(l.culturaId))};
+          areas:l.areas || [], arrobas:l.arrobas===''||l.arrobas==null ? null : Number(l.arrobas)};
 }
 /* O plano de contas do Conag é hierárquico, e essa hierarquia já está
  * gravada — só não era lida por nenhum app:
@@ -472,13 +454,7 @@ function subgrupoDoCentro(c){
 }
 const ATIVIDADES_LANC = [['pecuaria','Pecuária'],['cana','Cana-de-açúcar'],['graos','Grãos'],['geral','Geral / administrativo']];
 const TIPO_LABEL = {despesa:'despesa', receita:'receita', investimento:'investimento'};
-// Antes so id e nome, que bastava para vincular uma receita a um lote. A
-// venda de animais precisa de mais: quantas cabecas tem (para nao vender
-// mais do que existe) e se o lote esta encerrado.
-function rowToLotePec(r){
-  return {id:r.id, nome:r.nome, numeroAnimais:Number(r.numero_animais||0),
-          destino:r.destino||'pasto', dataFim:r.data_fim||null};
-}
+function rowToLotePec(r){ return {id:r.id, nome:r.nome}; }
 
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo, permissoes:r.permissoes||{}}; }
@@ -527,7 +503,7 @@ async function loadAll(){
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
     fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id')),
-    db.from('culturas').select('id, nome, frente, ativo'),
+    db.from('culturas').select('id, frente'),
     souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
@@ -536,17 +512,8 @@ async function loadAll(){
     // nao teria como mostrar nem reativar o que foi desativado. Quem filtra
     // por ativo e o seletor do lancamento, logo abaixo.
     temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, data_fim').order('nome') : Promise.resolve({data:[]}),
+    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome').order('nome') : Promise.resolve({data:[]}),
   ]);
-  // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
-  // devolve vazio e a consulta e desperdicio de rede.
-  const [ents, ctas, tits, rats, bxs] = podeVerContas() ? await Promise.all([
-    db.from('entidades').select('*').order('nome'),
-    db.from('contas_bancarias').select('*').order('nome'),
-    fetchAllRows(()=>db.from('titulos').select('*').order('vencimento').order('id')),
-    fetchAllRows(()=>db.from('titulo_rateios').select('*').order('id')),
-    fetchAllRows(()=>db.from('titulo_baixas').select('*').order('id')),
-  ]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]}];
   // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
   // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
   // apresentado com a mesma confiança de um número real.
@@ -565,11 +532,6 @@ async function loadAll(){
   state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
   state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
   state.lotesPec     = (lotPec.data||[]).map(rowToLotePec);
-  state.entidades       = (ents.data||[]).map(rowToEntidade);
-  state.contasBancarias = (ctas.data||[]).map(rowToContaBancaria);
-  state.titulos         = (tits.data||[]).map(rowToTitulo);
-  state.rateios         = (rats.data||[]).map(rowToRateio);
-  state.baixas          = (bxs.data||[]).map(rowToBaixa);
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
@@ -955,16 +917,6 @@ const state = {
   filtroAtividade: '',
   lotesPec: [],       // só id e nome, pra vincular receita a um lote
   abaFinanceiro: 'despesa',
-  // Contas a pagar / a receber
-  entidades: [],        // {id, nome, documento, papel, ativo}
-  contasBancarias: [],  // {id, nome, banco, agencia, conta, ativo}
-  titulos: [],          // o boleto
-  rateios: [],          // onde cada titulo pesa
-  baixas: [],           // cada pagamento
-  abaContas: 'pagar',
-  filtroContas: 'abertos',
-  searchContas: '',
-  erroTitulo: '',
   erroLancamento: '',
   searchDespesas: '',
   searchCentros: '',
@@ -1084,7 +1036,6 @@ function render(){
       ${state.page==='financeiro' ? PageFinanceiro() : ''}
       ${state.page==='fazendas' ? PageFazendas() : ''}
       ${state.page==='centrosCusto' ? PageCentrosCusto() : ''}
-      ${state.page==='contas' ? PageContas() : ''}
       ${state.page==='funcionarios' ? PageFuncionarios() : ''}
       ${state.page==='usuarios' ? PageUsuarios() : ''}
     `;
@@ -1109,20 +1060,6 @@ function render(){
   // perde a cada re-render (ex: abrir o formulário de criar acesso jogava a
   // tela pro topo). Guarda antes e restaura depois.
   const scrollModalAntes = document.querySelector('.modal-body')?.scrollTop;
-  // Guarda também qual campo estava em edição e onde estava o cursor.
-  //
-  // Formulários que recalculam ao mudar um campo (o de título, com o aviso
-  // de quanto falta ratear) chamam render(), e render() troca o DOM
-  // inteiro. Sem isto, o foco volta pro nada: a pessoa digita o valor,
-  // muda de campo, a tela se redesenha e ela precisa clicar de novo pra
-  // continuar — e o que estava digitado e ainda não confirmado se perde.
-  const focoAntes = (()=>{
-    const el = document.activeElement;
-    if(!el || !el.id || !document.querySelector('.modal')) return null;
-    if(!['INPUT','TEXTAREA','SELECT'].includes(el.tagName)) return null;
-    const podeSelecionar = el.tagName!=='SELECT' && ['text','search','url','tel','password'].includes(el.type);
-    return {id: el.id, ini: podeSelecionar ? el.selectionStart : null, fim: podeSelecionar ? el.selectionEnd : null};
-  })();
   root.innerHTML = `
     <div class="app">
       ${Topbar()}
@@ -1142,33 +1079,6 @@ function render(){
       // rolagem que o Chrome faz quando conteúdo entra acima da posição.
       requestAnimationFrame(()=>{ corpoModal.scrollTop = scrollModalAntes; });
     }
-  }
-  if(focoAntes){
-    const el = document.getElementById(focoAntes.id);
-    if(el){
-      el.focus();
-      if(focoAntes.ini!=null){ try{ el.setSelectionRange(focoAntes.ini, focoAntes.fim); }catch(e){} }
-    }
-  }
-
-  // EXCLUIR E SO DE ADMIN OU PROPRIETARIO, em todo o app - a mesma regra
-  // que o banco aplica em pode_excluir().
-  //
-  // Varre o DOM depois de montar, em vez de condicionar cada botao um a
-  // um. Sao dezenas de botoes espalhados; um esquecido viraria um clique
-  // que NAO da erro nenhum: a RLS nega o delete em silencio (apaga zero
-  // linhas sem reclamar), a tela recarrega e o registro continua la. A
-  // pessoa clica de novo achando que nao pegou.
-  //
-  // As linhas que o app apaga por conta propria (movimentos ao editar uma
-  // saida de racao, desfazer um manejo que falhou) nao passam por botao,
-  // entao continuam funcionando para quem nao e dono.
-  if(!podeExcluir()){
-    root.querySelectorAll('[class*="danger"], button, a').forEach(el=>{
-      for(const attr of el.attributes){
-        if(attr.name.startsWith('data-del-')){ el.remove(); return; }
-      }
-    });
   }
   attachEvents();
 }
@@ -1191,10 +1101,6 @@ const PAGES = [
   // lá quando o Financeiro veio pra cá, e sem esta tela ninguém mais
   // conseguiria criar ou corrigir um centro de custo.
   {key:'centrosCusto', label:'Centros de Custo', modulo:'matriz_financeiro'},
-  // Pagar/Receber exige a chave propria 'contas' ALEM do financeiro - a
-  // RLS do banco pede as duas. Aqui basta pedir 'contas': quem nao tem
-  // matriz_financeiro nao chega a ver dado nenhum de qualquer forma.
-  {key:'contas', label:'Pagar/Receber', modulo:'contas'},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
@@ -1403,7 +1309,6 @@ const MODULOS_PERMISSAO = [
     ['matriz_painel','Painel (indicadores de cada app)'],
     ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
     ['matriz_financeiro','Financeiro (lançar despesa, receita e investimento)'],
-    ['contas','Contas a Pagar e a Receber (exige também o Financeiro acima)'],
     ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
     ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
   ]],
@@ -1472,7 +1377,6 @@ function Header(){
     financeiro:{eyebrow:'Lançamentos', title:'Financeiro', desc:'Despesa, receita e investimento de todas as atividades no mesmo lugar. A atividade é um campo do lançamento, não um app separado — é isso que permite comparar custo por hectare entre pecuária, cana e grãos.'},
     fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área total e, pra cada atividade (grãos, cana, pecuária), quantos hectares dela tem ali. AE Lavoura e AE Pecuária só leem esses dados.'},
     centrosCusto:{eyebrow:'Cadastro', title:'Centros de Custo', desc:'O plano de contas usado em todo lançamento financeiro. Um centro global (sem fazenda) vale para todas — é o caso das contas do Conag, que atendem pecuária, cana e cereais ao mesmo tempo. A atividade é campo do lançamento, não do centro de custo.'},
-    contas:{eyebrow:'Financeiro', title:'Contas a Pagar e a Receber', desc:'O boleto antes de virar dinheiro: quem, quanto, quando vence e onde pesa. Um título pode ser dividido entre fazendas e atividades. Só entra no Financeiro quando é baixado, com a data do pagamento.'},
     funcionarios:{eyebrow:'Cadastro', title:'Funcionários', desc:'Cargo, em quais atividades cada pessoa participa (com % de alocação) e qual login de acesso ela usa. Sem CPF, salário ou Pix — esses dados não entram aqui.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso. Depois da unificação é um login só, que vale para Matriz, Lavoura e Pecuária.'},
   };
@@ -2488,1246 +2392,6 @@ function BlocoPorGrupo(lancamentos, total){
     </table>
   </div>`;
 }
-
-/* ===================== CONTAS A PAGAR E A RECEBER =====================
- *
- * Copia a separacao que o Conag faz entre Financeiro (o boleto) e
- * Gerencial (o rateio). Um titulo pode pesar em mais de uma fazenda e
- * atividade — um lancamento sozinho nao representa isso.
- *
- * REGIME DE CAIXA. O titulo nao aparece no Financeiro nem nos Resultados
- * enquanto nao for pago. Quem cria os lancamentos e o gatilho do banco,
- * na hora da baixa, com a data do pagamento — a tela NAO replica essa
- * regra. Uma regra, uma implementacao.
- */
-const SITUACAO_LABEL = {aberto:'Em aberto', parcial:'Parcial', pago:'Pago', cancelado:'Cancelado'};
-const FORMAS_PAGAMENTO = [
-  'Boleto bancário','PIX','Transferência','Débito em conta','Dinheiro',
-  'Cheque','Cartão de crédito','Cartão de débito','Depósito','Barter / troca','Outro',
-];
-
-function rowToEntidade(r){
-  return {id:r.id, nome:r.nome||'', documento:r.documento||'', papel:r.papel||'fornecedor',
-          observacao:r.observacao||'', ativo:r.ativo!==false};
-}
-function rowToContaBancaria(r){
-  return {id:r.id, nome:r.nome||'', banco:r.banco||'', agencia:r.agencia||'',
-          conta:r.conta||'', ativo:r.ativo!==false};
-}
-function rowToTitulo(r){
-  return {id:r.id, tipo:r.tipo, entidadeId:r.entidade_id||null, descricao:r.descricao||'',
-          documento:r.documento||'', formaPagamento:r.forma_pagamento||'',
-          contaBancariaId:r.conta_bancaria_id||null,
-          valor:Number(r.valor||0), vencimento:r.vencimento||null,
-          parcela:r.parcela||1, parcelas:r.parcelas||1, grupo:r.grupo||null,
-          previsao:r.previsao===true, cancelado:r.cancelado===true,
-          valorBaixado:Number(r.valor_baixado||0), situacao:r.situacao||'aberto',
-          observacao:r.observacao||''};
-}
-function rowToRateio(r){
-  return {id:r.id, tituloId:r.titulo_id, fazendaId:r.fazenda_id||null, atividade:r.atividade,
-          centroCustoId:r.centro_custo_id, competencia:r.competencia||'',
-          valor:Number(r.valor||0), talhaoId:r.talhao_id||null, observacao:r.observacao||''};
-}
-function rowToBaixa(r){
-  return {id:r.id, tituloId:r.titulo_id, data:r.data, valor:Number(r.valor||0),
-          contaBancariaId:r.conta_bancaria_id||null, observacao:r.observacao||''};
-}
-
-function podeVerContas(){ return temPermissao('contas','visualizar'); }
-function podeEditarContas(){ return temPermissao('contas','editar'); }
-// Excluir e so de admin ou proprietario — a mesma regra que o banco aplica
-// em pode_excluir(). Aqui e so para nao mostrar um botao que vai falhar.
-function podeExcluir(){ return acessoTotal(); }
-
-function nomeEntidade(id){
-  if(!id) return '—';
-  const e = state.entidades.find(x=>x.id===id);
-  return e ? e.nome : '—';
-}
-function nomeContaBancaria(id){
-  if(!id) return '';
-  const c = state.contasBancarias.find(x=>x.id===id);
-  return c ? c.nome : '';
-}
-function rateiosDoTitulo(id){ return state.rateios.filter(r=>r.tituloId===id); }
-function baixasDoTitulo(id){ return state.baixas.filter(b=>b.tituloId===id); }
-function saldoDoTitulo(t){ return Math.max(0, Number(t.valor||0) - Number(t.valorBaixado||0)); }
-
-/* Vencido depende do dia de hoje, entao nao fica guardado no banco — e
- * calculado aqui. hojeStr() e local; toISOString devolveria o dia seguinte
- * depois das 21h no Brasil. */
-function estadoDoVencimento(t){
-  if(t.cancelado) return 'cancelado';
-  if(t.situacao==='pago') return 'pago';
-  const hoje = hojeStr();
-  if(!t.vencimento) return 'aberto';
-  if(t.vencimento < hoje) return 'vencido';
-  if(t.vencimento === hoje) return 'hoje';
-  return 'aberto';
-}
-function PillSituacao(t){
-  const e = estadoDoVencimento(t);
-  if(e==='pago')      return `<span class="pill pill-ok">Pago</span>`;
-  if(e==='cancelado') return `<span class="pill">Cancelado</span>`;
-  if(e==='vencido')   return `<span class="pill pill-alerta">Vencido</span>`;
-  if(e==='hoje')      return `<span class="pill pill-warn">Vence hoje</span>`;
-  return t.situacao==='parcial'
-    ? `<span class="pill pill-warn">Parcial</span>`
-    : `<span class="pill">Em aberto</span>`;
-}
-function dataBr(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
-
-function titulosFiltrados(){
-  const tipo = state.abaContas;
-  const busca = (state.searchContas||'').trim().toLowerCase();
-  return state.titulos
-    .filter(t=>t.tipo===tipo)
-    .filter(t=>{
-      const f = state.filtroContas;
-      if(f==='todos') return true;
-      const e = estadoDoVencimento(t);
-      if(f==='vencidos') return e==='vencido';
-      if(f==='hoje')     return e==='hoje';
-      if(f==='abertos')  return e==='aberto' || e==='hoje' || e==='vencido';
-      if(f==='pagos')    return e==='pago';
-      if(f==='previsao') return t.previsao===true;
-      return true;
-    })
-    .filter(t=>{
-      if(!busca) return true;
-      const rat = rateiosDoTitulo(t.id);
-      const alvo = [
-        t.descricao, t.documento, nomeEntidade(t.entidadeId),
-        ...rat.map(r=>nomeCentroCusto(r.centroCustoId)),
-        ...rat.map(r=>nomeFazendaLanc(r.fazendaId)),
-      ].join(' ').toLowerCase();
-      return alvo.includes(busca);
-    })
-    .sort((a,b)=>{
-      // vencido primeiro, depois por vencimento mais proximo
-      const pa = estadoDoVencimento(a)==='vencido' ? 0 : 1;
-      const pb = estadoDoVencimento(b)==='vencido' ? 0 : 1;
-      if(pa!==pb) return pa-pb;
-      return String(a.vencimento||'').localeCompare(String(b.vencimento||''));
-    });
-}
-
-
-function PageContas(){
-  const tipo = state.abaContas;
-  const daAba = state.titulos.filter(t=>t.tipo===tipo && !t.cancelado);
-  const emAberto = daAba.filter(t=>t.situacao!=='pago');
-  const totalAberto  = emAberto.reduce((a,t)=>a+saldoDoTitulo(t), 0);
-  const vencidos     = emAberto.filter(t=>estadoDoVencimento(t)==='vencido');
-  const totalVencido = vencidos.reduce((a,t)=>a+saldoDoTitulo(t), 0);
-  const hoje = hojeStr();
-  const em30 = new Date(hoje+'T12:00:00'); em30.setDate(em30.getDate()+30);
-  const limite30 = em30.toISOString().slice(0,10);
-  const proximos = emAberto.filter(t=>t.vencimento >= hoje && t.vencimento <= limite30);
-  const total30  = proximos.reduce((a,t)=>a+saldoDoTitulo(t), 0);
-
-  const lista = titulosFiltrados();
-  const rotulo = tipo==='pagar' ? 'conta a pagar' : 'conta a receber';
-  const filtros = [
-    ['abertos','Em aberto'], ['vencidos',`Vencidos (${vencidos.length})`],
-    ['hoje','Vence hoje'], ['previsao','Previsão'], ['pagos','Pagos'], ['todos','Todos'],
-  ];
-
-  return `
-  <div class="toolbar" style="gap:8px;">
-    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-      ${[['pagar','A Pagar'],['receber','A Receber']].map(([k,l])=>`
-        <button class="${tipo===k?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-aba-contas="${k}">${l}</button>
-      `).join('')}
-    </div>
-    ${podeEditarContas() ? `<button class="btn btn-primary btn-sm" data-novo-titulo="${tipo}">+ Nova ${rotulo}</button>` : ''}
-  </div>
-
-  <div class="stat-row" style="grid-template-columns:repeat(3,1fr); margin-bottom:14px;">
-    <div class="stat-card">
-      <div class="stat-label">Em aberto</div>
-      <div class="stat-value">R$ ${fmt(totalAberto)}</div>
-      <div class="hint">${emAberto.length} ${emAberto.length===1?'título':'títulos'}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Vencido</div>
-      <div class="stat-value" style="${totalVencido>0?'color:var(--alerta);':''}">R$ ${fmt(totalVencido)}</div>
-      <div class="hint">${vencidos.length} ${vencidos.length===1?'título':'títulos'}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Vence em 30 dias</div>
-      <div class="stat-value">R$ ${fmt(total30)}</div>
-      <div class="hint">${proximos.length} ${proximos.length===1?'título':'títulos'}</div>
-    </div>
-  </div>
-
-  <div class="toolbar">
-    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-      ${filtros.map(([k,l])=>`
-        <button class="${state.filtroContas===k?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-filtro-contas="${k}">${l}</button>
-      `).join('')}
-    </div>
-    <input type="text" placeholder="Buscar por fornecedor, descrição, centro de custo..." value="${esc(state.searchContas)}" data-search-contas="1" style="max-width:340px;" autocomplete="off"/>
-  </div>
-
-  <div class="card" style="overflow-x:auto;">
-    ${lista.length===0 ? Empty('Nenhum título aqui', podeEditarContas()?'Use o botão acima para lançar. O filtro também pode estar escondendo linhas.':'O filtro pode estar escondendo linhas.') : `
-    <table>
-      <thead><tr>
-        <th>Vencimento</th><th>${tipo==='pagar'?'Fornecedor':'Cliente'}</th><th>Descrição</th>
-        <th>Onde pesa</th><th>Valor</th><th>Saldo</th><th>Situação</th><th></th>
-      </tr></thead>
-      <tbody>
-        ${lista.map(t=>{
-          const rat = rateiosDoTitulo(t.id);
-          const saldo = saldoDoTitulo(t);
-          return `
-          <tr>
-            <td class="mono">${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}</td>
-            <td>${esc(nomeEntidade(t.entidadeId))}</td>
-            <td><strong>${esc(t.descricao)}</strong>
-              ${t.documento?`<div class="hint">doc ${esc(t.documento)}</div>`:''}
-              ${t.previsao?`<div class="hint"><span class="pill pill-warn">Previsão</span></div>`:''}</td>
-            <td>${rat.length===0
-                  ? `<span class="pill pill-alerta">sem rateio</span>`
-                  : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(r.competencia)} · R$ ${fmt(r.valor)}</div>`).join('')}</td>
-            <td class="mono">R$ ${fmt(t.valor)}</td>
-            <td class="mono">${saldo>0?`R$ ${fmt(saldo)}`:'<span class="hint">—</span>'}</td>
-            <td>${PillSituacao(t)}</td>
-            <td style="display:flex; gap:6px; flex-wrap:wrap;">
-              ${podeEditarContas() && saldo>0 && !t.cancelado ? `<button class="btn btn-primary btn-sm" data-baixar-titulo="${t.id}">Baixar</button>` : ''}
-              ${podeEditarContas() ? `<button class="btn-ghost btn-sm" data-edit-titulo="${t.id}">Editar</button>` : ''}
-              ${baixasDoTitulo(t.id).length>0 ? `<button class="btn-ghost btn-sm" data-ver-baixas="${t.id}">Baixas</button>` : ''}
-              ${podeExcluir() ? `<button class="btn-danger-ghost" data-del-titulo="${t.id}">Excluir</button>` : ''}
-            </td>
-          </tr>`;
-        }).join('')}
-        <tr>
-          <td colspan="4" style="text-align:right; font-weight:600;">Total listado</td>
-          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+Number(t.valor||0),0))}</td>
-          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td>
-          <td colspan="2"></td>
-        </tr>
-      </tbody>
-    </table>`}
-  </div>
-
-  <p class="hint" style="margin-top:14px;">
-    O título só entra no Financeiro e nos Resultados quando é baixado, com a data do pagamento — regime de caixa,
-    igual ao resto do app. Quem cria o lançamento é o banco, na hora da baixa, repartindo pelo rateio.
-    Apagar uma baixa desfaz os lançamentos que ela criou.
-  </p>`;
-}
-
-
-/* Le o formulario do titulo. Usado ao salvar e tambem ao mexer nos
- * rateios, que redesenha a tela — sem isto o que ja foi digitado sumiria.
- * Mesmo motivo do lerLancamentoDoFormulario. */
-function lerTituloDoFormulario(base){
-  const v = (id)=> document.getElementById(id)?.value ?? '';
-  const rateios = (base.rateios||[]).map((r,i)=>({
-    ...r,
-    fazendaId:     document.getElementById(`f-rat-fazenda-${i}`)   ? v(`f-rat-fazenda-${i}`)   : r.fazendaId,
-    atividade:     document.getElementById(`f-rat-atividade-${i}`) ? v(`f-rat-atividade-${i}`) : r.atividade,
-    centroCustoId: document.getElementById(`f-rat-centro-${i}`)    ? v(`f-rat-centro-${i}`)    : r.centroCustoId,
-    competencia:   document.getElementById(`f-rat-comp-${i}`)      ? v(`f-rat-comp-${i}`)      : r.competencia,
-    valor:         document.getElementById(`f-rat-valor-${i}`)     ? v(`f-rat-valor-${i}`)     : r.valor,
-  }));
-  const nParc = Math.max(1, Number(v('f-tit-parcelas') || base.parcelas || 1));
-  const vencimentos = Array.from({length: nParc}, (_, i)=>{
-    const campo = document.getElementById(`f-tit-venc-${i}`);
-    return campo ? campo.value : (base.vencimentos||[])[i] || '';
-  });
-  const valoresParcela = Array.from({length: nParc}, (_, i)=>{
-    const campo = document.getElementById(`f-tit-valorparc-${i}`);
-    return campo ? campo.value : (base.valoresParcela||[])[i] ?? '';
-  });
-  return {
-    ...base,
-    vencimentos,
-    valoresParcela,
-    entidadeNome:    v('f-tit-entidade').trim(),
-    descricao:       v('f-tit-descricao').trim(),
-    documento:       v('f-tit-documento').trim(),
-    valor:           v('f-tit-valor'),
-    vencimento:      v('f-tit-vencimento'),
-    parcelas:        v('f-tit-parcelas') || '1',
-    intervaloTipo:   v('f-tit-intervalo-tipo') || 'mensal',
-    intervaloDias:   v('f-tit-intervalo-dias') || '',
-    formaPagamento:  v('f-tit-forma'),
-    contaBancariaId: v('f-tit-conta'),
-    previsao:        document.getElementById('f-tit-previsao')?.checked === true,
-    observacao:      v('f-tit-obs').trim(),
-    rateios,
-  };
-}
-
-/* Recalcula as datas das parcelas quando a REGRA muda (1o vencimento, nº de
- * parcelas ou intervalo) e preserva o que foi ajustado a mao quando nao
- * mudou. Sem a chave de regra, qualquer re-render desfaria a data que a
- * pessoa acabou de corrigir. */
-function ajustarParcelas(d){
-  const n = Math.max(1, Number(d.parcelas||1));
-  const dias = d.intervaloTipo==='dias' ? (Number(d.intervaloDias)||30) : '';
-  const total = Number(d.valor||0);
-  // O valor total entra na chave: mudar o total tem que refazer a divisao,
-  // senao as parcelas continuariam somando o valor antigo.
-  const chave = `${d.vencimento}|${n}|${d.intervaloTipo||'mensal'}|${dias}|${total}`;
-  const jaTem = (d.vencimentos||[]).length === n && (d.valoresParcela||[]).length === n;
-  if(d._regraChave === chave && jaTem) return d;
-  const base = d.vencimento || hojeStr();
-  return {...d, _regraChave: chave,
-          vencimentos: Array.from({length:n}, (_,i)=> vencimentoDaParcela(base, i, dias)),
-          valoresParcela: repartir(total, n)};
-}
-
-function ModalTitulo(){
-  // Garante que a tabela de datas exista e esteja coerente com a regra
-  // antes de desenhar. Guardar de volta em editDraft e o que faz a data
-  // ajustada a mao sobreviver ao proximo re-render.
-  const d = editDraft = ajustarParcelas(editDraft);
-  const ehPagar = d.tipo==='pagar';
-  const total = Number(d.valor||0);
-  const somaRateios = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
-  const falta = Math.round((total - somaRateios) * 100) / 100;
-  // A soma fechar nao basta: com dois rateios, um pode estar com o valor
-  // inteiro e o outro vazio — a soma bate e a linha ficaria verde enquanto
-  // o formulario recusa salvar. Dizer "fecha" e "preencha" ao mesmo tempo
-  // e pior do que nao dizer nada.
-  const rateiosCompletos = (d.rateios||[]).every(r =>
-    r.centroCustoId && r.competencia && Number(r.valor) > 0);
-  const somaParcelas = (d.valoresParcela||[]).reduce((a,v)=>a+Number(v||0), 0);
-  const faltaParcelas = Math.round((total - somaParcelas) * 100) / 100;
-  const nParcelas = Math.max(1, Number(d.parcelas||1));
-  const editando = !!d._editId;
-
-  // So oferece centro do lado certo do plano de contas: 'entrada' para
-  // conta a receber, 'saida' para conta a pagar.
-  //
-  // Sem isto dava para lancar uma venda de cana contra ADUBOS E
-  // FERTILIZANTES. O lancamento ficaria com valor certo e grupo errado, e
-  // o DFC mostraria receita dentro de OPERACIONAL - o tipo de erro que so
-  // aparece quando alguem estranha o relatorio meses depois.
-  //
-  // Centro sem tipo (ainda nao classificado) continua aparecendo: barrar
-  // seria pior, deixaria a pessoa sem opcao nenhuma.
-  const tipoEsperado = ehPagar ? 'saida' : 'entrada';
-  const centrosPara = (atividade)=> state.centrosCusto
-    .filter(c=> c.ativo!==false)
-    .filter(c=> !c.frente || c.frente==='geral' || c.frente===atividade)
-    .filter(c=> !c.tipo || c.tipo===tipoEsperado)
-    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
-
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal modal-lg" data-stop="1">
-      <div class="modal-head">
-        <h3>${editando?'Editar':'Nova'} ${ehPagar?'conta a pagar':'conta a receber'}</h3>
-        <button class="modal-close" data-close="1">&times;</button>
-      </div>
-      <div class="modal-body">
-
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:0 0 8px;">Financeiro</h4>
-        <p class="hint" style="margin-top:0;">O papel: quem, quanto, quando vence.</p>
-
-        <div class="field"><label>${ehPagar?'Fornecedor':'Cliente'}</label>
-          <input id="f-tit-entidade" list="lista-entidades" value="${esc(d.entidadeNome||'')}" placeholder="Comece a digitar..." autocomplete="off"/>
-          <datalist id="lista-entidades">
-            ${state.entidades.filter(e=>e.ativo).map(e=>`<option value="${esc(e.nome)}"></option>`).join('')}
-          </datalist>
-          <span class="hint">Se o nome ainda não existir, ele é cadastrado ao salvar.</span>
-        </div>
-        <div class="field"><label>Descrição</label>
-          <input id="f-tit-descricao" value="${esc(d.descricao||'')}" placeholder="${ehPagar?'Ex: Adubo 20-05-20, 12 toneladas':'Ex: Venda de boi gordo'}" autocomplete="off"/></div>
-        <div class="field"><label>Documento (nota ou boleto, opcional)</label>
-          <input id="f-tit-documento" value="${esc(d.documento||'')}" autocomplete="off"/></div>
-        <div class="field"><label>Valor total (R$)</label>
-          <input id="f-tit-valor" type="number" step="0.01" min="0" value="${d.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/>
-          ${nParcelas>1?`<span class="hint">Serão criados ${nParcelas} títulos de R$ ${fmt(total/nParcelas)} (o último absorve o arredondamento).</span>`:''}</div>
-        <div class="field"><label>Vencimento${nParcelas>1?' da 1ª parcela':''}</label>
-          <input id="f-tit-vencimento" type="date" value="${d.vencimento||''}"/></div>
-
-        ${editando ? '' : `
-        <div class="field"><label>Nº de parcelas</label>
-          <input id="f-tit-parcelas" type="number" step="1" min="1" max="120" value="${d.parcelas||1}" data-recalcula-titulo="1"/></div>
-        ${nParcelas>1?`
-        <div class="field"><label>Intervalo entre parcelas</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <select id="f-tit-intervalo-tipo" data-recalcula-titulo="1" style="flex:1;">
-              <option value="mensal" ${d.intervaloTipo!=='dias'?'selected':''}>Mensal (mesmo dia do mês seguinte)</option>
-              <option value="dias" ${d.intervaloTipo==='dias'?'selected':''}>A cada N dias</option>
-            </select>
-            ${d.intervaloTipo==='dias'?`
-            <input id="f-tit-intervalo-dias" type="number" step="1" min="1" max="365"
-                   value="${d.intervaloDias||30}" data-recalcula-titulo="1"
-                   style="width:110px;" placeholder="dias"/>`:''}
-          </div>
-          <span class="hint">Isto só preenche as datas abaixo. Qualquer uma pode ser corrigida à mão.</span>
-        </div>
-
-        <div class="field"><label>Parcelas</label>
-          <table style="width:100%;">
-            <thead><tr><th style="width:52px;">Parc.</th><th>Vencimento</th><th style="width:120px;">Valor (R$)</th></tr></thead>
-            <tbody>
-              ${Array.from({length:nParcelas}, (_,i)=>`
-                <tr>
-                  <td class="mono">${i+1}/${nParcelas}</td>
-                  <td><input id="f-tit-venc-${i}" type="date" value="${(d.vencimentos||[])[i]||''}" style="width:100%;"/></td>
-                  <td><input id="f-tit-valorparc-${i}" type="number" step="0.01" min="0"
-                             value="${(d.valoresParcela||[])[i] ?? ''}" data-recalcula-parcela="1"
-                             style="width:100%;" autocomplete="off"/></td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-          ${Math.abs(faltaParcelas)<0.005
-            ? `<span class="hint" style="color:var(--verde-vivo-escuro);">As parcelas somam o valor total.</span>`
-            : `<div class="login-error" style="margin-top:6px;">
-                 As parcelas somam R$ ${fmt(somaParcelas)}, e o total é R$ ${fmt(total)}.
-                 ${faltaParcelas>0?`Faltam R$ ${fmt(faltaParcelas)}.`:`Passou R$ ${fmt(-faltaParcelas)}.`}
-                 <button class="btn-ghost btn-sm" data-distribuir-resto="1" style="margin-top:6px;">Distribuir a diferença nas demais</button>
-               </div>`}
-          <span class="hint">Vem dividido por igual, que é o caso comum. Edite quando houver entrada maior ou um valor diferente na última.
-          Mudar o total, o nº de parcelas ou o intervalo refaz a tabela; editar uma linha isolada não mexe nas outras.</span>
-        </div>`:''}`}
-
-        <div class="field"><label>Forma de pagamento</label>
-          <select id="f-tit-forma">
-            <option value="">— Não informada —</option>
-            ${FORMAS_PAGAMENTO.map(f=>`<option value="${esc(f)}" ${d.formaPagamento===f?'selected':''}>${esc(f)}</option>`).join('')}
-          </select></div>
-        <div class="field"><label>Conta bancária</label>
-          <select id="f-tit-conta">
-            <option value="">— Não informada —</option>
-            ${state.contasBancarias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${String(d.contaBancariaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
-          </select></div>
-        <div class="field">
-          <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
-            <input id="f-tit-previsao" type="checkbox" style="width:auto;" ${d.previsao?'checked':''}/> É previsão
-          </label>
-          <span class="hint">Marque quando o valor é esperado mas ainda não tem boleto firme. Aparece na lista separado.</span>
-        </div>
-
-        <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:18px 0 8px;">Gerencial</h4>
-        <p class="hint" style="margin-top:0;">
-          Onde o dinheiro pesa. Pode dividir entre fazendas e atividades — é o que um lançamento sozinho não consegue.
-          A competência é independente do vencimento: um boleto que vence em setembro pode ser competência de julho.
-        </p>
-
-        ${(d.rateios||[]).map((r,i)=>`
-        <div class="card" style="padding:12px; margin-bottom:10px; background:var(--cinza-bg);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong style="font-size:13px;">Rateio ${i+1} de ${(d.rateios||[]).length}</strong>
-            ${(d.rateios||[]).length>1?`<button class="btn-danger-ghost btn-sm" data-remove-rateio="${i}">Remover</button>`:''}
-          </div>
-          <div class="field"><label>Atividade</label>
-            <select id="f-rat-atividade-${i}" data-recalcula-titulo="1">
-              ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${r.atividade===k?'selected':''}>${l}</option>`).join('')}
-            </select></div>
-          <div class="field"><label>Fazenda</label>
-            <select id="f-rat-fazenda-${i}">
-              <option value="" ${!r.fazendaId?'selected':''}>Geral / toda a empresa</option>
-              ${state.fazendasLavoura.map(f=>`<option value="${f.id}" ${String(r.fazendaId)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
-            </select></div>
-          <div class="field"><label>Centro de custo</label>
-            <select id="f-rat-centro-${i}">
-              <option value="">— Selecione —</option>
-              ${centrosPara(r.atividade).map(c=>`<option value="${c.id}" ${String(r.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
-            </select></div>
-          <div class="field"><label>Competência</label>
-            <input id="f-rat-comp-${i}" type="month" value="${esc(r.competencia||'')}"/>
-            <span class="hint">Em que mês este gasto pertence, independente de quando vence ou é pago.</span></div>
-          <div class="field"><label>Valor deste rateio (R$)</label>
-            <input id="f-rat-valor-${i}" type="number" step="0.01" min="0" value="${r.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/></div>
-        </div>`).join('')}
-
-        <button class="btn-ghost btn-sm" data-add-rateio="1" style="margin-bottom:10px;">+ Dividir em outro centro de custo / fazenda</button>
-
-        ${total>0 ? (
-          Math.abs(falta)>=0.005
-            ? `<div class="login-error">Falta distribuir R$ ${fmt(Math.abs(falta))}${falta<0?' (o rateio passou do valor do título)':''}. A soma dos rateios tem que dar R$ ${fmt(total)}.</div>`
-          : !rateiosCompletos
-            ? `<div class="hint" style="color:var(--ambar);">A soma fecha, mas ainda falta preencher centro de custo, competência ou valor em algum rateio.</div>`
-            : `<div class="hint" style="color:var(--verde-vivo-escuro); font-weight:600;">O rateio fecha com o valor do título.</div>`
-        ) : ''}
-
-        <div class="field" style="margin-top:12px;"><label>Observação (opcional)</label>
-          <textarea id="f-tit-obs" rows="2">${esc(d.observacao||'')}</textarea></div>
-
-        ${state.erroTitulo ? `<div class="login-error">${esc(state.erroTitulo)}</div>` : ''}
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="titulo">${editando?'Salvar alterações':(nParcelas>1?`Gerar ${nParcelas} parcelas`:'Salvar')}</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-
-function ModalBaixa(){
-  const d = editDraft;
-  const t = state.titulos.find(x=>x.id===d._tituloId);
-  if(!t) return '';
-  const saldo = saldoDoTitulo(t);
-  const rat = rateiosDoTitulo(t.id);
-  const valorInformado = Number(d.valor||0);
-  const proporcao = valorInformado>0 && t.valor>0 ? valorInformado / t.valor : 0;
-
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head">
-        <h3>${t.tipo==='pagar'?'Baixar pagamento':'Registrar recebimento'}</h3>
-        <button class="modal-close" data-close="1">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="card" style="background:var(--cinza-bg); padding:12px; margin-bottom:12px;">
-          <strong>${esc(t.descricao)}</strong>
-          <div class="hint">${esc(nomeEntidade(t.entidadeId))} · vence ${dataBr(t.vencimento)}${t.parcelas>1?` · parcela ${t.parcela}/${t.parcelas}`:''}</div>
-          <div class="hint">Valor do título R$ ${fmt(t.valor)}${t.valorBaixado>0?` · já baixado R$ ${fmt(t.valorBaixado)}`:''}</div>
-          <div style="font-size:18px; font-weight:700; margin-top:6px;">Saldo: R$ ${fmt(saldo)}</div>
-        </div>
-
-        <div class="field"><label>Data do pagamento</label>
-          <input id="f-bx-data" type="date" value="${d.data||hojeStr()}"/>
-          <span class="hint">É esta data que vai para o Financeiro. O mês do lançamento é o mês do pagamento.</span></div>
-        <div class="field"><label>Valor pago (R$)</label>
-          <input id="f-bx-valor" type="number" step="0.01" min="0" max="${saldo}" value="${d.valor ?? saldo}" data-recalcula-baixa="1" autocomplete="off"/>
-          <span class="hint">Deixe o saldo inteiro para quitar, ou informe menos para uma baixa parcial.</span></div>
-        <div class="field"><label>Conta bancária</label>
-          <select id="f-bx-conta">
-            <option value="">— Não informada —</option>
-            ${state.contasBancarias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${String(d.contaBancariaId ?? t.contaBancariaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
-          </select></div>
-        <div class="field"><label>Observação (opcional)</label>
-          <textarea id="f-bx-obs" rows="2">${esc(d.observacao||'')}</textarea></div>
-
-        ${rat.length>0 && valorInformado>0 ? `
-        <div class="card" style="padding:12px; background:var(--cinza-bg);">
-          <div class="hint" style="margin-bottom:6px;"><strong>Vai gerar ${rat.length} ${rat.length===1?'lançamento':'lançamentos'} no Financeiro:</strong></div>
-          ${rat.map((r,i)=>{
-            const parte = i===rat.length-1
-              ? valorInformado - rat.slice(0,-1).reduce((a,x)=>a+Math.round(valorInformado*(x.valor/t.valor)*100)/100, 0)
-              : Math.round(valorInformado * (r.valor/t.valor) * 100)/100;
-            return `<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} → <strong>R$ ${fmt(parte)}</strong></div>`;
-          }).join('')}
-          ${proporcao<0.999?`<div class="hint" style="margin-top:6px;">Baixa parcial: cada rateio recebe ${fmt(proporcao*100,1)}% do que lhe cabe.</div>`:''}
-        </div>` : ''}
-        ${rat.length===0 ? `<div class="login-error">Este título não tem rateio. Edite o título e defina onde a despesa pesa antes de baixar.</div>` : ''}
-
-        ${state.erroTitulo ? `<div class="login-error">${esc(state.erroTitulo)}</div>` : ''}
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="baixa" ${rat.length===0?'disabled':''}>Confirmar</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function ModalVerBaixas(){
-  const t = state.titulos.find(x=>x.id===state.modal.tituloId);
-  if(!t) return '';
-  const lista = baixasDoTitulo(t.id).sort((a,b)=>String(b.data).localeCompare(String(a.data)));
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Baixas — ${esc(t.descricao)}</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <p class="hint">Título de R$ ${fmt(t.valor)} · já baixado R$ ${fmt(t.valorBaixado)} · saldo R$ ${fmt(saldoDoTitulo(t))}</p>
-        <table>
-          <thead><tr><th>Data</th><th>Valor</th><th>Conta</th><th></th></tr></thead>
-          <tbody>
-            ${lista.map(b=>`
-              <tr>
-                <td class="mono">${dataBr(b.data)}</td>
-                <td class="mono">R$ ${fmt(b.valor)}</td>
-                <td>${esc(nomeContaBancaria(b.contaBancariaId)) || '<span class="hint">—</span>'}</td>
-                <td>${podeExcluir() ? `<button class="btn-danger-ghost btn-sm" data-del-baixa="${b.id}">Desfazer</button>` : ''}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-        <p class="hint" style="margin-top:10px;">Desfazer uma baixa apaga os lançamentos que ela criou no Financeiro e devolve o saldo ao título.</p>
-      </div>
-      <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
-    </div>
-  </div>`;
-}
-
-/* Gera as parcelas. Mensal soma meses de verdade (nao 30 dias), entao um
- * boleto que vence dia 31 cai no ultimo dia do mes seguinte em vez de
- * pular para o mes subsequente. */
-function vencimentoDaParcela(primeiro, i, intervaloDias){
-  const base = new Date(primeiro + 'T12:00:00');
-  if(intervaloDias){
-    base.setDate(base.getDate() + Number(intervaloDias) * i);
-    return base.toISOString().slice(0,10);
-  }
-  const dia = base.getDate();
-  const d = new Date(base.getFullYear(), base.getMonth() + i, 1, 12, 0, 0);
-  const ultimoDiaDoMes = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-  d.setDate(Math.min(dia, ultimoDiaDoMes));
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const dd = String(d.getDate()).padStart(2,'0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-/* Reparte um valor em n partes de 2 casas cuja soma bate exatamente. O
- * resto vai na ultima — mesma regra do gatilho do banco, para a tela nunca
- * mostrar um numero diferente do que o banco vai gravar. */
-function repartir(total, n){
-  const t = Math.round(Number(total)*100);
-  const base = Math.floor(t/n);
-  const partes = Array.from({length:n}, ()=>base);
-  partes[n-1] = t - base*(n-1);
-  return partes.map(c=>c/100);
-}
-
-
-/* Acha a entidade pelo nome ou cria. O indice unico do banco e por
- * lower(btrim(nome)), entao a comparacao aqui usa a mesma regra — senao a
- * tela tentaria criar "Agrosaquy" tendo "AGROSAQUY" e tomaria erro. */
-async function acharOuCriarEntidade(nome){
-  const limpo = (nome||'').trim();
-  if(!limpo) return {id:null};
-  const achou = state.entidades.find(e=>e.nome.trim().toLowerCase() === limpo.toLowerCase());
-  if(achou) return {id:achou.id};
-  const {data, error} = await db.from('entidades')
-    .insert({nome: limpo, papel: 'fornecedor', criado_por: state.perfil?.nome || null})
-    .select('id').single();
-  if(error) return {error};
-  return {id: data.id};
-}
-
-async function salvarTitulo(){
-  const d = lerTituloDoFormulario(editDraft);
-  const total = Number(d.valor||0);
-  const nParcelas = Math.max(1, Number(d.parcelas||1));
-
-  const faltando = [];
-  if(!d.descricao) faltando.push('descrição');
-  if(!(total > 0)) faltando.push('valor (maior que zero)');
-  if(!d.vencimento) faltando.push('vencimento');
-  // Com parcelas, cada data e escolhida na tabela; uma vazia geraria um
-  // titulo sem vencimento, que some dos filtros de vencido e a vencer.
-  if(!d._editId && nParcelas > 1){
-    (d.vencimentos||[]).forEach((v,i)=>{ if(!v) faltando.push(`data da parcela ${i+1}`); });
-    (d.valoresParcela||[]).forEach((v,i)=>{ if(!(Number(v) > 0)) faltando.push(`valor da parcela ${i+1}`); });
-    const somaParc = (d.valoresParcela||[]).reduce((a,v)=>a+Number(v||0), 0);
-    if(Math.abs(somaParc - total) > 0.005){
-      faltando.push(`as parcelas somam R$ ${fmt(somaParc)} e o total é R$ ${fmt(total)}`);
-    }
-  }
-  if(!(d.rateios||[]).length) faltando.push('pelo menos um rateio');
-  (d.rateios||[]).forEach((r,i)=>{
-    if(!r.centroCustoId) faltando.push(`centro de custo do rateio ${i+1}`);
-    if(!r.competencia)   faltando.push(`competência do rateio ${i+1}`);
-    if(!(Number(r.valor) > 0)) faltando.push(`valor do rateio ${i+1}`);
-  });
-  const soma = (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0), 0);
-  if(faltando.length===0 && Math.abs(soma - total) > 0.005){
-    faltando.push(`a soma dos rateios (R$ ${fmt(soma)}) tem que fechar com o valor do título (R$ ${fmt(total)})`);
-  }
-  if(faltando.length){
-    state.erroTitulo = 'Preencha: ' + faltando.join('; ') + '.';
-    editDraft = d; render(); return;
-  }
-  state.erroTitulo = '';
-
-  const ent = await acharOuCriarEntidade(d.entidadeNome);
-  if(ent.error){ alert('Não foi possível cadastrar o fornecedor: ' + ent.error.message); return; }
-
-  const comum = {
-    tipo: d.tipo,
-    entidade_id: ent.id,
-    descricao: d.descricao,
-    documento: d.documento || null,
-    forma_pagamento: d.formaPagamento || null,
-    conta_bancaria_id: d.contaBancariaId ? Number(d.contaBancariaId) : null,
-    previsao: d.previsao === true,
-    observacao: d.observacao || null,
-  };
-
-  if(d._editId){
-    // Editar mexe num titulo so. Os rateios sao trocados por inteiro: e
-    // mais simples e mais seguro do que casar linha a linha, e o gatilho
-    // que confere o fechamento e "deferrable", entao a troca acontece
-    // dentro da mesma transacao sem acusar diferenca no meio do caminho.
-    const {error: e1} = await db.from('titulos')
-      .update({...comum, valor: total, vencimento: d.vencimento}).eq('id', d._editId);
-    if(e1){ alert('Não foi possível salvar: ' + e1.message); return; }
-    const {error: e2} = await db.from('titulo_rateios').delete().eq('titulo_id', d._editId);
-    if(e2){ alert('Não foi possível atualizar o rateio: ' + e2.message); return; }
-    const {error: e3} = await db.from('titulo_rateios').insert((d.rateios||[]).map(r=>({
-      titulo_id: d._editId,
-      fazenda_id: r.fazendaId ? Number(r.fazendaId) : null,
-      atividade: r.atividade,
-      centro_custo_id: Number(r.centroCustoId),
-      competencia: r.competencia,
-      valor: Number(r.valor),
-    })));
-    if(e3){ alert('Não foi possível salvar o rateio: ' + e3.message); return; }
-  } else {
-    const grupo = nParcelas > 1
-      ? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2))
-      : null;
-    // Os valores vem da tabela que a pessoa viu e pode ter ajustado
-    // (entrada maior, balao na ultima). A validacao acima ja garantiu que
-    // somam o total.
-    const valoresParcela = (d.valoresParcela||[]).length === nParcelas
-      ? (d.valoresParcela||[]).map(v=>Number(v))
-      : repartir(total, nParcelas);
-
-    for(let p = 0; p < nParcelas; p++){
-      const vp = valoresParcela[p];
-      const {data: novo, error: e1} = await db.from('titulos').insert({
-        ...comum,
-        valor: vp,
-        // A data vem da tabela que a pessoa viu e pode ter corrigido — nao
-        // da regra. Se a tabela nao existir (1 parcela), cai no vencimento.
-        vencimento: (d.vencimentos||[])[p] || d.vencimento,
-        parcela: p + 1,
-        parcelas: nParcelas,
-        grupo,
-        criado_por: state.perfil?.nome || null,
-      }).select('id').single();
-      if(e1){ alert('Não foi possível salvar: ' + e1.message); return; }
-
-      // Cada parcela recebe o rateio na mesma proporcao do titulo cheio, e
-      // a ultima linha absorve o arredondamento para a soma fechar exata —
-      // o banco recusa rateio que nao fecha.
-      const rat = d.rateios || [];
-      let acumulado = 0;
-      const linhas = rat.map((r, i)=>{
-        const parte = (i === rat.length - 1)
-          ? Math.round((vp - acumulado) * 100) / 100
-          : Math.round((vp * (Number(r.valor) / total)) * 100) / 100;
-        if(i < rat.length - 1) acumulado += parte;
-        return {
-          titulo_id: novo.id,
-          fazenda_id: r.fazendaId ? Number(r.fazendaId) : null,
-          atividade: r.atividade,
-          centro_custo_id: Number(r.centroCustoId),
-          competencia: r.competencia,
-          valor: parte,
-        };
-      }).filter(l=>l.valor > 0);
-
-      const {error: e2} = await db.from('titulo_rateios').insert(linhas);
-      if(e2){ alert('Não foi possível salvar o rateio: ' + e2.message); return; }
-    }
-  }
-
-  state.modal = null; editDraft = null;
-  await loadAll();
-}
-
-async function salvarBaixa(){
-  const d = editDraft;
-  const t = state.titulos.find(x=>x.id===d._tituloId);
-  if(!t) return;
-  const data  = document.getElementById('f-bx-data')?.value || '';
-  const valor = Number(document.getElementById('f-bx-valor')?.value || 0);
-  const conta = document.getElementById('f-bx-conta')?.value || '';
-  const obs   = document.getElementById('f-bx-obs')?.value.trim() || '';
-
-  if(!data){ state.erroTitulo = 'Informe a data do pagamento.'; render(); return; }
-  if(!(valor > 0)){ state.erroTitulo = 'Informe um valor maior que zero.'; render(); return; }
-  if(valor > saldoDoTitulo(t) + 0.005){
-    state.erroTitulo = `O valor passa do saldo (R$ ${fmt(saldoDoTitulo(t))}).`; render(); return;
-  }
-  state.erroTitulo = '';
-
-  // A tela so insere a baixa. Quem cria os lancamentos e reparte pelo
-  // rateio e o gatilho do banco — replicar isso aqui seria a segunda
-  // implementacao da mesma regra.
-  const {error} = await db.from('titulo_baixas').insert({
-    titulo_id: t.id,
-    data,
-    valor,
-    conta_bancaria_id: conta ? Number(conta) : null,
-    observacao: obs || null,
-    criado_por: state.perfil?.nome || null,
-  });
-  if(error){ alert('Não foi possível registrar a baixa: ' + error.message); return; }
-
-  state.modal = null; editDraft = null;
-  await loadAll();
-}
-
-function rateioVazio(){
-  return {fazendaId:'', atividade:'geral', centroCustoId:'', competencia: mesAtualStr(), valor:''};
-}
-
-
-function ligarEventosContas(){
-  document.querySelectorAll('[data-aba-contas]').forEach(el=>{
-    el.onclick = ()=>{ state.abaContas = el.dataset.abaContas; render(); };
-  });
-  document.querySelectorAll('[data-filtro-contas]').forEach(el=>{
-    el.onclick = ()=>{ state.filtroContas = el.dataset.filtroContas; render(); };
-  });
-  const buscaContas = document.querySelector('[data-search-contas]');
-  if(buscaContas){
-    buscaContas.oninput = ()=>{ state.searchContas = buscaContas.value; render();
-      const novo = document.querySelector('[data-search-contas]');
-      if(novo){ novo.focus(); novo.setSelectionRange(novo.value.length, novo.value.length); } };
-  }
-  document.querySelectorAll('[data-novo-titulo]').forEach(el=>{
-    el.onclick = ()=>{
-      state.erroTitulo = '';
-      editDraft = {tipo: el.dataset.novoTitulo, valor:'', vencimento: hojeStr(), parcelas:1,
-                   intervaloDias:'', previsao:false, rateios:[rateioVazio()]};
-      state.modal = {type:'titulo'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-edit-titulo]').forEach(el=>{
-    el.onclick = ()=>{
-      const t = state.titulos.find(x=>x.id===Number(el.dataset.editTitulo));
-      if(!t) return;
-      state.erroTitulo = '';
-      const rat = rateiosDoTitulo(t.id).map(r=>({
-        fazendaId: r.fazendaId ?? '', atividade: r.atividade, centroCustoId: r.centroCustoId,
-        competencia: r.competencia, valor: r.valor,
-      }));
-      editDraft = {
-        _editId: t.id, tipo: t.tipo, entidadeNome: nomeEntidade(t.entidadeId)==='—'?'':nomeEntidade(t.entidadeId),
-        descricao: t.descricao, documento: t.documento, valor: t.valor, vencimento: t.vencimento,
-        parcelas: t.parcelas, intervaloDias:'', formaPagamento: t.formaPagamento,
-        contaBancariaId: t.contaBancariaId ?? '', previsao: t.previsao, observacao: t.observacao,
-        rateios: rat.length ? rat : [rateioVazio()],
-      };
-      state.modal = {type:'titulo'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-baixar-titulo]').forEach(el=>{
-    el.onclick = ()=>{
-      const t = state.titulos.find(x=>x.id===Number(el.dataset.baixarTitulo));
-      if(!t) return;
-      state.erroTitulo = '';
-      editDraft = {_tituloId: t.id, data: hojeStr(), valor: saldoDoTitulo(t),
-                   contaBancariaId: t.contaBancariaId ?? '', observacao:''};
-      state.modal = {type:'baixa'};
-      render();
-    };
-  });
-  document.querySelectorAll('[data-ver-baixas]').forEach(el=>{
-    el.onclick = ()=>{ state.modal = {type:'verBaixas', tituloId: Number(el.dataset.verBaixas)}; render(); };
-  });
-  document.querySelectorAll('[data-del-titulo]').forEach(el=>{
-    el.onclick = async ()=>{
-      const t = state.titulos.find(x=>x.id===Number(el.dataset.delTitulo));
-      if(!t) return;
-      const temBaixa = baixasDoTitulo(t.id).length > 0;
-      const aviso = temBaixa
-        ? `"${t.descricao}" já tem baixa registrada. Excluir o título apaga também os lançamentos que a baixa criou no Financeiro. Continuar?`
-        : `Excluir "${t.descricao}"? Essa ação não pode ser desfeita.`;
-      if(!confirm(aviso)) return;
-      const {error} = await db.from('titulos').delete().eq('id', t.id);
-      if(error){ alert('Não foi possível excluir: ' + error.message); return; }
-      await loadAll();
-    };
-  });
-  document.querySelectorAll('[data-del-baixa]').forEach(el=>{
-    el.onclick = async ()=>{
-      if(!confirm('Desfazer esta baixa? Os lançamentos que ela criou no Financeiro serão apagados.')) return;
-      const {error} = await db.from('titulo_baixas').delete().eq('id', Number(el.dataset.delBaixa));
-      if(error){ alert('Não foi possível desfazer: ' + error.message); return; }
-      state.modal = null;
-      await loadAll();
-    };
-  });
-
-  // ---- dentro do formulário de título ----
-  document.querySelectorAll('[data-recalcula-titulo]').forEach(el=>{
-    el.onchange = ()=>{ editDraft = lerTituloDoFormulario(editDraft); render(); };
-  });
-  const addRateio = document.querySelector('[data-add-rateio]');
-  if(addRateio){
-    addRateio.onclick = ()=>{
-      const d = lerTituloDoFormulario(editDraft);
-      // O rateio novo já vem com o que falta para fechar: quase sempre é o
-      // valor que a pessoa ia digitar de qualquer jeito.
-      const falta = Math.round((Number(d.valor||0) - (d.rateios||[]).reduce((a,r)=>a+Number(r.valor||0),0)) * 100)/100;
-      d.rateios = [...(d.rateios||[]), {...rateioVazio(), valor: falta > 0 ? falta : ''}];
-      editDraft = d; render();
-    };
-  }
-  document.querySelectorAll('[data-remove-rateio]').forEach(el=>{
-    el.onclick = ()=>{
-      const d = lerTituloDoFormulario(editDraft);
-      d.rateios = (d.rateios||[]).filter((_,i)=> i !== Number(el.dataset.removeRateio));
-      editDraft = d; render();
-    };
-  });
-  document.querySelectorAll('[data-recalcula-venda],[data-recalcula-lanc]').forEach(el=>{
-    el.onchange = ()=>{ editDraft = lerLancamentoCompleto(editDraft); render(); };
-  });
-  document.querySelectorAll('[data-recalcula-parcela]').forEach(el=>{
-    // Anota QUAIS linhas a pessoa mexeu. Sem isso nao da para saber: todas
-    // ja vem preenchidas com a divisao igual, entao "tem valor" nao
-    // distingue o que foi digitado do que veio pronto. Foi assim que a
-    // primeira versao do botao de distribuir nao fez nada.
-    el.onchange = ()=>{
-      const i = Number(el.id.replace('f-tit-valorparc-',''));
-      const d = lerTituloDoFormulario(editDraft);
-      editDraft = {...d, _parcelasEditadas: [...new Set([...(d._parcelasEditadas||[]), i])]};
-      render();
-    };
-  });
-  const distribuir = document.querySelector('[data-distribuir-resto]');
-  if(distribuir){
-    distribuir.onclick = ()=>{
-      const dd = lerTituloDoFormulario(editDraft);
-      const total = Number(dd.valor||0);
-      const vals = (dd.valoresParcela||[]).map(v=>Number(v||0));
-      // As linhas que a pessoa digitou ficam como estao; a diferenca e
-      // repartida por igual entre as que ela NAO mexeu. E o caso real:
-      // digitar a entrada e querer o resto dividido no que sobrou.
-      const mexidas = new Set(dd._parcelasEditadas||[]);
-      const livres = vals.map((_,i)=>i).filter(i=>!mexidas.has(i));
-      if(livres.length === 0){
-        alert('Você ajustou todas as parcelas à mão, então não há onde distribuir a diferença. Corrija uma das linhas.');
-        return;
-      }
-      const somaFixas = vals.reduce((a,v,i)=> mexidas.has(i) ? a+v : a, 0);
-      const resto = Math.round((total - somaFixas) * 100)/100;
-      if(resto <= 0){
-        alert('O que você digitou já passa do valor total. Diminua alguma parcela ou aumente o total.');
-        return;
-      }
-      const pedacos = repartir(resto, livres.length);
-      const novos = [...vals];
-      livres.forEach((idx, k)=>{ novos[idx] = pedacos[k]; });
-      editDraft = {...dd, valoresParcela: novos};
-      render();
-    };
-  }
-  const bxValor = document.querySelector('[data-recalcula-baixa]');
-  if(bxValor){
-    bxValor.onchange = ()=>{
-      editDraft = {...editDraft, valor: bxValor.value,
-                   data: document.getElementById('f-bx-data')?.value || editDraft.data};
-      render();
-    };
-  }
-}
-
-
-
-/* ===================== QUANTO FOI ENTREGUE =====================
- *
- * Toda receita passa a poder registrar QUANTO saiu, na unidade da
- * atividade. Sem isso o app sabe quanto entrou de dinheiro mas nao sabe a
- * que preco - e preco por unidade e o numero que se compara entre safras,
- * entre fazendas e com o mercado.
- *
- * As unidades sao as do mercado brasileiro:
- *   tonelada  cana (a usina paga por tonelada, com ATR)
- *   saca      graos - 60 kg em soja, milho, cafe, trigo, feijao e sorgo;
- *             arroz e a excecao, 50 kg
- *   arroba    boi - 15 kg de CARCACA, nao de peso vivo
- *
- * As colunas quantidade e unidade ja existiam em lancamentos_financeiros
- * desde a migracao das receitas da lavoura, mas nenhum formulario as
- * preenchia: chegavam preenchidas na importacao e ficavam vazias em tudo
- * que era lancado pelo app.
- */
-const UNIDADES = {
-  t:    {rotulo:'Tonelada',            curto:'t'},
-  sc:   {rotulo:'Saca de 60 kg',       curto:'sc'},
-  sc50: {rotulo:'Saca de 50 kg (arroz)', curto:'sc'},
-  '@':  {rotulo:'Arroba (15 kg de carcaça)', curto:'@'},
-  cab:  {rotulo:'Cabeça',              curto:'cab'},
-  kg:   {rotulo:'Quilo',               curto:'kg'},
-  l:    {rotulo:'Litro',               curto:'L'},
-  un:   {rotulo:'Unidade',             curto:'un'},
-};
-// O que faz sentido oferecer em cada atividade, na ordem do mais provavel.
-const UNIDADES_DA_ATIVIDADE = {
-  cana:     ['t', 'kg'],
-  graos:    ['sc', 'sc50', 't', 'kg'],
-  pecuaria: ['@', 'cab', 'kg'],
-  geral:    ['un', 't', 'sc', 'kg', 'l', '@', 'cab'],
-};
-function unidadesPara(atividade){
-  return UNIDADES_DA_ATIVIDADE[atividade] || UNIDADES_DA_ATIVIDADE.geral;
-}
-function unidadePadrao(atividade){ return unidadesPara(atividade)[0]; }
-function unidadeCurta(u){ return UNIDADES[u]?.curto || u || ''; }
-
-/* Culturas de cereais, para o lancamento dizer QUAL cereal.
- *
- * Cultura e uma dimensao propria, nao um centro de custo. Se soja, milho e
- * sorgo virassem centros, o ADUBOS E FERTILIZANTES teria que virar ADUBOS
- * DA SOJA, ADUBOS DO MILHO, ADUBOS DO SORGO - e o mesmo para combustivel,
- * mao de obra e manutencao. O plano de contas recem-limpo de 71 para 63
- * contas multiplicaria.
- *
- * Separados, os dois se cruzam: quanto de adubo foi para a soja. Juntos,
- * so respondendo com uma conta para cada combinacao.
- */
-function culturasDeCereais(){
-  return state.culturas
-    .filter(c => c.frente==='graos' && c.ativo!==false)
-    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'));
-}
-function nomeCultura(id){
-  if(!id) return '';
-  const c = state.culturas.find(x=>String(x.id)===String(id));
-  return c ? (c.nome||'') : '';
-}
-
-/* Na venda de animais a quantidade nao e digitada: ela sai da forma de
- * venda, senao existiriam dois numeros dizendo quanto foi vendido.
- *   abate    arrobas de carcaca
- *   cabeca   numero de animais
- *   kg       quilos de peso vivo
- */
-function quantidadeDaVenda(d){
-  const qtd = Number(d.qtdAnimais||0);
-  if(d.tipoVenda==='cabeca') return {quantidade: qtd, unidade: 'cab'};
-  if(d.tipoVenda==='kg')     return {quantidade: qtd * numDecimal(d.pesoMedioKg), unidade: 'kg'};
-  return {quantidade: arrobasDaVenda(d), unidade: '@'};
-}
-
-// Preco por unidade — o numero que se compara entre safras e com o mercado.
-function precoUnitario(valor, quantidade){
-  const q = Number(quantidade||0);
-  return q > 0 ? Number(valor||0) / q : null;
-}
-
-function BlocoQuantidade(d){
-  const unidades = unidadesPara(d.atividade);
-  const u = d.unidade || unidadePadrao(d.atividade);
-  const qtd = Number(d.quantidade||0);
-  const preco = precoUnitario(d.valor, qtd);
-  return `
-  <div class="field-row">
-    <div class="field"><label>Quantidade entregue (opcional)</label>
-      <input id="f-qtdlanc" type="text" inputmode="decimal" value="${d.quantidade ?? ''}"
-             data-recalcula-lanc="1" autocomplete="off" placeholder="Ex: 1250"/>
-    </div>
-    <div class="field"><label>Unidade</label>
-      <select id="f-unidadelanc" data-recalcula-lanc="1">
-        ${unidades.map(k=>`<option value="${k}" ${u===k?'selected':''}>${UNIDADES[k].rotulo}</option>`).join('')}
-      </select>
-    </div>
-  </div>
-  ${preco!=null ? `<p class="hint" style="margin-top:-6px;">
-    <strong>R$ ${fmt(preco)}</strong> por ${unidadeCurta(u)} — é este número que se compara entre safras e com o mercado.
-  </p>` : `<p class="hint" style="margin-top:-6px;">Informe a quantidade para o app calcular o preço por ${unidadeCurta(u)}.</p>`}`;
-}
-
-/* ===================== VENDA DE ANIMAIS =====================
- *
- * Portado do AE Pecuaria, onde a venda era uma tela propria. Aqui ela e um
- * modo do lancamento de RECEITA: escolher atividade Pecuaria e marcar
- * "venda de animais" abre os campos do rebanho.
- *
- * Por que virou parte do lancamento: a venda sempre foi uma receita. Ter
- * uma tela separada obrigava a manter duas portas de entrada para o mesmo
- * dado, e a da Pecuaria escrevia direto no financeiro sem passar pelo
- * plano de contas.
- *
- * O QUE ELA FAZ ALEM DE LANCAR
- *   grava o abate (o registro zootecnico da venda)
- *   desconta os animais vendidos do lote
- *   encerra o lote quando a venda zera o rebanho dele
- *
- * As tres formas de vender, iguais as do app antigo:
- *   arroba  abate      arrobas de CARCACA x valor da arroba paga
- *   cabeca  em pe      valor fechado por animal x quantidade
- *   kg      em pe      peso vivo x quantidade x valor do kg
- */
-const KG_POR_ARROBA_CARCACA = 15;
-const TIPO_VENDA_LABEL = {
-  arroba: 'Abate — valor da arroba (peso de carcaça)',
-  cabeca: 'Em pé — valor fechado por cabeça',
-  kg:     'Em pé — valor por kg de peso vivo',
-};
-
-// Aceita virgula: no celular o teclado numerico brasileiro entrega "12,5" e
-// Number("12,5") e NaN.
-function numDecimal(v){
-  if(typeof v === 'number') return v;
-  if(v==null || v==='') return 0;
-  return Number(String(v).replace(',','.')) || 0;
-}
-/* qtdAnimais, nao quantidade.
- *
- * As duas coisas moravam no mesmo campo: numero de animais vendidos e
- * quantidade entregue do lancamento (que na venda e em @). Depois do
- * primeiro recalculo as 540 @ viravam "540 animais" e o app recusava
- * vender 540 de um lote de 100 cabecas. */
-function arrobasDaVenda(d){
-  return (numDecimal(d.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(d.qtdAnimais||0);
-}
-function valorDaVenda(d){
-  const qtd = Number(d.qtdAnimais||0);
-  if(d.tipoVenda==='cabeca') return qtd * numDecimal(d.valorPorAnimal);
-  if(d.tipoVenda==='kg')     return qtd * numDecimal(d.pesoMedioKg) * numDecimal(d.valorKg);
-  return arrobasDaVenda(d) * numDecimal(d.valorArroba);
-}
-
-/* Lote que pode ser vendido: ativo e com animais. Mesma regra do AE
- * Pecuaria (lotesQueRecebem) - se ela mudar la, muda aqui.
- * O lote ja gravado continua na lista ao editar, senao corrigir a data de
- * uma venda antiga trocaria o lote dela calado. */
-function lotesVendaveis(loteJaEscolhido){
-  return state.lotesPec.filter(l =>
-    (!l.dataFim && Number(l.numeroAnimais||0) > 0)
-    || (loteJaEscolhido != null && String(l.id) === String(loteJaEscolhido)));
-}
-
-function BlocoVendaAnimais(d){
-  const tipoVenda = d.tipoVenda || 'arroba';
-  const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
-  const qtd = Number(d.qtdAnimais||0);
-  const total = valorDaVenda(d);
-  const arrobas = arrobasDaVenda(d);
-  const disponiveis = Number(lote?.numeroAnimais||0);
-  const zeraOLote = lote && qtd >= disponiveis && qtd > 0;
-  const lotes = lotesVendaveis(d.loteId);
-
-  return `
-  <div class="card" style="padding:12px; margin:4px 0 10px; background:var(--cinza-bg);">
-    <div class="field"><label>Lote vendido</label>
-      <select id="f-lotevenda" data-recalcula-venda="1">
-        <option value="">— Selecione o lote —</option>
-        ${lotes.map(l=>`<option value="${l.id}" ${String(d.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}${l.numeroAnimais!=null?` — ${fmtInt(l.numeroAnimais)} cab.`:''}</option>`).join('')}
-      </select>
-      ${lotes.length===0?`<span class="hint" style="color:var(--alerta);">Nenhum lote ativo com animais. Confira em AE Pecuária &gt; Lotes.</span>`:''}
-    </div>
-    <div class="field"><label>Quantidade de animais</label>
-      <input id="f-qtdvenda" type="number" step="1" min="1" ${lote?`max="${disponiveis}"`:''}
-             value="${d.qtdAnimais ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
-      ${lote?`<span class="hint">O lote tem ${fmtInt(disponiveis)} ${disponiveis===1?'cabeça':'cabeças'}.${zeraOLote?' Esta venda zera o lote e ele será encerrado.':''}</span>`:''}
-    </div>
-    <div class="field"><label>Forma da venda</label>
-      <select id="f-tipovenda" data-recalcula-venda="1">
-        ${Object.entries(TIPO_VENDA_LABEL).map(([k,l])=>`<option value="${k}" ${tipoVenda===k?'selected':''}>${l}</option>`).join('')}
-      </select>
-    </div>
-    ${tipoVenda==='arroba'?`
-    <div class="field"><label>Peso de carcaça por animal (kg)</label>
-      <input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
-      <span class="hint">Peso de carcaça, não peso vivo — é o que o frigorífico paga. 1 @ = ${KG_POR_ARROBA_CARCACA} kg.</span></div>
-    <div class="field"><label>Valor da arroba paga (R$/@)</label>
-      <input id="f-valorarrobavenda" type="text" inputmode="decimal" value="${d.valorArroba ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
-    ${tipoVenda==='cabeca'?`
-    <div class="field"><label>Valor por animal (R$)</label>
-      <input id="f-valorporanimalvenda" type="text" inputmode="decimal" value="${d.valorPorAnimal ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
-    ${tipoVenda==='kg'?`
-    <div class="field"><label>Peso vivo por animal (kg)</label>
-      <input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>
-    <div class="field"><label>Valor do kg (R$/kg)</label>
-      <input id="f-valorkgvenda" type="text" inputmode="decimal" value="${d.valorKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
-
-    <div style="display:flex; justify-content:space-between; align-items:baseline; padding-top:8px; border-top:1px solid var(--cinza-claro);">
-      <span class="hint">${tipoVenda==='arroba' ? `${fmt(arrobas,2)} @ de carcaça` : `${fmtInt(qtd)} ${qtd===1?'animal':'animais'}`}</span>
-      <strong style="font-size:18px;">R$ ${fmt(total)}</strong>
-    </div>
-    <p class="hint" style="margin-top:6px;">
-      O valor da receita é calculado por aqui — o campo Valor acima fica travado.
-      Ao salvar, ${fmtInt(qtd)} ${qtd===1?'animal é descontado':'animais são descontados'} do lote${zeraOLote?' e o lote é encerrado':''}.
-    </p>
-  </div>`;
-}
-
-/* Grava a venda: abate, lancamento e baixa no lote, nessa ordem, com
- * desfazer em cada passo.
- *
- * A ordem importa. O abate vem primeiro porque e ele que da o abate_id ao
- * lancamento; a baixa no lote vem por ultimo porque e a unica que altera
- * dado que ja existia. Se o lancamento falhar, o abate e apagado; se a
- * baixa falhar, os dois sao apagados. Sem isso sobraria abate sem receita
- * (venda pela metade) ou receita sem baixa (lote com animal que ja foi
- * vendido, comendo racao).
- *
- * Mesma sequencia do AE Pecuaria - portada, nao reinventada.
- */
-async function salvarVendaAnimais(campos, row){
-  const lote = state.lotesPec.find(l=>String(l.id)===String(campos.loteId));
-  const qtd = Number(campos.qtdAnimais||0);
-
-  const abateRow = {
-    data: campos.data,
-    lote_id: Number(campos.loteId),
-    quantidade: qtd,
-    tipo_venda: campos.tipoVenda || 'arroba',
-    peso_medio_kg: campos.tipoVenda==='cabeca' ? null : numDecimal(campos.pesoMedioKg),
-    valor_arroba: campos.tipoVenda==='arroba' ? numDecimal(campos.valorArroba) : null,
-    valor_por_animal: campos.tipoVenda==='cabeca' ? numDecimal(campos.valorPorAnimal) : null,
-    valor_kg: campos.tipoVenda==='kg' ? numDecimal(campos.valorKg) : null,
-    observacao: campos.observacao || null,
-    criado_por: state.perfil?.nome || null,
-  };
-  const {data: abate, error: errAbate} =
-    await db.from('abates').insert(abateRow).select('id').single();
-  if(errAbate) return {error: errAbate};
-
-  const {error: errLanc} = await db.from('lancamentos_financeiros')
-    .insert({...row, abate_id: abate.id, arrobas: campos.tipoVenda==='arroba' ? arrobasDaVenda(campos) : null});
-  if(errLanc){
-    await db.from('abates').delete().eq('id', abate.id);
-    return {error: errLanc};
-  }
-
-  const restante = Math.max(0, Number(lote?.numeroAnimais||0) - qtd);
-  const upd = {numero_animais: restante};
-  if(restante === 0 && !lote?.dataFim) upd.data_fim = campos.data;
-  const {error: errLote} = await db.from('lotes').update(upd).eq('id', Number(campos.loteId));
-  if(errLote){
-    await db.from('lancamentos_financeiros').delete().eq('abate_id', abate.id);
-    await db.from('abates').delete().eq('id', abate.id);
-    return {error: errLote};
-  }
-  return {};
-}
-
-// Le os campos da venda. Separado do lerLancamentoDoFormulario para o
-// lancamento comum nao carregar campo que nao existe na tela dele.
-function lerVendaDoFormulario(base){
-  const v = (id)=> document.getElementById(id)?.value ?? '';
-  if(!document.getElementById('f-lotevenda')) return base;
-  return {
-    ...base,
-    loteId:         v('f-lotevenda'),
-    qtdAnimais:     v('f-qtdvenda'),
-    tipoVenda:      v('f-tipovenda') || 'arroba',
-    pesoMedioKg:    document.getElementById('f-pesovenda') ? v('f-pesovenda') : (base.pesoMedioKg ?? ''),
-    valorArroba:    document.getElementById('f-valorarrobavenda') ? v('f-valorarrobavenda') : (base.valorArroba ?? ''),
-    valorPorAnimal: document.getElementById('f-valorporanimalvenda') ? v('f-valorporanimalvenda') : (base.valorPorAnimal ?? ''),
-    valorKg:        document.getElementById('f-valorkgvenda') ? v('f-valorkgvenda') : (base.valorKg ?? ''),
-  };
-}
-
-// O que barra o salvamento de uma venda. Devolve a lista do que falta.
-function faltandoNaVenda(d){
-  const faltando = [];
-  const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
-  const qtd = Number(d.qtdAnimais||0);
-  if(!d.loteId) faltando.push('lote vendido');
-  if(!(qtd > 0)) faltando.push('quantidade de animais');
-  else if(lote && qtd > Number(lote.numeroAnimais||0)){
-    faltando.push(`quantidade menor ou igual às ${fmtInt(lote.numeroAnimais)} cabeças do lote`);
-  }
-  if(d.tipoVenda==='arroba'){
-    if(!(numDecimal(d.pesoMedioKg) > 0)) faltando.push('peso de carcaça');
-    if(!(numDecimal(d.valorArroba) > 0)) faltando.push('valor da arroba');
-  } else if(d.tipoVenda==='cabeca'){
-    if(!(numDecimal(d.valorPorAnimal) > 0)) faltando.push('valor por animal');
-  } else {
-    if(!(numDecimal(d.pesoMedioKg) > 0)) faltando.push('peso vivo');
-    if(!(numDecimal(d.valorKg) > 0)) faltando.push('valor do kg');
-  }
-  return faltando;
-}
-
 function PageFinanceiro(){
   const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos'],['custoha','Custo por hectare']];
   if(state.abaFinanceiro==='custoha'){
@@ -3794,9 +2458,7 @@ function PageFinanceiro(){
             <td>${rotuloAtividade(l.atividade)}</td>
             <td>${l.fazendaId ? esc(nomeFazendaLanc(l.fazendaId)) : `<span class="hint">Geral</span>`}</td>
             <td>${esc(nomeCentroCusto(l.centroCustoId))}</td>
-            <td><strong>${esc(l.descricao)}</strong>
-              ${l.culturaId?`<div class="hint" style="margin-top:2px;"><span class="pill pill-cat">${esc(nomeCultura(l.culturaId))}</span></div>`:''}
-              ${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}</td>
+            <td><strong>${esc(l.descricao)}</strong>${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}</td>
             ${ehDespesa?`<td>${l.atividade==='pecuaria' ? areasLabel(l.areas) : '—'}</td>`:''}
             <td class="mono">R$ ${fmt(l.valor)}</td>
             <td style="display:flex; gap:6px;">
@@ -3833,23 +2495,7 @@ function lerLancamentoDoFormulario(base){
     areas:         document.getElementById('f-arealanc-confinamento') ? areas : (base.areas||[]),
     loteId:        document.getElementById('f-lotelanc') ? v('f-lotelanc') : (base.loteId||''),
     arrobas:       document.getElementById('f-arrobaslanc') ? v('f-arrobaslanc') : (base.arrobas??''),
-    ehVenda:       document.getElementById('f-ehvenda') ? document.getElementById('f-ehvenda').checked : (base.ehVenda===true),
-    quantidade:    document.getElementById('f-qtdlanc') ? v('f-qtdlanc') : base.quantidade,
-    unidade:       document.getElementById('f-unidadelanc') ? v('f-unidadelanc') : base.unidade,
-    culturaId:     document.getElementById('f-culturalanc') ? v('f-culturalanc') : base.culturaId,
   };
-}
-// Le lancamento E venda. O valor da venda e sempre recalculado dos campos
-// dela: o campo Valor fica travado na tela justamente para nao existirem
-// duas verdades sobre quanto a venda valeu.
-function lerLancamentoCompleto(base){
-  const d = lerVendaDoFormulario(lerLancamentoDoFormulario(base));
-  if(!d.ehVenda) return d;
-  // Na venda o quanto nao e digitado: sai da forma escolhida. Dois campos
-  // dizendo quanto foi vendido acabariam discordando.
-  const q = quantidadeDaVenda(d);
-  return {...d, valor: Math.round(valorDaVenda(d)*100)/100,
-          quantidade: Math.round(q.quantidade*1000)/1000, unidade: q.unidade};
 }
 function ModalLancamento(){
   const d = editDraft;
@@ -3869,22 +2515,9 @@ function ModalLancamento(){
   //
   // A coluna frente é resquício do desenho anterior à unificação. Quem diz
   // a que atividade o gasto pertence é o campo atividade do lançamento.
-  // So o lado certo do plano de contas: receita e 'entrada', despesa e
-  // investimento sao 'saida'.
-  //
-  // Sem isto o formulario de RECEITA oferecia centro de custo de compra -
-  // dava para lancar uma venda de boi contra AQUISICAO DE MAQUINAS. O
-  // valor ficava certo e o grupo errado, e o DFC mostrava receita dentro
-  // de INVESTIMENTOS. Foi o que o Eduardo viu como "na venda estao os
-  // custos de compra".
-  //
-  // Centro ainda sem classificacao aparece nos dois: barrar deixaria a
-  // pessoa sem opcao nenhuma.
-  const ladoDoCentro = ehReceita ? 'entrada' : 'saida';
   const centros = state.centrosCusto
     .filter(c=> c.ativo!==false)
     .filter(c=> !c.frente || c.frente==='geral' || c.frente===d.atividade)
-    .filter(c=> !c.tipo || c.tipo===ladoDoCentro)
     .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   return `
   <div class="overlay" data-close-overlay="1">
@@ -3910,21 +2543,8 @@ function ModalLancamento(){
           </select>
           <span class="hint">Cadastre novos centros de custo no AE Lavoura, em Cadastros.</span>
         </div>
-        ${d.atividade==='graos' ? `
-        <div class="field"><label>Cultura</label>
-          <select id="f-culturalanc">
-            <option value="" ${!d.culturaId?'selected':''}>— Todas / não específico —</option>
-            ${culturasDeCereais().map(c=>`<option value="${c.id}" ${String(d.culturaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
-          </select>
-          <span class="hint">Qual cereal. Fica separado do centro de custo de propósito: assim dá para cruzar os dois — quanto de adubo foi para a soja — sem precisar de uma conta para cada combinação.</span>
-        </div>` : ''}
         <div class="field"><label>Descrição</label><input id="f-descricaolanc" value="${esc(d.descricao||'')}" placeholder="${ehReceita?'Ex: Venda de boi gordo':'Ex: Mão de obra do curral'}" autocomplete="off"/></div>
-        <div class="field"><label>Valor (R$)</label>
-          <input id="f-valorlanc" type="number" step="0.01" min="0"
-                 value="${d.ehVenda ? (Math.round(valorDaVenda(d)*100)/100) : (d.valor ?? '')}"
-                 ${d.ehVenda?'readonly style="background:var(--cinza-bg); cursor:not-allowed;"':''} autocomplete="off"/>
-          ${d.ehVenda?`<span class="hint">Calculado pelos campos da venda, logo abaixo.</span>`:''}
-        </div>
+        <div class="field"><label>Valor (R$)</label><input id="f-valorlanc" type="number" step="0.01" min="0" value="${d.valor ?? ''}" autocomplete="off"/></div>
         <div class="field"><label>Data${ehDespesa?' (deixe vazia para recorrente)':''}</label><input id="f-datalanc" type="date" value="${d.data||''}"/>
           ${ehDespesa?`<span class="hint">Sem data, vale como valor mensal padrão para qualquer mês sem lançamento próprio.</span>`:''}
         </div>
@@ -3940,21 +2560,13 @@ function ModalLancamento(){
           <span class="hint">Uma marcada leva o valor inteiro; duas ou três rateiam por número de animais entre as marcadas; nenhuma rateia entre as três.</span>
         </div>` : ''}
         ${ehReceita && ehPecuaria ? `
-        <div class="field">
-          <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
-            <input id="f-ehvenda" type="checkbox" style="width:auto;" ${d.ehVenda?'checked':''} data-recalcula-venda="1"/>
-            É venda de animais
-          </label>
-          <span class="hint">Marque para informar lote, quantidade e a forma da venda. O app desconta os animais do lote e guarda o registro do abate.</span>
-        </div>
-        ${d.ehVenda ? BlocoVendaAnimais(d) : `
         <div class="field"><label>Lote (opcional)</label>
           <select id="f-lotelanc">
             <option value="">— Não vinculada a um lote —</option>
             ${state.lotesPec.map(l=>`<option value="${l.id}" ${String(d.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobaslanc" type="number" step="0.01" value="${d.arrobas ?? ''}" autocomplete="off"/></div>`}` : ''}
+        <div class="field"><label>Arrobas vendidas (opcional)</label><input id="f-arrobaslanc" type="number" step="0.01" value="${d.arrobas ?? ''}" autocomplete="off"/></div>` : ''}
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obslanc" rows="2">${esc(d.observacao||'')}</textarea></div>
         ${state.erroLancamento ? `<div class="login-error">${esc(state.erroLancamento)}</div>` : ''}
       </div>
@@ -4104,9 +2716,6 @@ function Empty(title, sub){
 function Modal(){
   if(state.modal.type==='fazenda') return ModalFazenda();
   if(state.modal.type==='lancamento') return ModalLancamento();
-  if(state.modal.type==='titulo') return ModalTitulo();
-  if(state.modal.type==='baixa') return ModalBaixa();
-  if(state.modal.type==='verBaixas') return ModalVerBaixas();
   if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
   if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
@@ -4369,14 +2978,7 @@ function attachEvents(){
   // Trocar a atividade muda quais campos e quais centros de custo aparecem.
   const selAtivLanc = document.getElementById('f-atividadelanc');
   if(selAtivLanc) selAtivLanc.onchange = (e)=>{
-    const nova = e.target.value;
-    const d = {...lerLancamentoCompleto(editDraft), atividade: nova};
-    // Trocar de atividade troca a unidade sugerida: quem muda de Cana para
-    // Cereais quer saca, nao a tonelada que estava selecionada. So troca se
-    // a unidade atual nao servir na atividade nova - o que a pessoa
-    // escolheu de proposito fica.
-    if(!unidadesPara(nova).includes(d.unidade)) d.unidade = unidadePadrao(nova);
-    editDraft = d;
+    editDraft = {...lerLancamentoDoFormulario(editDraft), atividade: e.target.value};
     render();
   };
   document.querySelectorAll('[data-edit-lancamento]').forEach(el=>{
@@ -4387,8 +2989,6 @@ function attachEvents(){
       state.modal = {type:'lancamento'}; render();
     };
   });
-  ligarEventosContas();
-
   document.querySelectorAll('[data-del-lancamento]').forEach(el=>{
     el.onclick = async ()=>{
       const l = state.lancamentos.find(x=>x.id===Number(el.dataset.delLancamento));
@@ -4680,14 +3280,7 @@ function attachEvents(){
           if(erroPerm) alert('Funcionário salvo, mas as permissões não foram gravadas: ' + erroPerm.message);
         }
       } else if(type==='lancamento'){
-        const campos = lerLancamentoCompleto(editDraft);
-        if(campos.ehVenda){
-          const faltaVenda = faltandoNaVenda(campos);
-          if(faltaVenda.length){
-            state.erroLancamento = 'Preencha: ' + faltaVenda.join(', ') + '.';
-            editDraft = campos; render(); return;
-          }
-        }
+        const campos = lerLancamentoDoFormulario(editDraft);
         // Obrigatórios de verdade: sem eles o lançamento não serve pra
         // nenhum relatório depois. Melhor barrar aqui do que descobrir na
         // hora de fechar o custo por hectare.
@@ -4705,26 +3298,11 @@ function attachEvents(){
         }
         state.erroLancamento = '';
         const row = lancamentoToRow(campos);
-        // Venda nova passa pelo caminho proprio: alem do lancamento, ela
-        // grava o abate e desconta os animais do lote. Editar uma venda
-        // existente continua sendo so o lancamento - mexer no lote de novo
-        // descontaria os mesmos animais duas vezes.
-        if(campos.ehVenda && !editDraft._editId){
-          const res = await salvarVendaAnimais(campos, row);
-          if(res.error){ alert('Não foi possível registrar a venda: ' + res.error.message); return; }
-          state.modal = null; editDraft = null;
-          await loadAll();
-          return;
-        }
         if(editDraft._editId){
           ({error} = await db.from('lancamentos_financeiros').update(row).eq('id', editDraft._editId));
         } else {
           ({error} = await db.from('lancamentos_financeiros').insert(row));
         }
-      } else if(type==='titulo'){
-        await salvarTitulo(); return;
-      } else if(type==='baixa'){
-        await salvarBaixa(); return;
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;

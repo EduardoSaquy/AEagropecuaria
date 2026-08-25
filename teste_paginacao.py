@@ -1,99 +1,120 @@
-"""Testes da armadilha documentada no CLAUDE.md: 'O Supabase trunca em 1000
-linhas sem avisar' -- qualquer consulta que pode passar de mil linhas
-precisa paginar com fetchAllRows(...) (ou, no caso do AEpecuaria, pedir um
-range explícito grande o bastante).
+# Prova que a paginacao do Matriz busca alem de 1.000 linhas.
+# O stub imita o corte do PostgREST: devolve no maximo 1.000 por resposta,
+# respeitando o range pedido. Sem paginacao, o app so veria as 1.000
+# primeiras e o total viria errado.
+import json, sys
+from pathlib import Path
+from playwright.sync_api import sync_playwright
 
-Reconstrução do zero (o teste_paginacao.py original tinha 2 testes -- mantive
-o mesmo tamanho, um por variante de fetchAllRows que existe no código hoje).
-"""
-import json
-from urllib.parse import urlparse, parse_qs
+N = 2760          # o volume real de lancamentos_financeiros hoje
+VALOR = 100.0
+lanc = [{"id": i, "tipo": "despesa", "atividade": "cana", "fazenda_id": 1,
+         "centro_custo_id": 90, "descricao": f"Despesa {i}", "valor": VALOR,
+         "data": "2026-08-05", "mes": "2026-08", "areas": []} for i in range(1, N + 1)]
 
-from _test_utils import app_url
-
-CORS = {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET, OPTIONS",
-    "access-control-allow-headers": "*",
+DB = {
+    "fazendas": [{"id": 1, "nome": "F", "estado": "SP", "area_ha": 100, "ativo": True}],
+    "fazenda_atividades": [{"id": 1, "fazenda_id": 1, "atividade": "cana", "area_ha": 100}],
+    "centros_custo": [{"id": 90, "fazenda_id": None, "nome": "C", "frente": None, "ativo": True}],
+    "lancamentos_financeiros": lanc,
+    "insumos_cana": [], "entradas_insumo_cana": [], "aplicacoes_cana": [],
+    "insumos_graos": [], "entradas_insumo_graos": [], "aplicacoes_graos": [],
+    "ingredientes": [], "dietas": [], "saidas_racao": [], "pasto": [], "reproducao_custos": [],
+    "talhoes_areas": [], "culturas": [], "funcionarios": [], "funcionario_atividades": [],
+    "lotes": [],
+    "profiles": [{"id": "u1", "nome": "C", "usuario": "c", "papel": "admin", "ativo": True, "permissoes": {}}],
 }
 
+STUB_CORTE = Path('/tmp/lav_test/stub.js').read_text().replace(
+    "return Promise.resolve({ data: r.slice(de, ate + 1), error: null });",
+    # imita o teto do PostgREST: no maximo 1000 linhas por resposta
+    "const fatia = r.slice(de, ate + 1).slice(0, 1000);"
+    "window.__PAGINAS__ = (window.__PAGINAS__||0) + 1;"
+    "return Promise.resolve({ data: fatia, error: null });"
+).replace(
+    "then(res) { return Promise.resolve({ data: this._aplicar(), error: null }).then(res); },",
+    "then(res) { const r = this._aplicar();"
+    " if(r.length > 1000) window.__TRUNCOU__ = true;"
+    " return Promise.resolve({ data: r.slice(0,1000), error: null }).then(res); },"
+)
 
-def test_fetch_all_rows_matriz_pagina_alem_de_mil(page):
-    """AEMatriz.html: fetchAllRows(queryFactory) recebe a consulta pronta e
-    deve continuar pedindo páginas de 1000 até a última vir incompleta,
-    concatenando tudo. Sem isso, lancamentos_financeiros (~2.759 linhas
-    hoje) perde silenciosamente tudo depois da linha 1000."""
-    page.goto(app_url("AEMatriz.html"))
-
-    total_fake = 1500
-    resultado = page.evaluate(
-        """
-        async (total) => {
-          const todasAsLinhas = Array.from({length: total}, (_, i) => ({id: i}));
-          const chamadas = [];
-          const queryFactory = () => ({
-            range: async (from, to) => {
-              chamadas.push([from, to]);
-              return { data: todasAsLinhas.slice(from, to + 1), error: null };
-            },
-          });
-          const { data, error } = await fetchAllRows(queryFactory);
-          return { total: data.length, erro: error, chamadas };
-        }
-        """,
-        total_fake,
-    )
-
-    assert resultado["erro"] is None
-    assert resultado["total"] == total_fake, (
-        "fetchAllRows devolveu %d linhas de %d -- parece ter parado na "
-        "primeira página em vez de continuar paginando"
-        % (resultado["total"], total_fake)
-    )
-    assert len(resultado["chamadas"]) >= 2, "esperava mais de uma página pra 1500 linhas"
+def medir(pw, arquivo, expr_n, expr_total, extra_db=None):
+    """Abre o app com o stub que imita o teto do PostgREST e devolve o que
+    ele conseguiu carregar."""
+    b = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+    page = b.new_page()
+    page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
+    page.add_init_script(STUB_CORTE)
+    db = dict(DB, **(extra_db or {}))
+    page.add_init_script(f"window.__DB__={json.dumps(db)};"
+                         "window.__SESSAO__={user:{id:'u1'},access_token:'x'};")
+    page.goto("file:///home/claude/AEagropecuaria/" + arquivo)
+    page.wait_for_timeout(3000)
+    n = page.evaluate(expr_n)
+    total = page.evaluate(expr_total)
+    truncou = page.evaluate("() => !!window.__TRUNCOU__")
+    b.close()
+    return n, total, truncou
 
 
-def test_fetch_all_rows_cana_pagina_alem_de_mil(page):
-    """AECana.html (e AECereais.html, idêntico) já tinha a versão antiga de
-    fetchAllRows(table, orderBy, ascending), que fecha sobre `db` em vez de
-    receber a consulta pronta. Como `db` é `const` no escopo do próprio
-    script, não dá pra trocar por um mock em JS -- então intercepta a
-    requisição HTTP real (rota fake, nunca bate no Supabase de verdade).
+with sync_playwright() as pw:
+    b = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+    page = b.new_page()
+    page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
+    page.add_init_script(STUB_CORTE)
+    page.add_init_script(f"window.__DB__={json.dumps(DB)};"
+                         "window.__SESSAO__={user:{id:'u1'},access_token:'x'};")
+    page.goto("file:///home/claude/AEagropecuaria/AEMatriz.html")
+    page.wait_for_timeout(2500)
 
-    O supabase-js dessa versão pagina com `?offset=N&limit=1000` na própria
-    URL, não com um header Range (só descobri isso depurando: sem ler
-    offset/limit direito, o mock sempre devolvia a página 0 e o app pedia
-    página atrás de página pra sempre, sem nunca ver uma página curta pra
-    parar -- não era bug do app, era o mock devolvendo o dado errado)."""
-    total_fake = 1500
-    todas_as_linhas = [{"id": i} for i in range(total_fake)]
+    n = page.evaluate("() => state.lancamentos.length")
+    total = page.evaluate("() => state.lancamentos.reduce((a,l)=>a+Number(l.valor),0)")
+    paginas = page.evaluate("() => window.__PAGINAS__ || 0")
+    truncou = page.evaluate("() => !!window.__TRUNCOU__")
+    b.close()
 
-    def handler(route):
-        request = route.request
-        if request.method == "OPTIONS":
-            route.fulfill(status=204, headers=CORS)
-            return
-        query = parse_qs(urlparse(request.url).query)
-        offset = int(query.get("offset", ["0"])[0])
-        limit = int(query.get("limit", ["1000"])[0])
-        pagina = todas_as_linhas[offset:offset + limit]
-        route.fulfill(
-            status=206,
-            content_type="application/json",
-            headers={**CORS, "content-range": "%d-%d/%d" % (offset, offset + len(pagina) - 1, total_fake)},
-            body=json.dumps(pagina),
-        )
+esperado = N * VALOR
+ok = n == N and abs(total - esperado) < 0.01
+print(f"\n  AE Matriz")
+print(f"  linhas carregadas : {n} de {N}")
+print(f"  total somado      : R$ {total:,.2f}  (esperado R$ {esperado:,.2f})")
+print(f"  páginas pedidas   : {paginas}")
+print(f"  alguma consulta sem paginação foi truncada: {'SIM' if truncou else 'não'}")
+print(f"  {'ok — Matriz pagina' if ok else 'FALHOU — Matriz ainda corta'}")
 
-    page.route("**/rest/v1/tabela_fake_de_teste*", handler)
-    page.goto(app_url("AECana.html"))
+# ---- AE Pecuaria: mesma prova, contra custos_fixos remapeados ----
+DB_PEC = dict(DB)
+DB_PEC.update({
+    "custos_fixos": [], "receitas": [], "investimentos": [],
+    "ingredientes": [], "movimentos": [], "dietas": [], "lotes": [],
+    "saidas_racao": [], "pasto": [], "reproducao_custos": [],
+    "precos_arroba": [], "config_financeiro": [], "partos": [], "pesagens": [],
+    "producao_racao": [], "abates": [], "diagnosticos_gestacionais": [],
+    "desmamas": [], "animais": [], "pesagens_animais": [], "manejos": [],
+    "protocolos_inseminacao": [], "config_fazenda": [],
+})
+with sync_playwright() as pw:
+    n2, total2, truncou2 = medir(
+        pw, "AEpecuaria.html",
+        "() => state.custosFixos.length",
+        "() => state.custosFixos.reduce((a,l)=>a+Number(l.valorMensal),0)",
+        DB_PEC)
 
-    resultado = page.evaluate(
-        "async () => { const { data, error } = await fetchAllRows('tabela_fake_de_teste', 'id', true); "
-        "return { total: data.length, erro: error }; }"
-    )
+# os 2760 lancamentos do DB sao todos atividade='cana' no teste do Matriz;
+# para a pecuaria o stub filtra por atividade, entao o esperado e 0 - o que
+# nao prova nada. Refaz com lancamentos de pecuaria.
+lanc_pec = [dict(l, atividade="pecuaria", tipo="despesa") for l in lanc]
+with sync_playwright() as pw:
+    n3, total3, truncou3 = medir(
+        pw, "AEpecuaria.html",
+        "() => state.custosFixos.length",
+        "() => state.custosFixos.reduce((a,l)=>a+Number(l.valorMensal),0)",
+        dict(DB_PEC, lancamentos_financeiros=lanc_pec))
 
-    assert resultado["erro"] is None
-    assert resultado["total"] == total_fake, (
-        "fetchAllRows (variante Cana/Cereais) devolveu %d linhas de %d"
-        % (resultado["total"], total_fake)
-    )
+ok_pec = n3 == N and abs(total3 - esperado) < 0.01
+print(f"\n  AE Pecuária")
+print(f"  linhas carregadas : {n3} de {N}")
+print(f"  total somado      : R$ {total3:,.2f}  (esperado R$ {esperado:,.2f})")
+print(f"  {'ok — Pecuária pagina' if ok_pec else 'FALHOU — Pecuária ainda corta'}")
+
+sys.exit(0 if (ok and ok_pec) else 1)
