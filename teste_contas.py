@@ -98,6 +98,27 @@ def conf(ok, nome, extra=""):
     if ok: passes += 1; print(f"    ok      {nome}")
     else:  falhas += 1; print(f"    FALHOU  {nome}" + (f"\n            {extra}" if extra else ""))
 
+def preencher(page, seletor, valor):
+    """Preenche como uma pessoa: escreve e sai do campo.
+
+    page.fill() troca o valor e dispara input, mas nao dispara change. Os
+    campos do titulo que recalculam escutam change — com fill() o app nunca
+    enxergaria o que foi digitado, e o teste estaria medindo o Playwright.
+    """
+    el = page.locator(seletor)
+    tipo = el.get_attribute("type") or "text"
+    if tipo in ("month", "date"):
+        # campos de data/mes nao aceitam digitacao caractere a caractere;
+        # fill() escreve certo neles. O change sai no Tab logo abaixo.
+        el.fill(valor)
+    else:
+        el.click()
+        el.fill("")
+        el.type(valor)
+    page.keyboard.press("Tab")
+    page.wait_for_timeout(80)
+
+
 def abrir(pw, perfil):
     browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
     page = browser.new_page()
@@ -204,6 +225,66 @@ with sync_playwright() as pw:
     page.wait_for_timeout(150)
     conf("sem rateio" in page.inner_text("body"),
          "titulo sem rateio aparece marcado (a baixa dele falharia)")
+    # ---- fornecedor novo e cadastrado no proprio lancamento ----
+    # O Eduardo pediu isto explicitamente. Em vez de afirmar que funciona,
+    # o teste preenche o formulario com um nome que NAO existe em entidades
+    # e confere que a tela mandou o insert.
+    page.evaluate("""() => {
+      window.__ESCRITAS__ = [];
+      state.page='contas'; state.abaContas='pagar'; state.erroTitulo='';
+      editDraft = {tipo:'pagar', valor:'', vencimento:'2026-12-10', parcelas:1,
+                   intervaloDias:'', previsao:false, rateios:[rateioVazio()]};
+      state.modal = {type:'titulo'}; render();
+    }""")
+    page.wait_for_timeout(200)
+    # digitar e sair do campo, como uma pessoa faz. page.fill() nao dispara
+    # o evento change, entao os campos que recalculam nao veriam o valor —
+    # o teste passaria a testar o Playwright, nao o app.
+    preencher(page, "#f-tit-entidade", "TRANSPORTADORA NUNCA VISTA LTDA")
+    preencher(page, "#f-tit-descricao", "Frete do adubo")
+    preencher(page, "#f-tit-valor", "1500")
+    page.select_option("#f-rat-centro-0", "90")
+    preencher(page, "#f-rat-comp-0", "2026-12")
+    preencher(page, "#f-rat-valor-0", "1500")
+    page.click("[data-save='titulo']")
+    page.wait_for_timeout(400)
+
+    escritas = page.evaluate("() => window.__ESCRITAS__")
+    ents = [e for e in escritas if e["tabela"] == "entidades" and e["op"] == "insert"]
+    conf(len(ents) == 1, "fornecedor desconhecido e cadastrado ao salvar a conta",
+         f"escritas em entidades: {ents}")
+    if ents:
+        conf(ents[0]["v"].get("nome") == "TRANSPORTADORA NUNCA VISTA LTDA",
+             "cadastra com o nome digitado", str(ents[0]["v"]))
+        conf(ents[0]["v"].get("criado_por") == "Eduardo",
+             "registra quem cadastrou", str(ents[0]["v"]))
+    tits = [e for e in escritas if e["tabela"] == "titulos" and e["op"] == "insert"]
+    conf(len(tits) == 1, "e o titulo e salvo na mesma acao", str(len(tits)))
+
+    # ---- fornecedor que JA existe nao vira duplicata ----
+    # O indice unico do banco e por lower(btrim(nome)): se a tela comparasse
+    # de outro jeito, "agrosaquy  " tentaria criar e tomaria erro 23505.
+    page.evaluate("""() => {
+      window.__ESCRITAS__ = [];
+      editDraft = {tipo:'pagar', valor:'', vencimento:'2026-12-10', parcelas:1,
+                   intervaloDias:'', previsao:false, rateios:[rateioVazio()]};
+      state.modal = {type:'titulo'}; render();
+    }""")
+    page.wait_for_timeout(200)
+    preencher(page, "#f-tit-entidade", "  agrosaquy  ")
+    preencher(page, "#f-tit-descricao", "Compra qualquer")
+    preencher(page, "#f-tit-valor", "200")
+    page.select_option("#f-rat-centro-0", "90")
+    preencher(page, "#f-rat-comp-0", "2026-12")
+    preencher(page, "#f-rat-valor-0", "200")
+    page.click("[data-save='titulo']")
+    page.wait_for_timeout(400)
+    escritas2 = page.evaluate("() => window.__ESCRITAS__")
+    ents2 = [e for e in escritas2 if e["tabela"] == "entidades" and e["op"] == "insert"]
+    conf(len(ents2) == 0,
+         "fornecedor que ja existe (outra caixa e com espacos) nao e duplicado",
+         f"tentou cadastrar de novo: {ents2}")
+
     browser.close()
 
     # ================= permissao =================
