@@ -1179,10 +1179,10 @@ const PAGES = [
   // lá quando o Financeiro veio pra cá, e sem esta tela ninguém mais
   // conseguiria criar ou corrigir um centro de custo.
   {key:'centrosCusto', label:'Centros de Custo', modulo:'matriz_financeiro'},
-  // Contas a Pagar exige a chave propria 'contas' ALEM do financeiro - a
+  // Pagar/Receber exige a chave propria 'contas' ALEM do financeiro - a
   // RLS do banco pede as duas. Aqui basta pedir 'contas': quem nao tem
   // matriz_financeiro nao chega a ver dado nenhum de qualquer forma.
-  {key:'contas', label:'Contas a Pagar', modulo:'contas'},
+  {key:'contas', label:'Pagar/Receber', modulo:'contas'},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
