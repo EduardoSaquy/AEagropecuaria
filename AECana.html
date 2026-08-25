@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AE Cana</title>
-<link rel="manifest" href="manifest_lavoura.json">
-<link rel="icon" href="icon-lavoura-192.png">
-<link rel="apple-touch-icon" href="icon-lavoura-192.png">
+<link rel="manifest" href="manifest_cana.json">
+<link rel="icon" href="icon-cana-192.png">
+<link rel="apple-touch-icon" href="icon-cana-192.png">
 <meta name="theme-color" content="#1B4332">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -289,7 +289,6 @@ function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; 
 const OPCOES = {
   ESTADOS: [{value:'TO',label:'Tocantins'},{value:'SP',label:'São Paulo'}],
   FRENTES: [{value:'cana',label:'Cana-de-açúcar'}],
-  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
   CATEGORIAS_INSUMO_CANA: [
     {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
     {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'},
@@ -326,11 +325,6 @@ function frenteDoTalhao(t){
   const c = state.culturas.find(x=>x.id===t.culturaId);
   return c ? c.frente : null;
 }
-function culturaDoTalhaoNome(talhaoId){
-  if(talhaoId==null) return null;
-  const t = state.talhoes.find(x=>x.id===talhaoId);
-  return t && t.culturaId!=null ? fkNome('culturas', t.culturaId) : null;
-}
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
  * Cadastros de base (fazendas, culturas, talhoes, safras) sao tabelas
@@ -342,7 +336,8 @@ function culturaDoTalhaoNome(talhaoId){
 const CADASTROS = {
   fazendas: {
     table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'matriz_fazendas',
-    desc:'Unidades produtivas da empresa, com estado e área total.',
+    somenteLeitura:true,
+    desc:'As fazendas desta operação e os talhões de cada uma. O cadastro de fazenda é feito no AE Matriz.',
     emptyHint:'Cadastre a primeira fazenda para começar.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Fazenda Santa Fé'},
@@ -361,7 +356,7 @@ const CADASTROS = {
   },
   talhoes: {
     table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cana_cadastros',
-    desc:'Talhões de lavoura desta fazenda — de cana ou de grãos, conforme a Cultura escolhida.',
+    desc:'Talhões de cana desta fazenda. A Cultura define a safra e o histórico de cada um.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
     historico: true,
@@ -370,7 +365,7 @@ const CADASTROS = {
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Talhão 12'},
       {key:'tipo', type:'fixed', value:'talhao', list:false},
       {key:'areaHa', label:'Área (ha)', type:'number', step:'0.01', suffix:' ha'},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', filter:c=>c.frente==='cana'||c.frente==='graos'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
       {key:'ativo', label:'Talhão ativo', type:'checkbox', default:true, list:false},
     ],
   },
@@ -378,7 +373,7 @@ const CADASTROS = {
     table:'safras', label:'Safras', singular:'Safra', modulo:'cana_cadastros',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='cana'||c.frente==='graos'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
       {key:'nome', label:'Safra', type:'text', required:true, placeholder:'Ex: 2024/2025'},
       {key:'dataInicio', label:'Início', type:'date'},
       {key:'dataFim', label:'Fim', type:'date'},
@@ -463,7 +458,6 @@ const CADASTROS = {
   /* ---------- GRÃOS ---------- */
 };
 const CADASTRO_KEYS = Object.keys(CADASTROS);
-const FRENTE_KEYS = ['plantiosCana','colheitasCana','insumosCana','entradasInsumoCana','aplicacoesCana'];
 
 function rowToCadastro(row, cfg){
   const obj = {id: row.id};
@@ -473,11 +467,15 @@ function rowToCadastro(row, cfg){
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 /* ===================== CACHE LOCAL (abrir offline com os últimos dados) ===================== */
-const CACHE_LOCAL_KEY = 'cana_cache_cadastros_v1';
+const CACHE_LOCAL_KEY = 'cana_cache_v2';
 function salvarCacheLocal(){
   try{
     const snapshot = {};
     CADASTRO_KEYS.forEach(k=>{ snapshot[k] = state[k]; });
+    // Guarda tambem as atividades das fazendas: sem elas o corte por frente
+    // na abertura offline nao teria como saber quais fazendas sao desta
+    // frente, e cairia so nos talhoes.
+    snapshot.__fazendaAtividades = state.fazendaAtividades || [];
     localStorage.setItem(CACHE_LOCAL_KEY, JSON.stringify(snapshot));
   }catch(e){ /* localStorage indisponível ou cheio — segue sem cache offline */ }
 }
@@ -487,6 +485,11 @@ function carregarCacheLocal(){
     if(!raw) return;
     const snapshot = JSON.parse(raw);
     Object.keys(snapshot).forEach(k=>{ if(CADASTROS[k]) state[k] = snapshot[k]; });
+    // O cache tambem tem que passar pelo corte por frente: ele e pintado na
+    // tela antes de loadAll() rodar. Sem fazendaAtividades gravada, o corte
+    // usa so os talhoes - que ja bastam, porque toda fazenda desta frente
+    // tem talhao dela.
+    filtrarPelaFrente(snapshot.__fazendaAtividades || []);
   }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
 }
 
@@ -519,7 +522,8 @@ async function loadAll(){
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
-  filtrarPelaFrente((results[CADASTRO_KEYS.length+1].data)||[]);
+  state.fazendaAtividades = (results[CADASTRO_KEYS.length+1].data) || [];
+  filtrarPelaFrente(state.fazendaAtividades);
   salvarCacheLocal();
   render();
 }
@@ -562,9 +566,6 @@ const state = {
   loginLoading: false,
   usuarioError: '',
   usuarioLoading: false,
-  despesaFiltroMes: '',
-  despesaFiltroCentro: '',
-  despesaGruposAbertos: {},
   fazendaTalhoesAbertos: {},
 };
 
@@ -693,7 +694,7 @@ function AguardandoLiberacao(){
     <div class="login-card">
       <div class="login-brand">${brandMark()}<div class="brand-name">AE Cana</div></div>
       <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
-        Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
+        Seu login foi reconhecido, mas ainda não há acesso liberado para esta conta no AE Cana.
         Fale com o administrador do sistema.
       </p>
       <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
@@ -727,7 +728,6 @@ function grupoVisivel(key){
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
   return temPermissao('cana_cadastros','visualizar');
 }
-function paginaVisivel(key){ return true; }
 function paginaAcessivel(page){
   const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
   if(!grupo) return false;
@@ -827,7 +827,9 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao(cfg.modulo||'cana_cadastros','editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
+  const podeEditar = !cfg.somenteLeitura
+    && (temPermissao(cfg.modulo||'cana_cadastros','editar')
+        || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar')));
   const termo = state.search.toLowerCase();
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
@@ -1100,24 +1102,6 @@ function PageEstoqueInsumos(frente){
  * TALHÕES DA MESMA FRENTE com plantio ativo, proporcional à área —
  * uma despesa de Grãos nunca dilui o custo de um talhão de Cana e
  * vice-versa, porque os dois ratões são calculados separadamente. */
-function custoInsumosTalhao(frente, talhaoId){
-  return state['aplicacoes'+frente].filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
-    const preco = precoMedioInsumo(frente, ap.insumoId);
-    return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
-  },0);
-}
-function talhaoEmProducao(frente, t){
-  const chave = frente==='Cana' ? 'plantiosCana' : 'plantiosGraos';
-  return state[chave].some(p=>p.talhaoId===t.id && p.ativo);
-}
-function areaTotalEmProducao(frente){
-  return state.talhoes.filter(t=>t.ativo!==false && frenteDoTalhao(t)===(frente==='Cana'?'cana':'graos') && talhaoEmProducao(frente,t)).reduce((a,t)=>a+Number(t.areaHa||0),0);
-}
-function producaoTotalTalhao(frente, talhaoId){
-  const chave = frente==='Cana' ? 'colheitasCana' : 'colheitasGraos';
-  const campo = frente==='Cana' ? 'toneladas' : 'sacas';
-  return state[chave].filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c[campo]||0),0);
-}
 
 /* ---------- DONUT ---------- */
 
@@ -1178,7 +1162,7 @@ function ModalUsuario(){
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
         <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. Vale para o AE Cana antigo também (mesma conta, mesmo banco).</span></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. A mesma conta vale para todos os apps da AE Agropecuária.</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
@@ -1207,7 +1191,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos, das duas frentes. Cada módulo abaixo é independente — dá pra liberar só Grãos, só Cana, ou os dois. <strong>Financeiro x Resultados:</strong> "Financeiro: Editar" (de cada frente) deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado — isso só quem tiver "Resultados" daquela frente liberado enxerga.</p>
+        <p class="hint">Administrador e proprietário têm acesso total. Cada módulo abaixo é independente: dá para liberar só os cadastros, só as operações, ou os dois. <strong>Visualizar</strong> deixa ver sem mexer; <strong>Editar</strong> deixa criar, alterar e excluir. Financeiro e resultados ficam no AE Matriz, com permissão própria de lá.</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
@@ -1267,7 +1251,7 @@ function ModalHistoricoTalhao(){
     <div class="overlay" data-close-overlay="1">
       <div class="modal modal-lg" data-stop="1">
         <div class="modal-head"><h3>Histórico — ${t.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
-        <div class="modal-body">${Empty('Talhão sem cultura definida','Defina a Cultura deste talhão em Cadastros > Talhões (Cana ou Grãos) para ver o histórico.')}</div>
+        <div class="modal-body">${Empty('Talhão sem cultura definida','Defina a Cultura deste talhão em Cadastros > Talhões para ver o histórico.')}</div>
         <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
       </div>
     </div>`;
@@ -1451,24 +1435,6 @@ function attachEvents(){
       render();
     };
   });
-  const despesaMesEl = document.querySelector('[data-despesa-filtro-mes]');
-  if(despesaMesEl) despesaMesEl.onchange = (e)=>{ state.despesaFiltroMes = e.target.value; render(); };
-  const despesaCentroEl = document.querySelector('[data-despesa-filtro-centro]');
-  if(despesaCentroEl) despesaCentroEl.onchange = (e)=>{ state.despesaFiltroCentro = e.target.value; render(); };
-  document.querySelectorAll('[data-despesa-filtro-centro-bar]').forEach(el=>{
-    el.onclick = ()=>{
-      const chave = el.dataset.despesaFiltroCentroBar;
-      state.despesaFiltroCentro = String(state.despesaFiltroCentro)===String(chave) ? '' : chave;
-      render();
-    };
-  });
-  document.querySelectorAll('[data-despesa-grupo-toggle]').forEach(el=>{
-    el.onclick = ()=>{
-      const chave = el.dataset.despesaGrupoToggle;
-      state.despesaGruposAbertos[chave] = !state.despesaGruposAbertos[chave];
-      render();
-    };
-  });
   document.querySelectorAll('[data-del-cadastro]').forEach(el=>{
     el.onclick = async ()=>{
       const [key, idStr] = el.dataset.delCadastro.split(':');
@@ -1527,7 +1493,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_lavoura.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
 }
 </script>
 </body>
