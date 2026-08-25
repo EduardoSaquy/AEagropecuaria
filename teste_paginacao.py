@@ -7,8 +7,15 @@ Reconstrução do zero (o teste_paginacao.py original tinha 2 testes -- mantive
 o mesmo tamanho, um por variante de fetchAllRows que existe no código hoje).
 """
 import json
+from urllib.parse import urlparse, parse_qs
 
 from _test_utils import app_url
+
+CORS = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "*",
+}
 
 
 def test_fetch_all_rows_matriz_pagina_alem_de_mil(page):
@@ -51,21 +58,29 @@ def test_fetch_all_rows_cana_pagina_alem_de_mil(page):
     fetchAllRows(table, orderBy, ascending), que fecha sobre `db` em vez de
     receber a consulta pronta. Como `db` é `const` no escopo do próprio
     script, não dá pra trocar por um mock em JS -- então intercepta a
-    requisição HTTP real (rota fake, nunca bate no Supabase de verdade) e
-    honra o header Range que o supabase-js manda, do mesmo jeito que o
-    Postgrest real responde."""
+    requisição HTTP real (rota fake, nunca bate no Supabase de verdade).
+
+    O supabase-js dessa versão pagina com `?offset=N&limit=1000` na própria
+    URL, não com um header Range (só descobri isso depurando: sem ler
+    offset/limit direito, o mock sempre devolvia a página 0 e o app pedia
+    página atrás de página pra sempre, sem nunca ver uma página curta pra
+    parar -- não era bug do app, era o mock devolvendo o dado errado)."""
     total_fake = 1500
     todas_as_linhas = [{"id": i} for i in range(total_fake)]
 
     def handler(route):
         request = route.request
-        range_header = request.headers.get("range", "0-999")
-        inicio, fim = (int(x) for x in range_header.split("-"))
-        pagina = todas_as_linhas[inicio:fim + 1]
+        if request.method == "OPTIONS":
+            route.fulfill(status=204, headers=CORS)
+            return
+        query = parse_qs(urlparse(request.url).query)
+        offset = int(query.get("offset", ["0"])[0])
+        limit = int(query.get("limit", ["1000"])[0])
+        pagina = todas_as_linhas[offset:offset + limit]
         route.fulfill(
-            status=200,
+            status=206,
             content_type="application/json",
-            headers={"content-range": "%d-%d/%d" % (inicio, inicio + len(pagina) - 1, total_fake)},
+            headers={**CORS, "content-range": "%d-%d/%d" % (offset, offset + len(pagina) - 1, total_fake)},
             body=json.dumps(pagina),
         )
 
