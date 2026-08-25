@@ -52,18 +52,28 @@ $guarda$;
 
 
 -- ------------------------------------------------------------
--- QUEM PODE EXCLUIR
+-- QUEM E DONO DO NEGOCIO
 --
--- is_admin() so olha papel = 'admin'. O proprietario ficava de fora, o
--- que contraria a regra que o Eduardo definiu: excluir e so de admin ou
--- proprietario, em todo o app.
+-- is_admin() so olha papel = 'admin'. Os proprietarios - Alice, Marcia e
+-- Paulo - ficavam de fora de tudo que depende dele, inclusive da regra
+-- de exclusao que o Eduardo definiu.
+--
+-- Sem esta funcao, o Contas a Pagar nasceria com os donos do negocio
+-- trancados para fora das proprias contas: nenhum dos tres tem
+-- matriz_financeiro hoje, e is_admin() nao os alcanca.
 -- ------------------------------------------------------------
-create or replace function pode_excluir() returns boolean
+create or replace function is_dono() returns boolean
 language sql security definer set search_path = public stable as $$
   select exists(
     select 1 from profiles
     where id = auth.uid() and ativo = true and papel in ('admin','proprietario')
   );
+$$;
+
+-- Excluir e so de admin ou proprietario, em todo o app.
+create or replace function pode_excluir() returns boolean
+language sql security definer set search_path = public stable as $$
+  select is_dono();
 $$;
 
 
@@ -173,7 +183,7 @@ create table if not exists titulo_rateios (
   centro_custo_id bigint not null references centros_custo(id) on delete restrict,
   competencia     text not null check (competencia ~ '^[0-9]{4}-[0-9]{2}$'),
   valor           numeric(12,2) not null check (valor > 0),
-  talhao_id       bigint references talhoes(id) on delete set null,
+  talhao_id       bigint references talhoes_areas(id) on delete set null,
   observacao      text
 );
 
@@ -385,6 +395,10 @@ create constraint trigger trg_rateio_fecha
 -- ja enxergar o financeiro E ter a chave nova 'contas'. Assim ninguem
 -- ganha acesso as contas sem antes ter o financeiro, nem por descuido.
 --
+-- EXCECAO: admin e proprietario entram direto. Sao os donos; exigir que
+-- alguem se conceda permissao para ver as proprias contas so produziria
+-- gente trancada para fora sem entender por que.
+--
 -- EXCLUIR e so de admin ou proprietario, em qualquer das tabelas novas.
 -- ============================================================
 
@@ -396,8 +410,8 @@ alter table titulo_baixas     enable row level security;
 
 do $rls$
 declare
-  ve   text := '(is_admin() or (tem_permissao(''matriz_financeiro'',''visualizar'') and tem_permissao(''contas'',''visualizar'')))';
-  edita text := '(is_admin() or (tem_permissao(''matriz_financeiro'',''visualizar'') and tem_permissao(''contas'',''editar'')))';
+  ve    text := '(is_dono() or (tem_permissao(''matriz_financeiro'',''visualizar'') and tem_permissao(''contas'',''visualizar'')))';
+  edita text := '(is_dono() or (tem_permissao(''matriz_financeiro'',''visualizar'') and tem_permissao(''contas'',''editar'')))';
   t    text;
 begin
   foreach t in array array['entidades','contas_bancarias','titulos','titulo_rateios','titulo_baixas'] loop
