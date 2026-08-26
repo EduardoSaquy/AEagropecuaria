@@ -24,19 +24,24 @@
 // v3: um service worker so, e entram AECana.html e AECereais.html. A v2
 // guardava AELavoura.html como se fosse o app; ele agora e so a pagina que
 // encaminha para os dois.
+//
+// v4: entra AECombustivel.html, que ate aqui registrava o proprio
+// sw_combustivel.js (aposentado) e nunca tinha cache offline nenhum.
 // ============================================================
-const CACHE = 'ae-v3';
+const CACHE = 'ae-v4';
 
 const SHELL = [
-  './AEMatriz.html',   './manifest_matriz.json',
-  './AEpecuaria.html', './manifest.json',
-  './AECana.html',     './manifest_cana.json',
-  './AECereais.html',  './manifest_cereais.json',
+  './AEMatriz.html',      './manifest_matriz.json',
+  './AEpecuaria.html',    './manifest.json',
+  './AECana.html',        './manifest_cana.json',
+  './AECereais.html',     './manifest_cereais.json',
+  './AECombustivel.html', './manifest_combustivel.json',
   './AELavoura.html',
-  './icon-pecuaria-192.png', './icon-pecuaria-512.png',
-  './icon-matriz-192.png',   './icon-matriz-512.png',
-  './icon-cana-192.png',     './icon-cana-512.png',
-  './icon-cereais-192.png',  './icon-cereais-512.png',
+  './icon-pecuaria-192.png',    './icon-pecuaria-512.png',
+  './icon-matriz-192.png',      './icon-matriz-512.png',
+  './icon-cana-192.png',        './icon-cana-512.png',
+  './icon-cereais-192.png',     './icon-cereais-512.png',
+  './icon-combustivel-192.png', './icon-combustivel-512.png',
 ];
 
 self.addEventListener('install', (e) => {

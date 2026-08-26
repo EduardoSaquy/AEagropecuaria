@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AE Cana</title>
-<link rel="manifest" href="manifest_cana.json">
-<link rel="icon" href="icon-cana-192.png">
-<link rel="apple-touch-icon" href="icon-cana-192.png">
+<title>AE Lavoura</title>
+<link rel="manifest" href="manifest_lavoura.json">
+<link rel="icon" href="icon-lavoura-192.png">
+<link rel="apple-touch-icon" href="icon-lavoura-192.png">
 <meta name="theme-color" content="#1B4332">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -264,15 +264,6 @@ const db = supabase.createClient(
   'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
 
-/* ===================== A FRENTE DESTE APP =====================
- * Este arquivo e o AE Cana. Ele foi gerado a partir do
- * AELavoura.html por gerar_apps_lavoura.py e so enxerga uma frente.
- * Cana e Cereais sao operacoes em estados diferentes, com equipes e
- * cadastros proprios; o banco continua sendo um so, e o AE Matriz e
- * quem consolida as tres atividades. */
-const FRENTE = 'cana';       // culturas.frente
-const ATIVIDADE = 'cana'; // fazenda_atividades.atividade
-
 /* ===================== HELPERS DE CONVERSÃO ===================== */
 function toSnake(s){ return s.replace(/[A-Z]/g, m => '_'+m.toLowerCase()); }
 function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
@@ -288,7 +279,8 @@ function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; 
  * errada faria o formulário oferecer uma opção que o banco rejeita. */
 const OPCOES = {
   ESTADOS: [{value:'TO',label:'Tocantins'},{value:'SP',label:'São Paulo'}],
-  FRENTES: [{value:'cana',label:'Cana-de-açúcar'}],
+  FRENTES: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'}],
+  FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
   CATEGORIAS_INSUMO_CANA: [
     {value:'herbicida',label:'Herbicida'}, {value:'inseticida',label:'Inseticida'},
     {value:'fungicida',label:'Fungicida'}, {value:'adubo',label:'Adubo/Fertilizante'},
@@ -325,19 +317,27 @@ function frenteDoTalhao(t){
   const c = state.culturas.find(x=>x.id===t.culturaId);
   return c ? c.frente : null;
 }
+function culturaDoTalhaoNome(talhaoId){
+  if(talhaoId==null) return null;
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  return t && t.culturaId!=null ? fkNome('culturas', t.culturaId) : null;
+}
 
 /* ===================== CADASTROS (motor genérico de CRUD) =====================
- * Cadastros de base (fazendas, culturas, talhoes, safras) sao tabelas
- * compartilhadas com os outros apps, mas este arquivo so enxerga a
- * frente 'cana' - o corte e feito em filtrarPelaFrente(), na
- * entrada dos dados. Fazenda e cadastro do AE Matriz; aqui ela aparece
- * para consulta e para agrupar os talhoes. Centro de custo saiu junto
- * com o Financeiro para o Matriz. */
+ * Cadastros de base (fazendas, culturas, talhoes, safras)
+ * são ÚNICOS — compartilhados entre Cana e Grãos, exatamente como já
+ * eram dentro de cada um dos dois apps originais (mesma tabela física
+ * desde sempre: fazendas/culturas/safras/talhoes_areas/centros_custo).
+ * Os demais cadastros existem em par — um para Cana (tabela *_cana,
+ * módulo de permissão 'operacoes'/'financeiro'/'resultados') e um para
+ * Grãos (tabela *_graos, módulo 'operacoes_graos'/'financeiro_graos'/
+ * 'resultados_graos') — os módulos de permissão são os MESMOS nomes
+ * que cada app original já usava, então nenhuma política de RLS já
+ * publicada precisou mudar (ver lavoura_migracao_graos.sql). */
 const CADASTROS = {
   fazendas: {
-    table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'matriz_fazendas',
-    somenteLeitura:true,
-    desc:'As fazendas desta operação e os talhões de cada uma. O cadastro de fazenda é feito no AE Matriz.',
+    table:'fazendas', label:'Fazendas', singular:'Fazenda', modulo:'cadastros',
+    desc:'Unidades produtivas da empresa, com estado e área total.',
     emptyHint:'Cadastre a primeira fazenda para começar.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Fazenda Santa Fé'},
@@ -347,7 +347,7 @@ const CADASTROS = {
     ],
   },
   culturas: {
-    table:'culturas', label:'Culturas', singular:'Cultura', modulo:'cana_cadastros',
+    table:'culturas', label:'Culturas', singular:'Cultura', modulo:'cadastros',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true},
       {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES, required:true},
@@ -355,8 +355,8 @@ const CADASTROS = {
     ],
   },
   talhoes: {
-    table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cana_cadastros',
-    desc:'Talhões de cana desta fazenda. A Cultura define a safra e o histórico de cada um.',
+    table:'talhoes_areas', label:'Talhões', singular:'Talhão', modulo:'cadastros',
+    desc:'Talhões de lavoura desta fazenda — de cana ou de grãos, conforme a Cultura escolhida.',
     emptyHint:'Cadastre uma fazenda antes de criar um talhão.',
     filtroLista: item => item.tipo==='talhao',
     historico: true,
@@ -365,19 +365,29 @@ const CADASTROS = {
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Talhão 12'},
       {key:'tipo', type:'fixed', value:'talhao', list:false},
       {key:'areaHa', label:'Área (ha)', type:'number', step:'0.01', suffix:' ha'},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', filter:c=>c.frente==='cana'||c.frente==='graos'},
       {key:'ativo', label:'Talhão ativo', type:'checkbox', default:true, list:false},
     ],
   },
   safras: {
-    table:'safras', label:'Safras', singular:'Safra', modulo:'cana_cadastros',
+    table:'safras', label:'Safras', singular:'Safra', modulo:'cadastros',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='cana'||c.frente==='graos'},
       {key:'nome', label:'Safra', type:'text', required:true, placeholder:'Ex: 2024/2025'},
       {key:'dataInicio', label:'Início', type:'date'},
       {key:'dataFim', label:'Fim', type:'date'},
       {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
+    ],
+  },
+  centrosCusto: {
+    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', modulo:'cadastros',
+    desc:'Mesmo Plano de Contas gerencial do Conag (Centro de Custo/Receita) — não é por fazenda: é o TIPO de gasto ou receita (Manutenção de Frota, Mão de obra, Produção Agropecuária...). Fazenda e Talhão de cada lançamento são campos à parte.',
+    fields:[
+      {key:'nome', label:'Nome (igual ao Conag)', type:'text', required:true, placeholder:'Ex: MANUTENÇÃO DE TRATORES, CAMINHÕES, MÁQUINAS E IMPLEMENTOS'},
+      {key:'tipo', label:'Tipo', type:'select', options:[{value:'saida',label:'Saída (despesa)'},{value:'entrada',label:'Entrada (receita)'}], required:true},
+      {key:'subcategoria', label:'Subcategoria (opcional)', type:'text', placeholder:'Ex: OPERACIONAL | MANUTENÇÃO GERAL DA FAZENDA'},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
   /* ---------- CANA ---------- */
@@ -454,10 +464,151 @@ const CADASTROS = {
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
+  despesasCana: {
+    table:'despesas_cana', label:'Despesas', singular:'Despesa', modulo:'financeiro',
+    desc:'Despesas gerais da lavoura de cana que não são insumo lançado em Aplicações (mão de obra, colheita terceirizada, transporte, arrendamento, manutenção).',
+    emptyHint:'Cadastre uma fazenda antes de lançar uma despesa.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='cana'},
+      {key:'centroCustoId', label:'Centro de Custo', type:'fk', refEntity:'centrosCusto', required:true, filter:c=>c.tipo==='saida'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'categoria', type:'fixed', value:'outro'},
+      {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de trator terceirizado'},
+      {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  receitasCana: {
+    table:'receitas_cana', label:'Receita', singular:'Receita', modulo:'resultados', moduloEditarAlt:'financeiro',
+    desc:'Venda/entrega de cana para a usina — gera a receita usada no Resultado. Quem só tem acesso a Financeiro pode lançar receita aqui, mas não vê a lista nem o valor das já lançadas.',
+    emptyHint:'Nenhuma receita de cana para mostrar.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='cana'},
+      {key:'safraId', label:'Safra (opcional)', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='cana'; }},
+      {key:'centroCustoId', label:'Centro de Custo/Receita (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.tipo==='entrada'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'toneladas', label:'Toneladas entregues (opcional)', type:'number', step:'0.01'},
+      {key:'valorTotal', label:'Valor total (R$)', type:'number', step:'0.01', required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
 
   /* ---------- GRÃOS ---------- */
+  plantiosGraos: {
+    table:'plantios_graos', label:'Plantio', singular:'Plantio', modulo:'operacoes_graos',
+    desc:'Registro do plantio de cada talhão de grãos — cultura, cultivar e data de plantio. Uma linha por safra plantada (grão é cultura anual, pode repetir no mesmo ano — ex: soja no verão, milho safrinha em seguida).',
+    emptyHint:'Cadastre um talhão de grãos antes de registrar um plantio.',
+    orderBy:'data_plantio', orderDesc:true, semBusca:true,
+    fields:[
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='graos'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
+      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='graos'; }},
+      {key:'cultivar', label:'Cultivar', type:'text', required:true, placeholder:'Ex: TMG 7062'},
+      {key:'dataPlantio', label:'Data do plantio', type:'date', required:true},
+      {key:'dataPrevisaoColheita', label:'Previsão de colheita', type:'date'},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+      {key:'ativo', label:'Plantio ativo (safra em pé no talhão)', type:'checkbox', default:true, list:false},
+    ],
+  },
+  colheitasGraos: {
+    table:'colheitas_graos', label:'Colheita', singular:'Colheita', modulo:'operacoes_graos',
+    desc:'Registro da colheita de cada talhão de grãos — sacas colhidas (60kg) e produtividade (sc/ha).',
+    emptyHint:'Cadastre um talhão de grãos antes de registrar uma colheita.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='graos'},
+      {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true, filter:c=>c.frente==='graos'},
+      {key:'safraId', label:'Safra', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='graos'; }},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'sacas', label:'Sacas (60kg)', type:'number', step:'0.01', required:true},
+      {key:'produtividade', label:'Produtividade (sc/ha)', type:'computed', compute:item=>{
+        const t = state.talhoes.find(x=>x.id===item.talhaoId);
+        return (t && t.areaHa) ? fmt(Number(item.sacas||0)/Number(t.areaHa)) : '—';
+      }},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  insumosGraos: {
+    table:'insumos_graos', label:'Insumos', singular:'Insumo', modulo:'operacoes_graos',
+    desc:'Sementes, defensivos e fertilizantes usados nos tratos culturais de grãos, com estoque mínimo para alerta.',
+    fields:[
+      {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Semente Soja TMG 7062'},
+      {key:'categoria', label:'Categoria', type:'select', options:OPCOES.CATEGORIAS_INSUMO_GRAOS, required:true},
+      {key:'unidade', label:'Unidade', type:'text', required:true},
+      {key:'estoqueMinimo', label:'Estoque mínimo', type:'number', step:'0.01', suffix:''},
+      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
+    ],
+  },
+  entradasInsumoGraos: {
+    table:'entradas_insumo_graos', label:'Entradas de Insumo', singular:'Entrada', modulo:'operacoes_graos',
+    desc:'Compra/recebimento de insumo de grãos — soma no estoque; informar o preço pago recalcula o preço médio.',
+    emptyHint:'Cadastre um insumo de grãos antes de lançar uma entrada.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumosGraos', required:true},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
+      {key:'precoPago', label:'Preço pago (R$/unidade)', type:'number', step:'0.0001'},
+      {key:'fornecedor', label:'Fornecedor', type:'text'},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  aplicacoesGraos: {
+    table:'aplicacoes_graos', label:'Aplicações', singular:'Aplicação', modulo:'operacoes_graos',
+    desc:'Lançamento de trato cultural em campo (grãos) — desconta o insumo do estoque na quantidade aplicada.',
+    emptyHint:'Cadastre um talhão e um insumo de grãos antes de lançar uma aplicação.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'talhaoId', label:'Talhão', type:'fk', refEntity:'talhoes', required:true, filter:t=>frenteDoTalhao(t)==='graos'},
+      {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumosGraos', required:true},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'tipoOperacao', label:'Tipo de operação', type:'select', options:OPCOES.TIPOS_OPERACAO_GRAOS, required:true},
+      {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
+      {key:'custo', label:'Custo', type:'computed', compute:item=>{ const p=precoMedioInsumo('Graos',item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  despesasGraos: {
+    table:'despesas_graos', label:'Despesas', singular:'Despesa', modulo:'financeiro_graos',
+    desc:'Despesas gerais da lavoura de grãos que não são insumo lançado em Aplicações (mão de obra, colheita terceirizada, transporte, arrendamento, manutenção).',
+    emptyHint:'Cadastre uma fazenda antes de lançar uma despesa.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='graos'},
+      {key:'centroCustoId', label:'Centro de Custo', type:'fk', refEntity:'centrosCusto', required:true, filter:c=>c.tipo==='saida'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'categoria', type:'fixed', value:'outro'},
+      {key:'descricao', label:'Descrição', type:'text', required:true, placeholder:'Ex: Diária de colheitadeira terceirizada'},
+      {key:'valor', label:'Valor (R$)', type:'number', step:'0.01', required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
+  receitasGraos: {
+    table:'receitas_graos', label:'Receita', singular:'Receita', modulo:'resultados_graos', moduloEditarAlt:'financeiro_graos',
+    desc:'Venda de grãos (soja, milho, sorgo, feijão...) — gera a receita usada no Resultado. Quem só tem acesso a Financeiro de Grãos pode lançar receita aqui, mas não vê a lista nem o valor das já lançadas.',
+    emptyHint:'Nenhuma receita de grãos para mostrar.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'talhaoId', label:'Talhão (opcional)', type:'fk', refEntity:'talhoes', filter:t=>frenteDoTalhao(t)==='graos'},
+      {key:'safraId', label:'Safra (opcional)', type:'fk', refEntity:'safras', filter:s=>{ const c=state.culturas.find(x=>x.id===s.culturaId); return !!c && c.frente==='graos'; }},
+      {key:'culturaId', label:'Cultura (opcional)', type:'fk', refEntity:'culturas', filter:c=>c.frente==='graos'},
+      {key:'centroCustoId', label:'Centro de Custo/Receita (opcional)', type:'fk', refEntity:'centrosCusto', filter:c=>c.tipo==='entrada'},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'sacas', label:'Sacas entregues (opcional)', type:'number', step:'0.01'},
+      {key:'valorTotal', label:'Valor total (R$)', type:'number', step:'0.01', required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
+    ],
+  },
 };
 const CADASTRO_KEYS = Object.keys(CADASTROS);
+const CANA_KEYS = ['plantiosCana','colheitasCana','insumosCana','entradasInsumoCana','aplicacoesCana','despesasCana','receitasCana'];
+const GRAOS_KEYS = ['plantiosGraos','colheitasGraos','insumosGraos','entradasInsumoGraos','aplicacoesGraos','despesasGraos','receitasGraos'];
 
 function rowToCadastro(row, cfg){
   const obj = {id: row.id};
@@ -467,15 +618,11 @@ function rowToCadastro(row, cfg){
 function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 
 /* ===================== CACHE LOCAL (abrir offline com os últimos dados) ===================== */
-const CACHE_LOCAL_KEY = 'cana_cache_v2';
+const CACHE_LOCAL_KEY = 'lavoura_cache_cadastros_v1';
 function salvarCacheLocal(){
   try{
     const snapshot = {};
     CADASTRO_KEYS.forEach(k=>{ snapshot[k] = state[k]; });
-    // Guarda tambem as atividades das fazendas: sem elas o corte por frente
-    // na abertura offline nao teria como saber quais fazendas sao desta
-    // frente, e cairia so nos talhoes.
-    snapshot.__fazendaAtividades = state.fazendaAtividades || [];
     localStorage.setItem(CACHE_LOCAL_KEY, JSON.stringify(snapshot));
   }catch(e){ /* localStorage indisponível ou cheio — segue sem cache offline */ }
 }
@@ -485,11 +632,6 @@ function carregarCacheLocal(){
     if(!raw) return;
     const snapshot = JSON.parse(raw);
     Object.keys(snapshot).forEach(k=>{ if(CADASTROS[k]) state[k] = snapshot[k]; });
-    // O cache tambem tem que passar pelo corte por frente: ele e pintado na
-    // tela antes de loadAll() rodar. Sem fazendaAtividades gravada, o corte
-    // usa so os talhoes - que ja bastam, porque toda fazenda desta frente
-    // tem talhao dela.
-    filtrarPelaFrente(snapshot.__fazendaAtividades || []);
   }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
 }
 
@@ -518,34 +660,11 @@ async function loadAll(){
       return fetchAllRows(cfg.table, cfg.orderBy || 'nome', !cfg.orderDesc);
     }),
     db.from('profiles').select('*').order('nome'),
-    db.from('fazenda_atividades').select('*'),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
-  state.fazendaAtividades = (results[CADASTRO_KEYS.length+1].data) || [];
-  filtrarPelaFrente(state.fazendaAtividades);
   salvarCacheLocal();
   render();
-}
-
-/* Corta tudo que nao e desta frente na ENTRADA dos dados, e nao em cada
- * tela. Assim toda lista, todo seletor e todo calculo ja nascem certos,
- * sem depender de alguem lembrar de filtrar em cada lugar novo. */
-function filtrarPelaFrente(fazendaAtividades){
-  state.culturas = state.culturas.filter(c => c.frente === FRENTE);
-  const idsCultura = new Set(state.culturas.map(c=>c.id));
-  state.safras  = state.safras.filter(s  => s.culturaId!=null && idsCultura.has(s.culturaId));
-  state.talhoes = state.talhoes.filter(t => t.culturaId!=null && idsCultura.has(t.culturaId));
-
-  // Uma fazenda entra se DECLAROU a atividade ou se ja tem talhao desta
-  // frente. A segunda condicao existe para nunca esconder fazenda que tem
-  // trabalho de verdade so porque faltou declarar a area no Matriz.
-  const daFrente = new Set([
-    ...fazendaAtividades.filter(a => a.atividade===ATIVIDADE && Number(a.area_ha||0)>0)
-                        .map(a => a.fazenda_id),
-    ...state.talhoes.map(t => t.fazendaId),
-  ]);
-  state.fazendas = state.fazendas.filter(f => daFrente.has(f.id));
 }
 
 /* ===================== ESTADO ===================== */
@@ -566,6 +685,11 @@ const state = {
   loginLoading: false,
   usuarioError: '',
   usuarioLoading: false,
+  despesaFrenteAtual: 'cana',
+  despesaFiltroMes: '',
+  despesaFiltroCentro: '',
+  despesaGruposAbertos: {},
+  receitaFrenteAtual: 'cana',
   fazendaTalhoesAbertos: {},
 };
 
@@ -596,6 +720,11 @@ function render(){
 function paginaCustom(page){
   if(page==='adminUsuarios') return PageAdminUsuarios();
   if(page==='estoqueInsumosCana') return PageEstoqueInsumos('Cana');
+  if(page==='estoqueInsumosGraos') return PageEstoqueInsumos('Graos');
+  if(page==='custoProducao') return PageCustoProducao();
+  if(page==='despesas') return PageDespesas();
+  if(page==='receitas') return PageReceitas();
+  if(page==='resultado') return PageResultado();
   return PageCadastro(page);
 }
 
@@ -678,7 +807,7 @@ function LoginPage(){
   return `
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cana</div></div>
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Lavoura</div></div>
       ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
       <form data-login-form="1">
         <div class="login-field"><label>Usuário</label><input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus /></div>
@@ -692,9 +821,9 @@ function AguardandoLiberacao(){
   return `
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cana</div></div>
+      <div class="login-brand">${brandMark()}<div class="brand-name">AE Lavoura</div></div>
       <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
-        Seu login foi reconhecido, mas ainda não há acesso liberado para esta conta no AE Cana.
+        Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
         Fale com o administrador do sistema.
       </p>
       <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
@@ -706,17 +835,33 @@ function AguardandoLiberacao(){
 const GROUPS = {
   cadastros: {label:'Cadastros', icon:iconFazenda(), pages:[
     {key:'talhoes', label:'Talhões'},
-    {key:'fazendas', label:'Fazendas'},
     {key:'culturas', label:'Culturas'},
     {key:'safras', label:'Safras'},
+    {key:'centrosCusto', label:'Centros de Custo'},
   ]},
-  operacoes: {label:'Operações', icon:iconPlantio(), pages:[
+  operacoesCana: {label:'Operações · Cana', icon:iconPlantio(), pages:[
     {key:'plantiosCana', label:'Plantio'},
     {key:'colheitasCana', label:'Colheita'},
     {key:'insumosCana', label:'Insumos'},
     {key:'entradasInsumoCana', label:'Entradas'},
     {key:'estoqueInsumosCana', label:'Estoque'},
     {key:'aplicacoesCana', label:'Aplicações'},
+  ]},
+  operacoesGraos: {label:'Operações · Grãos', icon:iconGrao(), pages:[
+    {key:'plantiosGraos', label:'Plantio'},
+    {key:'colheitasGraos', label:'Colheita'},
+    {key:'insumosGraos', label:'Insumos'},
+    {key:'entradasInsumoGraos', label:'Entradas'},
+    {key:'estoqueInsumosGraos', label:'Estoque'},
+    {key:'aplicacoesGraos', label:'Aplicações'},
+  ]},
+  financeiro: {label:'Financeiro', icon:iconMoney(), pages:[
+    {key:'custoProducao', label:'Custo por Talhão'},
+    {key:'despesas', label:'Despesas'},
+  ]},
+  resultados: {label:'Resultados', icon:iconResultado(), pages:[
+    {key:'receitas', label:'Receita'},
+    {key:'resultado', label:'Resultado'},
   ]},
   admin: {label:'Administração', icon:iconAdmin(), pages:[
     {key:'adminUsuarios', label:'Usuários'},
@@ -725,14 +870,19 @@ const GROUPS = {
 function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  // Chave 'operacoes' sem prefixo (Cereais usa 'operacoes_graos') — assimetria
-  // herdada, não é bug ativo: como os dois apps leem a MESMA profiles.permissoes,
-  // trocar para algo como 'cana_operacoes' exige migrar essa chave em todo
-  // profile que já tem 'operacoes' hoje, senão quem tinha acesso perde em
-  // silêncio. Não renomear sem rodar essa migração antes.
-  if(key==='operacoes') return temPermissao('operacoes','visualizar');
-  return temPermissao('cana_cadastros','visualizar');
+  if(key==='operacoesCana') return temPermissao('operacoes','visualizar');
+  if(key==='operacoesGraos') return temPermissao('operacoes_graos','visualizar');
+  if(key==='financeiro') return temPermissao('financeiro','visualizar') || temPermissao('financeiro_graos','visualizar');
+  // Resultados fica visível pra quem tem 'resultados' OU 'resultados_graos'
+  // (vê a lucratividade daquela frente) — ou quem só tem 'financeiro'/
+  // 'financeiro_graos' de EDITAR, pra conseguir lançar receita "cega"
+  // (lança, mas não vê a lista nem o valor — mesmo racional do AE Cana
+  // original).
+  if(key==='resultados') return temPermissao('resultados','visualizar') || temPermissao('resultados_graos','visualizar')
+    || temPermissao('financeiro','editar') || temPermissao('financeiro_graos','editar');
+  return temPermissao('cadastros','visualizar');
 }
+function paginaVisivel(key){ return true; }
 function paginaAcessivel(page){
   const grupo = Object.entries(GROUPS).find(([,g])=>g.pages.some(p=>p.key===page));
   if(!grupo) return false;
@@ -752,7 +902,7 @@ function Topbar(){
   const inicial = nome ? nome.trim().charAt(0).toUpperCase() : '?';
   return `
   <div class="topbar">
-    <div class="brand">${brandMark()}<span class="brand-name">AE Cana</span></div>
+    <div class="brand">${brandMark()}<span class="brand-name">AE Lavoura</span></div>
     <div class="topbar-user">
       <span class="topbar-user-nome">${nome}</span>
       <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
@@ -781,13 +931,28 @@ function SubTabs(){
 }
 function Header(){
   if(state.page==='adminUsuarios'){
-    return headerHtml('Administração','Usuários','Contas de acesso desta operação e o que cada uma pode ver e editar.');
+    return headerHtml('Administração','Usuários','Crie contas de acesso para sua equipe e controle o nível de acesso, por frente (Cana/Grãos).');
   }
   if(state.page==='estoqueInsumosCana'){
-    return headerHtml('Operações · Cana','Estoque','Saldo atual de cada insumo (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
+    return headerHtml('Operações · Cana','Estoque','Saldo atual de cada insumo de cana (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
+  }
+  if(state.page==='estoqueInsumosGraos'){
+    return headerHtml('Operações · Grãos','Estoque','Saldo atual de cada insumo de grãos (entradas menos aplicações), preço médio ponderado e alerta de estoque baixo.');
+  }
+  if(state.page==='custoProducao'){
+    return headerHtml('Financeiro','Custo por Talhão','Custo de insumo e despesa por hectare e por unidade colhida (tonelada na cana, saca nos grãos) de cada talhão — Cana e Grãos juntos.');
+  }
+  if(state.page==='despesas'){
+    return headerHtml('Financeiro','Despesas','Despesas gerais da lavoura, por frente (Cana ou Grãos).');
+  }
+  if(state.page==='receitas'){
+    return headerHtml('Resultados','Receita','Venda de produção, por frente (Cana ou Grãos).');
+  }
+  if(state.page==='resultado'){
+    return headerHtml('Resultados','Resultado','Receita menos despesas (gerais + custo de insumo) de Cana, de Grãos e da lavoura inteira, com o resultado por hectare de cada uma.');
   }
   const cfg = CADASTROS[state.page];
-  const eyebrow = (cfg.modulo==='operacoes') ? 'Operações · Cana' : 'Cadastro';
+  const eyebrow = (cfg.modulo==='operacoes') ? 'Operações · Cana' : (cfg.modulo==='operacoes_graos') ? 'Operações · Grãos' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
 }
 function headerHtml(eyebrow,title,desc){
@@ -832,9 +997,7 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = !cfg.somenteLeitura
-    && (temPermissao(cfg.modulo||'cana_cadastros','editar')
-        || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar')));
+  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
   const termo = state.search.toLowerCase();
   const base = cfg.filtroLista ? state[key].filter(cfg.filtroLista) : state[key];
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
@@ -1107,10 +1270,311 @@ function PageEstoqueInsumos(frente){
  * TALHÕES DA MESMA FRENTE com plantio ativo, proporcional à área —
  * uma despesa de Grãos nunca dilui o custo de um talhão de Cana e
  * vice-versa, porque os dois ratões são calculados separadamente. */
+function custoInsumosTalhao(frente, talhaoId){
+  return state['aplicacoes'+frente].filter(a=>a.talhaoId===talhaoId).reduce((a,ap)=>{
+    const preco = precoMedioInsumo(frente, ap.insumoId);
+    return a + (preco!=null ? Number(ap.quantidade||0)*preco : 0);
+  },0);
+}
+function talhaoEmProducao(frente, t){
+  const chave = frente==='Cana' ? 'plantiosCana' : 'plantiosGraos';
+  return state[chave].some(p=>p.talhaoId===t.id && p.ativo);
+}
+function areaTotalEmProducao(frente){
+  return state.talhoes.filter(t=>t.ativo!==false && frenteDoTalhao(t)===(frente==='Cana'?'cana':'graos') && talhaoEmProducao(frente,t)).reduce((a,t)=>a+Number(t.areaHa||0),0);
+}
+function despesasGeraisSemTalhao(frente){
+  return state['despesas'+frente].filter(d=>!d.talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
+}
+function custoDespesasTalhao(frente, talhaoId){
+  const t = state.talhoes.find(x=>x.id===talhaoId);
+  const direta = state['despesas'+frente].filter(d=>d.talhaoId===talhaoId).reduce((a,d)=>a+Number(d.valor||0),0);
+  let rateio = 0;
+  if(t && t.areaHa && talhaoEmProducao(frente,t)){
+    const areaTotal = areaTotalEmProducao(frente);
+    if(areaTotal>0) rateio = despesasGeraisSemTalhao(frente) * (Number(t.areaHa)/areaTotal);
+  }
+  return direta + rateio;
+}
+function producaoTotalTalhao(frente, talhaoId){
+  const chave = frente==='Cana' ? 'colheitasCana' : 'colheitasGraos';
+  const campo = frente==='Cana' ? 'toneladas' : 'sacas';
+  return state[chave].filter(c=>c.talhaoId===talhaoId).reduce((a,c)=>a+Number(c[campo]||0),0);
+}
+function PageCustoProducao(){
+  const talhoes = state.talhoes.filter(t=>t.ativo!==false && frenteDoTalhao(t));
+  if(talhoes.length===0){
+    return `<div class="card">${Empty('Nenhum talhão com cultura definida','Cadastre um talhão em Cadastros > Talhões, com a Cultura (cana ou grãos) definida, para acompanhar o custo.')}</div>`;
+  }
+  const linhas = talhoes.map(t=>{
+    const frenteChave = frenteDoTalhao(t)==='cana' ? 'Cana' : 'Graos';
+    const unidade = frenteChave==='Cana' ? 't' : 'sc';
+    const custoInsumos = custoInsumosTalhao(frenteChave, t.id);
+    const custoDespesas = custoDespesasTalhao(frenteChave, t.id);
+    const custoTotalTalhao = custoInsumos + custoDespesas;
+    const producao = producaoTotalTalhao(frenteChave, t.id);
+    const custoHa = t.areaHa ? custoTotalTalhao/Number(t.areaHa) : null;
+    const custoUnidade = producao>0 ? custoTotalTalhao/producao : null;
+    return {t, frenteChave, unidade, custoInsumos, custoDespesas, custoTotalTalhao, producao, custoHa, custoUnidade};
+  });
+  const totalPorFrente = (chave)=>{
+    const doFrente = linhas.filter(l=>l.frenteChave===chave);
+    const custoTotal = doFrente.reduce((a,l)=>a+l.custoTotalTalhao,0);
+    const areaTotal = doFrente.reduce((a,l)=>a+Number(l.t.areaHa||0),0);
+    return {qtdTalhoes:doFrente.length, custoTotal, custoHa: areaTotal>0?custoTotal/areaTotal:null};
+  };
+  const cana = totalPorFrente('Cana');
+  const graos = totalPorFrente('Graos');
+  const custoGeral = cana.custoTotal + graos.custoTotal;
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Custo total · Cana</div><div class="stat-value">R$ ${fmt(cana.custoTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo/ha · Cana</div><div class="stat-value">${cana.custoHa==null?'—':'R$ '+fmt(cana.custoHa)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo total · Grãos</div><div class="stat-value">R$ ${fmt(graos.custoTotal)}</div></div>
+    <div class="stat-card"><div class="stat-label">Custo/ha · Grãos</div><div class="stat-value">${graos.custoHa==null?'—':'R$ '+fmt(graos.custoHa)}</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Talhão</th><th>Frente</th><th>Fazenda</th><th>Área</th><th>Custo insumos</th><th>Custo despesas</th><th>Custo total</th><th>Custo/ha</th><th>Produção</th><th>Custo/unidade</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>`
+          <tr>
+            <td><strong>${l.t.nome}</strong></td>
+            <td><span class="pill ${l.frenteChave==='Cana'?'pill-cana':'pill-graos'}">${l.frenteChave==='Cana'?'Cana':'Grãos'}</span></td>
+            <td>${fkNome('fazendas', l.t.fazendaId)}</td>
+            <td class="mono">${l.t.areaHa?fmt(l.t.areaHa)+' ha':'—'}</td>
+            <td class="mono">R$ ${fmt(l.custoInsumos)}</td>
+            <td class="mono">R$ ${fmt(l.custoDespesas)}</td>
+            <td class="mono">R$ ${fmt(l.custoTotalTalhao)}</td>
+            <td class="mono">${l.custoHa==null?'—':'R$ '+fmt(l.custoHa)}</td>
+            <td class="mono">${fmt(l.producao)} ${l.unidade}</td>
+            <td class="mono">${l.custoUnidade==null?'—':'R$ '+fmt(l.custoUnidade)+'/'+l.unidade}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:12px;">Custo total da lavoura (Cana + Grãos): R$ ${fmt(custoGeral)}. Custo de insumo pelo preço médio ponderado; aplicação sem nenhuma entrada com preço informado entra com custo zero. Despesa com talhão marcado entra 100% nele; despesa geral (sem talhão) é rateada entre os talhões DA MESMA FRENTE com plantio ativo, proporcional à área de cada um — uma despesa de Grãos nunca é rateada num talhão de Cana, e vice-versa.</p>`;
+}
 
+/* ===================== FINANCEIRO: DESPESAS (unificado, por frente) =====================
+ * Mesma UI (filtro por mês/centro de custo, gráfico clicável, grupos
+ * colapsáveis) do AE Cana original — agora parametrizada por frente e
+ * com um seletor Cana/Grãos no topo. Novo/editar/excluir reaproveitam
+ * o motor genérico de CADASTROS (despesasCana ou despesasGraos, de
+ * acordo com o seletor).
+ * Agrupamento é por CENTRO DE CUSTO (centroCustoId) — o mesmo Plano de
+ * Contas gerencial do Conag (Centro Gerencial > SubCategoria > Centro
+ * de Custo/Receita), com os mesmos nomes já usados lá. NÃO é por
+ * fazenda: fazenda/talhão de cada lançamento são campos à parte (o
+ * "onde"); centro de custo é o "o quê" foi gasto/recebido. O campo
+ * `categoria` (enum antigo, mao_obra/transporte/...) fica fixo em
+ * 'outro' só pra satisfazer a constraint do banco — não aparece mais
+ * na tela. Ver conversa de 2026-08-19. */
+const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function mesLabel(yyyyMm){
+  const [y,m] = String(yyyyMm).split('-');
+  return `${MESES_PT[Number(m)-1]||m}/${y}`;
+}
+function despesaPorCentroCusto(lista){
+  const agreg = new Map();
+  lista.forEach(d=>{
+    const chave = d.centroCustoId ?? 'sem';
+    agreg.set(chave, (agreg.get(chave)||0) + Number(d.valor||0));
+  });
+  return [...agreg.entries()].map(([chave,total])=>({
+    chave, nome: chave==='sem' ? 'Sem centro de custo' : fkNome('centrosCusto', chave), total,
+  })).sort((a,b)=>b.total-a.total);
+}
 /* ---------- DONUT ---------- */
+function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
+function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
+  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
+  const [x0,y0] = polarXY(cx,cy,rOut,a0);
+  const [x1,y1] = polarXY(cx,cy,rOut,a1);
+  const [x2,y2] = polarXY(cx,cy,rIn,a1);
+  const [x3,y3] = polarXY(cx,cy,rIn,a0);
+  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+}
+const DONUT_PALETTE = ['#1B4332','#2D6A4F','#40916C','#74C69D','#95D5B2','#C98A2B','#E0A458','#8A5A2B','#B3462F','#D98A73','#4A5A7A','#6E7BA6','#2E4057','#7A5C61','#A6798E','#65758A'];
+function corCentroCusto(idx){ return DONUT_PALETTE[idx % DONUT_PALETTE.length]; }
+const LIMITE_PCT_OUTROS = 3;
+function donutChart(entries, opts){
+  opts = opts || {};
+  const totalGeral = entries.reduce((a,e)=>a+e.total,0);
+  if(entries.length===0 || totalGeral<=0){
+    return `<div class="card">${Empty('Sem despesa para compor o gráfico', 'Lance uma despesa para ver o gráfico.')}</div>`;
+  }
+  const principais = entries.filter(e => (e.total/totalGeral*100) >= LIMITE_PCT_OUTROS);
+  const pequenas = entries.filter(e => (e.total/totalGeral*100) < LIMITE_PCT_OUTROS);
+  const agrupadas = pequenas.length>0
+    ? [...principais, {chave:'outros', nome:`Outros (${pequenas.length})`, total: pequenas.reduce((a,e)=>a+e.total,0)}]
+    : principais;
+  const total = totalGeral;
+  const cx=110, cy=110, rOut=100, rIn=64;
+  const gap = agrupadas.length>1 ? 0.025 : 0;
+  let angle = 0;
+  const slices = agrupadas.map((e,idx)=>{
+    const frac = total>0 ? e.total/total : 0;
+    const sweep = frac*Math.PI*2;
+    const a0 = angle + gap/2;
+    const a1 = angle + sweep - gap/2;
+    angle += sweep;
+    const path = donutSlicePath(cx,cy,rOut,rIn,a0,a1);
+    const midAngle = (a0+a1)/2;
+    const [lx,ly] = polarXY(cx,cy,(rOut+rIn)/2,midAngle);
+    const pct = frac*100;
+    const showLabel = pct>=6;
+    const clicavel = !!opts.clicavel && e.chave!=='outros';
+    return `
+      <path class="donut-slice" ${clicavel?`data-donut-centro="${e.chave}"`:'style="cursor:default;"'} d="${path}" fill="${corCentroCusto(idx)}"
+        tabindex="0" role="img" aria-label="${e.nome}: R$ ${fmt(e.total)}, ${fmt(pct,1)}%"></path>
+      ${showLabel ? `<text class="donut-label" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${fmt(pct,0)}%</text>` : ''}
+    `;
+  }).join('');
+  const legenda = agrupadas.map((e,idx)=>{
+    const clicavel = !!opts.clicavel && e.chave!=='outros';
+    return `
+    <div class="legenda-row" ${clicavel?`data-donut-centro="${e.chave}"`:'style="cursor:default;"'}>
+      <span class="legenda-swatch" style="background:${corCentroCusto(idx)}"></span>
+      <span class="legenda-nome">${e.nome}</span>
+      <span class="legenda-valor">R$ ${fmt(e.total)}</span>
+      <span class="legenda-pct">${fmt(total>0?e.total/total*100:0,1)}%</span>
+    </div>
+  `;}).join('');
+  return `
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="eyebrow" style="margin-bottom:12px;">${opts.titulo||'Despesa por centro de custo (ano)'}</div>
+    <div class="painel-resultados">
+      <div class="donut-wrap">
+        <svg class="donut-svg" viewBox="0 0 220 220" width="220" height="220">
+          ${slices}
+          <text class="donut-center-value" x="110" y="104" text-anchor="middle">R$ ${fmt(total,0)}</text>
+          <text class="donut-center-label" x="110" y="123" text-anchor="middle">${opts.centroLabel||'ano'}</text>
+        </svg>
+      </div>
+      <div class="painel-legenda">${legenda}</div>
+    </div>
+  </div>`;
+}
+function FrenteToggle(dataAttr, atual){
+  return `
+  <div class="segmented">
+    <button class="${atual==='cana'?'active':''}" data-${dataAttr}="cana">Cana</button>
+    <button class="${atual==='graos'?'active':''} graos" data-${dataAttr}="graos">Grãos</button>
+  </div>`;
+}
+function PageDespesas(){
+  const frente = state.despesaFrenteAtual;
+  const cfgKey = frente==='cana' ? 'despesasCana' : 'despesasGraos';
+  const cfg = CADASTROS[cfgKey];
+  const podeEditar = temPermissao(cfg.modulo,'editar') || (cfg.moduloEditarAlt && temPermissao(cfg.moduloEditarAlt,'editar'));
+  const todas = state[cfgKey];
+  const meses = [...new Set(todas.map(d=>String(d.data||'').slice(0,7)).filter(Boolean))].sort();
+  const centrosUsados = [...new Set(todas.map(d=>d.centroCustoId).filter(id=>id!=null))]
+    .map(id=>state.centrosCusto.find(c=>c.id===id)).filter(Boolean)
+    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+
+  const porMes = state.despesaFiltroMes ? todas.filter(d=>String(d.data||'').slice(0,7)===state.despesaFiltroMes) : todas;
+  const barras = despesaPorCentroCusto(porMes);
+  const maxBarra = barras.reduce((a,b)=>Math.max(a,b.total),0);
+  const gruposVisiveis = state.despesaFiltroCentro
+    ? barras.filter(b=>String(b.chave)===String(state.despesaFiltroCentro))
+    : barras;
+  const totalFiltrado = gruposVisiveis.reduce((a,g)=>a+g.total,0);
+  const totalLancamentos = gruposVisiveis.reduce((a,g)=>a + porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).length, 0);
+
+  const ticketMedio = totalLancamentos>0 ? totalFiltrado/totalLancamentos : 0;
+
+  return `
+  <div class="totals-strip">
+    <div class="totals-nums">
+      <div class="total-item">
+        <div class="total-label">Total de saídas (${totalLancamentos})</div>
+        <div class="total-value neg">R$ ${fmt(totalFiltrado)}</div>
+      </div>
+      <div class="total-item">
+        <div class="total-label">Ticket médio</div>
+        <div class="total-value">R$ ${fmt(ticketMedio)}</div>
+      </div>
+    </div>
+    ${FrenteToggle('despesa-frente', frente)}
+  </div>
+  <div class="toolbar">
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <select data-despesa-filtro-mes>
+        <option value="">Todos os meses</option>
+        ${meses.map(m=>`<option value="${m}" ${state.despesaFiltroMes===m?'selected':''}>${mesLabel(m)}</option>`).join('')}
+      </select>
+      <select data-despesa-filtro-centro>
+        <option value="">Todos os centros de custo</option>
+        ${centrosUsados.map(c=>`<option value="${c.id}" ${String(state.despesaFiltroCentro)===String(c.id)?'selected':''}>${c.nome}</option>`).join('')}
+        <option value="sem" ${state.despesaFiltroCentro==='sem'?'selected':''}>Sem centro de custo</option>
+      </select>
+    </div>
+    ${podeEditar ? `<button class="btn btn-primary btn-sm ${frente==='graos'?'dourado':''}" data-novo-cadastro="${cfgKey}">+ Nova Despesa</button>` : ''}
+  </div>
+  ${barras.length===0 ? '' : `
+  <div class="card card-pad" style="margin-bottom:16px;">
+    <div class="eyebrow" style="margin-bottom:12px;">Despesa por centro de custo${state.despesaFiltroMes?` — ${mesLabel(state.despesaFiltroMes)}`:' (ano)'}</div>
+    <div class="despesa-barras">
+      ${barras.map((b,idx)=>`
+        <div class="despesa-barra-linha ${String(state.despesaFiltroCentro)===String(b.chave)?'ativa':''}" data-despesa-filtro-centro-bar="${b.chave}">
+          <div class="despesa-barra-nome">${b.nome}</div>
+          <div class="despesa-barra-track"><div class="despesa-barra-fill" style="width:${maxBarra>0?(b.total/maxBarra*100):0}%; background:${corCentroCusto(idx)}"></div></div>
+          <div class="despesa-barra-valor mono">R$ ${fmt(b.total)} <span style="opacity:.7;">${maxBarra>0?fmt(b.total/totalFiltrado*100,1):'0'}%</span></div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`}
+  ${gruposVisiveis.length===0 ? `<div class="card">${Empty('Nenhuma despesa encontrada', cfg.emptyHint||'Cadastre uma despesa ou ajuste os filtros.')}</div>` : gruposVisiveis.map((g,idx)=>{
+    const itens = porMes.filter(d=>(d.centroCustoId ?? 'sem')===g.chave).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
+    const aberto = !!state.despesaGruposAbertos[frente+':'+g.chave] || (!!state.despesaFiltroCentro && String(state.despesaFiltroCentro)===String(g.chave));
+    return `
+    <div class="card despesa-grupo">
+      <div class="despesa-grupo-header" data-despesa-grupo-toggle="${frente}:${g.chave}">
+        <span class="despesa-grupo-seta">${aberto?'▼':'▶'}</span>
+        <span style="width:10px; height:10px; border-radius:3px; flex-shrink:0; background:${corCentroCusto(barras.indexOf(barras.find(b=>b.chave===g.chave)))}"></span>
+        <span class="despesa-grupo-nome">${g.nome}</span>
+        <span class="pill pill-cat">${itens.length} lançamento(s)</span>
+        <span class="mono despesa-grupo-valor">R$ ${fmt(g.total)}</span>
+      </div>
+      ${aberto ? `
+      <table class="despesa-grupo-tabela">
+        <tbody>
+          ${itens.map(d=>{
+            const talhao = d.talhaoId ? state.talhoes.find(t=>t.id===d.talhaoId) : null;
+            const culturaNome = culturaDoTalhaoNome(d.talhaoId);
+            const culturaClasse = talhao && frenteDoTalhao(talhao)==='graos' ? 'graos' : 'cana';
+            return `
+            <tr>
+              <td class="despesa-grupo-data">${fmtData(d.data)}</td>
+              <td>${d.descricao}${d.observacao?`<br/><span class="hint">${d.observacao}</span>`:''}
+                <div class="contexto-tags">
+                  <span class="pill pill-cat">${fkNome('fazendas', d.fazendaId)}</span>
+                  ${d.talhaoId?`<span class="pill pill-cat">${fkNome('talhoes', d.talhaoId)}</span>`:''}
+                  ${culturaNome?`<span class="pill ${culturaClasse==='graos'?'pill-graos':'pill-cana'}">${culturaNome}</span>`:''}
+                </div>
+              </td>
+              <td class="mono despesa-grupo-valorlinha">R$ ${fmt(d.valor)}</td>
+              <td class="despesa-grupo-acoes">
+                ${podeEditar ? `<button class="btn-ghost btn-sm" data-edit-cadastro="${cfgKey}:${d.id}">Editar</button>` : ''}
+                ${podeEditar && !souOperador() ? `<button class="btn-danger-ghost" data-del-cadastro="${cfgKey}:${d.id}">Excluir</button>` : ''}
+              </td>
+            </tr>
+          `;}).join('')}
+        </tbody>
+      </table>` : ''}
+    </div>`;
+  }).join('')}`;
+}
 
 /* ===================== RESULTADOS: RECEITA (unificado, por frente) ===================== */
+function PageReceitas(){
+  const frente = state.receitaFrenteAtual;
+  const cfgKey = frente==='cana' ? 'receitasCana' : 'receitasGraos';
+  return `<div class="toolbar" style="margin-bottom:0;">${FrenteToggle('receita-frente', frente)}</div>${PageCadastro(cfgKey)}`;
+}
 
 /* ===================== RESULTADOS: RESULTADO (Cana, Grãos e Geral) =====================
  * Junta Receita (receitas_cana/receitas_graos) com Despesas gerais e
@@ -1122,11 +1586,61 @@ function PageEstoqueInsumos(frente){
  * mais correto que usar a área total das fazendas (que inclui hectares
  * de outra frente, ou nenhuma). O bloco Geral usa a soma das duas
  * áreas em produção. */
+function resultadoFrente(frente){
+  const cfgReceita = frente==='Cana' ? 'receitasCana' : 'receitasGraos';
+  const receitaTotal = state[cfgReceita].reduce((a,r)=>a+Number(r.valorTotal||0),0);
+  const despesasGerais = state['despesas'+frente].reduce((a,d)=>a+Number(d.valor||0),0);
+  const talhoesFrente = state.talhoes.filter(t=>t.ativo!==false && frenteDoTalhao(t)===(frente==='Cana'?'cana':'graos'));
+  const custoInsumoTotal = talhoesFrente.reduce((a,t)=>a+custoInsumosTalhao(frente,t.id),0);
+  const despesaTotal = despesasGerais + custoInsumoTotal;
+  const resultado = receitaTotal - despesaTotal;
+  const areaProducao = areaTotalEmProducao(frente);
+  const resultadoHa = areaProducao>0 ? resultado/areaProducao : null;
+  return {receitaTotal, despesasGerais, custoInsumoTotal, despesaTotal, resultado, areaProducao, resultadoHa};
+}
+function blocoResultado(titulo, r, extraClass){
+  return `
+  <div class="frente-bloco ${extraClass||''}">
+    <div class="frente-bloco-titulo"><h3>${titulo}</h3></div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-label">Receita</div><div class="stat-value">R$ ${fmt(r.receitaTotal)}</div></div>
+      <div class="stat-card"><div class="stat-label">Despesa</div><div class="stat-value">R$ ${fmt(r.despesaTotal)}</div></div>
+      <div class="stat-card"><div class="stat-label">Resultado</div><div class="stat-value ${r.resultado<0?'alerta':''}">R$ ${fmt(r.resultado)}</div></div>
+      <div class="stat-card"><div class="stat-label">Resultado / hectare</div><div class="stat-value ${r.resultadoHa!=null&&r.resultadoHa<0?'alerta':''}">${r.resultadoHa==null?'—':'R$ '+fmt(r.resultadoHa)}</div></div>
+    </div>
+  </div>`;
+}
+function PageResultado(){
+  const cana = resultadoFrente('Cana');
+  const graos = resultadoFrente('Graos');
+  const geral = {
+    receitaTotal: cana.receitaTotal + graos.receitaTotal,
+    despesaTotal: cana.despesaTotal + graos.despesaTotal,
+    resultado: cana.resultado + graos.resultado,
+    areaProducao: cana.areaProducao + graos.areaProducao,
+  };
+  geral.resultadoHa = geral.areaProducao>0 ? geral.resultado/geral.areaProducao : null;
+  const porFrenteDonut = [
+    {chave:'cana', nome:'Cana', total: Math.max(0,cana.resultado)},
+    {chave:'graos', nome:'Grãos', total: Math.max(0,graos.resultado)},
+  ].filter(e=>e.total>0);
+  return `
+  ${blocoResultado('Geral da empresa (Cana + Grãos)', geral)}
+  ${blocoResultado('Cana', cana)}
+  ${blocoResultado('Grãos', graos, 'graos')}
+  ${porFrenteDonut.length>0 ? donutChart(porFrenteDonut, {titulo:'Resultado positivo por frente', centroLabel:'lucro'}) : ''}
+  <p class="hint" style="margin-top:4px;">Resultado por hectare usa a área EM PRODUÇÃO de cada frente (talhões com plantio ativo) — não a área total das fazendas, para não diluir o resultado de uma frente com hectares que são da outra (ou de nenhuma). Ainda não separa por safra/período — mostra o acumulado de tudo que foi lançado.</p>`;
+}
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
-  ['cana_cadastros','Cadastros (Talhões, Culturas, Safras)'],
-  ['operacoes','Operações (Plantio, Tratos, Colheita, Insumos)'],
+  ['cadastros','Cadastros (Fazendas, Talhões, Culturas, Safras...)'],
+  ['operacoes','Operações de Cana (Plantio, Tratos, Colheita)'],
+  ['financeiro','Financeiro de Cana (Custo por Talhão, Despesas)'],
+  ['resultados','Resultados de Cana (Receita, Resultado)'],
+  ['operacoes_graos','Operações de Grãos (Plantio, Tratos, Colheita)'],
+  ['financeiro_graos','Financeiro de Grãos (Custo por Talhão, Despesas)'],
+  ['resultados_graos','Resultados de Grãos (Receita, Resultado)'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', colaborador:'Colaborador', operador:'Operador'};
 function papelPill(papel){
@@ -1167,7 +1681,7 @@ function ModalUsuario(){
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
         <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. A mesma conta vale para todos os apps da AE Agropecuária.</span></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. Vale para o AE Cana antigo também (mesma conta, mesmo banco).</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
       <div class="modal-foot">
@@ -1196,7 +1710,7 @@ function ModalPermissoes(){
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador e proprietário têm acesso total. Cada módulo abaixo é independente: dá para liberar só os cadastros, só as operações, ou os dois. <strong>Visualizar</strong> deixa ver sem mexer; <strong>Editar</strong> deixa criar, alterar e excluir. Financeiro e resultados ficam no AE Matriz, com permissão própria de lá.</p>
+        <p class="hint">Administrador tem acesso total a todos os módulos, das duas frentes. Cada módulo abaixo é independente — dá pra liberar só Grãos, só Cana, ou os dois. <strong>Financeiro x Resultados:</strong> "Financeiro: Editar" (de cada frente) deixa ver/lançar Despesas e também lançar Receita, mas sem ver a lista de receitas nem o Resultado — isso só quem tiver "Resultados" daquela frente liberado enxerga.</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
@@ -1256,7 +1770,7 @@ function ModalHistoricoTalhao(){
     <div class="overlay" data-close-overlay="1">
       <div class="modal modal-lg" data-stop="1">
         <div class="modal-head"><h3>Histórico — ${t.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
-        <div class="modal-body">${Empty('Talhão sem cultura definida','Defina a Cultura deste talhão em Cadastros > Talhões para ver o histórico.')}</div>
+        <div class="modal-body">${Empty('Talhão sem cultura definida','Defina a Cultura deste talhão em Cadastros > Talhões (Cana ou Grãos) para ver o histórico.')}</div>
         <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
       </div>
     </div>`;
@@ -1440,6 +1954,30 @@ function attachEvents(){
       render();
     };
   });
+  document.querySelectorAll('[data-despesa-frente]').forEach(el=>{
+    el.onclick = ()=>{ state.despesaFrenteAtual = el.dataset.despesaFrente; state.despesaFiltroMes=''; state.despesaFiltroCentro=''; render(); };
+  });
+  document.querySelectorAll('[data-receita-frente]').forEach(el=>{
+    el.onclick = ()=>{ state.receitaFrenteAtual = el.dataset.receitaFrente; render(); };
+  });
+  const despesaMesEl = document.querySelector('[data-despesa-filtro-mes]');
+  if(despesaMesEl) despesaMesEl.onchange = (e)=>{ state.despesaFiltroMes = e.target.value; render(); };
+  const despesaCentroEl = document.querySelector('[data-despesa-filtro-centro]');
+  if(despesaCentroEl) despesaCentroEl.onchange = (e)=>{ state.despesaFiltroCentro = e.target.value; render(); };
+  document.querySelectorAll('[data-despesa-filtro-centro-bar]').forEach(el=>{
+    el.onclick = ()=>{
+      const chave = el.dataset.despesaFiltroCentroBar;
+      state.despesaFiltroCentro = String(state.despesaFiltroCentro)===String(chave) ? '' : chave;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-despesa-grupo-toggle]').forEach(el=>{
+    el.onclick = ()=>{
+      const chave = el.dataset.despesaGrupoToggle;
+      state.despesaGruposAbertos[chave] = !state.despesaGruposAbertos[chave];
+      render();
+    };
+  });
   document.querySelectorAll('[data-del-cadastro]').forEach(el=>{
     el.onclick = async ()=>{
       const [key, idStr] = el.dataset.delCadastro.split(':');
@@ -1498,7 +2036,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw_lavoura.js'));
 }
 </script>
 </body>
