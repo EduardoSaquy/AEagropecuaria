@@ -8,7 +8,7 @@ aberto direto no navegador ou instalado como PWA.
 
 | Arquivo | O que é |
 |---|---|
-| `AEMatriz.html` | consolidação: financeiro, centros de custo, usuários, resultados |
+| `AEMatriz.html` | consolidação: financeiro, centros de custo, financiamentos, usuários, resultados |
 | `AEpecuaria.html` | gado: lotes, pesagens, ração, reprodução, abate. Financeiro/Resultados/Fazenda daqui migraram pro Matriz — aqui é só leitura |
 | `AECana.html` | cana: talhões, safras, aplicações, colheitas. Sem Financeiro/Resultados próprios (migraram pro Matriz) |
 | `AECereais.html` | grãos: mesma estrutura da cana, outra frente |
@@ -90,6 +90,22 @@ A compra do adubo já é despesa lançada. A aplicação no talhão serve para
 **repartir** esse custo entre talhões, nunca para somar ao total. A tela de
 Resultados já somou as duas coisas — foi corrigido. Não reintroduzir.
 
+### Financiamentos: só o juros vira despesa
+
+`financiamentos`/`parcelas_financiamento` (`financiamentos_01_criar_modulo.sql`,
+tela em AEMatriz.html) são separadas de `lancamentos_financeiros` de propósito.
+Receber o empréstimo não é receita (é dívida entrando); pagar a amortização não
+é despesa (é dívida saindo) — só o **juros** de cada parcela paga vira um
+`lancamento_financeiro` (`tipo:'despesa'`), no centro de custo **"Juros e
+Encargos de Financiamento"**. Mesma classe de erro do bug do insumo contado
+duas vezes: nunca lançar o valor da parcela inteira nem o desembolso do
+principal como despesa/receita.
+
+Financiamento de **capital de giro** não tem uma atividade só: ao marcar a
+parcela como paga, o juros vira **3 lançamentos iguais** (Pecuária/Cana/Grãos,
+1/3 cada — decisão do Eduardo, mais simples que ratear por hectare).
+Investimento/custeio têm atividade única, escolhida no cadastro.
+
 ## Armadilhas que já custaram caro
 
 - **Leia o catálogo vivo, não os arquivos de schema.** `cana_schema.sql` e
@@ -114,9 +130,10 @@ Resultados já somou as duas coisas — foi corrigido. Não reintroduzir.
 ## Testes
 
 `teste_apps_lavoura.py` (44), `teste_matriz.py` (22), `teste_paginacao.py` (2).
-Rodam com Playwright + Python contra um stub do Supabase. 68 testes, todos em
-`AEMatriz.html`/`AEpecuaria.html`/`AECana.html`/`AECereais.html` — nenhum em
-`AECombustivel.html` nem `Adubacao.html` ainda.
+Rodam com Playwright + Python contra um stub do Supabase. 68 testes. Cobrem
+`AEMatriz.html`/`AEpecuaria.html`/`AECana.html`/`AECereais.html`, mas nada
+ainda do módulo de Financiamentos (novo, 25/08) nem de `AECombustivel.html`/
+`Adubacao.html`.
 Rodar todos antes de entregar qualquer alteração. Em sandbox sem rede pra
 buscar fonte/CDN externo, espere 2 falhas de `ERR_CONNECTION_RESET` em
 `teste_apps_lavoura.py` — é ruído do ambiente, não regressão (o teste já
