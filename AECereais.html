@@ -592,26 +592,6 @@ function render(){
     </div>
     ${state.modal ? Modal() : ''}
   `;
-
-  // EXCLUIR E SO DE ADMIN OU PROPRIETARIO, em todo o app - a mesma regra
-  // que o banco aplica em pode_excluir().
-  //
-  // Varre o DOM depois de montar, em vez de condicionar cada botao um a
-  // um. Sao dezenas de botoes espalhados; um esquecido viraria um clique
-  // que NAO da erro nenhum: a RLS nega o delete em silencio (apaga zero
-  // linhas sem reclamar), a tela recarrega e o registro continua la. A
-  // pessoa clica de novo achando que nao pegou.
-  //
-  // As linhas que o app apaga por conta propria (movimentos ao editar uma
-  // saida de racao, desfazer um manejo que falhou) nao passam por botao,
-  // entao continuam funcionando para quem nao e dono.
-  if(!podeExcluir()){
-    root.querySelectorAll('[class*="danger"], button, a').forEach(el=>{
-      for(const attr of el.attributes){
-        if(attr.name.startsWith('data-del-')){ el.remove(); return; }
-      }
-    });
-  }
   attachEvents();
 }
 function paginaCustom(page){
@@ -629,28 +609,10 @@ function paginaCustom(page){
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
-// Excluir e so de admin ou proprietario, em todo o app. Mesma regra que o
-// banco aplica em pode_excluir(); aqui e so para nao mostrar um botao que
-// vai falhar - e falhar calado, porque a RLS nega delete sem dar erro.
-function podeExcluir(){ return acessoTotal(); }
 function souOperador(){ return state.perfil?.papel === 'operador'; }
-// Administrador e Proprietario enxergam tudo. souAdmin() sozinho nao servia
-// aqui: ele so reconhece papel='admin', entao os proprietarios - a Alice, a
-// Marcia e o Paulo - caiam na matriz de modulos como um colaborador
-// qualquer e enxergavam UMA tela deste app, sendo donos do negocio.
-//
-// O AE Matriz e o AE Pecuaria ja tratavam proprietario como acesso total;
-// so a lavoura discordava, desde antes da divisao Cana/Cereais. Mesma
-// divergencia que o banco tinha com is_admin() e que o is_dono() corrigiu.
-//
-// souAdmin() continua so para o que e de administrador mesmo (a tela de
-// Usuarios), igual ao Matriz.
-function acessoTotal(){
-  return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario';
-}
 function temPermissao(modulo, nivel){
   if(!state.perfil) return false;
-  if(acessoTotal()) return true;
+  if(souAdmin()) return true;
   const atual = state.perfil.permissoes?.[modulo];
   if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
   return atual==='editar';
