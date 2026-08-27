@@ -30,7 +30,7 @@ update centros_custo c
    set ativo = false, updated_at = now()
  where plano_norm(c.nome) in ('COMPRA DE ANIMAIS PARA ENGORDA','MANUTENCAO DE VEICULOS LEVES')
    and c.ativo
-   and not exists (select 1 from lancamentos_financeiros l where l.centro_id = c.id);
+   and not exists (select 1 from lancamentos_financeiros l where l.centro_custo_id = c.id);
 
 select 1 as ordem, 'Centros que ganharam classe do Conag' as item, count(*)::text as valor, 'esperado: 7' as situacao
 from centros_custo
@@ -39,7 +39,7 @@ where plano_norm(nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E F
   and plano_norm(classe) <> plano_norm(nome)
 union all
 select 2, 'Lancamentos que passam a cair em classe do Conag', count(*)::text, 'esperado: 1.375'
-from lancamentos_financeiros l join centros_custo c on c.id = l.centro_id
+from lancamentos_financeiros l join centros_custo c on c.id = l.centro_custo_id
 where plano_norm(c.nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E FROTA','SERVICOS TECNICOS / CONSULTORIA',
                              'DESPESAS COM VEICULOS','DESPESAS COM INSTALACOES','VENDAS','JUROS E ENCARGOS DE FINANCIAMENTO')
 union all
