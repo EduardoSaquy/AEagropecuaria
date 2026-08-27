@@ -4,6 +4,17 @@
 > **Lavoura/Matriz** (`kmkystqgpvmzrccxvyaz`), deixando um único banco, um único
 > login e uma única tabela de permissões.
 
+> **Status (25/08/2026): unificação concluída** — `AEpecuaria.html` e
+> `AEMatriz.html` já apontam só para o projeto único, e `UNIFICACAO_VIRADA.md`
+> tem o roteiro que foi de fato seguido. Este documento é o plano original;
+> nomes de arquivo abaixo não batem mais com os scripts reais do repo:
+> `unificacao_01_gerar_ddl.sql` (Passo 1) foi substituído pela cópia
+> automática via `dblink` em `unificacao_02_estrutura_automatica.sql`, e
+> `unificacao_02_copiar_dados.sql` (Passo 3) é hoje
+> `unificacao_03_copiar_dados.sql` (os scripts foram renumerados). O único
+> passo ainda pendente é o do repositório: pausar o projeto antigo da
+> Pecuária no painel do Supabase — ver CLAUDE.md.
+
 ---
 
 ## 1. Levantamento (feito, com dados reais dos dois bancos)

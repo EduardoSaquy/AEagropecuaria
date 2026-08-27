@@ -523,7 +523,11 @@ async function fetchAllRows(consulta){
 
 async function loadAll(){
   state.apps = APPS_REGISTRO;
-  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec] = await Promise.all([
+  // Centro de custo também carrega para quem só tem Financiamentos (sem
+  // Financeiro): marcar parcela como paga precisa achar o centro "Juros e
+  // Encargos de Financiamento" pra lançar o juros.
+  const vePecuniaOuFinanciamentos = temPermissao('matriz_financeiro','visualizar') || temPermissao('matriz_financiamentos','visualizar');
+  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec, fin, parcFin] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
     fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id')),
@@ -535,8 +539,12 @@ async function loadAll(){
     // Carrega inclusive os inativos: sem eles a tela de Centros de Custo
     // nao teria como mostrar nem reativar o que foi desativado. Quem filtra
     // por ativo e o seletor do lancamento, logo abaixo.
-    temPermissao('matriz_financeiro','visualizar') ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
+    vePecuniaOuFinanciamentos ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
+    // numero_animais, destino e data_fim sao do lancamento de venda de animais:
+    // ele precisa saber quantas cabecas o lote tem e se ja foi encerrado.
     temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, data_fim').order('nome') : Promise.resolve({data:[]}),
+    temPermissao('matriz_financiamentos','visualizar') ? db.from('financiamentos').select('*').order('data_contratacao', {ascending:false}) : Promise.resolve({data:[]}),
+    temPermissao('matriz_financiamentos','visualizar') ? fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero')) : Promise.resolve({data:[]}),
   ]);
   // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
   // devolve vazio e a consulta e desperdicio de rede.
@@ -550,7 +558,7 @@ async function loadAll(){
   // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
   // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
   // apresentado com a mesma confiança de um número real.
-  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto].find(r=>r.error)?.error;
+  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, fin, parcFin].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
@@ -570,6 +578,8 @@ async function loadAll(){
   state.titulos         = (tits.data||[]).map(rowToTitulo);
   state.rateios         = (rats.data||[]).map(rowToRateio);
   state.baixas          = (bxs.data||[]).map(rowToBaixa);
+  state.financiamentos = (fin.data||[]).map(rowToFinanciamento);
+  state.parcelasFinanciamento = (parcFin.data||[]).map(rowToParcela);
   render();
   carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
@@ -972,6 +982,11 @@ const state = {
   filtroMesReceitas: '',
   funcionarios: [], // {id, nome, cargo, ativo, dataAdmissao, perfilId, observacao} — sem CPF/salário/Pix
   funcionarioAtividades: [], // {id, funcionarioId, atividade, percentual} — % de alocação em cada atividade
+  financiamentos: [],        // empréstimos/custeio — ver seção FINANCIAMENTOS
+  parcelasFinanciamento: [], // cronograma de cada financiamento
+  financiamentoDetalheId: null,
+  searchFinanciamentos: '',
+  erroFinanciamento: '',
   modal: null, // {type:'usuario'|'papelUsuario'|'trocarSenha'|'detalheOperacao'|'graficoOperacao', data:{...}}
   // loading começa true (não false) — enquanto o primeiro carregamento não
   // chega, a tela precisa mostrar "carregando", não "sem dados".
@@ -1085,6 +1100,7 @@ function render(){
       ${state.page==='fazendas' ? PageFazendas() : ''}
       ${state.page==='centrosCusto' ? PageCentrosCusto() : ''}
       ${state.page==='contas' ? PageContas() : ''}
+      ${state.page==='financiamentos' ? PageFinanciamentos() : ''}
       ${state.page==='funcionarios' ? PageFuncionarios() : ''}
       ${state.page==='usuarios' ? PageUsuarios() : ''}
     `;
@@ -1195,6 +1211,7 @@ const PAGES = [
   // RLS do banco pede as duas. Aqui basta pedir 'contas': quem nao tem
   // matriz_financeiro nao chega a ver dado nenhum de qualquer forma.
   {key:'contas', label:'Pagar/Receber', modulo:'contas'},
+  {key:'financiamentos', label:'Financiamentos', modulo:'matriz_financiamentos'},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
@@ -1365,6 +1382,7 @@ function iconCarteira(){ return `<svg width="16" height="16" viewBox="0 0 24 24"
 function iconCheckCircle(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>`; }
 function iconAlertTriangle(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>`; }
 function iconAdubacao(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16Z"/><path d="M5 21c2-4 5-7 9-9"/></svg>`; }
+function iconFinanciamento(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M7 14h.01M12 14h.01M17 14h4"/></svg>`; }
 function normalizarTexto(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function iconOperacao(slug, nome){
   if(normalizarTexto(nome).includes('adub')) return iconAdubacao();
@@ -1406,6 +1424,7 @@ const MODULOS_PERMISSAO = [
     ['contas','Contas a Pagar e a Receber (exige também o Financeiro acima)'],
     ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
     ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
+    ['matriz_financiamentos','Financiamentos (empréstimos, juros e parcelas)'],
   ]],
   // Cana e Cereais são dois apps separados desde a divisão do AE Lavoura —
   // operações em estados diferentes (SP e TO), com equipes e cadastros
@@ -1459,7 +1478,7 @@ function TabsRow(){
   <div class="tabsrow">
     ${paginasVisiveis().map(p=>`
       <button class="nav-item ${state.page===p.key?'active':''}" data-nav="${p.key}">
-        ${p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():p.key==='funcionarios'?iconFuncionarios():iconAdmin()} ${p.label}
+        ${p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():p.key==='funcionarios'?iconFuncionarios():p.key==='financiamentos'?iconFinanciamento():iconAdmin()} ${p.label}
       </button>
     `).join('')}
   </div>`;
@@ -2044,6 +2063,367 @@ function ModalCentroCusto(){
       </div>
     </div>
   </div>`;
+}
+
+/* ===================== FINANCIAMENTOS ===================== */
+// Empréstimos e custeio bancário tomados pela operação. Modelo separado de
+// propósito de lancamentos_financeiros: só o JUROS de cada parcela paga vira
+// despesa lançada — a amortização é dívida voltando pro banco, não custo, e
+// o desembolso do empréstimo não é receita, é dívida entrando. Lançar a
+// parcela inteira (ou o desembolso) como despesa/receita infla ou reduz o
+// resultado sem isso ser lucro/prejuízo de verdade — mesma classe do bug já
+// corrigido do custo de insumo contado duas vezes. Ver CLAUDE.md.
+const FINALIDADE_FIN = [
+  ['investimento','Investimento (ex: trator, benfeitoria)'],
+  ['custeio','Custeio (ex: insumos da safra)'],
+  ['capital_giro','Capital de giro'],
+];
+const SISTEMA_AMORT = [
+  ['parcela_unica','Parcela única (ex: custeio de safra, quita na colheita)'],
+  ['sac','SAC (amortização constante)'],
+  ['price','Price (parcela fixa)'],
+];
+const STATUS_FIN_LABEL = {ativo:'Ativo', quitado:'Quitado', renegociado:'Renegociado', cancelado:'Cancelado'};
+const STATUS_PARC_LABEL = {pendente:'Pendente', paga:'Paga', atrasada:'Atrasada', cancelada:'Cancelada'};
+const NOME_CENTRO_JUROS_FIN = 'Juros e Encargos de Financiamento';
+
+function rowToFinanciamento(r){
+  return {id:r.id, banco:r.banco, finalidade:r.finalidade,
+          valorPrincipal:r.valor_principal, valorIof:r.valor_iof||0, valorSeguro:r.valor_seguro||0,
+          dataContratacao:r.data_contratacao, taxaJurosAa:r.taxa_juros_aa,
+          sistemaAmortizacao:r.sistema_amortizacao, numeroParcelas:r.numero_parcelas,
+          carenciaMeses:r.carencia_meses, atividade:r.atividade||'', fazendaId:r.fazenda_id,
+          garantia:r.garantia||'', status:r.status, financiamentoOrigemId:r.financiamento_origem_id,
+          observacao:r.observacao||''};
+}
+function financiamentoToRow(f){
+  return {banco:f.banco, finalidade:f.finalidade,
+          valor_principal:Number(f.valorPrincipal)||0, valor_iof:Number(f.valorIof)||0, valor_seguro:Number(f.valorSeguro)||0,
+          data_contratacao:f.dataContratacao, taxa_juros_aa:Number(f.taxaJurosAa)||0,
+          sistema_amortizacao:f.sistemaAmortizacao,
+          numero_parcelas: f.sistemaAmortizacao==='parcela_unica' ? 1 : (Number(f.numeroParcelas)||1),
+          carencia_meses:Number(f.carenciaMeses)||0,
+          // Capital de giro não tem uma atividade só — o juros de cada
+          // parcela paga é dividido em 3 partes iguais ao ser lançado.
+          atividade: f.finalidade==='capital_giro' ? null : (f.atividade||null),
+          fazenda_id: f.fazendaId ? Number(f.fazendaId) : null,
+          garantia: f.garantia ? f.garantia.trim() : null,
+          status: f.status||'ativo',
+          financiamento_origem_id: f.financiamentoOrigemId ? Number(f.financiamentoOrigemId) : null,
+          observacao: f.observacao ? f.observacao.trim() : null};
+}
+function rowToParcela(r){
+  return {id:r.id, financiamentoId:r.financiamento_id, numero:r.numero, dataVencimento:r.data_vencimento,
+          valorParcela:r.valor_parcela, valorAmortizacao:r.valor_amortizacao, valorJuros:r.valor_juros,
+          saldoDevedorApos:r.saldo_devedor_apos, status:r.status, dataPagamento:r.data_pagamento,
+          valorPago:r.valor_pago, lancamentosFinanceiroIds:r.lancamentos_financeiro_ids||[]};
+}
+
+// Componentes locais de data, igual hojeStr() — toISOString() é UTC e
+// desalinha o mês/dia perto da virada do dia no Brasil.
+function addMeses(dataStr, n){
+  const [y,m,d] = dataStr.split('-').map(Number);
+  const dt = new Date(y, (m-1)+n, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+// Gera o cronograma inteiro de uma vez, a partir dos termos do contrato.
+// taxaJurosAa é % ao ano; a conversão pra taxa mensal composta é a mesma
+// convenção que os bancos usam pra montar tabela SAC/Price.
+function gerarParcelasFinanciamento(f){
+  const principal = Number(f.valorPrincipal)||0;
+  const taxaAa = Number(f.taxaJurosAa)||0;
+  const carencia = Number(f.carenciaMeses)||0;
+  if(f.sistemaAmortizacao === 'parcela_unica'){
+    // Custeio agrícola típico: um desembolso, uma parcela só no fim do
+    // ciclo (normalmente a colheita). "Carência" aqui é o prazo até esse
+    // vencimento único, não meses sem pagar antes de outras parcelas.
+    const meses = carencia > 0 ? carencia : 12;
+    const juros = principal * (Math.pow(1+taxaAa/100, meses/12) - 1);
+    return [{numero:1, dataVencimento:addMeses(f.dataContratacao, meses),
+              valorParcela:principal+juros, valorAmortizacao:principal, valorJuros:juros, saldoDevedorApos:0}];
+  }
+  const n = Math.max(1, Number(f.numeroParcelas)||1);
+  const taxaMensal = Math.pow(1+taxaAa/100, 1/12) - 1;
+  const parcelas = [];
+  let saldo = principal;
+  if(f.sistemaAmortizacao === 'sac'){
+    const amortConstante = principal / n;
+    for(let i=1; i<=n; i++){
+      const juros = saldo * taxaMensal;
+      const amort = i===n ? saldo : amortConstante; // a última fecha o resíduo de arredondamento
+      saldo -= amort;
+      parcelas.push({numero:i, dataVencimento:addMeses(f.dataContratacao, carencia+i),
+                      valorParcela:juros+amort, valorAmortizacao:amort, valorJuros:juros, saldoDevedorApos:Math.max(0,saldo)});
+    }
+  } else { // price
+    const prestacao = taxaMensal===0 ? principal/n : principal*taxaMensal/(1-Math.pow(1+taxaMensal,-n));
+    for(let i=1; i<=n; i++){
+      const juros = saldo * taxaMensal;
+      const amort = i===n ? saldo : (prestacao - juros);
+      saldo -= amort;
+      parcelas.push({numero:i, dataVencimento:addMeses(f.dataContratacao, carencia+i),
+                      valorParcela: i===n ? amort+juros : prestacao, valorAmortizacao:amort, valorJuros:juros, saldoDevedorApos:Math.max(0,saldo)});
+    }
+  }
+  return parcelas;
+}
+function parcelaToRow(p, financiamentoId){
+  return {financiamento_id:financiamentoId, numero:p.numero, data_vencimento:p.dataVencimento,
+          valor_parcela:Number(p.valorParcela.toFixed(2)), valor_amortizacao:Number(p.valorAmortizacao.toFixed(2)),
+          valor_juros:Number(p.valorJuros.toFixed(2)), saldo_devedor_apos:Number(p.saldoDevedorApos.toFixed(2)),
+          status:'pendente'};
+}
+
+function parcelasDoFinanciamento(id){
+  return state.parcelasFinanciamento.filter(p=>p.financiamentoId===id).sort((a,b)=>a.numero-b.numero);
+}
+// "Atrasada" é calculado na hora de mostrar, não gravado — nenhum job de
+// servidor roda aqui, é o mesmo princípio do AE Combustível (alerta
+// detectado ao abrir o app, não por um cron).
+function statusEfetivoParcela(p){
+  if(p.status==='pendente' && p.dataVencimento < hojeStr()) return 'atrasada';
+  return p.status;
+}
+function saldoDevedorFinanciamento(f){
+  const parcelas = parcelasDoFinanciamento(f.id);
+  if(parcelas.length===0) return Number(f.valorPrincipal)||0;
+  const ultimaPaga = [...parcelas].reverse().find(p=>p.status==='paga');
+  if(ultimaPaga) return ultimaPaga.saldoDevedorApos;
+  return parcelas.some(p=>p.status!=='cancelada') ? (Number(f.valorPrincipal)||0) : 0;
+}
+function proximaParcela(f){
+  return parcelasDoFinanciamento(f.id).find(p=>p.status==='pendente' || p.status==='atrasada');
+}
+// Só financiamento ATIVO conta no saldo devedor: um renegociado já virou
+// outro financiamento (que entra sozinho na soma), e quitado não deve nada.
+function resumoFinanciamentos(){
+  const ativos = state.financiamentos.filter(f=>f.status==='ativo');
+  const totalContratado = ativos.reduce((s,f)=>s+Number(f.valorPrincipal||0), 0);
+  const saldoDevedor = ativos.reduce((s,f)=>s+saldoDevedorFinanciamento(f), 0);
+  const anoAtual = hojeStr().slice(0,4);
+  const jurosPagoAno = state.parcelasFinanciamento
+    .filter(p=>p.status==='paga' && (p.dataPagamento||'').startsWith(anoAtual))
+    .reduce((s,p)=>s+Number(p.valorJuros||0), 0);
+  return {totalContratado, saldoDevedor, jurosPagoAno};
+}
+
+function lerFinanciamentoDoFormulario(base){
+  const v = (id)=> document.getElementById(id)?.value ?? '';
+  return {
+    ...base,
+    banco: v('f-bancofin'),
+    finalidade: v('f-finalidadefin') || base.finalidade,
+    atividade: v('f-atividadefin'),
+    valorPrincipal: v('f-principalfin'),
+    dataContratacao: v('f-datafin'),
+    taxaJurosAa: v('f-taxafin'),
+    sistemaAmortizacao: v('f-sistemafin') || base.sistemaAmortizacao,
+    numeroParcelas: v('f-numparcelasfin'),
+    carenciaMeses: v('f-carenciafin'),
+    valorIof: v('f-ioffin'),
+    valorSeguro: v('f-segurofin'),
+    fazendaId: v('f-fazendafin'),
+    garantia: v('f-garantiafin'),
+    observacao: v('f-obsfin'),
+  };
+}
+
+function PageFinanciamentos(){
+  if(state.financiamentoDetalheId) return PageFinanciamentoDetalhe();
+  const podeEditar = temPermissao('matriz_financiamentos','editar');
+  const busca = (state.searchFinanciamentos||'').toLowerCase();
+  const linhas = state.financiamentos
+    .filter(f => !busca || f.banco.toLowerCase().includes(busca))
+    .sort((a,b)=> (a.status==='ativo'?0:1)-(b.status==='ativo'?0:1) || (b.dataContratacao||'').localeCompare(a.dataContratacao||''));
+  const r = resumoFinanciamentos();
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-card-ic" style="background:var(--bom-bg); color:var(--bom);">${iconFinanciamento()}</div>
+      <div class="stat-label">Total contratado (ativos)</div><div class="stat-value">R$ ${fmt(r.totalContratado)}</div></div>
+    <div class="stat-card"><div class="stat-card-ic" style="background:#F5E9D7; color:var(--trigo);">${iconCarteira()}</div>
+      <div class="stat-label">Saldo devedor (quanto falta)</div><div class="stat-value">R$ ${fmt(r.saldoDevedor)}</div></div>
+    <div class="stat-card"><div class="stat-card-ic" style="background:var(--alerta-bg); color:var(--alerta);">${iconSetaAlta()}</div>
+      <div class="stat-label">Juros pago em ${hojeStr().slice(0,4)}</div><div class="stat-value">R$ ${fmt(r.jurosPagoAno)}</div></div>
+  </div>
+  <div class="toolbar">
+    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar por banco..." value="${esc(state.searchFinanciamentos||'')}" data-search-financiamentos="1" autocomplete="off"/></div>
+    <span class="hint">${linhas.length} de ${state.financiamentos.length}</span>
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-financiamento="1">+ Novo financiamento</button>` : ''}
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${linhas.length===0 ? Empty('Nenhum financiamento cadastrado','Cadastre os empréstimos e custeios tomados pela operação.') : `
+    <table>
+      <thead><tr><th>Banco</th><th>Finalidade</th><th>Contratado</th><th>Saldo devedor</th><th>Próxima parcela</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${linhas.map(f=>{
+          const prox = proximaParcela(f);
+          const semPagamento = parcelasDoFinanciamento(f.id).every(p=>p.status!=='paga');
+          const atividadeLabel = f.finalidade==='capital_giro' ? 'Rateado (Pec./Cana/Grãos)' : (ATIVIDADES_LANC.find(([k])=>k===f.atividade)?.[1] || '—');
+          return `
+          <tr${f.status!=='ativo' ? ' style="opacity:.6;"' : ''}>
+            <td><strong>${esc(f.banco)}</strong><div class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)}</div></td>
+            <td class="mono">R$ ${fmt(f.valorPrincipal)}</td>
+            <td class="mono">${f.dataContratacao||'—'}</td>
+            <td class="mono">R$ ${fmt(saldoDevedorFinanciamento(f))}</td>
+            <td>${prox ? `${prox.dataVencimento} <span class="hint">R$ ${fmt(prox.valorParcela)}</span>` : '—'}</td>
+            <td><span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></td>
+            <td style="display:flex; gap:6px;">
+              <button class="btn-ghost btn-sm" data-abrir-financiamento="${f.id}">Ver parcelas</button>
+              ${podeEditar && f.status==='ativo' && semPagamento ? `<button class="btn-ghost btn-sm" data-editar-financiamento="${f.id}">Editar</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+function PageFinanciamentoDetalhe(){
+  const f = state.financiamentos.find(x=>x.id===state.financiamentoDetalheId);
+  if(!f){ state.financiamentoDetalheId = null; return PageFinanciamentos(); }
+  const podeEditar = temPermissao('matriz_financiamentos','editar');
+  const parcelas = parcelasDoFinanciamento(f.id);
+  const atividadeLabel = f.finalidade==='capital_giro' ? 'Rateado igualmente entre Pecuária, Cana e Grãos' : (ATIVIDADES_LANC.find(([k])=>k===f.atividade)?.[1] || '—');
+  return `
+  <div class="toolbar">
+    <button class="btn-ghost btn-sm" data-voltar-financiamentos="1">&larr; Voltar</button>
+    <span class="hint" style="flex:1;"></span>
+    ${podeEditar && f.status==='ativo' ? `<button class="btn btn-ghost btn-sm" data-renegociar-financiamento="${f.id}">Renegociar</button>` : ''}
+  </div>
+  <div class="card card-pad" style="margin-bottom:14px;">
+    <h3 style="margin-bottom:8px;">${esc(f.banco)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
+    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}</p>
+    ${f.garantia ? `<p class="hint">Garantia: ${esc(f.garantia)}</p>` : ''}
+    ${f.financiamentoOrigemId ? `<p class="hint">Nasceu de renegociação do financiamento #${f.financiamentoOrigemId}.</p>` : ''}
+    ${(Number(f.valorIof)>0 || Number(f.valorSeguro)>0) ? `<p class="hint">IOF: R$ ${fmt(f.valorIof)} · Seguro: R$ ${fmt(f.valorSeguro)} (informativo, não lançado no Financeiro)</p>` : ''}
+    ${f.observacao ? `<p class="hint">${esc(f.observacao)}</p>` : ''}
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${parcelas.length===0 ? Empty('Sem parcelas', 'Este financiamento não tem cronograma gerado.') : `
+    <table>
+      <thead><tr><th>#</th><th>Vencimento</th><th>Valor</th><th>Amortização</th><th>Juros</th><th>Saldo após</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${parcelas.map(p=>{
+          const st = statusEfetivoParcela(p);
+          return `
+          <tr>
+            <td>${p.numero}</td>
+            <td class="mono">${p.dataVencimento}</td>
+            <td class="mono">R$ ${fmt(p.valorParcela)}</td>
+            <td class="mono">R$ ${fmt(p.valorAmortizacao)}</td>
+            <td class="mono">R$ ${fmt(p.valorJuros)}</td>
+            <td class="mono">R$ ${fmt(p.saldoDevedorApos)}</td>
+            <td><span class="pill ${st==='paga'?'pill-ok':st==='atrasada'?'pill-warn':st==='cancelada'?'pill-cat':''}">${STATUS_PARC_LABEL[st]||st}</span>
+              ${p.status==='paga' && p.dataPagamento ? `<div class="hint">em ${p.dataPagamento}</div>` : ''}</td>
+            <td>${podeEditar && (p.status==='pendente'||p.status==='atrasada') ? `<button class="btn-ghost btn-sm" data-pagar-parcela="${p.id}">Marcar como paga</button>` : ''}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+function ModalFinanciamento(){
+  const d = editDraft;
+  const precisaAtividade = d.finalidade==='investimento' || d.finalidade==='custeio';
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${d._origemId?'Renegociar financiamento':(d._editId?'Editar financiamento':'Novo financiamento')}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${d._origemId ? `<p class="hint" style="margin-bottom:10px;">O saldo devedor do financiamento anterior vira o principal deste contrato novo. O antigo fica marcado como renegociado, sem apagar o histórico.</p>` : ''}
+        <div class="field"><label>Banco</label><input id="f-bancofin" value="${esc(d.banco||'')}" placeholder="Ex: Banco do Brasil" autocomplete="off"/></div>
+        <div class="field"><label>Finalidade</label>
+          <select id="f-finalidadefin">
+            ${FINALIDADE_FIN.map(([k,l])=>`<option value="${k}" ${d.finalidade===k?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" id="campo-atividadefin" style="${precisaAtividade?'':'display:none;'}"><label>Atividade</label>
+          <select id="f-atividadefin">
+            <option value="">— Selecione —</option>
+            ${ATIVIDADES_PRODUTIVAS.map(a=>`<option value="${a}" ${d.atividade===a?'selected':''}>${esc(ATIVIDADES_LANC.find(([k])=>k===a)?.[1]||a)}</option>`).join('')}
+          </select>
+          <span class="hint">Define em qual atividade o juros pago entra como despesa.</span>
+        </div>
+        ${!precisaAtividade ? `<p class="hint" style="margin:-6px 0 14px;">Capital de giro: o juros de cada parcela paga é dividido em 3 partes iguais entre Pecuária, Cana e Grãos.</p>` : ''}
+        <div class="field"><label>Valor principal (R$)</label><input id="f-principalfin" type="number" step="0.01" min="0" value="${d.valorPrincipal ?? ''}" ${d._origemId?'readonly':''} autocomplete="off"/>
+          ${d._origemId ? `<span class="hint">Saldo devedor do financiamento anterior — não editável.</span>` : ''}
+        </div>
+        <div class="field"><label>Data de contratação</label><input id="f-datafin" type="date" value="${d.dataContratacao||hojeStr()}"/></div>
+        <div class="field"><label>Taxa de juros (% ao ano)</label><input id="f-taxafin" type="number" step="0.01" min="0" value="${d.taxaJurosAa ?? ''}" autocomplete="off"/></div>
+        <div class="field"><label>Sistema de amortização</label>
+          <select id="f-sistemafin">
+            ${SISTEMA_AMORT.map(([k,l])=>`<option value="${k}" ${d.sistemaAmortizacao===k?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" id="campo-parcelasfin" style="${d.sistemaAmortizacao==='parcela_unica'?'display:none;':''}"><label>Número de parcelas</label>
+          <input id="f-numparcelasfin" type="number" step="1" min="1" value="${d.numeroParcelas || 12}" autocomplete="off"/>
+        </div>
+        <div class="field"><label>Carência (meses)${d.sistemaAmortizacao==='parcela_unica'?' até o vencimento':' antes da 1ª parcela'}</label>
+          <input id="f-carenciafin" type="number" step="1" min="0" value="${d.carenciaMeses ?? (d.sistemaAmortizacao==='parcela_unica'?12:0)}" autocomplete="off"/>
+        </div>
+        <div class="field"><label>IOF (R$, opcional)</label><input id="f-ioffin" type="number" step="0.01" min="0" value="${d.valorIof ?? 0}" autocomplete="off"/></div>
+        <div class="field"><label>Seguro (R$, opcional)</label><input id="f-segurofin" type="number" step="0.01" min="0" value="${d.valorSeguro ?? 0}" autocomplete="off"/></div>
+        <div class="field"><label>Fazenda (opcional)</label>
+          <select id="f-fazendafin">
+            <option value="" ${!d.fazendaId?'selected':''}>Geral / toda a empresa</option>
+            ${state.fazendasLavoura.map(fz=>`<option value="${fz.id}" ${String(d.fazendaId)===String(fz.id)?'selected':''}>${esc(fz.nome)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Garantia (opcional)</label><input id="f-garantiafin" value="${esc(d.garantia||'')}" autocomplete="off"/></div>
+        <div class="field"><label>Observação (opcional)</label><textarea id="f-obsfin" rows="2">${esc(d.observacao||'')}</textarea></div>
+        ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="financiamento">${d._editId?'Salvar alterações':'Salvar financiamento'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Marca uma parcela como paga: só o juros vira lançamento (1, ou 3 iguais
+// se for capital de giro). Amortização nunca vira lançamento — só reduz o
+// saldo devedor, que já está pré-calculado na própria parcela.
+async function pagarParcela(parcelaId){
+  const p = state.parcelasFinanciamento.find(x=>x.id===parcelaId);
+  if(!p) return;
+  const f = state.financiamentos.find(x=>x.id===p.financiamentoId);
+  if(!f) return;
+  const centro = state.centrosCusto.find(c=>c.nome.trim().toLowerCase()===NOME_CENTRO_JUROS_FIN.toLowerCase());
+  if(!centro){
+    alert(`Centro de custo "${NOME_CENTRO_JUROS_FIN}" não encontrado. Rode a migração do módulo de financiamentos antes de pagar uma parcela.`);
+    return;
+  }
+  if(!confirm(`Marcar a parcela ${p.numero} (R$ ${fmt(p.valorParcela)}) como paga?\n\nSó o juros (R$ ${fmt(p.valorJuros)}) vira despesa lançada no Resultado — a amortização (R$ ${fmt(p.valorAmortizacao)}) não afeta o resultado, só reduz o saldo devedor.`)) return;
+
+  const atividades = f.finalidade==='capital_giro' ? ATIVIDADES_PRODUTIVAS : [f.atividade];
+  const valorPorAtividade = Number(p.valorJuros) / atividades.length;
+  const idsGerados = [];
+  for(const atividade of atividades){
+    const row = lancamentoToRow({
+      tipo:'despesa', atividade, fazendaId: f.fazendaId||'', centroCustoId: centro.id,
+      descricao: `Juros — ${f.banco} (parcela ${p.numero}/${f.numeroParcelas})`,
+      valor: valorPorAtividade, data: hojeStr(), fornecedor: f.banco, observacao: '', areas: [],
+    });
+    const {data, error} = await db.from('lancamentos_financeiros').insert(row).select().single();
+    if(error){ alert('Não foi possível lançar o juros: ' + error.message); return; }
+    idsGerados.push(data.id);
+  }
+  const {error: erroParcela} = await db.from('parcelas_financiamento').update({
+    status:'paga', data_pagamento: hojeStr(), valor_pago: p.valorParcela,
+    lancamentos_financeiro_ids: idsGerados,
+  }).eq('id', p.id);
+  if(erroParcela){ alert('O juros já foi lançado, mas não consegui atualizar a parcela: ' + erroParcela.message); return; }
+
+  // Última parcela paga quita o financiamento sozinho — sem precisar de
+  // uma tela separada só pra marcar "quitado" manualmente.
+  const restam = parcelasDoFinanciamento(f.id).filter(x=>x.id!==p.id && x.status!=='paga' && x.status!=='cancelada');
+  if(restam.length===0){
+    await db.from('financiamentos').update({status:'quitado'}).eq('id', f.id);
+  }
+  await loadAll();
 }
 
 /* ===================== FUNCIONÁRIOS ===================== */
@@ -4152,6 +4532,7 @@ function Modal(){
   if(state.modal.type==='verBaixas') return ModalVerBaixas();
   if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
+  if(state.modal.type==='financiamento') return ModalFinanciamento();
   if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='papelUsuario') return ModalPapelUsuario();
@@ -4301,7 +4682,7 @@ function attachEvents(){
     el.onclick = async ()=>{ await loadPerfil(); render(); if(state.perfil?.ativo) loadAll(); };
   });
   document.querySelectorAll('[data-nav]').forEach(el=>{
-    el.onclick = ()=>{ state.page = el.dataset.nav; render(); };
+    el.onclick = ()=>{ state.page = el.dataset.nav; state.financiamentoDetalheId = null; render(); };
   });
   const voltarErroBtn = document.querySelector('[data-voltar-erro]');
   if(voltarErroBtn) voltarErroBtn.onclick = ()=>{ state.page = 'painel'; render(); };
@@ -4349,6 +4730,69 @@ function attachEvents(){
       await loadAll();
     };
   });
+
+  // ---- financiamentos ----
+  const buscaFinEl = document.querySelector('[data-search-financiamentos]');
+  if(buscaFinEl){
+    buscaFinEl.oninput = (e)=>{
+      state.searchFinanciamentos = e.target.value; render();
+      const s = document.querySelector('[data-search-financiamentos]');
+      if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+    };
+  }
+  const novoFinBtn = document.querySelector('[data-novo-financiamento]');
+  if(novoFinBtn) novoFinBtn.onclick = ()=>{
+    editDraft = {banco:'', finalidade:'investimento', atividade:'', valorPrincipal:'', dataContratacao:hojeStr(),
+                 taxaJurosAa:'', sistemaAmortizacao:'parcela_unica', numeroParcelas:1, carenciaMeses:12,
+                 valorIof:0, valorSeguro:0, fazendaId:'', garantia:'', observacao:''};
+    state.erroFinanciamento = '';
+    state.modal = {type:'financiamento'}; render();
+  };
+  document.querySelectorAll('[data-editar-financiamento]').forEach(el=>{
+    el.onclick = ()=>{
+      const f = state.financiamentos.find(x=>x.id===Number(el.dataset.editarFinanciamento));
+      editDraft = {...f, _editId: f.id};
+      state.erroFinanciamento = '';
+      state.modal = {type:'financiamento'}; render();
+    };
+  });
+  document.querySelectorAll('[data-renegociar-financiamento]').forEach(el=>{
+    el.onclick = ()=>{
+      const f = state.financiamentos.find(x=>x.id===Number(el.dataset.renegociarFinanciamento));
+      editDraft = {banco:f.banco, finalidade:f.finalidade, atividade:f.atividade||'',
+                   valorPrincipal:saldoDevedorFinanciamento(f), dataContratacao:hojeStr(), taxaJurosAa:'',
+                   sistemaAmortizacao:f.sistemaAmortizacao, numeroParcelas:f.numeroParcelas, carenciaMeses:f.carenciaMeses,
+                   valorIof:0, valorSeguro:0, fazendaId:f.fazendaId||'', garantia:f.garantia||'',
+                   observacao:`Renegociação do financiamento #${f.id} (${f.banco}).`,
+                   _origemId:f.id};
+      state.erroFinanciamento = '';
+      state.modal = {type:'financiamento'}; render();
+    };
+  });
+  document.querySelectorAll('[data-abrir-financiamento]').forEach(el=>{
+    el.onclick = ()=>{ state.financiamentoDetalheId = Number(el.dataset.abrirFinanciamento); render(); };
+  });
+  document.querySelectorAll('[data-voltar-financiamentos]').forEach(el=>{
+    el.onclick = ()=>{ state.financiamentoDetalheId = null; render(); };
+  });
+  document.querySelectorAll('[data-pagar-parcela]').forEach(el=>{
+    el.onclick = ()=> pagarParcela(Number(el.dataset.pagarParcela));
+  });
+  // Trocar finalidade muda se o campo Atividade aparece; trocar sistema
+  // muda se Número de parcelas aparece (parcela única não tem).
+  const selFinalidadeFin = document.getElementById('f-finalidadefin');
+  if(selFinalidadeFin) selFinalidadeFin.onchange = (e)=>{
+    editDraft = {...lerFinanciamentoDoFormulario(editDraft), finalidade: e.target.value};
+    render();
+  };
+  const selSistemaFin = document.getElementById('f-sistemafin');
+  if(selSistemaFin) selSistemaFin.onchange = (e)=>{
+    const draft = lerFinanciamentoDoFormulario(editDraft);
+    draft.sistemaAmortizacao = e.target.value;
+    if(e.target.value==='parcela_unica' && !draft.carenciaMeses) draft.carenciaMeses = 12;
+    editDraft = draft;
+    render();
+  };
 
   // ---- fazendas ----
   const novaFazendaBtn = document.querySelector('[data-nova-fazenda]');
@@ -4768,6 +5212,72 @@ function attachEvents(){
         await salvarTitulo(); return;
       } else if(type==='baixa'){
         await salvarBaixa(); return;
+      } else if(type==='financiamento'){
+        const precisaAtividade = document.getElementById('f-finalidadefin').value !== 'capital_giro';
+        const campos = {
+          banco: document.getElementById('f-bancofin').value.trim(),
+          finalidade: document.getElementById('f-finalidadefin').value,
+          atividade: document.getElementById('f-atividadefin')?.value || '',
+          valorPrincipal: document.getElementById('f-principalfin').value,
+          dataContratacao: document.getElementById('f-datafin').value,
+          taxaJurosAa: document.getElementById('f-taxafin').value,
+          sistemaAmortizacao: document.getElementById('f-sistemafin').value,
+          numeroParcelas: document.getElementById('f-numparcelasfin')?.value || 1,
+          carenciaMeses: document.getElementById('f-carenciafin').value,
+          valorIof: document.getElementById('f-ioffin').value,
+          valorSeguro: document.getElementById('f-segurofin').value,
+          fazendaId: document.getElementById('f-fazendafin').value,
+          garantia: document.getElementById('f-garantiafin').value.trim(),
+          observacao: document.getElementById('f-obsfin').value.trim(),
+          status: 'ativo',
+        };
+        const faltando = [];
+        if(!campos.banco) faltando.push('banco');
+        if(!(Number(campos.valorPrincipal) > 0)) faltando.push('valor principal (maior que zero)');
+        if(!campos.dataContratacao) faltando.push('data de contratação');
+        if(!(Number(campos.taxaJurosAa) >= 0)) faltando.push('taxa de juros');
+        if(precisaAtividade && !campos.atividade) faltando.push('atividade');
+        if(faltando.length){
+          state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
+          editDraft = {...editDraft, ...campos};
+          render();
+          return;
+        }
+        state.erroFinanciamento = '';
+        const row = financiamentoToRow(campos);
+        // Editar termos regera o cronograma do zero — só chega aqui se
+        // nenhuma parcela foi paga ainda (o botão Editar da lista já
+        // esconde essa opção quando há pagamento; confere de novo aqui
+        // pra não depender só da tela não mostrar o botão).
+        const gerarSchedule = !editDraft._editId || parcelasDoFinanciamento(editDraft._editId).every(p=>p.status!=='paga');
+        let financiamentoId = editDraft._editId;
+        if(financiamentoId){
+          ({error} = await db.from('financiamentos').update(row).eq('id', financiamentoId));
+        } else {
+          const res = await db.from('financiamentos').insert(row).select().single();
+          error = res.error;
+          if(!error) financiamentoId = res.data.id;
+        }
+        if(!error && financiamentoId && gerarSchedule){
+          const antigas = parcelasDoFinanciamento(financiamentoId);
+          if(antigas.length){
+            ({error} = await db.from('parcelas_financiamento').delete().eq('financiamento_id', financiamentoId));
+          }
+          if(!error){
+            const novasParcelas = gerarParcelasFinanciamento(campos).map(p=>parcelaToRow(p, financiamentoId));
+            ({error} = await db.from('parcelas_financiamento').insert(novasParcelas));
+          }
+        }
+        if(!error && editDraft._origemId){
+          // Renegociação: o financiamento antigo sai da dívida ativa, e as
+          // parcelas dele que ainda não foram pagas são canceladas — o
+          // saldo devedor delas já virou o principal deste financiamento novo.
+          await db.from('financiamentos').update({status:'renegociado'}).eq('id', editDraft._origemId);
+          const pendentesOrigem = parcelasDoFinanciamento(editDraft._origemId).filter(p=>p.status==='pendente'||p.status==='atrasada');
+          for(const p of pendentesOrigem){
+            await db.from('parcelas_financiamento').update({status:'cancelada'}).eq('id', p.id);
+          }
+        }
       } else if(type==='papelUsuario'){
         const papel = document.getElementById('f-papelusuario').value;
         const ativo = document.getElementById('f-ativousuario').checked;

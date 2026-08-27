@@ -763,6 +763,11 @@ const GROUPS = {
 function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
+  // Chave 'operacoes' sem prefixo (Cereais usa 'operacoes_graos') — assimetria
+  // herdada, não é bug ativo: como os dois apps leem a MESMA profiles.permissoes,
+  // trocar para algo como 'cana_operacoes' exige migrar essa chave em todo
+  // profile que já tem 'operacoes' hoje, senão quem tinha acesso perde em
+  // silêncio. Não renomear sem rodar essa migração antes.
   if(key==='operacoes') return temPermissao('operacoes','visualizar');
   return temPermissao('cana_cadastros','visualizar');
 }
