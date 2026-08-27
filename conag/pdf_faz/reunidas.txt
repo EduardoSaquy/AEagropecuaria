@@ -1,0 +1,380 @@
+27/08/2026, 09:48                                               ERP Conag - Contas a Pagar
+
+
+                                                            ERP Conag - Contas a Pagar
+                                                            27/08/2026 09:48:53
+
+
+ Relatório Gerencial
+
+       Filtros
+       Buscar por *:                                               Data Início *: 01/01/2023
+       Data Vencimento
+       Data Final *: 31/12/2030                                    Subtotal *:
+                                                                   Plano de Conta
+       Contas *:                                                   Fazenda:
+       Todas                                                       6 - FAZENDA REUNIDAS
+       Conta Bancária:                                             Previsão:
+       TODAS                                                       Todos
+
+
+
+                                                                                       Mês            Data
+  Id       Fornecedor                    Conta                                         Competência    Pagamento      Valor
+
+  ALUGUEL DE ÁREA PRODUTIVA
+
+  65       ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                04/2023        10/04/2023     R$
+                                                                                                                     33.000,00
+
+  247      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                04/2023        10/05/2023     R$
+                                                                                                                     33.000,00
+
+  364      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                05/2023        12/06/2023     R$
+                                                                                                                     33.000,00
+
+  365      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                06/2023        10/07/2023     R$
+                                                                                                                     33.000,00
+
+  366      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                07/2023        10/08/2023     R$
+                                                                                                                     33.000,00
+
+  367      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                08/2023        11/09/2023     R$ 27.788,00
+
+  368      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                09/2023        10/10/2023     R$ 27.788,00
+
+  369      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                10/2023        10/11/2023     R$ 27.788,00
+
+  370      ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                11/2023        11/12/2023     R$ 27.788,00
+
+  2464 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                11/2023        10/01/2024     R$ 27.788,00
+
+  2465 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                12/2023        14/02/2024     R$ 27.788,00
+
+  2466 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                01/2024        11/03/2024     R$ 27.788,00
+
+  2467 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                02/2024        10/04/2024     R$ 27.788,00
+
+  2468 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                03/2024        10/05/2024     R$ 27.788,00
+
+  2469 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                04/2024        10/06/2024     R$ 27.788,00
+
+  2470 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                05/2024        10/07/2024     R$ 21.675,00
+
+  2471     ARI MACHADO DINIZ TELES       ARRENDAMENTO DE ÁREA PRODUTIVA                06/2024        12/08/2024     R$ 21.675,00
+
+  2472 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                07/2024        10/09/2024     R$ 21.675,00
+
+  2473 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                08/2024        10/10/2024     R$ 21.675,00
+
+  2474 ARI MACHADO DINIZ TELES           ARRENDAMENTO DE ÁREA PRODUTIVA                09/2024        11/11/2024     R$ 21.675,00
+
+                                                                                                 SUB-TOTAL CONTA R$
+                                                                                                                     551.255,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                551.255,00
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…    1/5
+27/08/2026, 09:48                                               ERP Conag - Contas a Pagar
+
+                                                                                      Mês             Data
+  Id     Fornecedor                      Conta                                        Competência     Pagamento      Valor
+
+  INSUMOS PECUÁRIOS
+
+  3746 ESPACO RURAL COMERCIO E           NUTRIÇÃO ANIMAL                              05/2024         10/06/2024     R$ 7.175,00
+       REPRESENTACAO LTDA
+
+  3747 ESPACO RURAL COMERCIO E           NUTRIÇÃO ANIMAL                              06/2024         08/07/2024     R$ 7.175,00
+       REPRESENTACAO LTDA
+
+  3748 ESPACO RURAL COMERCIO E           NUTRIÇÃO ANIMAL                              07/2024         07/08/2024     R$ 7.175,00
+       REPRESENTACAO LTDA
+
+  3749 ESPACO RURAL COMERCIO E           NUTRIÇÃO ANIMAL                              08/2024         06/09/2024     R$ 7.175,00
+       REPRESENTACAO LTDA
+
+  2783 CRIA PECUÁRIA                     NUTRIÇÃO ANIMAL                              06/2024         12/07/2024     R$ 6.060,30
+
+  2782 CRIA PECUÁRIA                     NUTRIÇÃO ANIMAL                              06/2024         12/06/2024     R$ 6.060,25
+
+  1455   TERRA BOA PECUARIA LTDA         NUTRIÇÃO ANIMAL                              07/2023         16/08/2023     R$ 416,67
+
+  1456   TERRA BOA PECUARIA LTDA         NUTRIÇÃO ANIMAL                              08/2023         15/09/2023     R$ 416,67
+
+  1457   TERRA BOA PECUARIA LTDA         NUTRIÇÃO ANIMAL                              09/2023         16/10/2023     R$ 416,66
+
+                                                                                                 SUB-TOTAL CONTA R$ 42.070,55
+
+  952    SERGIO ZUFFO                    FERRAMENTAS E UTENSÍLIOS PARA MANEJO 05/2023                 15/06/2023     R$ 450,00
+
+  229    KOMPRE BEM                      FERRAMENTAS E UTENSÍLIOS PARA MANEJO 04/2023                 20/04/2023     R$ 210,00
+
+  1147   JOSSIVANE PEREIRA DO            FERRAMENTAS E UTENSÍLIOS PARA MANEJO 06/2023                 22/06/2023     R$ 135,00
+         NASCIMENTO
+
+  3768 MARIA CORINA FERREIRA DE          FERRAMENTAS E UTENSÍLIOS PARA MANEJO 05/2024                 31/05/2024     R$ 125,00
+       SOUZA
+
+                                                                                                 SUB-TOTAL CONTA R$ 920,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 42.990,55
+
+  MÃO-DE-OBRA DE OPERACIONAL
+
+  2020 LUIZ ROGERIO RIBEIRO DE           DIARISTA                                     09/2023         22/09/2023     R$ 100,00
+       SOUZA
+
+  2317   CARLITO SIRIANO DA SILVA        DIARISTA                                     10/2023         27/10/2023     R$ 100,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 200,00
+
+  604    FLAVIO LIMA DOS SANTOS          SALÁRIOS                                     04/2023         05/05/2023     R$ 2.300,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 2.300,00
+
+  799    JOÃO HUMBERTO TEIXEIRA          OUTROS ENCARGOS                              05/2023         16/05/2023     R$ 100,00
+
+  3790 CLINICA CESA - JOÃO               OUTROS ENCARGOS                              06/2024         03/06/2024     R$ 100,00
+
+  816    FLAVIO LIMA DOS SANTOS          OUTROS ENCARGOS                              05/2023         16/05/2023     R$ 0,01
+
+                                                                                                 SUB-TOTAL CONTA R$ 200,01
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 2.700,01
+
+  ENERGIA ELÉTRICA DE INFRAESTRUTURA OPERACIONAL
+
+  3806 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  05/2024         07/06/2024     R$ 96,90
+
+  1865   ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  08/2023         08/09/2023     R$ 95,07
+
+  2853 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  12/2023         10/01/2024     R$ 93,65
+
+  653    ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  04/2023         09/05/2023     R$ 92,17
+
+  2146   ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  10/2023         06/10/2023     R$ 92,06
+
+  4101   ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  06/2024         08/07/2024     R$ 92,02
+
+  1218   ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  06/2023         05/07/2023     R$ 91,95
+
+  3259 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  02/2024         06/03/2024     R$ 91,72
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…     2/5
+27/08/2026, 09:48                                               ERP Conag - Contas a Pagar
+
+                                                                                      Mês             Data
+  Id     Fornecedor                      Conta                                        Competência     Pagamento      Valor
+
+  3661   ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  04/2024         07/05/2024     R$ 91,38
+
+  3456 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  03/2024         05/04/2024     R$ 90,84
+
+  115    ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  03/2023         12/04/2023     R$ 90,59
+
+  3008 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  01/2024         06/02/2024     R$ 90,55
+
+  2358 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  10/2023         07/11/2023     R$ 90,09
+
+  996    ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  05/2023         09/06/2023     R$ 89,89
+
+  1587   ENERGISA                        ENERGIA ELÉTRICA DA FAZENDA                  07/2023         07/08/2023     R$ 83,75
+
+  2685 ENERGISA                          ENERGIA ELÉTRICA DA FAZENDA                  11/2023         06/12/2023     R$ 59,56
+
+                                                                                                 SUB-TOTAL CONTA R$ 1.432,19
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 1.432,19
+
+  MANUTENÇÃO DE TRATORES, CAMINHÕES, MÁQUINAS, EQUIPAMENTOS E IMPLEMENTOS
+
+  1034   LEANDRO DIAS DA SILVA           MANUTENÇÃO DA FROTA DE VEÍCULOS,             05/2023         15/06/2023     R$ 380,00
+                                         MAQUINAS E EQUIPAMENTOS DE CAMPO
+
+  1841   JOSSIVANE PEREIRA DO            MANUTENÇÃO DA FROTA DE VEÍCULOS,             09/2023         06/09/2023     R$ 135,00
+         NASCIMENTO                      MAQUINAS E EQUIPAMENTOS DE CAMPO
+
+                                                                                                 SUB-TOTAL CONTA R$ 515,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 515,00
+
+  MANUTENÇÃO E REPARO DE INFRAESTRUTURAS
+
+  926    CARLITO SIRIANO DA SILVA        MANUTENÇÃO DE INFRAESTRUTURA                 05/2023         29/05/2023     R$ 1.468,00
+
+  1056   CARLITO SIRIANO DA SILVA        MANUTENÇÃO DE INFRAESTRUTURA                 06/2023         13/06/2023     R$ 600,00
+
+  1209   CARLITO SIRIANO DA SILVA        MANUTENÇÃO DE INFRAESTRUTURA                 06/2023         03/07/2023     R$ 390,00
+
+  3595 JAIRO JOSÉ MOURÃO                 MANUTENÇÃO DE INFRAESTRUTURA                 04/2024         30/04/2024     R$ 270,00
+
+  1141   TRANSPORTADORA PERUZZO          MANUTENÇÃO DE INFRAESTRUTURA                 06/2023         22/06/2023     R$ 205,00
+
+  3353 ANTONIO ALVES DE JESUS            MANUTENÇÃO DE INFRAESTRUTURA                 03/2024         11/03/2024     R$ 200,00
+
+  1094 TRANSPORTADORA PERUZZO            MANUTENÇÃO DE INFRAESTRUTURA                 06/2023         19/06/2023     R$ 41,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 3.174,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 3.174,00
+
+  REFEITÓRIO, RESTAURANTES & ALIMENTAÇÃO
+
+  3769 MARIA CORINA FERREIRA DE          AQUISIÇÃO DE REFEIÇÕES PRONTAS               05/2024         31/05/2024     R$ 280,00
+         SOUZA
+
+                                                                                                 SUB-TOTAL CONTA R$ 280,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 280,00
+
+  DESPESAS COM INSTALAÇÕES - ADMINISTRAÇÃO
+
+  260    CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      04/2023         20/04/2023     R$ 387,50
+
+  261    CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      05/2023         22/05/2023     R$ 387,50
+
+  3557 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      04/2024         15/05/2024     R$ 300,00
+
+  262    CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      04/2023         20/04/2023     R$ 100,00
+
+  775    CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      05/2023         22/05/2023     R$ 100,00
+
+  1139   CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      06/2023         20/06/2023     R$ 100,00
+
+  1439   CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      07/2023         20/07/2023     R$ 100,00
+
+  2342 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      10/2023         03/11/2023     R$ 100,00
+
+  2602 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      11/2023         15/12/2023     R$ 100,00
+
+  2896 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      01/2024         15/01/2024     R$ 100,00
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…     3/5
+27/08/2026, 09:48                                               ERP Conag - Contas a Pagar
+
+                                                                                      Mês             Data
+  Id     Fornecedor                      Conta                                        Competência     Pagamento      Valor
+
+  3149   CRISTIANO ALVES AFONSO          COMUNICAÇÃO E TELEFONIA                      02/2024         15/02/2024     R$ 100,00
+
+  3348 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      03/2024         15/03/2024     R$ 100,00
+
+  3508 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      04/2024         12/04/2024     R$ 100,00
+
+  3679 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      05/2024         15/05/2024     R$ 100,00
+
+  2894 CRISTIANO ALVES AFONSO            COMUNICAÇÃO E TELEFONIA                      01/2024         15/01/2024     R$ 53,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 2.228,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 2.228,00
+
+  INVESTIMENTO EM ANIMAIS
+
+  1144   JOSÉ MANOEL DE LIMA             COMPRA DE ANIMAIS PARA RECRIA,               06/2023         26/06/2023     R$
+                                         ENGORDA E ABATE                                                             129.200,00
+
+  1834   BOA FÉ AGROPECUARIA             COMPRA DE ANIMAIS PARA RECRIA,               09/2023         05/09/2023     R$
+                                         ENGORDA E ABATE                                                             100.936,00
+
+  1653   DIDIMAR LAURINDO DE SOUSA       COMPRA DE ANIMAIS PARA RECRIA,               08/2023         11/09/2023     R$
+                                         ENGORDA E ABATE                                                             80.500,00
+
+  3766 ANTONIO PITA DOS ANJOS            COMPRA DE ANIMAIS PARA RECRIA,               05/2024         31/05/2024     R$
+                                         ENGORDA E ABATE                                                             67.500,00
+
+  3767 DELMIRO MARTINS DE OLIVEIRA       COMPRA DE ANIMAIS PARA RECRIA,               05/2024         31/05/2024     R$ 62.750,00
+       NETO                              ENGORDA E ABATE
+
+  77     JOSÉ MARIA SANTOS BARBOSA       COMPRA DE ANIMAIS PARA RECRIA,               04/2023         11/04/2023     R$ 61.750,00
+                                         ENGORDA E ABATE
+
+  3765 ANDERSON DOS SANTOS DIAS          COMPRA DE ANIMAIS PARA RECRIA,               05/2024         31/05/2024     R$ 55.620,00
+                                         ENGORDA E ABATE
+
+  1068   ALBERTO DENDENA                 COMPRA DE ANIMAIS PARA RECRIA,               06/2023         27/07/2023     R$
+                                         ENGORDA E ABATE                                                             52.800,00
+
+  3751   ERONICE DE SOUZA BORGES         COMPRA DE ANIMAIS PARA RECRIA,               05/2024         31/05/2024     R$
+                                         ENGORDA E ABATE                                                             48.300,00
+
+  280    JOSÉ HUMBERTO RISPOLI ALVES     COMPRA DE ANIMAIS PARA RECRIA,               04/2023         10/05/2023     R$
+                                         ENGORDA E ABATE                                                             36.000,00
+
+  3745 WOLNEY RODRIGUES MEIRELES         COMPRA DE ANIMAIS PARA RECRIA,               05/2024         23/05/2024     R$
+       FILHO                             ENGORDA E ABATE                                                             34.000,00
+
+  1069 ALBERTO DENDENA                   COMPRA DE ANIMAIS PARA RECRIA,               06/2023         27/07/2023     R$
+                                         ENGORDA E ABATE                                                             20.000,00
+
+  675    ANTONIO VIANA PEREIRA DOS       COMPRA DE ANIMAIS PARA RECRIA,               05/2023         29/05/2023     R$ 18.700,00
+         REIS                            ENGORDA E ABATE
+
+  662    VALDECI JOSE DE BRITO           COMPRA DE ANIMAIS PARA RECRIA,               05/2023         29/05/2023     R$ 14.500,00
+                                         ENGORDA E ABATE
+
+  79     ADORINO PIRES DA SILVA          COMPRA DE ANIMAIS PARA RECRIA,               04/2023         11/04/2023     R$ 6.750,00
+                                         ENGORDA E ABATE
+
+                                                                                                 SUB-TOTAL CONTA R$
+                                                                                                                     789.306,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                     789.306,00
+
+  TERCEIRIZAÇÃO DE SERVIÇOS AGROPECUÁRIOS
+
+  1898   JONIO FRANCISCO SIRIANO         FRETE DE ANIMAIS                             09/2023         15/09/2023     R$ 5.900,00
+
+  1472   JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             07/2023         26/07/2023     R$ 5.225,00
+
+  1897   JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             09/2023         15/09/2023     R$ 4.362,00
+
+  933    JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             05/2023         05/06/2023     R$ 3.400,00
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…     4/5
+27/08/2026, 09:48                                               ERP Conag - Contas a Pagar
+
+                                                                                      Mês             Data
+  Id     Fornecedor                      Conta                                        Competência     Pagamento      Valor
+
+  1494   JAIR MARQUES DA SILVA           FRETE DE ANIMAIS                             07/2023         26/07/2023     R$ 2.775,00
+
+  1605   JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             08/2023         14/08/2023     R$ 2.700,00
+
+  3730 LORENA PAULA DE FREITAS           FRETE DE ANIMAIS                             05/2024         17/05/2024     R$ 2.204,00
+
+  3752 JONIO FRANCISCO SIRIANO           FRETE DE ANIMAIS                             05/2024         07/06/2024     R$ 2.000,00
+
+  3732 AILTON MELO ROCHA                 FRETE DE ANIMAIS                             05/2024         31/05/2024     R$ 1.400,00
+
+  1071   JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             06/2023         22/06/2023     R$ 1.360,50
+
+  1148   JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             06/2023         28/06/2023     R$ 1.000,00
+
+  560    JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             05/2023         05/05/2023     R$ 700,00
+
+  1657   JOSÉ ARAUJO COSTA DIAS          FRETE DE ANIMAIS                             08/2023         18/08/2023     R$ 700,00
+
+  2983 PAULO CESAR SAQUY                 FRETE DE ANIMAIS                             01/2024         22/01/2024     R$ 150,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 33.876,50
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 33.876,50
+
+                                                                                                             TOTAL R$
+                                                                                                                     1.427.757,25
+
+ Desenvolvido por ERP CONAG
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…      5/5
+

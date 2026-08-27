@@ -1,0 +1,2714 @@
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+
+                                                            ERP Conag - Contas a Pagar
+                                                            27/08/2026 09:44:56
+
+
+ Relatório Gerencial
+
+       Filtros
+       Buscar por *:                                               Data Início *: 01/01/2023
+       Data Vencimento
+       Data Final *: 31/12/2030                                    Subtotal *:
+                                                                   Plano de Conta
+       Contas *:                                                   Fazenda:
+       Todas                                                       1 - FAZENDA PALHADÃO
+       Conta Bancária:                                             Previsão:
+       TODAS                                                       Todos
+
+
+
+                                                                                       Mês            Data
+  Id        Fornecedor                        Conta                                    Competência    Pagamento     Valor
+
+  INSUMOS AGRÍCOLAS
+
+  4188      USINA SANTO ANTONIO               SEMENTES E MUDAS DE PLANTIO              07/2024        12/08/2024    R$ 73.439,13
+
+  4189      USINA SANTO ANTONIO               SEMENTES E MUDAS DE PLANTIO              08/2024        11/08/2025    R$ 73.439,13
+
+  4953      AGROSAQUY                         SEMENTES E MUDAS DE PLANTIO              03/2025        10/04/2025    R$ 4.050,00
+
+  8977      MAYCON FELIPE CAMPOS NOGUEIRA SEMENTES E MUDAS DE PLANTIO                  04/2026        20/04/2026    R$ 3.200,00
+
+  8734      AGROSAQUY                         SEMENTES E MUDAS DE PLANTIO              08/2026        10/08/2026    R$ 3.200,00
+
+  8924      AGROSAQUY                         SEMENTES E MUDAS DE PLANTIO              08/2026        10/08/2026    R$ 864,90
+
+                                                                                                 SUB-TOTAL CONTA R$ 158.193,16
+
+  1583      CALCARIO DIAMANTE LTDA            CORRETIVOS DE SOLO                       08/2023        31/08/2023    R$ 19.426,50
+
+  6928      CALCARIO DIAMANTE LTDA            CORRETIVOS DE SOLO                       09/2025        15/09/2025    R$ 10.017,00
+
+  1592      CALCARIO DIAMANTE LTDA            CORRETIVOS DE SOLO                       08/2023        31/08/2023    R$ 6.412,50
+
+                                                                                                 SUB-TOTAL CONTA R$ 35.856,00
+
+  6063      SORRENTE MARTINI LTDA             ADUBOS E FERTILIZANTES                   06/2025        25/06/2025    R$
+                                                                                                                    151.900,00
+
+  9277      CRISTIAN D. THOMAZ LTDA           ADUBOS E FERTILIZANTES                   05/2026        21/05/2026    R$ 63.961,60
+
+  9307      CRISTIAN D. THOMAZ LTDA           ADUBOS E FERTILIZANTES                   05/2026        28/05/2026    R$ 62.836,80
+
+  9428      CRISTIAN D. THOMAZ LTDA           ADUBOS E FERTILIZANTES                   06/2026        12/06/2026    R$ 61.176,20
+
+  9619      CJC COMERCIO DE INSUMOS           ADUBOS E FERTILIZANTES                   07/2026        20/07/2026    R$ 50.078,04
+            AGRICOLAS E SERVICOS LTDA
+
+  9676      CJC COMERCIO DE INSUMOS           ADUBOS E FERTILIZANTES                   07/2026        20/07/2026    R$ 31.904,46
+            AGRICOLAS E SERVICOS LTDA
+
+  4265      FONTGALANT COMERCIO DE            ADUBOS E FERTILIZANTES                   08/2024        27/09/2024    R$ 10.832,17
+            CORRETIVOS DE SOLO LTDA
+
+  6840      CJC COMERCIO DE INSUMOS           ADUBOS E FERTILIZANTES                   07/2025        07/07/2025    R$ 8.494,05
+            AGRICOLAS E SERVICOS LTDA
+
+  6841      CJC COMERCIO DE INSUMOS           ADUBOS E FERTILIZANTES                   08/2025        17/07/2025    R$ 8.494,04
+            AGRICOLAS E SERVICOS LTDA
+
+  4243      FONTGALANT COMERCIO DE            ADUBOS E FERTILIZANTES                   07/2024        26/09/2024    R$ 8.290,14
+            CORRETIVOS DE SOLO LTDA
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     1/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  10030 PATRÍCIA APARECIDA M. BORELA          ADUBOS E FERTILIZANTES                   08/2026        26/08/2026    R$ 7.473,00
+        TRANSPORTES
+
+  6212    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   04/2025        22/04/2025    R$ 6.913,90
+          DE SOLO LTDA
+
+  6213    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   05/2025        16/05/2025    R$ 6.913,90
+          DE SOLO LTDA
+
+  6210    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   04/2025        22/04/2025    R$ 6.727,15
+          DE SOLO LTDA
+
+  6211    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   05/2025        16/05/2025    R$ 6.727,15
+          DE SOLO LTDA
+
+  6216    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   04/2025        25/04/2025    R$ 6.669,05
+          DE SOLO LTDA
+
+  6217    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   05/2025        16/05/2025    R$ 6.669,05
+          DE SOLO LTDA
+
+  6214    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   04/2025        24/04/2025    R$ 6.283,10
+          DE SOLO LTDA
+
+  6215    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   05/2025        16/05/2025    R$ 6.283,10
+          DE SOLO LTDA
+
+  4509    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   09/2024        10/10/2024    R$ 5.658,80
+          DE SOLO LTDA
+
+  4510    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   10/2024        11/11/2024    R$ 5.658,80
+          DE SOLO LTDA
+
+  4513    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   09/2024        10/10/2024    R$ 5.614,15
+          DE SOLO LTDA
+
+  4514    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   10/2024        11/11/2024    R$ 5.614,15
+          DE SOLO LTDA
+
+  4511    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   09/2024        10/10/2024    R$ 5.611,80
+          DE SOLO LTDA
+
+  4512    IBIATA COMERCIO DE CORRETIVOS       ADUBOS E FERTILIZANTES                   10/2024        11/11/2024    R$ 5.611,80
+          DE SOLO LTDA
+
+  6725    AGROSAQUY                           ADUBOS E FERTILIZANTES                   06/2025        16/06/2025    R$ 690,00
+
+  10006 CALCARIO DIAMANTE LTDA                ADUBOS E FERTILIZANTES                                                R$ 5.142,20
+
+                                                                                                 SUB-TOTAL CONTA R$
+                                                                                                                 558.228,60
+
+  4820    COOPERATIVA DOS PLANTADORES         EMBALAGENS, SACARIAS E LONAS             11/2024        04/12/2024    R$ 1.162,04
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  6727    AGROSAQUY                           EMBALAGENS, SACARIAS E LONAS             06/2025        29/06/2025    R$ 979,00
+
+  6728    AGROSAQUY                           EMBALAGENS, SACARIAS E LONAS             07/2025        28/07/2025    R$ 979,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 3.120,04
+
+  7012    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     09/2025        10/09/2025    R$
+                                                                                                                    20.000,00
+
+  6166    COPERCANA                           DEFENSIVOS AGRÍCOLAS                     07/2025        10/07/2025    R$ 13.954,80
+
+  6164    COPERCANA                           DEFENSIVOS AGRÍCOLAS                     07/2025        10/07/2025    R$ 6.033,60
+
+  6914    COPERCANA                           DEFENSIVOS AGRÍCOLAS                     07/2025        20/08/2025    R$ 5.900,00
+
+  283     28 - RIBEIRAO PRETO - LOJA          DEFENSIVOS AGRÍCOLAS                     04/2023        05/06/2023    R$ 3.637,99
+
+  5534    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     03/2025        10/04/2025    R$ 3.290,00
+
+  6475    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     05/2025        12/05/2025    R$ 2.910,00
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     2/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  5163    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     03/2025        10/04/2025    R$ 2.433,00
+
+  6165    COPERCANA                           DEFENSIVOS AGRÍCOLAS                     07/2025        10/07/2025    R$ 2.268,00
+
+  6796    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     07/2025        30/07/2025    R$ 1.640,00
+
+  9296    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     04/2026        10/08/2026    R$ 820,00
+
+  9399    28 - RIBEIRAO PRETO - LOJA          DEFENSIVOS AGRÍCOLAS                     06/2026        10/07/2026    R$ 371,16
+
+  6372    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     09/2025        10/09/2025    R$ 359,00
+
+  6167    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     09/2025        10/09/2025    R$ 295,00
+
+  6940    AGROSAQUY                           DEFENSIVOS AGRÍCOLAS                     08/2025        07/08/2025    R$ 180,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 64.092,55
+
+                                                                                        SUB-TOTAL CENTRO CUSTO R$
+                                                                                                               819.490,35
+
+  INSUMOS PECUÁRIOS
+
+  6580    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          05/2025        30/05/2025    R$ 2.631,03
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  4016    EDUARDO MARIANI SAQUY               NUTRIÇÃO ANIMAL                          06/2024        24/06/2024    R$ 2.325,00
+
+  4286    RAFAEL LUCAS TURATI ROSSI (SILO)    NUTRIÇÃO ANIMAL                          09/2024        30/08/2024    R$ 2.250,00
+
+  4287    RAFAEL LUCAS TURATI ROSSI (SILO)    NUTRIÇÃO ANIMAL                          10/2024        27/09/2024    R$ 2.250,00
+
+  4285    RAFAEL LUCAS TURATI ROSSI (SILO)    NUTRIÇÃO ANIMAL                          08/2024        09/08/2024    R$ 1.800,00
+
+  4720    RAFAEL LUCAS TURATI ROSSI (SILO)    NUTRIÇÃO ANIMAL                          09/2024        18/10/2024    R$ 1.500,00
+
+  4721    RAFAEL LUCAS TURATI ROSSI (SILO)    NUTRIÇÃO ANIMAL                          10/2024        02/12/2024    R$ 1.500,00
+
+  4722    RAFAEL LUCAS TURATI ROSSI (SILO)    NUTRIÇÃO ANIMAL                          11/2024        30/12/2024    R$ 1.500,00
+
+  9025    OSMAR ANTÔNIO DE FARIA              NUTRIÇÃO ANIMAL                          04/2026        30/04/2026    R$ 1.493,34
+
+  9026    OSMAR ANTÔNIO DE FARIA              NUTRIÇÃO ANIMAL                          05/2026        01/06/2026    R$ 1.493,33
+
+  9027    OSMAR ANTÔNIO DE FARIA              NUTRIÇÃO ANIMAL                          06/2026        30/06/2026    R$ 1.493,33
+
+  6737    OSMAR ANTÔNIO DE FARIA              NUTRIÇÃO ANIMAL                          08/2025        15/08/2025    R$ 1.360,00
+
+  1236    28 - RIBEIRAO PRETO - LOJA          NUTRIÇÃO ANIMAL                          08/2023        03/08/2023    R$ 1.309,56
+
+  6735    OSMAR ANTÔNIO DE FARIA              NUTRIÇÃO ANIMAL                          06/2025        16/06/2025    R$ 1.280,00
+
+  5167    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          12/2024        06/01/2025    R$ 1.260,34
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  6736    OSMAR ANTÔNIO DE FARIA              NUTRIÇÃO ANIMAL                          07/2025        15/07/2025    R$ 1.200,00
+
+  4821    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          10/2024        02/12/2024    R$ 1.185,89
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5640    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          12/2024        30/01/2025    R$ 1.145,25
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5641    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          01/2025        28/02/2025    R$ 1.145,25
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5642    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          02/2025        31/03/2025    R$ 1.145,25
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5643    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          03/2025        30/04/2025    R$ 1.145,23
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     3/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  4664    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          09/2024        28/10/2024    R$ 1.084,32
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  4665    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          10/2024        26/11/2024    R$ 1.084,32
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  4666    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          11/2024        26/12/2024    R$ 1.084,32
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  4667    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          12/2024        27/01/2025    R$ 1.084,30
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5990    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          02/2025        25/03/2025    R$ 964,70
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5991    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          03/2025        25/04/2025    R$ 964,70
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5992    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          04/2025        26/05/2025    R$ 964,69
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  5993    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          05/2025        25/06/2025    R$ 964,68
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  1738    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          09/2023        19/09/2023    R$ 740,31
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  7432    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          11/2025        11/11/2025    R$ 738,28
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  1050    28 - RIBEIRAO PRETO - LOJA          NUTRIÇÃO ANIMAL                          06/2023        03/07/2023    R$ 690,31
+
+  5753    ADRIANO FRANCISCO FERRARI           NUTRIÇÃO ANIMAL                          01/2025        04/02/2025    R$ 592,00
+
+  1779    COPERCANA                           NUTRIÇÃO ANIMAL                          08/2023        31/08/2023    R$ 480,27
+
+  9527    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          06/2026        29/07/2026    R$ 425,33
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  7013    COOPER PLANT CANA OESTE EST SP NUTRIÇÃO ANIMAL                               09/2025        04/09/2025    R$ 364,05
+
+  5574    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          01/2025        10/02/2025    R$ 340,06
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  934     AGROSAQUY                           NUTRIÇÃO ANIMAL                          06/2023        22/06/2023    R$ 330,00
+
+  9157    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          05/2026        27/05/2026    R$ 327,81
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  9158    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          06/2026        29/06/2026    R$ 327,79
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  9159    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          07/2026        27/07/2026    R$ 327,79
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  7011    COOPER PLANT CANA OESTE EST SP NUTRIÇÃO ANIMAL                               09/2025        08/09/2025    R$ 228,47
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     4/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  7014    COOPER PLANT CANA OESTE EST SP NUTRIÇÃO ANIMAL                               09/2025        05/09/2025    R$ 210,70
+
+  7877    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          01/2026        05/01/2026    R$ 196,22
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  7878    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          02/2026        03/02/2026    R$ 196,22
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  8425    ADRIANO FRANCISCO FERRARI           NUTRIÇÃO ANIMAL                          01/2026        06/02/2026    R$ 196,22
+
+  7879    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          03/2026        03/03/2026    R$ 196,22
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  7880    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          04/2026        06/04/2026    R$ 196,22
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  7881    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                          05/2026        04/05/2026    R$ 196,20
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+  2027    BABA AGROPET                        NUTRIÇÃO ANIMAL                          10/2023        10/10/2023    R$ 149,50
+
+  8677    COOPER PLANT CANA OESTE EST SP NUTRIÇÃO ANIMAL                               04/2026        06/04/2026    R$ 148,90
+
+  1048    28 - RIBEIRAO PRETO - LOJA          NUTRIÇÃO ANIMAL                          06/2023        30/06/2023    R$ 82,82
+
+  7509    AGROSAQUY                           NUTRIÇÃO ANIMAL                          11/2025        25/11/2025    R$ 45,00
+
+  1049    28 - RIBEIRAO PRETO - LOJA          NUTRIÇÃO ANIMAL                          06/2023        03/07/2023    R$ 32,59
+
+  9528    COOPERATIVA DOS PLANTADORES         NUTRIÇÃO ANIMAL                                                       R$ 425,33
+          DE CANA DO OESTE DO ESTADO DE
+          SA
+
+                                                                                                 SUB-TOTAL CONTA R$ 48.793,44
+
+  7193    AGROSAQUY                           SANIDADE ANIMAL                          10/2025        01/10/2025    R$ 288,00
+
+  6685    AGROSAQUY                           SANIDADE ANIMAL                          06/2025        20/06/2025    R$ 125,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 413,00
+
+  4245    GUSTAVO TOMAZELI (VETERINÁRIO)      REPRODUÇÃO ANIMAL                        07/2024        30/07/2024    R$ 700,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 700,00
+
+  3761    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            05/2024        20/06/2024    R$ 1.053,51
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  3762    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            06/2024        22/07/2024    R$ 1.053,51
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  3763    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            07/2024        20/08/2024    R$ 1.053,51
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  3764    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            08/2024        23/09/2024    R$ 1.053,51
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  4505    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            09/2024        11/10/2024    R$ 342,83
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  4506    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            10/2024        11/11/2024    R$ 342,83
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     5/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  4507    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            11/2024        11/12/2024    R$ 342,83
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  4508    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            12/2024        13/01/2025    R$ 342,83
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  6559    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            08/2025        06/08/2025    R$ 240,36
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  6557    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            06/2025        06/06/2025    R$ 240,29
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+  6558    COOPERATIVA DOS PLANTADORES         FERRAMENTAS E UTENSÍLIOS PARA            07/2025        07/07/2025    R$ 240,29
+          DE CANA DO OESTE DO ESTADO DE       MANEJO
+          SA
+
+                                                                                                 SUB-TOTAL CONTA R$ 6.306,30
+
+                                                                                        SUB-TOTAL CENTRO CUSTO R$ 56.212,74
+
+  MÃO-DE-OBRA DE OPERACIONAL
+
+  8498    APARECIDO JOSÉ KISS                 DIARISTA                                 02/2026        20/02/2026    R$ 21.840,00
+
+  8294    APARECIDO JOSÉ KISS                 DIARISTA                                 01/2026        30/01/2026    R$ 18.760,00
+
+  9988    APARECIDO JOSÉ KISS                 DIARISTA                                 08/2026        19/08/2026    R$ 11.340,00
+
+  5231    GERALDO MARTINS DE OLIVEIRA         DIARISTA                                 11/2024        20/12/2024    R$ 11.000,00
+
+  5274    GERALDO MARTINS DE OLIVEIRA         DIARISTA                                 11/2024        23/12/2024    R$ 7.700,00
+
+  6823    APARECIDO JOSÉ KISS                 DIARISTA                                 06/2025        30/06/2025    R$ 5.070,00
+
+  4729    GERALDO MARTINS DE OLIVEIRA         DIARISTA                                 09/2024        25/10/2024    R$ 4.400,00
+
+  5345    GERALDO MARTINS DE OLIVEIRA         DIARISTA                                 12/2024        06/01/2025    R$ 3.080,00
+
+  4751    GERALDO MARTINS DE OLIVEIRA         DIARISTA                                 10/2024        01/11/2024    R$ 2.900,00
+
+  6039    TIAGO MARCELINO DE OLIVEIRA         DIARISTA                                 02/2025        06/03/2025    R$ 400,00
+
+  8853    ADRIANO FRANCISCO FERRARI           DIARISTA                                 04/2026        08/04/2026    R$ 100,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 86.590,00
+
+  9929    EDUARDO MARIANI SAQUY               SALÁRIOS                                 02/2023        07/03/2023    R$ 9.123,84
+
+  9985    EDUARDO MARIANI SAQUY               SALÁRIOS                                 10/2023        05/11/2023    R$ 7.336,73
+
+  9923    EDUARDO MARIANI SAQUY               SALÁRIOS                                 01/2023        03/02/2023    R$ 7.113,50
+
+  9935    EDUARDO MARIANI SAQUY               SALÁRIOS                                 03/2023        03/04/2023    R$ 6.958,86
+
+  9916    JOEL HUESCAR                        SALÁRIOS                                 08/2026        14/08/2026    R$ 6.000,00
+
+  6291    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 12/2025        05/12/2025    R$ 5.728,76
+
+  3954    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 11/2024        09/12/2024    R$ 5.463,72
+
+  3955    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 12/2024        08/01/2025    R$ 5.411,48
+
+  6290    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 11/2025        07/11/2025    R$ 5.353,63
+
+  3957    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 02/2025        06/03/2025    R$ 5.214,34
+
+  8810    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 07/2026        05/08/2026    R$ 5.053,39
+
+  9933    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 03/2023        03/04/2023    R$ 5.002,49
+
+  6286    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 07/2025        04/07/2025    R$ 4.988,59
+
+  6295    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 04/2026        07/04/2026    R$ 4.895,30
+
+  6289    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 10/2025        03/10/2025    R$ 4.874,44
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     6/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  8809    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 06/2026        03/07/2026    R$ 4.825,44
+
+  6294    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 03/2026        07/03/2026    R$ 4.676,48
+
+  3953    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 10/2024        06/11/2024    R$ 4.601,62
+
+  8808    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 05/2026        05/06/2026    R$ 4.598,05
+
+  3958    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 03/2025        04/04/2025    R$ 4.596,18
+
+  6287    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 08/2025        05/08/2025    R$ 4.583,09
+
+  3956    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 01/2025        07/02/2025    R$ 4.535,41
+
+  2384    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 11/2023        07/11/2023    R$ 4.497,92
+
+  9927    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 02/2023        07/03/2023    R$ 4.444,47
+
+  3951    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 08/2024        05/09/2024    R$ 4.419,92
+
+  6288    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 09/2025        05/09/2025    R$ 4.287,77
+
+  6293    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 02/2026        03/02/2026    R$ 4.102,22
+
+  3949    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 06/2024        05/07/2024    R$ 4.000,22
+
+  3950    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 07/2024        02/08/2024    R$ 4.000,22
+
+  3952    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 09/2024        04/10/2024    R$ 4.000,22
+
+  3316    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 03/2024        07/03/2024    R$ 4.000,00
+
+  3475    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 04/2024        05/04/2024    R$ 4.000,00
+
+  3818    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 06/2024        07/06/2024    R$ 4.000,00
+
+  2136    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 10/2023        06/10/2023    R$ 3.984,53
+
+  3049    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 02/2024        06/02/2024    R$ 3.874,95
+
+  9921    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 01/2023        03/02/2023    R$ 3.848,57
+
+  6314    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 11/2025        07/11/2025    R$ 3.805,97
+
+  6285    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 06/2025        06/06/2025    R$ 3.791,39
+
+  1848    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 09/2023        08/09/2023    R$ 3.758,08
+
+  692     ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 05/2023        05/05/2023    R$ 3.733,28
+
+  6308    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 05/2025        07/05/2025    R$ 3.686,53
+
+  2385    JULIO CESAR FERRARI                 SALÁRIOS                                 11/2023        07/11/2023    R$ 3.612,59
+
+  6284    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 05/2025        07/05/2025    R$ 3.470,26
+
+  1260    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 07/2023        07/07/2023    R$ 3.331,54
+
+  1564    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 08/2023        04/08/2023    R$ 3.331,54
+
+  6311    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 08/2025        05/08/2025    R$ 3.313,80
+
+  6040    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 02/2025        06/03/2025    R$ 3.283,15
+
+  688     JULIO CESAR FERRARI                 SALÁRIOS                                 05/2023        05/05/2023    R$ 3.243,85
+
+  8807    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 04/2026        07/05/2026    R$ 3.206,34
+
+  6310    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 07/2025        04/07/2025    R$ 3.185,05
+
+  3934    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 11/2024        09/12/2024    R$ 3.137,00
+
+  986     ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 06/2023        07/06/2023    R$ 3.134,35
+
+  9076    JOEL HUESCAR                        SALÁRIOS                                 06/2026        03/07/2026    R$ 3.128,63
+
+  9077    JOEL HUESCAR                        SALÁRIOS                                 07/2026        05/08/2026    R$ 3.122,94
+
+  3050    JULIO CESAR FERRARI                 SALÁRIOS                                 02/2024        06/02/2024    R$ 3.112,93
+
+  9075    JOEL HUESCAR                        SALÁRIOS                                 05/2026        05/06/2026    R$ 3.107,42
+
+  6312    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 09/2025        05/09/2025    R$ 3.069,65
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     7/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  6321    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 04/2025        04/04/2025    R$ 3.050,43
+
+  6313    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 10/2025        03/10/2025    R$ 3.044,40
+
+  8783    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 04/2026        07/05/2026    R$ 3.028,36
+
+  6292    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 01/2026        07/01/2026    R$ 2.982,30
+
+  2137    JULIO CESAR FERRARI                 SALÁRIOS                                 10/2023        06/10/2023    R$ 2.967,54
+
+  3937    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 02/2025        06/03/2025    R$ 2.941,58
+
+  3971    TONY RAMOS DA SILVA                 SALÁRIOS                                 08/2024        05/09/2024    R$ 2.921,44
+
+  1849    JULIO CESAR FERRARI                 SALÁRIOS                                 09/2023        08/09/2023    R$ 2.869,97
+
+  3317    JULIO CESAR FERRARI                 SALÁRIOS                                 03/2024        07/03/2024    R$ 2.852,52
+
+  989     JULIO CESAR FERRARI                 SALÁRIOS                                 06/2023        07/06/2023    R$ 2.816,49
+
+  1261    JULIO CESAR FERRARI                 SALÁRIOS                                 07/2023        07/07/2023    R$ 2.816,49
+
+  1565    JULIO CESAR FERRARI                 SALÁRIOS                                 08/2023        04/08/2023    R$ 2.816,49
+
+  6309    WELLINGTON ANDRADE NEVES            SALÁRIOS                                 06/2025        06/06/2025    R$ 2.800,28
+
+  3970    TONY RAMOS DA SILVA                 SALÁRIOS                                 07/2024        02/08/2024    R$ 2.800,23
+
+  6267    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 12/2025        05/12/2025    R$ 2.773,18
+
+  6266    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 11/2025        07/11/2025    R$ 2.721,87
+
+  3935    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 12/2024        08/01/2025    R$ 2.716,05
+
+  8785    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 06/2026        03/07/2026    R$ 2.715,18
+
+  6262    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 07/2025        04/07/2025    R$ 2.631,17
+
+  8786    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 07/2026        05/08/2026    R$ 2.604,67
+
+  3933    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 10/2024        06/11/2024    R$ 2.583,52
+
+  6270    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 03/2026        07/03/2026    R$ 2.571,01
+
+  8797    JOSELAINE APARECIDA DO              SALÁRIOS                                 06/2026        03/07/2026    R$ 2.533,71
+          NASCIMENTO NOGUEIRA
+
+  3938    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 03/2025        04/04/2025    R$ 2.504,41
+
+  6271    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 04/2026        07/04/2026    R$ 2.492,48
+
+  8784    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 05/2026        05/06/2026    R$ 2.492,48
+
+  6265    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 10/2025        03/10/2025    R$ 2.490,93
+
+  6263    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 08/2025        05/08/2025    R$ 2.490,03
+
+  6274    JOSELAINE APARECIDA DO              SALÁRIOS                                 07/2025        04/07/2025    R$ 2.466,16
+          NASCIMENTO NOGUEIRA
+
+  9088    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                 06/2026        03/07/2026    R$ 2.423,69
+
+  8798    JOSELAINE APARECIDA DO              SALÁRIOS                                 07/2026        05/08/2026    R$ 2.419,65
+          NASCIMENTO NOGUEIRA
+
+  9089    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                 07/2026        05/08/2026    R$ 2.390,32
+
+  3929    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 06/2024        05/07/2024    R$ 2.368,27
+
+  3930    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 07/2024        02/08/2024    R$ 2.368,27
+
+  2873    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 01/2024        05/01/2024    R$ 2.366,80
+
+  6282    JOSELAINE APARECIDA DO              SALÁRIOS                                 03/2026        07/03/2026    R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8795    JOSELAINE APARECIDA DO              SALÁRIOS                                 04/2026        07/05/2026    R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8796    JOSELAINE APARECIDA DO              SALÁRIOS                                 05/2026        05/06/2026    R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     8/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês            Data
+  Id      Fornecedor                          Conta                                    Competência    Pagamento     Valor
+
+  6275    JOSELAINE APARECIDA DO              SALÁRIOS                                 08/2025        05/08/2025    R$ 2.304,04
+          NASCIMENTO NOGUEIRA
+
+  6276    JOSELAINE APARECIDA DO              SALÁRIOS                                 09/2025        05/09/2025    R$ 2.304,04
+          NASCIMENTO NOGUEIRA
+
+  6277    JOSELAINE APARECIDA DO              SALÁRIOS                                 10/2025        03/10/2025    R$ 2.304,04
+          NASCIMENTO NOGUEIRA
+
+  6278    JOSELAINE APARECIDA DO              SALÁRIOS                                 11/2025        07/11/2025    R$ 2.304,04
+          NASCIMENTO NOGUEIRA
+
+  6279    JOSELAINE APARECIDA DO              SALÁRIOS                                 12/2025        05/12/2025    R$ 2.304,04
+          NASCIMENTO NOGUEIRA
+
+  3936    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 01/2025        07/02/2025    R$ 2.301,95
+
+  6260    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 05/2025        07/05/2025    R$ 2.301,95
+
+  6261    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 06/2025        06/06/2025    R$ 2.301,95
+
+  3932    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 09/2024        04/10/2024    R$ 2.300,36
+
+  9087    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                 05/2026        05/06/2026    R$ 2.299,32
+
+  2134    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 10/2023        06/10/2023    R$ 2.298,58
+
+  6305    MARIA DO CARMO DE JESUS             SALÁRIOS                                 02/2026        03/02/2026    R$ 2.241,90
+          ARAUJO
+
+  6306    MARIA DO CARMO DE JESUS             SALÁRIOS                                 03/2026        07/03/2026    R$ 2.241,90
+          ARAUJO
+
+  6307    MARIA DO CARMO DE JESUS             SALÁRIOS                                 04/2026        07/04/2026    R$ 2.241,90
+          ARAUJO
+
+  8819    MARIA DO CARMO DE JESUS             SALÁRIOS                                 04/2026        07/05/2026    R$ 2.241,90
+          ARAUJO
+
+  6301    MARIA DO CARMO DE JESUS             SALÁRIOS                                 10/2025        03/10/2025    R$ 2.240,35
+          ARAUJO
+
+  6303    MARIA DO CARMO DE JESUS             SALÁRIOS                                 12/2025        05/12/2025    R$ 2.240,35
+          ARAUJO
+
+  6304    MARIA DO CARMO DE JESUS             SALÁRIOS                                 01/2026        07/01/2026    R$ 2.240,35
+          ARAUJO
+
+  9925    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 01/2023        03/02/2023    R$ 2.211,54
+
+  9928    ANTÔNIO FRANCISCO DE SOUZA          SALÁRIOS                                 02/2023        07/03/2023    R$ 2.211,54
+          REIS
+
+  9931    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 02/2023        07/03/2023    R$ 2.211,54
+
+  9934    ANTÔNIO FRANCISCO DE SOUZA          SALÁRIOS                                 03/2023        03/04/2023    R$ 2.211,54
+          REIS
+
+  9937    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 03/2023        03/04/2023    R$ 2.211,54
+
+  3939    JOSELAINE APARECIDA DO              SALÁRIOS                                 06/2024        05/07/2024    R$ 2.209,38
+          NASCIMENTO NOGUEIRA
+
+  3940    JOSELAINE APARECIDA DO              SALÁRIOS                                 07/2024        02/08/2024    R$ 2.209,38
+          NASCIMENTO NOGUEIRA
+
+  686     LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 05/2023        05/05/2023    R$ 2.165,23
+
+  3047    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 02/2024        06/02/2024    R$ 2.164,55
+
+  3314    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 03/2024        07/03/2024    R$ 2.164,55
+
+  3473    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 04/2024        05/04/2024    R$ 2.164,55
+
+  3647    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 05/2024        07/05/2024    R$ 2.164,55
+
+  3816    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 06/2024        07/06/2024    R$ 2.164,55
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKm…     9/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  2382    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 11/2023         07/11/2023    R$ 2.163,17
+
+  3969    TONY RAMOS DA SILVA                 SALÁRIOS                                 06/2024         05/07/2024    R$ 2.157,40
+
+  8822    MARIA DO CARMO DE JESUS             SALÁRIOS                                 07/2026         05/08/2026    R$ 2.152,78
+          ARAUJO
+
+  3947    JOSELAINE APARECIDA DO              SALÁRIOS                                 02/2025         06/03/2025    R$ 2.141,93
+          NASCIMENTO NOGUEIRA
+
+  6272    JOSELAINE APARECIDA DO              SALÁRIOS                                 05/2025         07/05/2025    R$ 2.141,93
+          NASCIMENTO NOGUEIRA
+
+  6273    JOSELAINE APARECIDA DO              SALÁRIOS                                 06/2025         06/06/2025    R$ 2.141,93
+          NASCIMENTO NOGUEIRA
+
+  3941    JOSELAINE APARECIDA DO              SALÁRIOS                                 08/2024         05/09/2024    R$ 2.140,34
+          NASCIMENTO NOGUEIRA
+
+  3942    JOSELAINE APARECIDA DO              SALÁRIOS                                 09/2024         04/10/2024    R$ 2.140,34
+          NASCIMENTO NOGUEIRA
+
+  3943    JOSELAINE APARECIDA DO              SALÁRIOS                                 10/2024         06/11/2024    R$ 2.140,34
+          NASCIMENTO NOGUEIRA
+
+  3944    JOSELAINE APARECIDA DO              SALÁRIOS                                 11/2024         09/12/2024    R$ 2.140,34
+          NASCIMENTO NOGUEIRA
+
+  9922    ANTÔNIO FRANCISCO DE SOUZA          SALÁRIOS                                 01/2023         03/02/2023    R$ 2.111,54
+          REIS
+
+  3959    MARIA DO CARMO DE JESUS             SALÁRIOS                                 06/2024         05/07/2024    R$ 2.087,11
+          ARAUJO
+
+  3960    MARIA DO CARMO DE JESUS             SALÁRIOS                                 07/2024         02/08/2024    R$ 2.087,11
+          ARAUJO
+
+  9924    JOSELAINE APARECIDA DO              SALÁRIOS                                 01/2023         03/02/2023    R$ 2.085,93
+          NASCIMENTO NOGUEIRA
+
+  3966    MARIA DO CARMO DE JESUS             SALÁRIOS                                 01/2025         07/02/2025    R$ 2.082,77
+          ARAUJO
+
+  3967    MARIA DO CARMO DE JESUS             SALÁRIOS                                 02/2025         06/03/2025    R$ 2.082,77
+          ARAUJO
+
+  3968    MARIA DO CARMO DE JESUS             SALÁRIOS                                 03/2025         04/04/2025    R$ 2.082,77
+          ARAUJO
+
+  6296    MARIA DO CARMO DE JESUS             SALÁRIOS                                 05/2025         07/05/2025    R$ 2.082,77
+          ARAUJO
+
+  3961    MARIA DO CARMO DE JESUS             SALÁRIOS                                 08/2024         05/09/2024    R$ 2.081,18
+          ARAUJO
+
+  3962    MARIA DO CARMO DE JESUS             SALÁRIOS                                 09/2024         04/10/2024    R$ 2.081,18
+          ARAUJO
+
+  3963    MARIA DO CARMO DE JESUS             SALÁRIOS                                 10/2024         06/11/2024    R$ 2.081,18
+          ARAUJO
+
+  3964    MARIA DO CARMO DE JESUS             SALÁRIOS                                 11/2024         09/12/2024    R$ 2.081,18
+          ARAUJO
+
+  3965    MARIA DO CARMO DE JESUS             SALÁRIOS                                 12/2024         08/01/2025    R$ 2.081,18
+          ARAUJO
+
+  6269    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 02/2026         03/02/2026    R$ 2.072,85
+
+  3819    MARIA DO CARMO DE JESUS             SALÁRIOS                                 06/2024         07/06/2024    R$ 2.069,30
+          ARAUJO
+
+  984     LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 06/2023         07/06/2023    R$ 2.032,31
+
+  1258    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 07/2023         07/07/2023    R$ 2.032,31
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       10/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  1562    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 08/2023         04/08/2023    R$ 2.032,31
+
+  3315    JOSELAINE APARECIDA DO              SALÁRIOS                                 03/2024         07/03/2024    R$ 2.002,25
+          NASCIMENTO NOGUEIRA
+
+  3474    JOSELAINE APARECIDA DO              SALÁRIOS                                 04/2024         05/04/2024    R$ 2.002,25
+          NASCIMENTO NOGUEIRA
+
+  3648    JOSELAINE APARECIDA DO              SALÁRIOS                                 05/2024         07/05/2024    R$ 2.002,25
+          NASCIMENTO NOGUEIRA
+
+  3817    JOSELAINE APARECIDA DO              SALÁRIOS                                 06/2024         07/06/2024    R$ 2.002,25
+          NASCIMENTO NOGUEIRA
+
+  985     JOSELAINE APARECIDA DO              SALÁRIOS                                 06/2023         07/06/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  1259    JOSELAINE APARECIDA DO              SALÁRIOS                                 07/2023         07/07/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  1563    JOSELAINE APARECIDA DO              SALÁRIOS                                 08/2023         04/08/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  1847    JOSELAINE APARECIDA DO              SALÁRIOS                                 09/2023         08/09/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  2135    JOSELAINE APARECIDA DO              SALÁRIOS                                 10/2023         06/10/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  2383    JOSELAINE APARECIDA DO              SALÁRIOS                                 11/2023         07/11/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  3946    JOSELAINE APARECIDA DO              SALÁRIOS                                 01/2025         07/02/2025    R$ 1.997,77
+          NASCIMENTO NOGUEIRA
+
+  6299    MARIA DO CARMO DE JESUS             SALÁRIOS                                 08/2025         05/08/2025    R$ 1.990,35
+          ARAUJO
+
+  6300    MARIA DO CARMO DE JESUS             SALÁRIOS                                 09/2025         05/09/2025    R$ 1.990,35
+          ARAUJO
+
+  6298    MARIA DO CARMO DE JESUS             SALÁRIOS                                 07/2025         04/07/2025    R$ 1.942,66
+          ARAUJO
+
+  6281    JOSELAINE APARECIDA DO              SALÁRIOS                                 02/2026         03/02/2026    R$ 1.917,76
+          NASCIMENTO NOGUEIRA
+
+  2874    JULIO CESAR FERRARI                 SALÁRIOS                                 01/2024         05/01/2024    R$ 1.909,27
+
+  9930    JOSELAINE APARECIDA DO              SALÁRIOS                                 02/2023         07/03/2023    R$ 1.877,34
+          NASCIMENTO NOGUEIRA
+
+  9936    JOSELAINE APARECIDA DO              SALÁRIOS                                 03/2023         03/04/2023    R$ 1.877,34
+          NASCIMENTO NOGUEIRA
+
+  8821    MARIA DO CARMO DE JESUS             SALÁRIOS                                 06/2026         03/07/2026    R$ 1.869,06
+          ARAUJO
+
+  687     JOSELAINE APARECIDA DO              SALÁRIOS                                 05/2023         05/05/2023    R$ 1.727,91
+          NASCIMENTO NOGUEIRA
+
+  6268    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 01/2026         07/01/2026    R$ 1.642,64
+
+  6280    JOSELAINE APARECIDA DO              SALÁRIOS                                 01/2026         07/01/2026    R$ 1.528,47
+          NASCIMENTO NOGUEIRA
+
+  8820    MARIA DO CARMO DE JESUS             SALÁRIOS                                 05/2026         05/06/2026    R$ 1.513,10
+          ARAUJO
+
+  9926    ROSA MARIA DIAS                     SALÁRIOS                                 01/2023         03/02/2023    R$ 1.450,32
+
+  9932    ROSA MARIA DIAS                     SALÁRIOS                                 02/2023         07/03/2023    R$ 1.450,32
+
+  9938    ROSA MARIA DIAS                     SALÁRIOS                                 03/2023         03/04/2023    R$ 1.450,32
+
+  2871    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 01/2024         05/01/2024    R$ 1.426,33
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       11/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  9074    JOEL HUESCAR                        SALÁRIOS                                 04/2026         07/05/2026    R$ 1.424,50
+
+  6297    MARIA DO CARMO DE JESUS             SALÁRIOS                                 06/2025         06/06/2025    R$ 1.240,65
+          ARAUJO
+
+  3945    JOSELAINE APARECIDA DO              SALÁRIOS                                 12/2024         08/01/2025    R$ 1.203,74
+          NASCIMENTO NOGUEIRA
+
+  3649    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                 05/2024         07/05/2024    R$ 1.190,44
+
+  6283    JOSELAINE APARECIDA DO              SALÁRIOS                                 04/2026         07/04/2026    R$ 1.139,98
+          NASCIMENTO NOGUEIRA
+
+  6302    MARIA DO CARMO DE JESUS             SALÁRIOS                                 11/2025         07/11/2025    R$ 1.107,32
+          ARAUJO
+
+  2872    JOSELAINE APARECIDA DO              SALÁRIOS                                 01/2024         05/01/2024    R$ 1.071,77
+          NASCIMENTO NOGUEIRA
+
+  1247    RONE PAULA DE ARAUJO                SALÁRIOS                                 07/2023         07/07/2023    R$ 1.070,74
+
+  1572    RONE PAULA DE ARAUJO                SALÁRIOS                                 08/2023         04/08/2023    R$ 1.070,74
+
+  2116    RONE PAULA DE ARAUJO                SALÁRIOS                                 10/2023         06/10/2023    R$ 1.070,74
+
+  2377    RONE PAULA DE ARAUJO                SALÁRIOS                                 11/2023         07/11/2023    R$ 1.070,74
+
+  2656    RONE PAULA DE ARAUJO                SALÁRIOS                                 12/2023         06/12/2023    R$ 1.070,74
+
+  978     RONE PAULA DE ARAUJO                SALÁRIOS                                 06/2023         07/06/2023    R$ 1.070,73
+
+  672     RONE PAULA DE ARAUJO                SALÁRIOS                                 05/2023         05/05/2023    R$ 1.061,71
+
+  3948    JOSELAINE APARECIDA DO              SALÁRIOS                                 03/2025         04/04/2025    R$ 1.059,58
+          NASCIMENTO NOGUEIRA
+
+  717     MARIA DO CARMO DE JESUS             SALÁRIOS                                 05/2023         05/05/2023    R$ 1.016,88
+          ARAUJO
+
+  1246    MARIA DO CARMO DE JESUS             SALÁRIOS                                 07/2023         07/07/2023    R$ 1.016,82
+          ARAUJO
+
+  1571    MARIA DO CARMO DE JESUS             SALÁRIOS                                 08/2023         04/08/2023    R$ 1.016,82
+          ARAUJO
+
+  2115    MARIA DO CARMO DE JESUS             SALÁRIOS                                 10/2023         06/10/2023    R$ 1.016,82
+          ARAUJO
+
+  2376    MARIA DO CARMO DE JESUS             SALÁRIOS                                 11/2023         07/11/2023    R$ 1.016,82
+          ARAUJO
+
+  2655    MARIA DO CARMO DE JESUS             SALÁRIOS                                 12/2023         06/12/2023    R$ 1.016,82
+          ARAUJO
+
+  977     MARIA DO CARMO DE JESUS             SALÁRIOS                                 06/2023         07/06/2023    R$ 1.016,81
+          ARAUJO
+
+  6717    MARIA DO CARMO DE JESUS             SALÁRIOS                                 05/2025         19/05/2025    R$ 1.000,00
+          ARAUJO
+
+  3048    JOSELAINE APARECIDA DO              SALÁRIOS                                 02/2024         06/02/2024    R$ 940,42
+          NASCIMENTO NOGUEIRA
+
+  3650    MARIA DO CARMO DE JESUS             SALÁRIOS                                 05/2024         07/05/2024    R$ 902,15
+          ARAUJO
+
+  6264    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 09/2025         05/09/2025    R$ 890,28
+
+  9086    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                 04/2026         07/05/2026    R$ 847,92
+
+  3931    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 08/2024         05/09/2024    R$ 741,91
+
+  9266    JOEL HUESCAR                        SALÁRIOS                                 04/2026         20/05/2026    R$ 700,00
+
+  9267    JOEL HUESCAR                        SALÁRIOS                                 05/2026         22/06/2026    R$ 700,00
+
+  9268    JOEL HUESCAR                        SALÁRIOS                                 06/2026         20/07/2026    R$ 700,00
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       12/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  9269    JOEL HUESCAR                        SALÁRIOS                                 07/2026         20/08/2026    R$ 700,00
+
+  1845    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                 09/2023         08/09/2023    R$ 316,23
+
+  8787    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8788    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8789    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8790    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8791    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8792    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8793    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8794    LUIS ANTÔNIO DAVID DA SILVA         SALÁRIOS                                                               R$ 2.492,48
+
+  8799    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8800    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8801    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8802    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8803    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8804    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8805    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8806    JOSELAINE APARECIDA DO              SALÁRIOS                                                               R$ 2.305,59
+          NASCIMENTO NOGUEIRA
+
+  8811    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8812    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8813    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8814    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8815    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8816    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8817    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8818    ADRIANO FRANCISCO FERRARI           SALÁRIOS                                                               R$ 4.676,48
+
+  8823    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  8824    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  8825    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  8826    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  8827    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  8828    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     13/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  8829    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  8830    MARIA DO CARMO DE JESUS             SALÁRIOS                                                               R$ 2.241,90
+          ARAUJO
+
+  9078    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9079    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9080    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9081    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9082    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9083    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9084    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9085    JOEL HUESCAR                        SALÁRIOS                                                               R$ 3.107,42
+
+  9090    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9091    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9092    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9093    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9094    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9095    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9096    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9097    RODRIGO FERNANDES HUESCAR           SALÁRIOS                                                               R$ 2.210,00
+
+  9270    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+  9271    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+  9272    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+  9273    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+  9274    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+  9275    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+  9276    JOEL HUESCAR                        SALÁRIOS                                                               R$ 700,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 701.224,74
+
+  9570    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                            06/2026         10/07/2026    R$ 389,87
+
+  9571    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                            07/2026         10/08/2026    R$ 389,87
+
+  9580    JOEL HUESCAR                        GRATIFICAÇÕES                            06/2026         06/07/2026    R$ 315,00
+
+  9581    JOEL HUESCAR                        GRATIFICAÇÕES                            07/2026         10/08/2026    R$ 315,00
+
+  9561    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                            07/2026         10/08/2026    R$ 194,17
+
+  9590    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                            06/2026         06/07/2026    R$ 187,50
+
+  9591    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                            07/2026         10/08/2026    R$ 187,50
+
+  9562    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9563    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9564    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9565    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9566    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9567    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9568    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+  9569    LUIS ANTÔNIO DAVID DA SILVA         GRATIFICAÇÕES                                                          R$ 194,17
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     14/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  9572    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9573    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9574    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9575    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9576    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9577    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9578    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9579    ADRIANO FRANCISCO FERRARI           GRATIFICAÇÕES                                                          R$ 389,87
+
+  9582    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9583    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9584    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9585    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9586    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9587    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9588    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9589    JOEL HUESCAR                        GRATIFICAÇÕES                                                          R$ 315,00
+
+  9592    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9593    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9594    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9595    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9596    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9597    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9598    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+  9599    RODRIGO FERNANDES HUESCAR           GRATIFICAÇÕES                                                          R$ 187,50
+
+                                                                                                 SUB-TOTAL CONTA R$ 10.671,23
+
+  8395    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   01/2026         03/02/2026    R$ 7.426,23
+
+  689     ADRIANO FRANCISCO FERRARI           FÉRIAS                                   05/2023         05/05/2023    R$ 4.210,38
+
+  3651    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   05/2024         07/05/2024    R$ 3.798,37
+
+  9072    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   05/2026         07/05/2026    R$ 3.733,43
+
+  6502    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   05/2025         07/05/2025    R$ 3.693,79
+
+  7891    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   12/2025         22/12/2025    R$ 3.563,48
+
+  3476    JULIO CESAR FERRARI                 FÉRIAS                                   04/2024         05/04/2024    R$ 2.756,02
+
+  5160    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   11/2024         19/12/2024    R$ 2.300,44
+
+  4441    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   09/2024         05/09/2024    R$ 2.228,23
+
+  2701    JOSELAINE APARECIDA DO              FÉRIAS                                   12/2023         11/12/2023    R$ 2.225,07
+          NASCIMENTO NOGUEIRA
+
+  7116    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   09/2025         05/09/2025    R$ 2.106,99
+
+  2699    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   12/2023         11/12/2023    R$ 2.064,53
+
+  4797    ANTÔNIO FRANCISCO DE SOUZA          FÉRIAS                                   10/2024         06/11/2024    R$ 2.058,38
+          REIS
+
+  1846    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   09/2023         08/09/2023    R$ 1.930,05
+
+  7889    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   12/2025         22/12/2025    R$ 1.840,87
+
+  988     ADRIANO FRANCISCO FERRARI           FÉRIAS                                   06/2023         07/06/2023    R$ 1.648,02
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     15/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  8831    JOSELAINE APARECIDA DO              FÉRIAS                                   03/2026         07/04/2026    R$ 1.545,18
+          NASCIMENTO NOGUEIRA
+
+  7890    JOSELAINE APARECIDA DO              FÉRIAS                                   12/2025         22/12/2025    R$ 1.543,63
+          NASCIMENTO NOGUEIRA
+
+  4247    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   07/2024         05/08/2024    R$ 1.533,00
+
+  4248    ADRIANO FRANCISCO FERRARI           FÉRIAS                                   08/2024         05/09/2024    R$ 1.533,00
+
+  9198    MARIA DO CARMO DE JESUS             FÉRIAS                                   05/2026         25/05/2026    R$ 1.502,71
+          ARAUJO
+
+  7317    MARIA DO CARMO DE JESUS             FÉRIAS                                   10/2025         09/10/2025    R$ 1.501,16
+          ARAUJO
+
+  3319    RONE PAULA DE ARAUJO                FÉRIAS                                   03/2024         07/03/2024    R$ 1.467,49
+
+  6320    JOSELAINE APARECIDA DO              FÉRIAS                                   04/2025         04/04/2025    R$ 1.435,54
+          NASCIMENTO NOGUEIRA
+
+  5159    JOSELAINE APARECIDA DO              FÉRIAS                                   11/2024         19/12/2024    R$ 1.433,95
+          NASCIMENTO NOGUEIRA
+
+  3318    MARIA DO CARMO DE JESUS             FÉRIAS                                   03/2024         07/03/2024    R$ 1.399,87
+          ARAUJO
+
+  6527    MARIA DO CARMO DE JESUS             FÉRIAS                                   05/2025         16/05/2025    R$ 1.395,98
+          ARAUJO
+
+  2700    JULIO CESAR FERRARI                 FÉRIAS                                   12/2023         11/12/2023    R$ 1.370,24
+
+  987     ADRIANO FRANCISCO FERRARI           FÉRIAS                                   06/2023         07/06/2023    R$ 1.251,00
+
+  5158    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   11/2024         19/12/2024    R$ 1.132,64
+
+  2698    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   12/2023         11/12/2023    R$ 1.054,87
+
+  2138    ANTÔNIO FRANCISCO DE SOUZA          FÉRIAS                                   10/2023         06/10/2023    R$ 785,12
+          REIS
+
+  1567    LUIS ANTÔNIO DAVID DA SILVA         FÉRIAS                                   08/2023         04/08/2023    R$ 745,56
+
+                                                                                                 SUB-TOTAL CONTA R$ 70.215,22
+
+  7706    ADRIANO FRANCISCO FERRARI           13º SALÁRIO                              11/2025         28/11/2025    R$ 3.039,57
+
+  2679    JULIO CESAR FERRARI                 13º SALÁRIO                              12/2023         20/12/2023    R$ 2.620,39
+
+  5045    ADRIANO FRANCISCO FERRARI           13º SALÁRIO                              10/2024         29/11/2024    R$ 2.473,06
+
+  2676    LUIS ANTÔNIO DAVID DA SILVA         13º SALÁRIO                              12/2023         20/12/2023    R$ 2.170,40
+
+  2677    JOSELAINE APARECIDA DO              13º SALÁRIO                              12/2023         20/12/2023    R$ 2.000,87
+          NASCIMENTO NOGUEIRA
+
+  7713    ADRIANO FRANCISCO FERRARI           13º SALÁRIO                              12/2025         19/12/2025    R$ 1.866,38
+
+  5262    ADRIANO FRANCISCO FERRARI           13º SALÁRIO                              11/2024         20/12/2024    R$ 1.717,84
+
+  7704    LUIS ANTÔNIO DAVID DA SILVA         13º SALÁRIO                              11/2025         28/11/2025    R$ 1.416,71
+
+  2678    ADRIANO FRANCISCO FERRARI           13º SALÁRIO                              12/2023         20/12/2023    R$ 1.286,02
+
+  5043    LUIS ANTÔNIO DAVID DA SILVA         13º SALÁRIO                              10/2024         29/11/2024    R$ 1.266,82
+
+  7711    LUIS ANTÔNIO DAVID DA SILVA         13º SALÁRIO                              12/2025         19/12/2025    R$ 1.184,43
+
+  5044    JOSELAINE APARECIDA DO              13º SALÁRIO                              10/2024         29/11/2024    R$ 1.164,37
+          NASCIMENTO NOGUEIRA
+
+  5260    LUIS ANTÔNIO DAVID DA SILVA         13º SALÁRIO                              11/2024         20/12/2024    R$ 1.110,89
+
+  7714    MARIA DO CARMO DE JESUS             13º SALÁRIO                              12/2025         19/12/2025    R$ 1.021,90
+          ARAUJO
+
+  9293    MARIA DO CARMO DE JESUS             13º SALÁRIO                              05/2026         25/05/2026    R$ 1.000,00
+          ARAUJO
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       16/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  5261    JOSELAINE APARECIDA DO              13º SALÁRIO                              11/2024         20/12/2024    R$ 975,97
+          NASCIMENTO NOGUEIRA
+
+  7707    MARIA DO CARMO DE JESUS             13º SALÁRIO                              11/2025         28/11/2025    R$ 968,45
+          ARAUJO
+
+  5046    MARIA DO CARMO DE JESUS             13º SALÁRIO                              10/2024         29/11/2024    R$ 745,58
+          ARAUJO
+
+  5263    MARIA DO CARMO DE JESUS             13º SALÁRIO                              11/2024         20/12/2024    R$ 639,93
+          ARAUJO
+
+                                                                                                 SUB-TOTAL CONTA R$ 28.669,58
+
+  6691    SECRETARIA DA RECEITA FEDERAL       FGTS                                     10/2025         20/10/2025    R$ 4.534,48
+
+  6693    SECRETARIA DA RECEITA FEDERAL       FGTS                                     12/2025         19/12/2025    R$ 3.614,68
+
+  9141    SECRETARIA DA RECEITA FEDERAL       FGTS                                     07/2026         20/07/2026    R$ 3.025,79
+
+  6733    SECRETARIA DA RECEITA FEDERAL       FGTS                                     06/2025         10/06/2025    R$ 2.957,96
+
+  9142    SECRETARIA DA RECEITA FEDERAL       FGTS                                     08/2026         20/08/2026    R$ 2.952,76
+
+  6692    SECRETARIA DA RECEITA FEDERAL       FGTS                                     11/2025         19/11/2025    R$ 2.818,25
+
+  9140    SECRETARIA DA RECEITA FEDERAL       FGTS                                     06/2026         19/06/2026    R$ 2.792,35
+
+  6688    SECRETARIA DA RECEITA FEDERAL       FGTS                                     07/2025         18/07/2025    R$ 2.745,28
+
+  6698    SECRETARIA DA RECEITA FEDERAL       FGTS                                     05/2026         20/05/2026    R$ 2.697,14
+
+  6690    SECRETARIA DA RECEITA FEDERAL       FGTS                                     09/2025         19/09/2025    R$ 2.633,11
+
+  6696    SECRETARIA DA RECEITA FEDERAL       FGTS                                     03/2026         20/03/2026    R$ 2.441,57
+
+  6694    SECRETARIA DA RECEITA FEDERAL       FGTS                                     01/2026         20/01/2026    R$ 2.418,38
+
+  6695    SECRETARIA DA RECEITA FEDERAL       FGTS                                     02/2026         20/02/2026    R$ 2.397,29
+
+  6687    SECRETARIA DA RECEITA FEDERAL       FGTS                                     06/2025         20/06/2025    R$ 2.356,84
+
+  6697    SECRETARIA DA RECEITA FEDERAL       FGTS                                     04/2026         20/04/2026    R$ 2.326,00
+
+  59      CONTABILIDADE CRUZ                  FGTS                                     04/2023         06/04/2023    R$ 1.923,38
+
+  7739    CONTABILIDADE CRUZ                  FGTS                                     12/2025         01/12/2025    R$ 1.394,99
+
+  4503    SECRETARIA DA RECEITA FEDERAL       FGTS                                     09/2024         16/09/2024    R$ 1.040,72
+
+  6689    SECRETARIA DA RECEITA FEDERAL       FGTS                                     08/2025         20/08/2025    R$ 1.012,38
+
+  2658    WILMA JANÓLIO MARIANI               FGTS                                     12/2023         06/12/2023    R$ 518,72
+
+  674     WILMA JANÓLIO MARIANI               FGTS                                     05/2023         05/05/2023    R$ 428,10
+
+  980     WILMA JANÓLIO MARIANI               FGTS                                     06/2023         07/06/2023    R$ 427,83
+
+  1249    WILMA JANÓLIO MARIANI               FGTS                                     07/2023         07/07/2023    R$ 427,83
+
+  1574    WILMA JANÓLIO MARIANI               FGTS                                     08/2023         04/08/2023    R$ 427,83
+
+  1850    WILMA JANÓLIO MARIANI               FGTS                                     09/2023         08/09/2023    R$ 427,83
+
+  2118    WILMA JANÓLIO MARIANI               FGTS                                     10/2023         06/10/2023    R$ 427,83
+
+  2379    WILMA JANÓLIO MARIANI               FGTS                                     11/2023         07/11/2023    R$ 427,83
+
+  9143    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9144    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9145    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9146    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9147    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9148    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9149    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     17/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  9150    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+  9151    SECRETARIA DA RECEITA FEDERAL       FGTS                                                                   R$ 2.697,14
+
+                                                                                                 SUB-TOTAL CONTA R$ 75.871,41
+
+  5829    DORIVAL ROSSI                       OUTROS ENCARGOS                          02/2025         06/02/2025    R$ 400,00
+
+  4482    JR ASSESSORIA (EXAMES               OUTROS ENCARGOS                          09/2024         11/09/2024    R$ 110,00
+          PERIÓDICOS)
+
+  3422    JR ASSESSORIA (EXAMES               OUTROS ENCARGOS                          03/2024         27/03/2024    R$ 80,00
+          PERIÓDICOS)
+
+                                                                                                 SUB-TOTAL CONTA R$ 590,00
+
+  7723    SERMED                              PLANO DE SAÚDE                           06/2026         10/07/2026    R$ 1.655,89
+
+  7724    SERMED                              PLANO DE SAÚDE                           07/2026         10/08/2026    R$ 1.642,20
+
+  7718    SERMED                              PLANO DE SAÚDE                           01/2026         10/02/2026    R$ 1.617,06
+
+  5015    SERMED                              PLANO DE SAÚDE                           04/2025         12/05/2025    R$ 1.591,24
+
+  7720    SERMED                              PLANO DE SAÚDE                           03/2026         10/04/2026    R$ 1.553,98
+
+  7722    SERMED                              PLANO DE SAÚDE                           05/2026         10/06/2026    R$ 1.553,98
+
+  7717    SERMED                              PLANO DE SAÚDE                           12/2025         12/01/2026    R$ 1.490,90
+
+  7719    SERMED                              PLANO DE SAÚDE                           02/2026         10/03/2026    R$ 1.490,90
+
+  7721    SERMED                              PLANO DE SAÚDE                           04/2026         11/05/2026    R$ 1.490,90
+
+  5019    SERMED                              PLANO DE SAÚDE                           08/2025         10/09/2025    R$ 1.380,04
+
+  5018    SERMED                              PLANO DE SAÚDE                           07/2025         11/08/2025    R$ 1.321,04
+
+  5021    SERMED                              PLANO DE SAÚDE                           10/2025         10/11/2025    R$ 1.312,72
+
+  5022    SERMED                              PLANO DE SAÚDE                           11/2025         10/12/2025    R$ 1.312,72
+
+  5017    SERMED                              PLANO DE SAÚDE                           06/2025         10/07/2025    R$ 1.296,24
+
+  2013    SERMED                              PLANO DE SAÚDE                           06/2024         10/07/2024    R$ 1.254,39
+
+  5020    SERMED                              PLANO DE SAÚDE                           09/2025         10/10/2025    R$ 1.249,64
+
+  253     SERMED                              PLANO DE SAÚDE                           06/2023         10/07/2023    R$ 1.245,50
+
+  5014    SERMED                              PLANO DE SAÚDE                           03/2025         10/04/2025    R$ 1.237,24
+
+  2015    SERMED                              PLANO DE SAÚDE                           08/2024         10/09/2024    R$ 1.232,06
+
+  2011    SERMED                              PLANO DE SAÚDE                           04/2024         10/05/2024    R$ 1.209,73
+
+  2014    SERMED                              PLANO DE SAÚDE                           07/2024         12/08/2024    R$ 1.178,24
+
+  2016    SERMED                              PLANO DE SAÚDE                           09/2024         10/10/2024    R$ 1.178,24
+
+  2017    SERMED                              PLANO DE SAÚDE                           10/2024         11/11/2024    R$ 1.178,24
+
+  2018    SERMED                              PLANO DE SAÚDE                           11/2024         10/12/2024    R$ 1.178,24
+
+  5011    SERMED                              PLANO DE SAÚDE                           12/2024         10/01/2025    R$ 1.178,24
+
+  5012    SERMED                              PLANO DE SAÚDE                           01/2025         10/02/2025    R$ 1.178,24
+
+  5013    SERMED                              PLANO DE SAÚDE                           02/2025         10/03/2025    R$ 1.178,24
+
+  5016    SERMED                              PLANO DE SAÚDE                           05/2025         10/06/2025    R$ 1.178,24
+
+  255     SERMED                              PLANO DE SAÚDE                           08/2023         11/09/2023    R$ 1.155,91
+
+  2008    SERMED                              PLANO DE SAÚDE                           01/2024         14/02/2024    R$ 1.155,91
+
+  256     SERMED                              PLANO DE SAÚDE                           09/2023         11/10/2023    R$ 1.124,48
+
+  254     SERMED                              PLANO DE SAÚDE                           07/2023         10/08/2023    R$ 1.102,09
+
+  257     SERMED                              PLANO DE SAÚDE                           10/2023         10/11/2023    R$ 1.102,09
+
+  258     SERMED                              PLANO DE SAÚDE                           11/2023         11/12/2023    R$ 1.102,09
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       18/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  2007    SERMED                              PLANO DE SAÚDE                           12/2023         10/01/2024    R$ 1.102,09
+
+  2009    SERMED                              PLANO DE SAÚDE                           02/2024         11/03/2024    R$ 1.102,09
+
+  2010    SERMED                              PLANO DE SAÚDE                           03/2024         10/04/2024    R$ 1.102,09
+
+  2012    SERMED                              PLANO DE SAÚDE                           05/2024         10/06/2024    R$ 1.102,09
+
+  5764    LANCERS                             PLANO DE SAÚDE                           08/2025         10/09/2025    R$ 1.059,16
+
+  5765    LANCERS                             PLANO DE SAÚDE                           09/2025         10/10/2025    R$ 1.059,16
+
+  5766    LANCERS                             PLANO DE SAÚDE                           10/2025         10/11/2025    R$ 1.059,16
+
+  5767    LANCERS                             PLANO DE SAÚDE                           11/2025         10/12/2025    R$ 1.059,16
+
+  5768    LANCERS                             PLANO DE SAÚDE                           12/2025         12/01/2026    R$ 1.059,16
+
+  5769    LANCERS                             PLANO DE SAÚDE                           01/2026         10/02/2026    R$ 1.059,16
+
+  8457    LANCERS                             PLANO DE SAÚDE                           02/2026         10/03/2026    R$ 1.059,16
+
+  8458    LANCERS                             PLANO DE SAÚDE                           03/2026         10/04/2026    R$ 1.059,16
+
+  8459    LANCERS                             PLANO DE SAÚDE                           04/2026         11/05/2026    R$ 1.059,16
+
+  8460    LANCERS                             PLANO DE SAÚDE                           05/2026         10/06/2026    R$ 1.059,16
+
+  8461    LANCERS                             PLANO DE SAÚDE                           06/2026         10/07/2026    R$ 1.059,16
+
+  8462    LANCERS                             PLANO DE SAÚDE                           07/2026         10/08/2026    R$ 1.059,16
+
+  251     SERMED                              PLANO DE SAÚDE                           04/2023         10/05/2023    R$ 1.005,28
+
+  252     SERMED                              PLANO DE SAÚDE                           05/2023         12/06/2023    R$ 1.005,28
+
+  5758    LANCERS                             PLANO DE SAÚDE                           02/2025         10/03/2025    R$ 998,64
+
+  5759    LANCERS                             PLANO DE SAÚDE                           03/2025         10/04/2025    R$ 998,64
+
+  5760    LANCERS                             PLANO DE SAÚDE                           04/2025         12/05/2025    R$ 998,64
+
+  5761    LANCERS                             PLANO DE SAÚDE                           05/2025         10/06/2025    R$ 998,64
+
+  5762    LANCERS                             PLANO DE SAÚDE                           06/2025         10/07/2025    R$ 998,64
+
+  5763    LANCERS                             PLANO DE SAÚDE                           07/2025         11/08/2025    R$ 998,64
+
+  62      LANCERS                             PLANO DE SAÚDE                           04/2023         10/04/2023    R$ 786,58
+
+  282     HAPVIDA                             PLANO DE SAÚDE                           04/2023         05/05/2023    R$ 423,50
+
+  7725    SERMED                              PLANO DE SAÚDE                                                         R$ 1.579,12
+
+  7726    SERMED                              PLANO DE SAÚDE                                                         R$ 1.312,72
+
+  7727    SERMED                              PLANO DE SAÚDE                                                         R$ 1.312,72
+
+  7728    SERMED                              PLANO DE SAÚDE                                                         R$ 1.312,72
+
+  8463    LANCERS                             PLANO DE SAÚDE                                                         R$ 1.059,16
+
+  8464    LANCERS                             PLANO DE SAÚDE                                                         R$ 1.059,16
+
+  8465    LANCERS                             PLANO DE SAÚDE                                                         R$ 1.059,16
+
+  8466    LANCERS                             PLANO DE SAÚDE                                                         R$ 1.059,16
+
+  8467    LANCERS                             PLANO DE SAÚDE                                                         R$ 1.059,16
+
+  8468    LANCERS                             PLANO DE SAÚDE                                                         R$ 1.059,16
+
+                                                                                                 SUB-TOTAL CONTA R$ 82.509,86
+
+  7738    WELLINGTON ANDRADE NEVES            RESCISÃO                                 11/2025         28/11/2025    R$ 7.905,40
+
+  4515    TONY RAMOS DA SILVA                 RESCISÃO                                 09/2024         16/09/2024    R$ 5.988,60
+
+                                                                                                 SUB-TOTAL CONTA R$ 13.894,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                1.070.236,04
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     19/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  ENERGIA ELÉTRICA DE INFRAESTRUTURA OPERACIONAL
+
+  9298    CPFL                                ENERGIA ELÉTRICA DA FAZENDA              05/2026         28/05/2026    R$ 13.555,56
+
+  9212    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              05/2026         15/05/2026    R$ 5.050,00
+
+  9213    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              06/2026         15/06/2026    R$ 5.050,00
+
+  9625    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              07/2026         08/07/2026    R$ 2.550,00
+
+  3801    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              06/2024         14/06/2024    R$ 1.350,00
+
+  4983    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              10/2024         22/11/2024    R$ 1.300,00
+
+  3524    CERNE RURAL MADEREIRAS              ENERGIA ELÉTRICA DA FAZENDA              05/2024         22/05/2024    R$ 1.225,00
+
+  7491    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              10/2025         30/10/2025    R$ 1.075,00
+
+  10022 MARCO ANTÔNIO DA CRUZ                 ENERGIA ELÉTRICA DA FAZENDA              07/2026         21/08/2026    R$ 600,00
+
+  8247    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA DA FAZENDA              01/2026         30/01/2026    R$ 500,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 32.255,56
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 32.255,56
+
+  GASTOS COM PESSOAL
+
+  2714    AGROSAQUY                           SEGURANÇA DO TRABALHO E EPI              12/2023         16/01/2024    R$ 179,00
+
+  6604    AGROSAQUY                           SEGURANÇA DO TRABALHO E EPI              06/2025         30/06/2025    R$ 136,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 315,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 315,00
+
+  MANUTENÇÃO DE TRATORES, CAMINHÕES, MÁQUINAS, EQUIPAMENTOS E IMPLEMENTOS
+
+  3824    GILBERTO JULIO MARIA E OUTRO        SEGURO DE MÁQUINAS E                     06/2024         01/07/2024    R$ 966,53
+          LTDA                                EQUIPAMENTOS
+
+                                                                                                 SUB-TOTAL CONTA R$ 966,53
+
+  1867    MARCO ANTÔNIO DA CRUZ               MANUTENÇÃO DA FROTA DE                   09/2023         08/09/2023    R$ 700,00
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  1513    MARCO ANTÔNIO DA CRUZ               MANUTENÇÃO DA FROTA DE                   07/2023         31/07/2023    R$ 675,00
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  1627    AGROSAQUY                           MANUTENÇÃO DA FROTA DE                   09/2023         01/09/2023    R$ 512,00
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  1255    COOPERATIVA DOS PLANTADORES         MANUTENÇÃO DA FROTA DE                   07/2023         07/08/2023    R$ 496,00
+          DE CANA DO OESTE DO ESTADO DE       VEÍCULOS, MAQUINAS E
+          SA                                  EQUIPAMENTOS DE CAMPO
+
+  3795    LUBRI LUX                           MANUTENÇÃO DA FROTA DE                   06/2024         05/06/2024    R$ 400,00
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  1145    BERTINI                             MANUTENÇÃO DA FROTA DE                   06/2023         13/07/2023    R$ 203,46
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  1802    AUTO ELÉTRICA JARD                  MANUTENÇÃO DA FROTA DE                   09/2023         08/09/2023    R$ 170,00
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  39      AGROSAQUY                           MANUTENÇÃO DA FROTA DE                   04/2023         10/04/2023    R$ 130,00
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     20/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  4525    ALPINIA VEICULOS E PECAS LTDA       MANUTENÇÃO DA FROTA DE                   09/2024         18/09/2024    R$ 72,66
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+  4526    ALPINIA VEICULOS E PECAS LTDA       MANUTENÇÃO DA FROTA DE                   10/2024         18/10/2024    R$ 72,66
+                                              VEÍCULOS, MAQUINAS E
+                                              EQUIPAMENTOS DE CAMPO
+
+                                                                                                 SUB-TOTAL CONTA R$ 3.431,78
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 4.398,31
+
+  MANUTENÇÃO E REPARO DE INFRAESTRUTURAS
+
+  30      MARCO ANTÔNIO DA CRUZ               REDE ELÉTRICA                            04/2023         04/04/2023    R$ 400,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 400,00
+
+  5061    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             10/2024         28/11/2024    R$ 10.000,00
+
+  9666    ELÉTRICA VM                         MANUTENÇÃO DE INFRAESTRUTURA             07/2026         10/08/2026    R$ 9.287,03
+
+  9675    MARCO ANTÔNIO DA CRUZ               MANUTENÇÃO DE INFRAESTRUTURA             07/2026         20/07/2026    R$ 7.900,00
+
+  9008    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             08/2026         14/08/2026    R$ 5.520,00
+
+  9009    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             08/2026         21/08/2026    R$ 5.520,00
+
+  8994    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             05/2026         08/05/2026    R$ 5.400,00
+
+  8995    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             05/2026         15/05/2026    R$ 5.400,00
+
+  8996    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             05/2026         22/05/2026    R$ 5.400,00
+
+  8997    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             05/2026         29/05/2026    R$ 5.400,00
+
+  8998    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             06/2026         05/06/2026    R$ 5.400,00
+
+  8999    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             06/2026         12/06/2026    R$ 5.400,00
+
+  9000    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             06/2026         19/06/2026    R$ 5.400,00
+
+  9001    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             06/2026         26/06/2026    R$ 5.400,00
+
+  9002    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             07/2026         03/07/2026    R$ 5.400,00
+
+  9003    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             07/2026         10/07/2026    R$ 5.400,00
+
+  9004    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             07/2026         17/07/2026    R$ 5.400,00
+
+  9005    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             07/2026         26/07/2026    R$ 5.400,00
+
+  9006    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             07/2026         31/07/2026    R$ 5.400,00
+
+  9007    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             08/2026         07/08/2026    R$ 5.400,00
+
+  4724    MADEIREIRA RULFATO LTDA             MANUTENÇÃO DE INFRAESTRUTURA             09/2024         23/10/2024    R$ 5.000,00
+
+  4725    MADEIREIRA RULFATO LTDA             MANUTENÇÃO DE INFRAESTRUTURA             10/2024         25/11/2024    R$ 5.000,00
+
+  8992    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             04/2026         24/04/2026    R$ 5.000,00
+
+  8993    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             05/2026         30/04/2026    R$ 5.000,00
+
+  5062    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             11/2024         02/12/2024    R$ 4.700,00
+
+  5063    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             12/2024         02/01/2025    R$ 3.929,00
+
+  5064    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             01/2025         17/02/2025    R$ 3.929,00
+
+  9012    H.R.R TRANSPORTES LTDA - ME         MANUTENÇÃO DE INFRAESTRUTURA             04/2026         27/04/2026    R$ 3.800,00
+
+  9433    PORTÃO MATERIAIS DE                 MANUTENÇÃO DE INFRAESTRUTURA             06/2026         23/06/2026    R$ 3.171,65
+          CONSTRUÇÃO LTDA
+
+  9216    MADEIREIRA TONIOLO                  MANUTENÇÃO DE INFRAESTRUTURA             05/2026         18/05/2026    R$ 3.160,00
+
+  9217    MADEIREIRA TONIOLO                  MANUTENÇÃO DE INFRAESTRUTURA             06/2026         18/06/2026    R$ 3.160,00
+
+  9218    MADEIREIRA TONIOLO                  MANUTENÇÃO DE INFRAESTRUTURA             07/2026         18/07/2026    R$ 3.160,00
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…    21/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  9219    PORTÃO MATERIAIS DE                 MANUTENÇÃO DE INFRAESTRUTURA             05/2026         28/05/2026    R$ 3.068,14
+          CONSTRUÇÃO LTDA
+
+  9220    PORTÃO MATERIAIS DE                 MANUTENÇÃO DE INFRAESTRUTURA             06/2026         29/06/2026    R$ 3.068,13
+          CONSTRUÇÃO LTDA
+
+  9221    PORTÃO MATERIAIS DE                 MANUTENÇÃO DE INFRAESTRUTURA             07/2026         28/07/2026    R$ 3.068,13
+          CONSTRUÇÃO LTDA
+
+  9858    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             07/2026         10/08/2026    R$ 3.000,00
+
+  9329    REVESTI ACABAMENTOS                 MANUTENÇÃO DE INFRAESTRUTURA             05/2026         22/06/2026    R$ 2.966,68
+
+  9330    REVESTI ACABAMENTOS                 MANUTENÇÃO DE INFRAESTRUTURA             06/2026         20/07/2026    R$ 2.966,66
+
+  9331    REVESTI ACABAMENTOS                 MANUTENÇÃO DE INFRAESTRUTURA             07/2026         20/08/2026    R$ 2.966,66
+
+  9680    MARCO ANTÔNIO DA CRUZ               MANUTENÇÃO DE INFRAESTRUTURA             07/2026         20/07/2026    R$ 2.900,00
+
+  9364    MADEIREIRA RULFATO LTDA             MANUTENÇÃO DE INFRAESTRUTURA             05/2026         30/06/2026    R$ 2.750,00
+
+  9178    H.R.R TRANSPORTES LTDA - ME         MANUTENÇÃO DE INFRAESTRUTURA             05/2026         12/05/2026    R$ 2.100,00
+
+  9517    ELÉTRICA VM                         MANUTENÇÃO DE INFRAESTRUTURA             07/2026         03/07/2026    R$ 2.070,00
+
+  5477    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA             12/2024         10/01/2025    R$ 1.547,50
+          TINTAS LTDA - ME
+
+  5478    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA             01/2025         10/02/2025    R$ 1.545,00
+          TINTAS LTDA - ME
+
+  5479    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA             02/2025         10/03/2025    R$ 1.545,00
+          TINTAS LTDA - ME
+
+  5480    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA             03/2025         10/04/2025    R$ 1.545,00
+          TINTAS LTDA - ME
+
+  3013    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             01/2024         01/03/2024    R$ 1.500,00
+
+  4637    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             10/2024         04/10/2024    R$ 1.500,00
+
+  4611    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             09/2024         07/10/2024    R$ 1.500,00
+
+  4712    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             09/2024         18/10/2024    R$ 1.500,00
+
+  4735    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             09/2024         25/10/2024    R$ 1.500,00
+
+  4752    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             10/2024         01/11/2024    R$ 1.500,00
+
+  4819    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             10/2024         08/11/2024    R$ 1.500,00
+
+  4909    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             10/2024         18/11/2024    R$ 1.500,00
+
+  4982    JAMES CARLOS TOSTES                 MANUTENÇÃO DE INFRAESTRUTURA             10/2024         22/11/2024    R$ 1.500,00
+
+  9664    VIDRAÇARIA JARDINÓPOLIS             MANUTENÇÃO DE INFRAESTRUTURA             07/2026         16/07/2026    R$ 1.500,00
+          (CASOBRA)
+
+  3523    CERNE RURAL MADEREIRAS              MANUTENÇÃO DE INFRAESTRUTURA             04/2024         29/04/2024    R$ 1.225,00
+
+  9532    H.R.R TRANSPORTES LTDA - ME         MANUTENÇÃO DE INFRAESTRUTURA             07/2026         03/07/2026    R$ 1.200,00
+
+  9649    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA             07/2026         30/07/2026    R$ 1.059,38
+          TINTAS LTDA - ME
+
+  9989    PORTÃO MATERIAIS DE                 MANUTENÇÃO DE INFRAESTRUTURA             08/2026         27/08/2026    R$ 1.036,00
+          CONSTRUÇÃO LTDA
+
+  3787    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             06/2024         01/07/2024    R$ 991,84
+
+  5048    IVAN GABRIEL FERREIRA               MANUTENÇÃO DE INFRAESTRUTURA             10/2024         27/11/2024    R$ 927,00
+
+  5049    IVAN GABRIEL FERREIRA               MANUTENÇÃO DE INFRAESTRUTURA             11/2024         26/01/2025    R$ 927,00
+
+  1771    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             08/2023         23/08/2023    R$ 913,00
+
+  1772    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             09/2023         25/09/2023    R$ 913,00
+
+  4942    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             10/2024         02/12/2024    R$ 873,20
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     22/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  4764    MARMORARIA JARDUS                   MANUTENÇÃO DE INFRAESTRUTURA             10/2024         02/12/2024    R$ 850,00
+
+  9117    VILMAR RODRIGUES GOMES              MANUTENÇÃO DE INFRAESTRUTURA             05/2026         08/05/2026    R$ 800,00
+
+  944     DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             06/2023         12/06/2023    R$ 623,50
+
+  4783    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             10/2024         18/11/2024    R$ 616,65
+
+  6979    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             08/2025         11/08/2025    R$ 516,50
+
+  9882    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             07/2026         10/08/2026    R$ 475,00
+
+  4459    CERNE RURAL MADEREIRAS              MANUTENÇÃO DE INFRAESTRUTURA             09/2024         23/09/2024    R$ 462,00
+
+  1162    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             06/2023         26/06/2023    R$ 422,50
+
+  4754    JARD CALHAS                         MANUTENÇÃO DE INFRAESTRUTURA             10/2024         01/11/2024    R$ 400,00
+
+  4718    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             09/2024         30/10/2024    R$ 359,75
+
+  9197    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             05/2026         01/06/2026    R$ 356,00
+
+  9048    MARCO ANTÔNIO DA CRUZ               MANUTENÇÃO DE INFRAESTRUTURA             05/2026         08/05/2026    R$ 250,00
+
+  6373    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA             04/2025         12/05/2025    R$ 229,70
+          TINTAS LTDA - ME
+
+  4811    MADEIREIRA TONIOLO                  MANUTENÇÃO DE INFRAESTRUTURA             10/2024         08/11/2024    R$ 192,00
+
+  9671    MARCIA MARIANI SAQUY                MANUTENÇÃO DE INFRAESTRUTURA             07/2026         20/08/2026    R$ 188,34
+
+  4373    GILBERTO JULIO MARIA E OUTRO        MANUTENÇÃO DE INFRAESTRUTURA             08/2024         30/08/2024    R$ 127,24
+          LTDA
+
+  4644    MADEIREIRA TONIOLO                  MANUTENÇÃO DE INFRAESTRUTURA             09/2024         09/10/2024    R$ 110,00
+
+  9909    REVESTI ACABAMENTOS                 MANUTENÇÃO DE INFRAESTRUTURA             08/2026         17/08/2026    R$ 105,40
+
+  4719    GILBERTO JULIO MARIA E OUTRO        MANUTENÇÃO DE INFRAESTRUTURA             09/2024         30/10/2024    R$ 105,30
+          LTDA
+
+  9866    LOJA DO PEDRAO CASA E               MANUTENÇÃO DE INFRAESTRUTURA             08/2026         24/08/2026    R$ 96,00
+          CONSTRUCAO
+
+  6148    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA             03/2025         28/03/2025    R$ 79,00
+
+  9436    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             06/2026         30/06/2026    R$ 68,40
+
+  7429    ADRIANO FRANCISCO FERRARI           MANUTENÇÃO DE INFRAESTRUTURA             10/2025         14/10/2025    R$ 46,00
+
+  8731    DEPÓSITO RUEDA                      MANUTENÇÃO DE INFRAESTRUTURA             03/2026         31/03/2026    R$ 38,00
+
+  9650    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 1.059,38
+          TINTAS LTDA - ME
+
+  9651    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 1.059,38
+          TINTAS LTDA - ME
+
+  9652    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 1.059,38
+          TINTAS LTDA - ME
+
+  9653    PINOTTI & JULIANI COMERCIO DE       MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 1.059,38
+          TINTAS LTDA - ME
+
+  9667    ELÉTRICA VM                         MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 9.287,03
+
+  9668    ELÉTRICA VM                         MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 9.287,03
+
+  9672    MARCIA MARIANI SAQUY                MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 188,33
+
+  9673    MARCIA MARIANI SAQUY                MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 188,33
+
+  9867    LOJA DO PEDRAO CASA E               MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 95,96
+          CONSTRUCAO
+
+  9868    LOJA DO PEDRAO CASA E               MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 95,96
+          CONSTRUCAO
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     23/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  9869    LOJA DO PEDRAO CASA E               MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 95,96
+          CONSTRUCAO
+
+  9870    LOJA DO PEDRAO CASA E               MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 95,96
+          CONSTRUCAO
+
+  9871    LOJA DO PEDRAO CASA E               MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 95,96
+          CONSTRUCAO
+
+  9888    NOVA LUZ                            MANUTENÇÃO DE INFRAESTRUTURA                                           R$ 922,70
+
+                                                                                                 SUB-TOTAL CONTA R$ 257.117,02
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 257.517,02
+
+  CONTRATAÇÃO DE SEGUROS
+
+  1876    POSTO CARRO BOM                     SEGUROS AGROPECUÁRIOS (SEGURO            09/2023         11/09/2023    R$ 1.100,86
+                                              DE SAFRA)
+
+                                                                                                 SUB-TOTAL CONTA R$ 1.100,86
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 1.100,86
+
+  DESPESAS COM INSTALAÇÕES - ADMINISTRAÇÃO
+
+  8586    MARCO ANTÔNIO DA CRUZ               ENERGIA ELÉTRICA                         02/2026         27/02/2026    R$ 3.750,00
+
+  9255    CPFL                                ENERGIA ELÉTRICA                         07/2026         18/08/2026    R$ 1.537,75
+
+  9253    CPFL                                ENERGIA ELÉTRICA                         05/2026         18/06/2026    R$ 1.524,00
+
+  9254    CPFL                                ENERGIA ELÉTRICA                         06/2026         20/07/2026    R$ 1.171,75
+
+  9020    RODRIGO SCARPARO SILVA              ENERGIA ELÉTRICA                         04/2026         30/04/2026    R$ 1.000,00
+
+  9256    CPFL                                ENERGIA ELÉTRICA                                                       R$ 1.256,25
+
+  9257    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9258    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9259    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9260    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9261    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9262    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9263    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+  9264    CPFL                                ENERGIA ELÉTRICA                                                       R$ 500,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 14.239,75
+
+  6930    NOVA LUZ                            ÁGUA                                     07/2025         31/07/2025    R$ 38,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 38,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 14.277,75
+
+  DESPESAS COM VEÍCULOS - ADMINISTRAÇÃO
+
+  4562    EZZE SEGUROS S/A                    MANUTENÇÃO DOS VEÍCULOS DA               09/2024         02/10/2024    R$ 840,26
+                                              ADMINISTRAÇÃO
+
+  4563    EZZE SEGUROS S/A                    MANUTENÇÃO DOS VEÍCULOS DA               10/2024         04/11/2024    R$ 840,26
+                                              ADMINISTRAÇÃO
+
+  4564    EZZE SEGUROS S/A                    MANUTENÇÃO DOS VEÍCULOS DA               11/2024         02/12/2024    R$ 840,26
+                                              ADMINISTRAÇÃO
+
+  4565    EZZE SEGUROS S/A                    MANUTENÇÃO DOS VEÍCULOS DA               12/2024         02/01/2025    R$ 840,26
+                                              ADMINISTRAÇÃO
+
+  212     AUTO CENTER                         MANUTENÇÃO DOS VEÍCULOS DA               04/2023         19/04/2023    R$ 840,00
+                                              ADMINISTRAÇÃO
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       24/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  8666    JAPA BORRACHARIA                    MANUTENÇÃO DOS VEÍCULOS DA               02/2026         30/03/2026    R$ 30,00
+                                              ADMINISTRAÇÃO
+
+                                                                                                 SUB-TOTAL CONTA R$ 4.231,04
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 4.231,04
+
+  DESPESAS GERAIS - ADMINISTRAÇÃO
+
+  6179    VENDSEG SOLUCOES INTELIGENTES       DESPESAS GERAIS DA ADMINISTRAÇÃO         04/2025         02/04/2025    R$ 200,00
+          LTDA
+
+                                                                                                 SUB-TOTAL CONTA R$ 200,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 200,00
+
+  DESPESAS COM A CASA-SEDE
+
+  2996    PAGAMENTOS CONDOMÍNIO               DESPESAS COM A CASA-SEDE                 01/2024         29/01/2024    R$ 2.417,34
+          ESCRITÓRIO
+
+  2728    GERALDO MARTINS DE OLIVEIRA         DESPESAS COM A CASA-SEDE                 12/2023         15/12/2023    R$ 1.350,00
+
+  1515    PAGAMENTOS CONDOMÍNIO               DESPESAS COM A CASA-SEDE                 07/2023         31/07/2023    R$ 1.130,23
+          ESCRITÓRIO
+
+  6150    ELÉTRICA VM                         DESPESAS COM A CASA-SEDE                 03/2025         25/03/2025    R$ 656,00
+
+  830     MARCO ANTÔNIO DA CRUZ               DESPESAS COM A CASA-SEDE                 05/2023         22/05/2023    R$ 200,00
+
+  1169    GUSTAVO FELIPE FERREIRA (GÁS)       DESPESAS COM A CASA-SEDE                 06/2023         27/06/2023    R$ 105,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 5.858,57
+
+  29      AGROSAQUY                           DESPESAS GERAIS NA CASA-SEDE             04/2023         28/04/2023    R$ 370,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 370,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 6.228,57
+
+  TRIBUTOS E CONTRIBUIÇÕES
+
+  6705    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 01/2026         19/01/2026    R$ 6.132,41
+
+  3086    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 02/2024         20/02/2024    R$ 6.061,28
+
+  6704    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 12/2025         19/12/2025    R$ 5.575,92
+
+  2943    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 01/2024         19/01/2024    R$ 5.568,05
+
+  6703    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 11/2025         19/11/2025    R$ 5.557,74
+
+  6706    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 02/2026         20/02/2026    R$ 5.460,57
+
+  6699    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 07/2025         18/07/2025    R$ 5.292,68
+
+  2661    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 12/2023         20/12/2023    R$ 5.264,21
+
+  9130    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 08/2026         20/08/2026    R$ 5.244,35
+
+  9129    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 07/2026         20/07/2026    R$ 5.210,73
+
+  2403    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 11/2023         17/11/2023    R$ 5.159,12
+
+  6734    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2025         10/06/2025    R$ 5.124,47
+
+  6702    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 10/2025         20/10/2025    R$ 5.023,41
+
+  1878    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2023         20/09/2023    R$ 4.865,35
+
+  2124    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 10/2023         20/10/2023    R$ 4.838,20
+
+  6700    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 08/2025         20/08/2025    R$ 4.805,61
+
+  6701    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2025         19/09/2025    R$ 4.690,16
+
+  9128    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2026         18/06/2026    R$ 4.555,86
+
+  6709    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 05/2026         20/05/2026    R$ 4.492,59
+
+  6708    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 04/2026         20/04/2026    R$ 4.317,27
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     25/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  6686    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2025         20/06/2025    R$ 4.046,02
+
+  1557    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 08/2023         18/08/2023    R$ 3.961,21
+
+  1313    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 07/2023         20/07/2023    R$ 3.904,82
+
+  999     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2023         20/06/2023    R$ 3.884,47
+
+  1155    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2023         22/06/2023    R$ 3.497,92
+
+  3299    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 03/2024         20/03/2024    R$ 3.393,77
+
+  682     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 05/2023         19/05/2023    R$ 3.161,10
+
+  100     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 04/2023         20/04/2023    R$ 2.938,64
+
+  6707    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 03/2026         20/03/2026    R$ 2.801,95
+
+  1837    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2023         06/09/2023    R$ 2.282,74
+
+  2368    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 11/2023         07/11/2023    R$ 2.265,65
+
+  2111    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 10/2023         06/10/2023    R$ 2.161,92
+
+  680     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 05/2023         05/05/2023    R$ 2.043,72
+
+  981     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2023         07/06/2023    R$ 1.915,76
+
+  1262    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 07/2023         07/07/2023    R$ 1.908,76
+
+  1556    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 08/2023         07/08/2023    R$ 1.908,76
+
+  7229    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 12/2025         30/12/2025    R$ 1.477,34
+
+  7228    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 11/2025         28/11/2025    R$ 1.462,32
+
+  7227    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 10/2025         31/10/2025    R$ 1.444,02
+
+  7226    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2025         30/09/2025    R$ 1.429,73
+
+  683     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 05/2023         19/05/2023    R$ 1.401,97
+
+  2052    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2023         28/12/2023    R$ 1.256,23
+
+  101     SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 04/2023         20/04/2023    R$ 1.256,14
+
+  2051    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2023         30/11/2023    R$ 1.245,00
+
+  2050    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2023         31/10/2023    R$ 1.232,79
+
+  2049    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2023         29/09/2023    R$ 1.220,59
+
+  5193    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 11/2024         30/12/2024    R$ 1.090,83
+
+  4932    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 10/2024         29/11/2024    R$ 1.082,44
+
+  4648    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 09/2024         31/10/2024    R$ 1.072,56
+
+  7135    SECRETARIA DO MEIO AMBIENTE         TRIBUTOS                                 09/2025         08/09/2025    R$ 148,08
+
+  9446    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                 06/2026         16/06/2026    R$ 29,47
+
+  1310    MINISTÉRIO DA FAZENDA               TRIBUTOS                                 07/2023         19/07/2023    R$ 25,74
+          SECRETARIA DO TESOURO
+          NACIONAL
+
+  9131    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9132    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9133    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9134    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9135    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9136    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9137    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9138    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+  9139    SECRETARIA DA RECEITA FEDERAL       TRIBUTOS                                                               R$ 4.492,59
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       26/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+                                                                                                 SUB-TOTAL CONTA R$
+                                                                                                                 206.625,75
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                206.625,75
+
+  INVESTIMENTO EM ATIVOS
+
+  3908    65 - RIBEIRAO PRETO - DMA           AQUISIÇÃO DE MÁQUINAS, CAMINHÕES 10/2024                 15/10/2024    R$ 3.286,11
+                                              E EQUIPAMENTOS
+
+  3904    65 - RIBEIRAO PRETO - DMA           AQUISIÇÃO DE MÁQUINAS, CAMINHÕES 06/2024                 24/06/2024    R$ 3.286,10
+                                              E EQUIPAMENTOS
+
+  3905    65 - RIBEIRAO PRETO - DMA           AQUISIÇÃO DE MÁQUINAS, CAMINHÕES 07/2024                 15/07/2024    R$ 3.286,10
+                                              E EQUIPAMENTOS
+
+  3906    65 - RIBEIRAO PRETO - DMA           AQUISIÇÃO DE MÁQUINAS, CAMINHÕES 08/2024                 14/08/2024    R$ 3.286,10
+                                              E EQUIPAMENTOS
+
+  3907    65 - RIBEIRAO PRETO - DMA           AQUISIÇÃO DE MÁQUINAS, CAMINHÕES 09/2024                 16/09/2024    R$ 3.286,10
+                                              E EQUIPAMENTOS
+
+                                                                                                 SUB-TOTAL CONTA R$ 16.430,51
+
+  9622    PORTÃO MATERIAIS DE                 INVESTIMENTOS EM INFRAESTRUTURA          07/2026         20/07/2026    R$ 1.920,25
+          CONSTRUÇÃO LTDA
+
+  9623    PORTÃO MATERIAIS DE                 INVESTIMENTOS EM INFRAESTRUTURA          08/2026         20/08/2026    R$ 1.920,00
+          CONSTRUÇÃO LTDA
+
+  3789    DEPÓSITO RUEDA                      INVESTIMENTOS EM INFRAESTRUTURA          06/2024         17/06/2024    R$ 764,65
+
+  3987    DEPÓSITO RUEDA                      INVESTIMENTOS EM INFRAESTRUTURA          06/2024         01/07/2024    R$ 82,00
+
+  9624    PORTÃO MATERIAIS DE                 INVESTIMENTOS EM INFRAESTRUTURA                                        R$ 1.920,00
+          CONSTRUÇÃO LTDA
+
+                                                                                                 SUB-TOTAL CONTA R$ 6.606,90
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 23.037,41
+
+  INVESTIMENTO EM ANIMAIS
+
+  3491    ADRIANO FRANCISCO FERRARI           COMPRA DE MATRIZES PARA                  04/2024         04/04/2024    R$ 21.000,00
+                                              REPRODUÇÃO
+
+                                                                                                 SUB-TOTAL CONTA R$ 21.000,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 21.000,00
+
+  COMBUSTÍVEIS DA OPERAÇÃO AGROPECUÁRIA
+
+  5755    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 01/2025                 28/02/2025    R$ 22.759,90
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  9663    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 07/2026                 10/08/2026    R$ 17.100,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  1967    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 10/2023                 13/10/2023    R$ 12.000,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  6360    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 05/2025                 02/05/2025    R$ 11.599,94
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  6445    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 05/2025                 09/05/2025    R$ 11.500,05
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  7701    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 12/2025                 17/12/2025    R$ 11.299,98
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  5216    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 11/2024                 08/01/2025    R$ 11.239,95
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  6561    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 06/2025                 05/06/2025    R$ 11.100,05
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     27/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  8668    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 03/2026                 30/03/2026    R$ 11.100,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  4180    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 07/2024                 13/08/2024    R$ 11.099,97
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  6910    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 08/2025                 04/08/2025    R$ 11.079,98
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  3871    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 06/2024                 09/07/2024    R$ 11.060,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  1432    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 08/2023                 08/08/2023    R$ 9.060,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  1881    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 09/2023                 03/10/2023    R$ 6.140,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  7065    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 09/2025                 12/09/2025    R$ 5.599,99
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  4927    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 11/2024                 11/12/2024    R$ 5.579,98
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  2946    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 01/2024                 06/02/2024    R$ 5.400,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  3568    AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 04/2024                 02/05/2024    R$ 5.380,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  211     AGRIPETRO                           COMBUSTÍVEL PARA FROTA TRATORES, 04/2023                 02/05/2023    R$ 5.310,00
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  6046    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 02/2025                 17/03/2025    R$ 1.312,30
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  2401    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 11/2023                 16/11/2023    R$ 1.307,48
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  1584    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 08/2023                 10/08/2023    R$ 1.085,41
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  2646    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 12/2023                 15/12/2023    R$ 1.023,24
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  2119    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 10/2023                 10/10/2023    R$ 947,25
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  1237    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 07/2023                 10/07/2023    R$ 763,57
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  954     POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 06/2023                 12/06/2023    R$ 726,13
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  2400    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 11/2023                 16/11/2023    R$ 170,91
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+  1877    POSTO CARRO BOM                     COMBUSTÍVEL PARA FROTA TRATORES, 09/2023                 11/09/2023    R$ 117,80
+                                              MÁQUINAS E VEÍCULOS DA OPERAÇÃO
+
+                                                                                                 SUB-TOTAL CONTA R$
+                                                                                                                 202.863,88
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                202.863,88
+
+  TERCEIRIZAÇÃO DE SERVIÇOS AGROPECUÁRIOS
+
+  6742    MÁRIO SÉRGIO ROSSI                  TERCEIRIZAÇÃO DE COLHEITA                06/2025         06/06/2025    R$ 5.814,00
+
+  3736    CARLOS ALBERTO FRACAROLLI           TERCEIRIZAÇÃO DE COLHEITA                05/2024         21/05/2024    R$ 555,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 6.369,00
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     28/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  4566    RIBERSOLO                           ANÁLISES AGRÍCOLAS (SOLO, FOLHA,         09/2024         04/10/2024    R$ 1.879,15
+                                              ETC)
+
+  2592    RIBERSOLO                           ANÁLISES AGRÍCOLAS (SOLO, FOLHA,         11/2023         27/11/2023    R$ 1.587,31
+                                              ETC)
+
+  9523    3RLAB RIBERSOLO LABORATORIO DE ANÁLISES AGRÍCOLAS (SOLO, FOLHA,              06/2026         10/07/2026    R$ 1.584,63
+          ANALISES AGROPECUARIAS S. A.   ETC)
+
+  7202    3RLAB RIBERSOLO LABORATORIO DE ANÁLISES AGRÍCOLAS (SOLO, FOLHA,              09/2025         22/09/2025    R$ 1.200,00
+          ANALISES AGROPECUARIAS S. A.   ETC)
+
+  9492    3RLAB RIBERSOLO LABORATORIO DE ANÁLISES AGRÍCOLAS (SOLO, FOLHA,              06/2026         29/06/2026    R$ 1.198,72
+          ANALISES AGROPECUAR IAS S. A.  ETC)
+
+  1142    RIBERSOLO                           ANÁLISES AGRÍCOLAS (SOLO, FOLHA,         06/2023         23/06/2023    R$ 409,20
+                                              ETC)
+
+  7510    COPERCANA                           ANÁLISES AGRÍCOLAS (SOLO, FOLHA,         11/2025         24/11/2025    R$ 333,00
+                                              ETC)
+
+  7507    COPERCANA                           ANÁLISES AGRÍCOLAS (SOLO, FOLHA,         11/2025         17/11/2025    R$ 82,00
+                                              ETC)
+
+                                                                                                 SUB-TOTAL CONTA R$ 8.274,01
+
+  7585    FRANCISCO JOSÉ MARINCEK             PRESTAÇÃO DE SERVIÇOS PARA O             11/2025         17/11/2025    R$ 13.320,00
+                                              CAMPO
+
+  2177    GERALDO MARTINS DE OLIVEIRA         PRESTAÇÃO DE SERVIÇOS PARA O             10/2023         11/10/2023    R$ 8.550,00
+                                              CAMPO
+
+  2315    GERALDO MARTINS DE OLIVEIRA         PRESTAÇÃO DE SERVIÇOS PARA O             10/2023         27/10/2023    R$ 8.190,00
+                                              CAMPO
+
+  2247    GERALDO MARTINS DE OLIVEIRA         PRESTAÇÃO DE SERVIÇOS PARA O             10/2023         20/10/2023    R$ 7.920,00
+                                              CAMPO
+
+  2343    GERALDO MARTINS DE OLIVEIRA         PRESTAÇÃO DE SERVIÇOS PARA O             10/2023         03/11/2023    R$ 7.560,00
+                                              CAMPO
+
+  8937    LUIS FERNANDO DE OLIVEIRA           PRESTAÇÃO DE SERVIÇOS PARA O             04/2026         15/04/2026    R$ 485,71
+                                              CAMPO
+
+  4570    JOSENILTON DA SILVA BEVENUTO        PRESTAÇÃO DE SERVIÇOS PARA O             09/2024         04/10/2024    R$ 200,00
+                                              CAMPO
+
+                                                                                                 SUB-TOTAL CONTA R$ 46.225,71
+
+  1530    COC MAT TRANSPORTES E               FRETE COMPRA DE PRODUTOS                 08/2023         25/08/2023    R$ 11.080,30
+          LOGISTICA LTDA.
+
+  6062    SOMAR TRANSPORTES                   FRETE COMPRA DE PRODUTOS                 06/2025         25/06/2025    R$ 6.200,00
+
+  1593    COC MAT TRANSPORTES E               FRETE COMPRA DE PRODUTOS                 09/2023         01/09/2023    R$ 3.657,50
+          LOGISTICA LTDA.
+
+  6918    COC MAT TRANSPORTES E               FRETE COMPRA DE PRODUTOS                 07/2025         25/07/2025    R$ 2.790,00
+          LOGISTICA LTDA.
+
+  6929    COC MAT TRANSPORTES E               FRETE COMPRA DE PRODUTOS                 08/2025         01/08/2025    R$ 2.775,00
+          LOGISTICA LTDA.
+
+  3838    CARLOS NEWTON BOLDRIN               FRETE COMPRA DE PRODUTOS                 06/2024         10/06/2024    R$ 700,00
+
+  1163    MOISÉS JOSÉ BARBOSA                 FRETE COMPRA DE PRODUTOS                 06/2023         26/06/2023    R$ 600,00
+
+  955     DORIVAL ROSSI                       FRETE COMPRA DE PRODUTOS                 06/2023         05/06/2023    R$ 500,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 28.302,80
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 89.171,52
+
+  SERVIÇOS PROFISSIONAIS
+
+  2949    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2024         31/01/2024    R$ 4.050,00
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     29/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  5632    DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2024         28/01/2025    R$ 3.150,00
+
+  7689    DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2025         05/01/2026    R$ 2.322,98
+
+  7690    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2026         05/02/2026    R$ 2.322,98
+
+  7691    DNS                                 SEGURANÇA E VIGILÂNCIA                   02/2026         05/03/2026    R$ 2.322,98
+
+  7692    DNS                                 SEGURANÇA E VIGILÂNCIA                   03/2026         06/04/2026    R$ 2.322,98
+
+  7693    DNS                                 SEGURANÇA E VIGILÂNCIA                   04/2026         05/05/2026    R$ 2.322,98
+
+  7694    DNS                                 SEGURANÇA E VIGILÂNCIA                   05/2026         05/06/2026    R$ 2.322,98
+
+  7695    DNS                                 SEGURANÇA E VIGILÂNCIA                   06/2026         06/07/2026    R$ 2.322,98
+
+  7696    DNS                                 SEGURANÇA E VIGILÂNCIA                   07/2026         05/08/2026    R$ 2.322,98
+
+  4999    DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2024         06/01/2025    R$ 2.111,80
+
+  5000    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2025         06/02/2025    R$ 2.111,80
+
+  5001    DNS                                 SEGURANÇA E VIGILÂNCIA                   02/2025         05/03/2025    R$ 2.111,80
+
+  5002    DNS                                 SEGURANÇA E VIGILÂNCIA                   03/2025         07/04/2025    R$ 2.111,80
+
+  5003    DNS                                 SEGURANÇA E VIGILÂNCIA                   04/2025         05/05/2025    R$ 2.111,80
+
+  5004    DNS                                 SEGURANÇA E VIGILÂNCIA                   05/2025         05/06/2025    R$ 2.111,80
+
+  5005    DNS                                 SEGURANÇA E VIGILÂNCIA                   06/2025         07/07/2025    R$ 2.111,80
+
+  5006    DNS                                 SEGURANÇA E VIGILÂNCIA                   07/2025         05/08/2025    R$ 2.111,80
+
+  5007    DNS                                 SEGURANÇA E VIGILÂNCIA                   08/2025         05/09/2025    R$ 2.111,80
+
+  5008    DNS                                 SEGURANÇA E VIGILÂNCIA                   09/2025         06/10/2025    R$ 2.111,80
+
+  5009    DNS                                 SEGURANÇA E VIGILÂNCIA                   10/2025         05/11/2025    R$ 2.111,80
+
+  5010    DNS                                 SEGURANÇA E VIGILÂNCIA                   11/2025         05/12/2025    R$ 2.111,80
+
+  2543    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2023         06/02/2024    R$ 2.046,60
+
+  2542    DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2023         05/01/2024    R$ 2.000,00
+
+  2544    DNS                                 SEGURANÇA E VIGILÂNCIA                   02/2024         05/03/2024    R$ 2.000,00
+
+  2545    DNS                                 SEGURANÇA E VIGILÂNCIA                   03/2024         05/04/2024    R$ 2.000,00
+
+  2546    DNS                                 SEGURANÇA E VIGILÂNCIA                   04/2024         06/05/2024    R$ 2.000,00
+
+  2547    DNS                                 SEGURANÇA E VIGILÂNCIA                   05/2024         05/06/2024    R$ 2.000,00
+
+  2548    DNS                                 SEGURANÇA E VIGILÂNCIA                   06/2024         05/07/2024    R$ 2.000,00
+
+  2549    DNS                                 SEGURANÇA E VIGILÂNCIA                   07/2024         05/08/2024    R$ 2.000,00
+
+  2550    DNS                                 SEGURANÇA E VIGILÂNCIA                   08/2024         05/09/2024    R$ 2.000,00
+
+  2551    DNS                                 SEGURANÇA E VIGILÂNCIA                   09/2024         07/10/2024    R$ 2.000,00
+
+  2552    DNS                                 SEGURANÇA E VIGILÂNCIA                   10/2024         05/11/2024    R$ 2.000,00
+
+  2553    DNS                                 SEGURANÇA E VIGILÂNCIA                   11/2024         05/12/2024    R$ 2.000,00
+
+  1093    DNS                                 SEGURANÇA E VIGILÂNCIA                   06/2023         20/06/2023    R$ 1.900,00
+
+  9753    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2023         05/02/2023    R$ 1.800,00
+
+  9802    DNS                                 SEGURANÇA E VIGILÂNCIA                   02/2023         05/03/2023    R$ 1.800,00
+
+  8       DNS                                 SEGURANÇA E VIGILÂNCIA                   03/2023         05/04/2023    R$ 1.800,00
+
+  805     DNS                                 SEGURANÇA E VIGILÂNCIA                   05/2023         17/05/2023    R$ 1.800,00
+
+  806     DNS                                 SEGURANÇA E VIGILÂNCIA                   06/2023         05/06/2023    R$ 1.800,00
+
+  807     DNS                                 SEGURANÇA E VIGILÂNCIA                   07/2023         05/07/2023    R$ 1.800,00
+
+  808     DNS                                 SEGURANÇA E VIGILÂNCIA                   08/2023         07/08/2023    R$ 1.800,00
+
+  809     DNS                                 SEGURANÇA E VIGILÂNCIA                   09/2023         05/09/2023    R$ 1.800,00
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…       30/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  810     DNS                                 SEGURANÇA E VIGILÂNCIA                   10/2023         05/10/2023    R$ 1.800,00
+
+  811     DNS                                 SEGURANÇA E VIGILÂNCIA                   11/2023         06/11/2023    R$ 1.800,00
+
+  812     DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2023         05/12/2023    R$ 1.800,00
+
+  5882    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2025         20/02/2025    R$ 1.800,00
+
+  6554    DNS                                 SEGURANÇA E VIGILÂNCIA                   05/2025         16/05/2025    R$ 1.800,00
+
+  8921    DNS                                 SEGURANÇA E VIGILÂNCIA                   04/2026         20/04/2026    R$ 1.620,00
+
+  8211    DNS                                 SEGURANÇA E VIGILÂNCIA                   01/2026         16/01/2026    R$ 1.485,00
+
+  7789    DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2025         10/12/2025    R$ 1.350,00
+
+  2599    DNS                                 SEGURANÇA E VIGILÂNCIA                   11/2023         01/12/2023    R$ 1.260,00
+
+  9710    DNS                                 SEGURANÇA E VIGILÂNCIA                   12/2022         05/01/2023    R$ 1.200,00
+
+  146     DNS                                 SEGURANÇA E VIGILÂNCIA                   04/2023         20/04/2023    R$ 1.125,00
+
+  9381    DNS                                 SEGURANÇA E VIGILÂNCIA                   05/2026         17/06/2026    R$ 1.080,00
+
+  4272    DNS                                 SEGURANÇA E VIGILÂNCIA                   08/2024         14/08/2024    R$ 900,00
+
+  2019    DNS                                 SEGURANÇA E VIGILÂNCIA                   09/2023         28/09/2023    R$ 700,00
+
+  3197    DNS                                 SEGURANÇA E VIGILÂNCIA                   02/2024         05/03/2024    R$ 450,00
+
+  3862    DNS                                 SEGURANÇA E VIGILÂNCIA                   06/2024         20/06/2024    R$ 450,00
+
+  7697    DNS                                 SEGURANÇA E VIGILÂNCIA                                                 R$ 2.322,98
+
+  7698    DNS                                 SEGURANÇA E VIGILÂNCIA                                                 R$ 2.322,98
+
+  7699    DNS                                 SEGURANÇA E VIGILÂNCIA                                                 R$ 2.322,98
+
+  7700    DNS                                 SEGURANÇA E VIGILÂNCIA                                                 R$ 2.322,98
+
+                                                                                                 SUB-TOTAL CONTA R$ 121.383,96
+
+  7318    OFICIAL DE REGISTRO DE IMÓVEIS E    CARTÓRIO                                 10/2025         02/10/2025    R$ 3.587,53
+          ANEXOS DE JARDINÓPOLIS
+
+  2219    OFICIAL DE REGISTRO DE IMÓVEIS E    CARTÓRIO                                 10/2023         11/10/2023    R$ 69,47
+          ANEXOS DE JARDINÓPOLIS
+
+                                                                                                 SUB-TOTAL CONTA R$ 3.657,00
+
+  3276    CONTABILIDADE CRUZ                  CONTABILIDADE                            04/2024         08/04/2024    R$ 980,81
+
+  971     CONTABILIDADE CRUZ                  CONTABILIDADE                            06/2023         06/06/2023    R$ 910,75
+
+  3281    CONTABILIDADE CRUZ                  CONTABILIDADE                            09/2024         05/09/2024    R$ 866,70
+
+  3282    CONTABILIDADE CRUZ                  CONTABILIDADE                            10/2024         07/10/2024    R$ 866,70
+
+  3283    CONTABILIDADE CRUZ                  CONTABILIDADE                            11/2024         05/11/2024    R$ 866,70
+
+  3284    CONTABILIDADE CRUZ                  CONTABILIDADE                            12/2024         05/12/2024    R$ 866,70
+
+  3285    CONTABILIDADE CRUZ                  CONTABILIDADE                            01/2025         06/01/2025    R$ 866,70
+
+  3286    CONTABILIDADE CRUZ                  CONTABILIDADE                            02/2025         06/02/2025    R$ 866,70
+
+  1707    CONTABILIDADE CRUZ                  CONTABILIDADE                            09/2023         06/09/2023    R$ 810,81
+
+  1708    CONTABILIDADE CRUZ                  CONTABILIDADE                            10/2023         06/10/2023    R$ 810,81
+
+  1709    CONTABILIDADE CRUZ                  CONTABILIDADE                            11/2023         06/11/2023    R$ 810,81
+
+  1710    CONTABILIDADE CRUZ                  CONTABILIDADE                            12/2023         06/12/2023    R$ 810,81
+
+  1711    CONTABILIDADE CRUZ                  CONTABILIDADE                            01/2024         10/01/2024    R$ 810,81
+
+  1712    CONTABILIDADE CRUZ                  CONTABILIDADE                            02/2024         06/02/2024    R$ 810,81
+
+  3275    CONTABILIDADE CRUZ                  CONTABILIDADE                            03/2024         06/03/2024    R$ 810,81
+
+  3277    CONTABILIDADE CRUZ                  CONTABILIDADE                            05/2024         06/05/2024    R$ 810,81
+
+  3278    CONTABILIDADE CRUZ                  CONTABILIDADE                            06/2024         06/06/2024    R$ 810,81
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     31/32
+27/08/2026, 09:44                                               ERP Conag - Contas a Pagar
+
+                                                                                       Mês             Data
+  Id      Fornecedor                          Conta                                    Competência     Pagamento     Valor
+
+  3279    CONTABILIDADE CRUZ                  CONTABILIDADE                            07/2024         08/07/2024    R$ 810,81
+
+  3280    CONTABILIDADE CRUZ                  CONTABILIDADE                            08/2024         06/08/2024    R$ 810,81
+
+  58      CONTABILIDADE CRUZ                  CONTABILIDADE                            04/2023         06/04/2023    R$ 750,75
+
+  690     CONTABILIDADE CRUZ                  CONTABILIDADE                            05/2023         08/05/2023    R$ 750,75
+
+  1245    CONTABILIDADE CRUZ                  CONTABILIDADE                            07/2023         06/07/2023    R$ 750,75
+
+  1715    CONTABILIDADE CRUZ                  CONTABILIDADE                            08/2023         21/08/2023    R$ 750,75
+
+                                                                                                 SUB-TOTAL CONTA R$ 19.013,67
+
+  8976    MILTON DE LIMA PEREIRA              OUTROS SERVIÇOS PROFISSIONAIS            04/2026         20/04/2026    R$ 500,00
+
+                                                                                                 SUB-TOTAL CONTA R$ 500,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 144.554,63
+
+                                                                                                             TOTAL R$
+                                                                                                                   2.953.716,43
+
+ Desenvolvido por ERP CONAG
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVK…     32/32
+

@@ -1,0 +1,222 @@
+27/08/2026, 09:45                                               ERP Conag - Contas a Pagar
+
+
+                                                             ERP Conag - Contas a Pagar
+                                                             27/08/2026 09:45:45
+
+
+ Relatório Gerencial
+
+       Filtros
+       Buscar por *:                                               Data Início *: 01/01/2023
+       Data Vencimento
+       Data Final *: 31/12/2030                                    Subtotal *:
+                                                                   Plano de Conta
+       Contas *:                                                   Fazenda:
+       Todas                                                       3 - FAZENDA MATA VERDE
+       Conta Bancária:                                             Previsão:
+       TODAS                                                       Todos
+
+
+
+                                                                                       Mês            Data
+  Id       Fornecedor                                Conta                             Competência    Pagamento      Valor
+
+  INSUMOS AGRÍCOLAS
+
+  839      CALCARIO DIAMANTE LTDA                    CORRETIVOS DE SOLO                06/2023        30/06/2023     R$
+                                                                                                                     30.915,00
+
+                                                                                                  SUB-TOTAL CONTA R$
+                                                                                                                  30.915,00
+
+  3793 IBIATA COMERCIO DE CORRETIVOS DE SOLO         ADUBOS E FERTILIZANTES            06/2024        05/08/2024     R$
+       LTDA                                                                                                          31.980,00
+
+  6597 CJC COMERCIO DE INSUMOS AGRICOLAS E           ADUBOS E FERTILIZANTES            07/2025        10/06/2025     R$
+       SERVICOS LTDA                                                                                                 22.896,34
+
+  6596 CJC COMERCIO DE INSUMOS AGRICOLAS E           ADUBOS E FERTILIZANTES            06/2025        03/06/2025     R$
+       SERVICOS LTDA                                                                                                 22.896,33
+
+  7777 IBIATA COMERCIO DE CORRETIVOS DE SOLO         ADUBOS E FERTILIZANTES            12/2025        29/12/2025     R$ 5.892,65
+       LTDA
+
+  7778 IBIATA COMERCIO DE CORRETIVOS DE SOLO         ADUBOS E FERTILIZANTES            01/2026        26/01/2026     R$ 5.892,65
+       LTDA
+
+  7783 IBIATA COMERCIO DE CORRETIVOS DE SOLO         ADUBOS E FERTILIZANTES            12/2025        29/12/2025     R$ 5.527,50
+       LTDA
+
+  7784 IBIATA COMERCIO DE CORRETIVOS DE SOLO         ADUBOS E FERTILIZANTES            01/2026        27/01/2026     R$ 5.527,50
+       LTDA
+
+  1830     CALCARIO DIAMANTE LTDA                    ADUBOS E FERTILIZANTES            09/2023        02/10/2023     R$ 4.995,00
+
+  5735 AGROSAQUY                                     ADUBOS E FERTILIZANTES            01/2025        28/02/2025     R$ 4.830,00
+
+  3339 AGROSAQUY                                     ADUBOS E FERTILIZANTES            03/2024        12/04/2024     R$ 460,00
+
+  3872 IBIATA COMERCIO DE CORRETIVOS DE SOLO         ADUBOS E FERTILIZANTES            06/2024        05/08/2024     R$ 148,50
+       LTDA
+
+                                                                                                  SUB-TOTAL CONTA R$
+                                                                                                                  111.046,47
+
+  6130 AGROSAQUY                                     DEFENSIVOS AGRÍCOLAS              09/2025        10/09/2025     R$ 2.950,00
+
+  4540 AGROSAQUY                                     DEFENSIVOS AGRÍCOLAS              09/2024        30/10/2024     R$ 2.600,00
+
+  6129     AGROSAQUY                                 DEFENSIVOS AGRÍCOLAS              09/2025        10/09/2025     R$ 590,00
+
+  8675 AGROSAQUY                                     DEFENSIVOS AGRÍCOLAS              04/2026        10/04/2026     R$ 200,00
+
+                                                                                                  SUB-TOTAL CONTA R$ 6.340,00
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…   1/3
+27/08/2026, 09:45                                               ERP Conag - Contas a Pagar
+
+                                                                                      Mês             Data
+  Id     Fornecedor                                  Conta                            Competência     Pagamento      Valor
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                148.301,47
+
+  INSUMOS PECUÁRIOS
+
+  3735 AGROSAQUY                                     FERRAMENTAS E UTENSÍLIOS         05/2024         17/06/2024     R$ 550,00
+                                                     PARA MANEJO
+
+                                                                                                  SUB-TOTAL CONTA R$ 550,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 550,00
+
+  MÃO-DE-OBRA DE OPERACIONAL
+
+  9495 APARECIDO JOSÉ KISS                           DIARISTA                         06/2026         23/06/2026     R$ 1.540,00
+
+                                                                                                  SUB-TOTAL CONTA R$ 1.540,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 1.540,00
+
+  SERVIÇOS TÉCNICOS PROFISSIONAIS (CONSULTORIAS DE CAMPO)
+
+  8179   LUCIANA DE FATIMA GAIOSO RAFAEL             SERVIÇOS TÉCNICOS                01/2026         08/01/2026     R$ 5.156,25
+                                                     PROFISSIONAIS
+
+  8185   ADERVAL ROSETTO                             SERVIÇOS TÉCNICOS                01/2026         09/01/2026     R$ 3.200,00
+                                                     PROFISSIONAIS
+
+                                                                                                  SUB-TOTAL CONTA R$ 8.356,25
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 8.356,25
+
+  DESPESAS GERAIS - ADMINISTRAÇÃO
+
+  6183   VENDSEG SOLUCOES INTELIGENTES LTDA          DESPESAS GERAIS DA               04/2025         02/04/2025     R$ 200,00
+                                                     ADMINISTRAÇÃO
+
+                                                                                                  SUB-TOTAL CONTA R$ 200,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 200,00
+
+  TRIBUTOS E CONTRIBUIÇÕES
+
+  7225 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         12/2025         30/12/2025     R$ 393,97
+
+  7224 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         11/2025         28/11/2025     R$ 389,97
+
+  7223 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         10/2025         31/10/2025     R$ 385,09
+
+  7222 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         09/2025         30/09/2025     R$ 381,28
+
+  2068 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         09/2023         28/12/2023     R$ 350,28
+
+  5195   SECRETARIA DA RECEITA FEDERAL               TRIBUTOS                         11/2024         30/12/2024     R$ 349,62
+
+  2067 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         09/2023         30/11/2023     R$ 347,15
+
+  4933 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         10/2024         29/11/2024     R$ 346,93
+
+  4647 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         09/2024         31/10/2024     R$ 343,77
+
+  2066 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         09/2023         31/10/2023     R$ 343,75
+
+  2065 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         09/2023         29/09/2023     R$ 340,35
+
+  9450 SECRETARIA DA RECEITA FEDERAL                 TRIBUTOS                         06/2026         16/06/2026     R$ 11,79
+
+  1309 MINISTÉRIO DA FAZENDA SECRETARIA DO           TRIBUTOS                         07/2023         19/07/2023     R$ 10,30
+       TESOURO NACIONAL
+
+                                                                                                  SUB-TOTAL CONTA R$ 3.994,25
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 3.994,25
+
+  TERCEIRIZAÇÃO DE SERVIÇOS AGROPECUÁRIOS
+
+  9222 3RLAB RIBERSOLO LABORATORIO DE                ANÁLISES AGRÍCOLAS (SOLO,        05/2026         22/05/2026     R$ 704,00
+       ANALISES AGROPECUARIAS S. A.                  FOLHA, ETC)
+
+                                                                                                  SUB-TOTAL CONTA R$ 704,00
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…     2/3
+27/08/2026, 09:45                                               ERP Conag - Contas a Pagar
+
+                                                                                      Mês             Data
+  Id     Fornecedor                                  Conta                            Competência     Pagamento      Valor
+
+  7568 MAYCON FELIPE CAMPOS NOGUEIRA                 PRESTAÇÃO DE SERVIÇOS            11/2025         07/11/2025     R$
+                                                     PARA O CAMPO                                                    10.500,00
+
+  5852 DANILO LUIZ MARINCEK DUTRA                    PRESTAÇÃO DE SERVIÇOS            01/2025         07/02/2025     R$ 6.000,00
+                                                     PARA O CAMPO
+
+  612    NICOLAS ZANON PIRES                         PRESTAÇÃO DE SERVIÇOS            05/2023         10/05/2023     R$ 2.900,00
+                                                     PARA O CAMPO
+
+                                                                                                  SUB-TOTAL CONTA R$
+                                                                                                                  19.400,00
+
+  841    COC MAT TRANSPORTES E LOGISTICA LTDA.       FRETE COMPRA DE PRODUTOS         06/2023         15/06/2023     R$ 17.175,00
+
+  1803   PATRÍCIA APARECIDA M. BORELA                FRETE COMPRA DE PRODUTOS         09/2023         01/09/2023     R$ 3.330,00
+         TRANSPORTES
+
+  3385 DORIVAL ROSSI                                 FRETE COMPRA DE PRODUTOS         03/2024         22/03/2024     R$ 1.600,00
+
+  3729 DORIVAL ROSSI                                 FRETE COMPRA DE PRODUTOS         05/2024         17/05/2024     R$ 600,00
+
+  6966 DORIVAL ROSSI                                 FRETE COMPRA DE PRODUTOS         08/2025         05/08/2025     R$ 250,00
+
+                                                                                                  SUB-TOTAL CONTA R$
+                                                                                                                  22.955,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                43.059,00
+
+  SERVIÇOS PROFISSIONAIS
+
+  1778   LG CONSULTORIA AMBIENTAL LTDA               OUTROS SERVIÇOS                  08/2023         24/08/2023     R$ 1.050,00
+                                                     PROFISSIONAIS
+
+  2106 LG CONSULTORIA AMBIENTAL LTDA                 OUTROS SERVIÇOS                  10/2023         03/10/2023     R$ 1.050,00
+                                                     PROFISSIONAIS
+
+                                                                                                  SUB-TOTAL CONTA R$ 2.100,00
+
+                                                                                         SUB-TOTAL CENTRO CUSTO R$ 2.100,00
+
+                                                                                                              TOTAL R$
+                                                                                                                    208.100,97
+
+ Desenvolvido por ERP CONAG
+
+
+
+
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…   3/3
+

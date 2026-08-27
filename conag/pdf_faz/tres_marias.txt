@@ -1,0 +1,78 @@
+27/08/2026, 09:47                                                ERP Conag - Contas a Pagar
+
+
+                                                              ERP Conag - Contas a Pagar
+                                                              27/08/2026 09:47:02
+
+
+ Relatório Gerencial
+
+       Filtros
+       Buscar por *:                                               Data Início *: 01/01/2023
+       Data Vencimento
+       Data Final *: 31/12/2030                                    Subtotal *:
+                                                                   Plano de Conta
+       Contas *:                                                   Fazenda:
+       Todas                                                       7 - FAZENDA DAS TRÊS MARIAS
+       Conta Bancária:                                             Previsão:
+       TODAS                                                       Todos
+
+
+
+                                                                                       Mês               Data
+  Id       Fornecedor                                 Conta                            Competência       Pagamento     Valor
+
+  ALUGUEL DE ÁREA PRODUTIVA
+
+  1405 JORGE SAQUY SOBRINHO                           ARRENDAMENTO DE ÁREA             07/2023           11/07/2023    R$
+                                                      PRODUTIVA                                                        83.864,00
+
+  931      ALFA JARDINÓPOLIS EMPREENDIMENTOS          ARRENDAMENTO DE ÁREA             05/2023           26/05/2023    R$ 7.396,87
+           IMOBILIÁRIOS LTDA                          PRODUTIVA
+
+  924      JORGE SAQUY SOBRINHO                       ARRENDAMENTO DE ÁREA             05/2023           26/05/2023    R$
+                                                      PRODUTIVA                                                        5.000,00
+
+  1140     JORGE SAQUY SOBRINHO                       ARRENDAMENTO DE ÁREA             06/2023           20/06/2023    R$
+                                                      PRODUTIVA                                                        3.000,00
+
+  976      JORGE SAQUY SOBRINHO                       ARRENDAMENTO DE ÁREA             06/2023           02/06/2023    R$
+                                                      PRODUTIVA                                                        2.000,00
+
+                                                                                                     SUB-TOTAL CONTA R$
+                                                                                                                     101.260,87
+
+                                                                                              SUB-TOTAL CENTRO CUSTO R$
+                                                                                                                     101.260,87
+
+  TRIBUTOS E CONTRIBUIÇÕES
+
+  7212     SECRETARIA DA RECEITA FEDERAL              TRIBUTOS                         09/2025           30/09/2025    R$ 261,05
+
+  4567 SECRETARIA DA RECEITA FEDERAL                  TRIBUTOS                                           07/10/2024    R$ 1.521,51
+
+                                                                                                     SUB-TOTAL CONTA R$ 1.782,56
+
+                                                                                              SUB-TOTAL CENTRO CUSTO R$ 1.782,56
+
+  SERVIÇOS PROFISSIONAIS
+
+  1214     TABELIÃO DE NOTAS E PROTESTO               CARTÓRIO                         07/2023           03/07/2023    R$ 4.922,21
+
+  1213     OFICIAL DE REGISTRO DE IMÓVEIS E ANEXOS    CARTÓRIO                         07/2023           03/07/2023    R$ 3.123,25
+           DE JARDINÓPOLIS
+
+                                                                                                     SUB-TOTAL CONTA R$ 8.045,46
+
+  7409 CONTABILIDADE CRUZ                             CONTABILIDADE                    10/2025           13/10/2025    R$ 798,80
+
+                                                                                                     SUB-TOTAL CONTA R$ 798,80
+
+                                                                                              SUB-TOTAL CENTRO CUSTO R$ 8.844,26
+
+                                                                                                                TOTAL R$
+                                                                                                                      111.887,69
+
+ Desenvolvido por ERP CONAG
+https://aeagropecuaria.sysconag.com.br/public/contas-a-pagar?url=.0Fu9BhO_DyvomtnUq8RdR6j6wkZUqAXx5vle7E4WYhLuCzBL6-y77otVKmq…       1/1
+
