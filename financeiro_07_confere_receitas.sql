@@ -22,6 +22,18 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
+-- 0) TRAVA DE PROJETO
+-- ------------------------------------------------------------
+do $trava$
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'talhoes_areas') then
+    raise exception 'PROJETO ERRADO. Este script e do LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).';
+  end if;
+end
+$trava$;
+
+-- ------------------------------------------------------------
 -- 1) TIPO DAS COLUNAS
 --    Se receitas.valor for double precision e lancamentos_financeiros.valor
 --    for numeric, a diferenca esta explicada.

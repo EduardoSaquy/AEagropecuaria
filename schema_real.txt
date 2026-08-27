@@ -475,3 +475,19 @@ OBSERVAÇÕES DE QUEM LEU ESTE DUMP EM 22/08/2026
    funcionarios_backup_limpeza, zz_limpeza_relatorio) continuam existindo,
    agora com RLS ligada. Podem ser apagadas quando o projeto antigo da
    Pecuária for descartado.
+
+------------------------------------------------------------
+CORREÇÃO EM 25/08/2026
+
+A observação 2 acima ficou desatualizada: centros_custo.tipo e
+.subcategoria já são lidos. AEMatriz.html usa as duas (rowToCentroCusto,
+grupoDoCentro/subgrupoDoCentro, PageCentrosCusto e o card de despesas de
+PageFinanceiro) para agrupar o relatório pela hierarquia GRUPO|Subcategoria
+do Conag — é a correção descrita em laudo_auditoria.html ("O plano de
+contas do Conag estava invisível"). Esta nota provavelmente só não foi
+revisada depois daquela correção ser aplicada ao app.
+
+Ainda não neste dump (que é de 22/08/2026): a tabela log_alteracoes,
+criada por auditoria_05_registro_de_alteracoes.sql. O script existe no
+repo, tem trava de projeto e RLS, mas não há confirmação de que já rodou
+no banco real — regere este arquivo depois de confirmar.
