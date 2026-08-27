@@ -139,7 +139,7 @@ update centros_custo c
          'MANUTENCAO DE VEICULOS LEVES'
        )
    and c.ativo
-   and not exists (select 1 from lancamentos_financeiros l where l.centro_id = c.id);
+   and not exists (select 1 from lancamentos_financeiros l where l.centro_custo_id = c.id);
 
 
 -- ------------------------------------------------------------
@@ -158,7 +158,7 @@ union all
 select 2, 'Lancamentos que passam a cair em classe do Conag',
        count(*)::text, 'esperado: 1.375'
 from lancamentos_financeiros l
-join centros_custo c on c.id = l.centro_id
+join centros_custo c on c.id = l.centro_custo_id
 where plano_norm(c.nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E FROTA',
                              'SERVICOS TECNICOS / CONSULTORIA','DESPESAS COM VEICULOS',
                              'DESPESAS COM INSTALACOES','VENDAS')
@@ -166,7 +166,7 @@ union all
 select 3, 'Valor deles', round(coalesce(sum(l.valor),0),2)::text,
        'so mudou de gaveta, nao de valor'
 from lancamentos_financeiros l
-join centros_custo c on c.id = l.centro_id
+join centros_custo c on c.id = l.centro_custo_id
 where plano_norm(c.nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E FROTA',
                              'SERVICOS TECNICOS / CONSULTORIA','DESPESAS COM VEICULOS',
                              'DESPESAS COM INSTALACOES','VENDAS')
