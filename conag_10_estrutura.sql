@@ -47,7 +47,13 @@ create table conag_staging (
   fazenda_conag    text,
   atividade        text,
   cultura          text,
-  administrativo   text
+  administrativo   text,
+  -- Numero do contrato de financiamento. No Conag ele vinha COLADO no nome
+  -- da conta - 'AMORTIZACAO DE FINANCIAMENTO (Contrato: 40/02308-7)' - e
+  -- eram 22 contratos gerando 44 variantes de duas contas so. Importar
+  -- assim encheria o plano de contas de 44 versoes da mesma conta.
+  -- Separado, da para ver por contrato sem sujar o plano.
+  contrato         text
 );
 comment on table conag_staging is
   'Mesa de pouso do CSV do Conag. Some depois da importacao conferida.';
@@ -83,6 +89,12 @@ comment on column lancamentos_financeiros.conag_id is
 -- ------------------------------------------------------------
 alter table lancamentos_financeiros
   add column if not exists cnpj_nota text;
+
+-- Contrato de financiamento, quando houver. Sao 119 lancamentos e R$ 14,5
+-- milhoes em 22 contratos - amortizacao e juros. Fica em coluna propria
+-- para o plano de contas nao ganhar uma conta por contrato.
+alter table lancamentos_financeiros
+  add column if not exists contrato text;
 
 
 -- ------------------------------------------------------------
