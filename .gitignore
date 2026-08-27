@@ -1,1 +1,5 @@
 .claude/
+
+# planilhas cruas do Conag: pesadas e recriaveis a partir do ERP.
+# O consolidado em CSV fica versionado.
+conag/planilhas/
