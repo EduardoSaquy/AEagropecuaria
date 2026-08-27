@@ -24,17 +24,17 @@
 -- ------------------------------------------------------------
 -- O QUE ESTE SCRIPT FAZ
 --
--- 1. Seis centros NOSSOS, EM USO, ganham a classe certa do Conag. O nome
---    deles nao muda, os lancamentos nao se mexem. So passam a somar junto
---    com as contas do Conag num relatorio agrupado por classe.
+-- 1. Sete centros NOSSOS ganham a classe certa do Conag. O nome deles nao
+--    muda, os lancamentos nao se mexem. So passam a somar junto com as
+--    contas do Conag num relatorio agrupado por classe.
 --
--- 2. Tres centros VAZIOS que sao a mesma coisa que uma conta do Conag
+-- 2. Dois centros VAZIOS que sao a mesma coisa que uma conta do Conag
 --    saem de circulacao (ativo = false). Nao sao apagados: ativo volta a
 --    true numa linha de SQL se voce quiser.
 --
 -- 3. Os outros 14 ficam como estao. Sao contas do plano que montamos e o
 --    Conag nao movimentou no periodo - ENTRADA DE FINANCIAMENTOS,
---    DIVIDENDOS, CERTIFICACOES E RASTREABILIDADE e por ai. Conta sem
+--    DIVIDENDOS, CERTIFICACOES E RASTREABILIDADE e por ai. Sao 13 agora. Conta sem
 --    movimento nao sai no balancete; nao aparecer la nao quer dizer que
 --    nao exista.
 --
@@ -94,6 +94,18 @@ with de_para(nome_norm, classe_certa, sub_certa, obs) as (values
    'ADM | DESPESAS COM ADMINISTRACAO',
    'nossos 8 encontram ALUGUEL, ENERGIA, AGUA, TELEFONIA do escritorio'),
 
+  -- 'Juros e Encargos de Financiamento' esta com zero lancamento HOJE, mas
+  -- nao e conta morta: e o centro que o modulo de Financiamentos procura
+  -- PELO NOME quando alguem marca uma parcela como paga (constante
+  -- NOME_CENTRO_JUROS_FIN no AEMatriz.html). Desativar ele sumiria do
+  -- seletor de lancamento e o juros de cada parcela iria parar num centro
+  -- fora de circulacao. Fica ativo, e ganha a classe do Conag para o juros
+  -- do app somar junto com os 85 lancamentos de JUROS PAGOS OU INCORRIDOS.
+  ('JUROS E ENCARGOS DE FINANCIAMENTO',
+   'DESPESAS FINANCEIRAS',
+   'FINANCIAMENTOS | DESPESAS FINANCEIRAS',
+   'o juros das parcelas encontra os 85 do Conag, R$ 1,4 mi'),
+
   -- Vendas guarda R$ 4,76 milhoes de receita nossa. A classe PRODUCAO
   -- AGROPECUARIA e onde o Conag poe a venda fisica da producao. Sem isso a
   -- nossa receita fica num balde e a deles noutro.
@@ -112,7 +124,7 @@ update centros_custo c
 
 
 -- ------------------------------------------------------------
--- 2. OS TRES VAZIOS QUE DUPLICAM CONTA DO CONAG
+-- 2. OS DOIS VAZIOS QUE DUPLICAM CONTA DO CONAG
 --
 -- So sai de circulacao quem tem ZERO lancamento. O "not exists" e a trava:
 -- se algum tiver ganhado lancamento entre a consulta do 06 e agora, ele
@@ -123,8 +135,6 @@ update centros_custo c
  where plano_norm(c.nome) in (
          -- vira COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE (45 no Conag)
          'COMPRA DE ANIMAIS PARA ENGORDA',
-         -- vira JUROS PAGOS OU INCORRIDOS (85 no Conag, R$ 1,4 mi)
-         'JUROS E ENCARGOS DE FINANCIAMENTO',
          -- vira MANUTENCAO DOS VEICULOS DA ADMINISTRACAO (364 no Conag)
          'MANUTENCAO DE VEICULOS LEVES'
        )
@@ -137,11 +147,12 @@ update centros_custo c
 -- ------------------------------------------------------------
 select 1 as ordem, 'Centros em uso que ganharam classe do Conag' as item,
        count(*)::text as valor,
-       'esperado: 6' as situacao
+       'esperado: 7' as situacao
 from centros_custo
 where plano_norm(nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E FROTA',
                            'SERVICOS TECNICOS / CONSULTORIA','DESPESAS COM VEICULOS',
-                           'DESPESAS COM INSTALACOES','VENDAS')
+                           'DESPESAS COM INSTALACOES','VENDAS',
+                           'JUROS E ENCARGOS DE FINANCIAMENTO')
   and plano_norm(classe) <> plano_norm(nome)
 union all
 select 2, 'Lancamentos que passam a cair em classe do Conag',
@@ -161,7 +172,7 @@ where plano_norm(c.nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E
                              'DESPESAS COM INSTALACOES','VENDAS')
 union all
 select 4, 'Centros vazios tirados de circulacao', count(*)::text,
-       'esperado: 3 - da para reativar quando quiser'
+       'esperado: 2 - da para reativar quando quiser'
 from centros_custo
 where not ativo
   and plano_norm(nome) in ('COMPRA DE ANIMAIS PARA ENGORDA',
@@ -169,7 +180,7 @@ where not ativo
                            'MANUTENCAO DE VEICULOS LEVES')
 union all
 select 5, 'Centros fora da arvore que sobraram', count(*)::text,
-       'esperado: 14 - contas nossas sem movimento no Conag'
+       'esperado: 13 - contas nossas sem movimento no Conag'
 from centros_custo c
 where c.ativo
   and not exists (select 1 from conag_plano_contas p
