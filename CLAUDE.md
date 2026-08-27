@@ -129,11 +129,13 @@ Investimento/custeio têm atividade única, escolhida no cadastro.
 
 ## Testes
 
-`teste_apps_lavoura.py` (44), `teste_matriz.py` (22), `teste_paginacao.py` (2).
-Rodam com Playwright + Python contra um stub do Supabase. 68 testes. Cobrem
-`AEMatriz.html`/`AEpecuaria.html`/`AECana.html`/`AECereais.html`, mas nada
-ainda do módulo de Financiamentos (novo, 25/08) nem de `AECombustivel.html`/
-`Adubacao.html`.
+`teste_apps_lavoura.py` (44), `teste_matriz.py` (22), `teste_paginacao.py` (2),
+`teste_financiamentos.py` (33). Rodam com Playwright + Python contra um stub
+do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete` gravam de
+verdade em `window.__DB__` desde que o teste de Financiamentos passou a
+clicar em "Salvar"/"Marcar como paga" de verdade, não só ler tela). 101
+testes. Cobrem `AEMatriz.html`/`AEpecuaria.html`/`AECana.html`/`AECereais.html`,
+mas nada ainda de `AECombustivel.html`/`Adubacao.html`.
 Rodar todos antes de entregar qualquer alteração. Em sandbox sem rede pra
 buscar fonte/CDN externo, espere 2 falhas de `ERR_CONNECTION_RESET` em
 `teste_apps_lavoura.py` — é ruído do ambiente, não regressão (o teste já
