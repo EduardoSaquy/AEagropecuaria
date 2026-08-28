@@ -116,6 +116,11 @@ select 'despesa',
          where coalesce(btrim(s.cultura),'') <> ''
            and plano_norm(nome) = plano_norm(s.cultura)
          limit 1) cu on true
+ -- lancamentos_financeiros tem "check (valor > 0)" -- a mesma regra que a
+ -- tela do Matriz ja cobra no formulario ("valor maior que zero"). 72
+ -- titulos do CSV vem com R$ 0,00 (nenhum negativo) e violavam essa trava,
+ -- derrubando a importacao inteira. Ficam de fora, contados na conferencia.
+ where s.valor::numeric > 0
 on conflict (conag_id) where conag_id is not null do nothing;
 
 with base_fs as (
