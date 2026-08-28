@@ -1,10 +1,13 @@
 -- ============================================================
 -- IMPORTA A RECEITA HISTORICA DO CONAG (2023-2026)
 --
--- 199 titulos, R$ 53.829.175,60 - nunca foi importado antes (o import de
--- despesa nao trazia receita, o Conag nao tem modulo de Contas a Receber
--- em uso). Sem isso, o Resultado de 2023 a 2025 aparecia 100% no
--- vermelho: tinha a despesa (do import anterior) mas nao a receita real.
+-- 199 titulos na planilha, 191 importam (8 com valor R$ 0,00 ficam de
+-- fora - mesma trava "check (valor > 0)" que ja tinha derrubado a
+-- importacao da despesa. Soma nao muda, so a contagem: R$ 53.829.175,60
+-- - nunca foi importado antes (o import de despesa nao trazia receita, o
+-- Conag nao tem modulo de Contas a Receber em uso). Sem isso, o
+-- Resultado de 2023 a 2025 aparecia 100% no vermelho: tinha a despesa
+-- (do import anterior) mas nao a receita real.
 --
 -- ORIGEM: planilha exportada do Conag (titulo por titulo, sem ambiguidade
 -- de coluna) cruzada com os balancetes de Cana/Pecuaria/Soja/Milho que o
@@ -304,11 +307,12 @@ select 'receita',
          where s.cultura is not null
            and plano_norm(nome) = plano_norm(s.cultura)
          limit 1) cu on true
+ where s.valor > 0
 on conflict (conag_id) where conag_id is not null do nothing;
 
 select 1::numeric as ordem, 'Titulos de receita importados' as item,
        (select count(*) from lancamentos_financeiros where tipo='receita' and criado_por='Conag')::text as valor,
-       'esperado: 199' as situacao
+       'esperado: 191 (199 - 8 de valor zero)' as situacao
 union all
 select 2, 'Valor importado',
        (select round(sum(valor),2) from lancamentos_financeiros where tipo='receita' and criado_por='Conag')::text,
@@ -330,10 +334,16 @@ select 6, 'GERAL (sem atividade propria - arrendamento, ajuste bancario etc.)',
        (select round(sum(valor),2) from lancamentos_financeiros where tipo='receita' and criado_por='Conag' and atividade='geral')::text,
        'esperado: 699.761,02'
 union all
-select 7, 'Titulos sem centro de custo (nao importaram)',
+select 7, 'Titulos com valor R$ 0,00 (nao importados)',
+       (select count(*) from receita_nova where valor = 0)::text,
+       'esperado: 8'
+union all
+select 8, 'Titulos sem centro de custo (nao importaram, fora os de valor zero)',
        (select count(*) from receita_nova s
-         where not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id))::text,
+         where s.valor > 0
+           and not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id))::text,
        case when (select count(*) from receita_nova s
-                   where not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)) = 0
+                   where s.valor > 0
+                     and not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)) = 0
             then 'nenhum ficou de fora' else 'PARE E ME AVISE' end
 order by ordem;
