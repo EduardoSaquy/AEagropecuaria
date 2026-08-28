@@ -406,7 +406,14 @@ function rowToLancamento(r){
           // aparecem no formulário; ficam aqui para não se perderem e para
           // o R$ por tonelada poder ser calculado depois.
           quantidade:r.quantidade??null, unidade:r.unidade||null,
-          safraId:r.safra_id||null, culturaId:r.cultura_id||null};
+          safraId:r.safra_id||null, culturaId:r.cultura_id||null,
+          // Ano de início da safra (maio a abril) a que este lançamento
+          // pertence, SE diferente do mês em que caiu — ex.: venda em
+          // junho/2026 de gado engordado na safra 2025/2026 (ano_safra=2025).
+          // Não é o mesmo campo que safraId acima: aquele é FK pra tabela
+          // safras (fazenda+cultura, só cana/grãos); este é livre, cobre
+          // qualquer atividade, e null significa "usa o mês normalmente".
+          anoSafra:r.ano_safra??null};
 }
 function lancamentoToRow(l){
   return {tipo:l.tipo, atividade:l.atividade,
@@ -440,7 +447,11 @@ function lancamentoToRow(l){
           // campo para graos, e editar um lancamento de outra atividade nao
           // pode apagar a cultura de um lancamento que ja a tinha.
           cultura_id: l.culturaId===undefined ? undefined
-                      : (l.culturaId==='' || l.culturaId==null ? null : Number(l.culturaId))};
+                      : (l.culturaId==='' || l.culturaId==null ? null : Number(l.culturaId)),
+          // Mesma regra do undefined: só despesa/receita mostram este campo
+          // no formulário, editar um investimento não pode mexer nele.
+          ano_safra: l.anoSafra===undefined ? undefined
+                      : (l.anoSafra==='' || l.anoSafra==null ? null : Number(l.anoSafra))};
 }
 /* O plano de contas do Conag é hierárquico, e essa hierarquia já está
  * gravada — só não era lida por nenhum app:
@@ -768,7 +779,9 @@ async function carregarResultadoPecuaria(){
       };
     });
 
-    state.resultados.pecuaria = {loading:false, erro:'', mensal};
+    state.resultados.pecuaria = {loading:false, erro:'', mensal,
+      despesasFinanceiro: despesas, receitasFinanceiro: receitasPec,
+      categoriaSafra: 'fixa', receitaLabelPadrao: 'Receita'};
   } catch(e){
     state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
@@ -838,7 +851,9 @@ async function carregarResultadoCana(){
       };
     });
 
-    state.resultados.cana = {loading:false, erro:'', mensal};
+    state.resultados.cana = {loading:false, erro:'', mensal,
+      despesasFinanceiro: despesas, receitasFinanceiro: receitasCana,
+      categoriaSafra: 'despesaGeral', receitaLabelPadrao: 'Venda de cana'};
   } catch(e){
     state.resultados.cana = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
@@ -883,7 +898,9 @@ async function carregarResultadoCereais(){
       };
     });
 
-    state.resultados.cereais = {loading:false, erro:'', mensal};
+    state.resultados.cereais = {loading:false, erro:'', mensal,
+      despesasFinanceiro: despesas, receitasFinanceiro: receitasGraos,
+      categoriaSafra: 'despesaGeral', receitaLabelPadrao: 'Venda de cereais'};
   } catch(e){
     state.resultados.cereais = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
@@ -1616,6 +1633,15 @@ function safrasDisponiveis(){
   const safraAtual = hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1;
   return [safraAtual, safraAtual-1, safraAtual-2];
 }
+// Opções pro campo "Safra" do lançamento — mais anos que safrasDisponiveis()
+// porque aqui também se edita lançamento histórico (Conag vai até 2023).
+function anosSafraParaLancamento(){
+  const hoje = new Date();
+  const safraAtual = hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1;
+  const anos = [];
+  for(let s=safraAtual+1; s>=2018; s--) anos.push(s);
+  return anos;
+}
 
 /* ===================== RESULTADOS (geral, todas as operações) ===================== */
 // Pecuária, Cana e Cereais/Grãos têm receita e despesa próprias, cada uma
@@ -1626,8 +1652,72 @@ function resultadoBrutoOperacao(slug){
   if(slug==='cereais') return resultadoComCombustivel(state.resultados.cereais, slug);
   return null;
 }
+// Despesa de uma safra respeitando o campo Safra (ano_safra) do lançamento.
+// Um lançamento com mês dentro da janela da safra conta nela A MENOS QUE
+// tenha ano_safra apontando pra outra; um lançamento de fora da janela com
+// ano_safra apontando pra esta safra entra mesmo assim. Recorrente (sem
+// mês) não tem ano_safra que faça sentido — continua vigente em toda a
+// janela, como sempre foi (é o vigentesNoMes de cada mês que resolve isso).
+function despesaNaSafra(despesas, safra){
+  const janela = periodoMeses({tipo:'safra', safra});
+  let total = janela.reduce((soma,m)=>
+    soma + vigentesNoMes(despesas, m)
+      .filter(l=> !(l.mes && l.anoSafra!=null && Number(l.anoSafra)!==safra))
+      .reduce((a,l)=>a+Number(l.valor||0), 0)
+  , 0);
+  total += despesas
+    .filter(l=> l.mes && Number(l.anoSafra)===safra && !janela.includes(l.mes))
+    .reduce((a,l)=>a+Number(l.valor||0), 0);
+  return total;
+}
+// Mesma ideia pra receita — sem substituição de recorrente (receita não é
+// recorrente): só filtra o que é desta safra (pelo mês ou pelo ano_safra
+// manual) e troca o que foi remarcado pra fora da janela dele.
+function receitasNaSafra(receitas, safra){
+  const janela = periodoMeses({tipo:'safra', safra});
+  const doMes = receitas.filter(r=> r.mes && janela.includes(r.mes)
+    && !(r.anoSafra!=null && Number(r.anoSafra)!==safra));
+  const remarcadas = receitas.filter(r=> r.mes && Number(r.anoSafra)===safra && !janela.includes(r.mes));
+  return [...doMes, ...remarcadas];
+}
+// No filtro Mês/Ano, o resultado é 100% calendário (mensal já traz tudo
+// pronto). No filtro Safra, o total geral e a categoria financeira afetada
+// (despesa fixa da pecuária / despesa geral de cana e cereais, e a receita
+// inteira — as únicas que vêm de lancamentos_financeiros e por isso podem
+// ter ano_safra) são recalculados respeitando o campo Safra; o resto
+// (ração/pasto/reprodução da pecuária, combustível) não tem ano_safra —
+// continua somado por calendário, mês a mês, dentro da janela da safra.
 function resultadoOperacaoNoPeriodo(slug){
-  return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
+  const bruto = resultadoBrutoOperacao(slug);
+  const janela = periodoMeses(state.periodo);
+  const agregado = agregarPeriodo(bruto, janela);
+  const raw = state.resultados[slug];
+  if(state.periodo.tipo!=='safra' || !agregado || agregado.erro || !raw || raw.loading || raw.erro || !raw.despesasFinanceiro){
+    return agregado;
+  }
+  const safra = state.periodo.safra;
+  const categoria = raw.categoriaSafra;
+  const label = CATEGORIA_DESPESA_LABEL[categoria];
+  const despesaCategoriaCalendario = janela.reduce((a,m)=>{
+    const mesRow = bruto.mensal.find(x=>x.mes===m);
+    return a + Number((mesRow?.despesaPorCategoria||{})[categoria] || 0);
+  }, 0);
+  const despesaCategoriaSafra = despesaNaSafra(raw.despesasFinanceiro, safra);
+  const receitasSafra = receitasNaSafra(raw.receitasFinanceiro, safra);
+  const receita = receitasSafra.reduce((a,r)=>a+Number(r.valor||0), 0);
+  const despesa = agregado.despesa - despesaCategoriaCalendario + despesaCategoriaSafra;
+  const despesaDetalhe = agregado.despesaDetalhe
+    .map(x=> x.label===label ? {...x, valor: despesaCategoriaSafra} : x)
+    .filter(x=>x.valor>0);
+  if(despesaCategoriaSafra>0 && !despesaDetalhe.some(x=>x.label===label)){
+    despesaDetalhe.push({label, valor: despesaCategoriaSafra});
+  }
+  return {
+    ...agregado, despesa, receita, resultado: receita-despesa, despesaDetalhe,
+    receitasDetalhe: receitasSafra
+      .map(r=>({data:r.data, descricao:r.descricao || raw.receitaLabelPadrao, valor:Number(r.valor||0)}))
+      .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))),
+  };
 }
 // Área (ha) de cada operação — vem direto do cadastro de Fazendas (aba
 // Fazendas, aqui no Matriz), que guarda quanto hectare de cada atividade
@@ -1660,6 +1750,25 @@ function resultadoTotal(campo){
 }
 function algumResultadoCarregando(){
   return state.resultados.pecuaria.loading || state.resultados.cana.loading || state.resultados.cereais.loading || state.resultados.combustivelPorFrente.loading;
+}
+// Histórico ano a ano da empresa (gráfico consolidado dos Resultados) —
+// sempre calendário, independente do filtro Mês/Ano/Safra selecionado:
+// mesma janela que mesesJanela() já carrega (hoje-3 até hoje), então não
+// pede nada novo ao banco.
+function anosHistorico(){
+  const hoje = new Date().getFullYear();
+  const anos = []; for(let a=hoje-3; a<=hoje; a++) anos.push(a); return anos;
+}
+function resultadoOperacaoNoAno(slug, ano){
+  return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses({tipo:'ano', ano}));
+}
+function resultadoConsolidadoNoAno(ano){
+  const total = OPERACOES_ORDEM.reduce((acc,slug)=>{
+    const r = resultadoOperacaoNoAno(slug, ano);
+    if(r && !r.erro){ acc.despesa += r.despesa||0; acc.receita += r.receita||0; }
+    return acc;
+  }, {despesa:0, receita:0});
+  return {ano, despesa: total.despesa, receita: total.receita, resultado: total.receita-total.despesa};
 }
 // Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
 // insumo consumido pelas outras, não uma operação com receita/despesa
@@ -1833,7 +1942,17 @@ function PageResultados(){
     ${StatCard('Despesa', despesa, 'despesa')}
     ${StatCard('Resultado', resultado, 'resultado')}
   </div>
-  <p class="eyebrow" style="margin-bottom:10px;">Impacto de cada operação</p>
+  <div class="card card-pad" style="margin-top:18px;">
+    <p class="stat-label" style="margin-bottom:2px;">Histórico da empresa — ano a ano</p>
+    <p class="hint" style="margin-bottom:14px;">Receita, despesa e resultado de todas as operações juntas, calendário (não muda com o filtro Mês/Ano/Safra acima). Clique numa coluna pra ver o que cada atividade contribuiu naquele valor, ano a ano.</p>
+    ${GraficoBarrasConsolidadoAno(anosHistorico().map(resultadoConsolidadoNoAno))}
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Receita</span>
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--trigo); display:inline-block;"></span>Despesa</span>
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Resultado (vermelho quando negativo)</span>
+    </div>
+  </div>
+  <p class="eyebrow" style="margin-bottom:10px; margin-top:18px;">Impacto de cada operação</p>
   <div class="donuts-row">
     ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
     ${Donut(fatiasOperacoes('receita'), 'donut-receita', 'Receita por operação')}
@@ -4271,6 +4390,7 @@ function lerLancamentoDoFormulario(base){
     quantidade:    document.getElementById('f-qtdlanc') ? v('f-qtdlanc') : base.quantidade,
     unidade:       document.getElementById('f-unidadelanc') ? v('f-unidadelanc') : base.unidade,
     culturaId:     document.getElementById('f-culturalanc') ? v('f-culturalanc') : base.culturaId,
+    anoSafra:      document.getElementById('f-safralanc') ? v('f-safralanc') : base.anoSafra,
   };
 }
 // Le lancamento E venda. O valor da venda e sempre recalculado dos campos
@@ -4362,6 +4482,14 @@ function ModalLancamento(){
         <div class="field"><label>Data${ehDespesa?' (deixe vazia para recorrente)':''}</label><input id="f-datalanc" type="date" value="${d.data||''}"/>
           ${ehDespesa?`<span class="hint">Sem data, vale como valor mensal padrão para qualquer mês sem lançamento próprio.</span>`:''}
         </div>
+        ${(ehDespesa || ehReceita) ? `
+        <div class="field"><label>Safra (opcional)</label>
+          <select id="f-safralanc">
+            <option value="" ${!d.anoSafra?'selected':''}>— Usa o mês da data —</option>
+            ${anosSafraParaLancamento().map(s=>`<option value="${s}" ${String(d.anoSafra)===String(s)?'selected':''}>${s}/${s+1}</option>`).join('')}
+          </select>
+          <span class="hint">Só preencha quando a venda (ou a despesa) aconteceu depois do fim da safra, mas pertence à produção da safra anterior — ex.: gado vendido em junho que foi engordado na safra passada. Na maioria dos lançamentos deixe em branco: o app usa o mês normalmente.</span>
+        </div>` : ''}
         ${ehDespesa?`<div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedorlanc" value="${esc(d.fornecedor||'')}" autocomplete="off"/></div>`:''}
         ${ehDespesa && ehPecuaria ? `
         <div class="field"><label>Rateio entre as áreas da pecuária</label>
@@ -4550,6 +4678,7 @@ function Modal(){
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
   if(state.modal.type==='detalheOperacao') return ModalDetalheOperacao();
   if(state.modal.type==='graficoOperacao') return ModalGraficoOperacao();
+  if(state.modal.type==='graficoConsolidadoAno') return ModalGraficoConsolidadoAno();
   return '';
 }
 
@@ -4640,6 +4769,60 @@ function GraficoBarras(pontos){
   </svg>`;
 }
 
+// Monta um grupo de barras lado a lado por ano — usado tanto no histórico
+// consolidado (3 barras: receita/despesa/resultado) quanto no drill-down
+// por atividade (3 barras: pecuária/cana/cereais). `series` é
+// [{chave, label, cor}] — cor null pinta a barra verde/vermelho pelo sinal
+// do valor (caso do Resultado, que pode ser negativo).
+function gruposDeBarrasPorAno(pontos, series){
+  const vals = pontos.flatMap(p=>series.map(s=>Number(p[s.chave]||0)));
+  const maxV = Math.max(0, ...vals), minV = Math.min(0, ...vals);
+  const range = (maxV-minV) || 1;
+  const largura=560, altura=220, margemBaixo=32, margemTopo=10;
+  const areaAltura = altura-margemBaixo-margemTopo;
+  const zeroY = margemTopo + areaAltura*(maxV/range);
+  const n = pontos.length || 1;
+  const passo = largura/n;
+  const larguraGrupo = Math.min(84, passo-28);
+  const larguraBarra = larguraGrupo/series.length - 6;
+  const barras = pontos.map(p=>{
+    const xGrupo = p._i*passo + (passo-larguraGrupo)/2;
+    const rotulo = `<text x="${(xGrupo+larguraGrupo/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="10" fill="var(--cinza)" font-family="Inter,sans-serif">${p.ano}</text>`;
+    const bars = series.map((s,si)=>{
+      const valor = Number(p[s.chave]||0);
+      const x = xGrupo + si*(larguraBarra+4);
+      const yVal = margemTopo + areaAltura*((maxV-valor)/range);
+      const y = Math.min(zeroY,yVal), h = Math.max(1.5,Math.abs(yVal-zeroY));
+      const cor = s.cor || (valor>=0 ? 'var(--bom)' : 'var(--alerta)');
+      return `<rect class="gbar" data-gbar-valor="R$ ${fmt(valor)}" data-gbar-label="${esc(s.label)} · ${p.ano}"
+        ${s.attrs ? s.attrs(p) : ''}
+        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${cor}"></rect>`;
+    }).join('');
+    return bars + rotulo;
+  }).join('');
+  return `<svg class="grafico-barras-svg" viewBox="0 0 ${largura} ${altura}">
+    <line x1="0" y1="${zeroY.toFixed(1)}" x2="${largura}" y2="${zeroY.toFixed(1)}" stroke="var(--cinza-claro)" stroke-width="1"/>
+    ${barras}
+  </svg>`;
+}
+// Histórico ano a ano da empresa toda: cada ano com 3 barras (receita,
+// despesa, resultado). Clicar em qualquer uma abre o drill-down por
+// atividade daquela métrica.
+const LEGENDA_CONSOLIDADO = ['receita','despesa','resultado'].map(chave=>({
+  chave, label: {receita:'Receita', despesa:'Despesa', resultado:'Resultado'}[chave],
+  cor: {receita:'var(--bom)', despesa:'var(--trigo)', resultado:null}[chave],
+  attrs: p=>`data-consolidado-metrica="${chave}" data-consolidado-ano="${p.ano}"`,
+}));
+function GraficoBarrasConsolidadoAno(pontos){
+  return gruposDeBarrasPorAno(pontos.map((p,i)=>({...p, _i:i})), LEGENDA_CONSOLIDADO);
+}
+// Drill-down: mesma metrica (receita, despesa ou resultado), uma barra por
+// atividade, ano a ano — responde "o que puxou esse número nesse ano".
+function GraficoBarrasAtividadePorAno(pontos){
+  const series = OPERACOES_ORDEM.map(slug=>({chave:slug, label:OPERACOES[slug]||slug, cor:OPERACAO_COR[slug]}));
+  return gruposDeBarrasPorAno(pontos.map((p,i)=>({...p, _i:i})), series);
+}
+
 const METRICA_LABEL = {despesaHa:'Despesa por hectare', receitaHa:'Receita por hectare', resultadoHa:'Lucro por hectare'};
 const METRICA_CAMPO = {despesaHa:'despesa', receitaHa:'receita', resultadoHa:'resultado'};
 function ModalGraficoOperacao(){
@@ -4671,6 +4854,43 @@ function ModalGraficoOperacao(){
     <div class="modal" data-stop="1" style="max-width:640px;">
       <div class="modal-head"><h3>${METRICA_LABEL[metrica]} — ${nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">${corpo}</div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+const METRICA_CONSOLIDADO_LABEL = {receita:'Receita', despesa:'Despesa', resultado:'Resultado'};
+// Drill-down do histórico consolidado: mesma métrica clicada, comparando
+// as atividades ano a ano — "o que puxou a despesa de 2025, e como isso se
+// compara com 2023/2024/2026".
+function ModalGraficoConsolidadoAno(){
+  const {metrica, ano} = state.modal;
+  const anos = anosHistorico();
+  const pontos = anos.map(a=>{
+    const linha = {ano:a};
+    OPERACOES_ORDEM.forEach(slug=>{
+      const r = resultadoOperacaoNoAno(slug, a);
+      linha[slug] = (r && !r.erro && r[metrica]!=null) ? r[metrica] : 0;
+    });
+    return linha;
+  });
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1" style="max-width:640px;">
+      <div class="modal-head"><h3>${METRICA_CONSOLIDADO_LABEL[metrica]} por atividade — ano a ano</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:8px;">${anos.join(' · ')} — comparando com o ano ${ano}, que você clicou.</p>
+        ${GraficoBarrasAtividadePorAno(pontos)}
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
+          ${OPERACOES_ORDEM.map(slug=>`
+            <span class="hint" style="display:flex; align-items:center; gap:6px;">
+              <span style="width:10px; height:10px; border-radius:3px; background:${OPERACAO_COR[slug]}; display:inline-block;"></span>
+              ${esc(OPERACOES[slug]||slug)}
+            </span>`).join('')}
+        </div>
+      </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Fechar</button>
       </div>
@@ -4859,7 +5079,7 @@ function attachEvents(){
     // das 21h à meia-noite ele devolve a data de AMANHÃ, e a receita
     // lançada na noite de 31/08 caía na competência de setembro.
     data: tipo==='despesa' ? '' : hojeStr(),
-      fornecedor:'', observacao:'', areas:[], loteId:'', arrobas:'',
+      fornecedor:'', observacao:'', areas:[], loteId:'', arrobas:'', anoSafra:'',
     };
     state.erroLancamento = '';
     state.modal = {type:'lancamento'}; render();
@@ -5390,6 +5610,14 @@ function attachEvents(){
   document.querySelectorAll('[data-grafico-op]').forEach(el=>{
     el.onclick = ()=>{
       state.modal = {type:'graficoOperacao', slug: el.dataset.graficoOp, metrica: el.dataset.graficoMetrica};
+      render();
+    };
+  });
+  // histórico consolidado (ano a ano): clicar numa coluna abre o
+  // drill-down por atividade daquela métrica
+  document.querySelectorAll('[data-consolidado-metrica]').forEach(el=>{
+    el.onclick = ()=>{
+      state.modal = {type:'graficoConsolidadoAno', metrica: el.dataset.consolidadoMetrica, ano: Number(el.dataset.consolidadoAno)};
       render();
     };
   });
