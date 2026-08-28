@@ -406,7 +406,14 @@ function rowToLancamento(r){
           // aparecem no formulário; ficam aqui para não se perderem e para
           // o R$ por tonelada poder ser calculado depois.
           quantidade:r.quantidade??null, unidade:r.unidade||null,
-          safraId:r.safra_id||null, culturaId:r.cultura_id||null};
+          safraId:r.safra_id||null, culturaId:r.cultura_id||null,
+          // Ano de início da safra (maio a abril) a que este lançamento
+          // pertence, SE diferente do mês em que caiu — ex.: venda em
+          // junho/2026 de gado engordado na safra 2025/2026 (ano_safra=2025).
+          // Não é o mesmo campo que safraId acima: aquele é FK pra tabela
+          // safras (fazenda+cultura, só cana/grãos); este é livre, cobre
+          // qualquer atividade, e null significa "usa o mês normalmente".
+          anoSafra:r.ano_safra??null};
 }
 function lancamentoToRow(l){
   return {tipo:l.tipo, atividade:l.atividade,
@@ -440,7 +447,11 @@ function lancamentoToRow(l){
           // campo para graos, e editar um lancamento de outra atividade nao
           // pode apagar a cultura de um lancamento que ja a tinha.
           cultura_id: l.culturaId===undefined ? undefined
-                      : (l.culturaId==='' || l.culturaId==null ? null : Number(l.culturaId))};
+                      : (l.culturaId==='' || l.culturaId==null ? null : Number(l.culturaId)),
+          // Mesma regra do undefined: só despesa/receita mostram este campo
+          // no formulário, editar um investimento não pode mexer nele.
+          ano_safra: l.anoSafra===undefined ? undefined
+                      : (l.anoSafra==='' || l.anoSafra==null ? null : Number(l.anoSafra))};
 }
 /* O plano de contas do Conag é hierárquico, e essa hierarquia já está
  * gravada — só não era lida por nenhum app:
@@ -1615,6 +1626,15 @@ function safrasDisponiveis(){
   const hoje = new Date();
   const safraAtual = hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1;
   return [safraAtual, safraAtual-1, safraAtual-2];
+}
+// Opções pro campo "Safra" do lançamento — mais anos que safrasDisponiveis()
+// porque aqui também se edita lançamento histórico (Conag vai até 2023).
+function anosSafraParaLancamento(){
+  const hoje = new Date();
+  const safraAtual = hoje.getMonth()+1>=5 ? hoje.getFullYear() : hoje.getFullYear()-1;
+  const anos = [];
+  for(let s=safraAtual+1; s>=2018; s--) anos.push(s);
+  return anos;
 }
 
 /* ===================== RESULTADOS (geral, todas as operações) ===================== */
@@ -4271,6 +4291,7 @@ function lerLancamentoDoFormulario(base){
     quantidade:    document.getElementById('f-qtdlanc') ? v('f-qtdlanc') : base.quantidade,
     unidade:       document.getElementById('f-unidadelanc') ? v('f-unidadelanc') : base.unidade,
     culturaId:     document.getElementById('f-culturalanc') ? v('f-culturalanc') : base.culturaId,
+    anoSafra:      document.getElementById('f-safralanc') ? v('f-safralanc') : base.anoSafra,
   };
 }
 // Le lancamento E venda. O valor da venda e sempre recalculado dos campos
@@ -4362,6 +4383,14 @@ function ModalLancamento(){
         <div class="field"><label>Data${ehDespesa?' (deixe vazia para recorrente)':''}</label><input id="f-datalanc" type="date" value="${d.data||''}"/>
           ${ehDespesa?`<span class="hint">Sem data, vale como valor mensal padrão para qualquer mês sem lançamento próprio.</span>`:''}
         </div>
+        ${(ehDespesa || ehReceita) ? `
+        <div class="field"><label>Safra (opcional)</label>
+          <select id="f-safralanc">
+            <option value="" ${!d.anoSafra?'selected':''}>— Usa o mês da data —</option>
+            ${anosSafraParaLancamento().map(s=>`<option value="${s}" ${String(d.anoSafra)===String(s)?'selected':''}>${s}/${s+1}</option>`).join('')}
+          </select>
+          <span class="hint">Só preencha quando a venda (ou a despesa) aconteceu depois do fim da safra, mas pertence à produção da safra anterior — ex.: gado vendido em junho que foi engordado na safra passada. Na maioria dos lançamentos deixe em branco: o app usa o mês normalmente.</span>
+        </div>` : ''}
         ${ehDespesa?`<div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedorlanc" value="${esc(d.fornecedor||'')}" autocomplete="off"/></div>`:''}
         ${ehDespesa && ehPecuaria ? `
         <div class="field"><label>Rateio entre as áreas da pecuária</label>
@@ -4859,7 +4888,7 @@ function attachEvents(){
     // das 21h à meia-noite ele devolve a data de AMANHÃ, e a receita
     // lançada na noite de 31/08 caía na competência de setembro.
     data: tipo==='despesa' ? '' : hojeStr(),
-      fornecedor:'', observacao:'', areas:[], loteId:'', arrobas:'',
+      fornecedor:'', observacao:'', areas:[], loteId:'', arrobas:'', anoSafra:'',
     };
     state.erroLancamento = '';
     state.modal = {type:'lancamento'}; render();

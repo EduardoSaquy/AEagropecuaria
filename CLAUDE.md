@@ -117,6 +117,30 @@ nome de centro é único). Confirmado equivalente em 25/08/2026, mas é
 duplicação frágil: mudar a regra num app sem replicar no outro reintroduz o
 bug do R$ 1,2 milhão em silêncio. Se for mexer nessa regra, mexa nos dois.
 
+### `ano_safra`: safra de produção, independente do mês da transação
+
+Campo opcional no formulário de despesa/receita do AEMatriz.html ("Safra"),
+coluna `lancamentos_financeiros.ano_safra` (integer, o ano de início da safra
+maio-abril — ex.: `2025` = safra 2025/2026). Existe pra resolver o
+descasamento apontado pelo Eduardo em 28/08/2026: uma venda pode acontecer
+depois do fim da safra que produziu — gado vendido em junho que engordou na
+safra passada, grão vendido meses depois da colheita — e nesses casos o mês
+da transação (`mes`/`data`) não é o mês da produção. Preenchido, `ano_safra`
+diz a qual safra aquele valor pertence de verdade; em branco (`null`, a
+maioria dos casos) o lançamento continua contando pelo mês, como sempre foi.
+
+**Não é o mesmo campo que `safra_id`** (também na tabela, mas FK pra
+`safras`, que exige `fazenda_id`+`cultura_id` — só serve pra Cana/Grãos, veio
+da migração antiga da Lavoura, sem uso hoje). `ano_safra` é livre, serve
+qualquer atividade incluindo Pecuária, e é uma criação nova, não um resgate
+daquele campo.
+
+**Ainda não está ligado a lugar nenhum de leitura** — a aba "Safra" do
+Resultados continua agrupando por `mes` via `periodoMeses()`, sem olhar
+`ano_safra`. Só a captura foi feita (`lancamentos_ano_safra_01_adicionar_
+coluna.sql`); usar esse campo pra corrigir de fato o Resultado por safra é
+trabalho futuro, ainda não pedido.
+
 ### Plano de contas
 
 `centros_custo.tipo` ('entrada'/'saida') e `.subcategoria` ('GRUPO | Subcategoria'),
