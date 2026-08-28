@@ -106,6 +106,18 @@ parcela como paga, o juros vira **3 lançamentos iguais** (Pecuária/Cana/Grãos
 1/3 cada — decisão do Eduardo, mais simples que ratear por hectare).
 Investimento/custeio têm atividade única, escolhida no cadastro.
 
+A importação do Conag (`conag_dashboard_2_depois_do_csv.sql`) pisou nessa
+regra em 28/08/2026: o insert original marcava `tipo='despesa'` para os
+9.400 títulos sem olhar pra que conta cada um caía, inclusive os 75 de
+"AMORTIZAÇÃO DE FINANCIAMENTO" (R$ 17,8 milhões — desembolso de principal,
+não é despesa) e os 337 de compra de máquina/terra/matriz/infraestrutura
+(R$ 7,2 milhões — deveriam ser `tipo='investimento'`). Corrigido: amortização
+de financiamento fica de fora do import (não vira lançamento nenhum), e conta
+que cai no grupo `INVESTIMENTOS` do plano do Conag vira `tipo='investimento'`.
+O `conag_dashboard_4_corrigir_producao.sql` refaz o import já feito sem
+precisar recarregar o CSV. Cana e Grãos **não** tiveram esse problema — o
+CSV já traz `atividade` separado certo (1.762 cana, 1.689 graos).
+
 ## Armadilhas que já custaram caro
 
 - **Leia o catálogo vivo, não os arquivos de schema.** `cana_schema.sql` e

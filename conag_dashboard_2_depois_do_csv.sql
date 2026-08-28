@@ -86,7 +86,7 @@ comment on column lancamentos_financeiros.vencimento is
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
    vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
-select 'despesa',
+select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' end,
        s.atividade,
        f.id,
        c.id,
@@ -105,6 +105,11 @@ select 'despesa',
   from conag_staging s
   join centros_custo c  on plano_norm(c.nome) = plano_norm(s.centro_custo)
   left join lateral (
+        select grupo from conag_plano_contas
+         where plano_norm(conta) = plano_norm(s.centro_custo)
+         order by case when classe = 'DEDUCOES DA RECEITA BRUTA DE VENDAS' then 1 else 0 end
+         limit 1) p on true
+  left join lateral (
         select id from fazendas
          where coalesce(btrim(s.fazenda_conag),'') <> ''
            and plano_norm(nome) like '%' || plano_norm(
@@ -120,7 +125,19 @@ select 'despesa',
  -- tela do Matriz ja cobra no formulario ("valor maior que zero"). 72
  -- titulos do CSV vem com R$ 0,00 (nenhum negativo) e violavam essa trava,
  -- derrubando a importacao inteira. Ficam de fora, contados na conferencia.
+ --
+ -- AMORTIZACAO DE FINANCIAMENTO fica de fora: pagar o principal de um
+ -- emprestimo nao e despesa, e divida saindo (regra do proprio CLAUDE.md,
+ -- a mesma do modulo Financiamentos). So o juros vira lancamento, e o
+ -- juros esta em conta separada (DESPESAS FINANCEIRAS), que continua
+ -- entrando normalmente. Sao 75 titulos, R$ 17.829.159,91 - conferidos na
+ -- linha 11.6.
+ --
+ -- Conta que cai no grupo INVESTIMENTOS do plano do Conag (maquina, terra,
+ -- matriz, infraestrutura) vira tipo='investimento', nao despesa - senao
+ -- infla o total de despesas com dinheiro que virou patrimonio, nao custo.
  where s.valor::numeric > 0
+   and plano_norm(s.centro_custo) <> plano_norm('AMORTIZACAO DE FINANCIAMENTO')
 on conflict (conag_id) where conag_id is not null do nothing;
 
 with base_fs as (
