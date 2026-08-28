@@ -6,6 +6,12 @@
 // registram a intencao) desde que o teste de Financiamentos passou a
 // clicar em "Salvar" de verdade -- os tres arquivos de teste antigos nunca
 // exercitavam esse caminho, entao isso nao muda nenhum deles.
+//
+// O Contas a Pagar tinha chegado numa versao mais simples de insert()
+// (so fingia um id, sem gravar a linha) -- reconciliado com esta na fusao
+// do bundle de 26/08: teste_contas.py so confere window.__ESCRITAS__, que
+// as duas versoes gravam igual, entao nada quebrou ao ficar com a que
+// persiste de verdade.
 window.supabase = {
   createClient() {
     function tabela(nome) {
