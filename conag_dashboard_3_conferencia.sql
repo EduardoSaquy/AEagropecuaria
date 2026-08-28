@@ -18,7 +18,7 @@
 -- ============================================================
 
 select 1::numeric as ordem, 'Titulos do Conag importados' as item,
-       count(*)::text as valor, 'esperado: 9.400' as situacao
+       count(*)::text as valor, 'esperado: 9.328 (9.400 - 72 de valor zero, ver linha 11.4)' as situacao
 from lancamentos_financeiros where conag_id is not null
 union all
 select 2, 'Valor importado', round(sum(valor),2)::text, 'esperado: 62.609.569,50'
@@ -55,7 +55,7 @@ select 7, 'Rateados: administrativo', count(distinct lancamento_id)::text,
 from lancamento_rateios where origem = 'administrativo'
 union all
 select 8, 'Nao rateados por serem centavo ou zero', count(*)::text,
-       'esperado: 81, somando R$ 0,09'
+       'esperado: 9, somando R$ 0,09 (era 81 antes de excluir os 72 de valor zero da linha 11.4 - a soma nao mudou, so a contagem)'
 from lancamentos_financeiros l
 where l.conag_id is not null and l.atividade = 'geral'
   and not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id)
@@ -72,9 +72,16 @@ select 11, 'Titulos sem centro de custo', count(*)::text,
        case when count(*) = 0 then 'nenhum ficou de fora' else 'PARE E ME AVISE' end
 from conag_staging s
 where not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
+  and s.valor::numeric > 0
+union all
+select 11.4, 'Titulos com valor R$ 0,00 (nao importados)', count(*)::text,
+       'esperado: 72 - lancamentos_financeiros exige valor > 0'
+from conag_staging s
+where s.valor::numeric = 0
+  and not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
 union all
 select 11.5, 'Titulos com vencimento em outro mes', count(*)::text,
-       'esperado: 4.836 - nota a prazo, data fica nula'
+       'esperado: 4.813 - nota a prazo, data fica nula (era 4.836 antes de excluir os 72 de valor zero da linha 11.4)'
 from lancamentos_financeiros
 where conag_id is not null and vencimento is not null
   and to_char(vencimento,'YYYY-MM') <> mes
