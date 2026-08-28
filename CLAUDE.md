@@ -117,6 +117,46 @@ nome de centro é único). Confirmado equivalente em 25/08/2026, mas é
 duplicação frágil: mudar a regra num app sem replicar no outro reintroduz o
 bug do R$ 1,2 milhão em silêncio. Se for mexer nessa regra, mexa nos dois.
 
+### `ano_safra`: safra de produção, independente do mês da transação
+
+Campo opcional no formulário de despesa/receita do AEMatriz.html ("Safra"),
+coluna `lancamentos_financeiros.ano_safra` (integer, o ano de início da safra
+maio-abril — ex.: `2025` = safra 2025/2026). Existe pra resolver o
+descasamento apontado pelo Eduardo em 28/08/2026: uma venda pode acontecer
+depois do fim da safra que produziu — gado vendido em junho que engordou na
+safra passada, grão vendido meses depois da colheita — e nesses casos o mês
+da transação (`mes`/`data`) não é o mês da produção. Preenchido, `ano_safra`
+diz a qual safra aquele valor pertence de verdade; em branco (`null`, a
+maioria dos casos) o lançamento continua contando pelo mês, como sempre foi.
+
+**Não é o mesmo campo que `safra_id`** (também na tabela, mas FK pra
+`safras`, que exige `fazenda_id`+`cultura_id` — só serve pra Cana/Grãos, veio
+da migração antiga da Lavoura, sem uso hoje). `ano_safra` é livre, serve
+qualquer atividade incluindo Pecuária, e é uma criação nova, não um resgate
+daquele campo.
+
+**A aba "Safra" do Resultados usa este campo** (`resultadoOperacaoNoPeriodo()`
+no AEMatriz.html, via `despesaNaSafra()`/`receitasNaSafra()`): um lançamento
+com `mes` dentro da janela maio-abril da safra conta nela A MENOS QUE tenha
+`ano_safra` apontando pra outra; um lançamento de fora da janela com
+`ano_safra` apontando pra esta safra entra mesmo assim. Só afeta a parte que
+vem de `lancamentos_financeiros` — despesa fixa (Pecuária) / despesa geral
+(Cana, Cereais) e a receita inteira. Ração, pasto e reprodução da Pecuária
+vêm de outras tabelas (`saidas_racao`, `pasto`, `reproducao_custos`), não têm
+`ano_safra`, e continuam somadas por calendário dentro da janela — não faz
+sentido remarcar custo variável de ração pra outra safra manualmente.
+Recorrente (despesa sem `mes`) também não usa `ano_safra`: continua vigente
+em toda a janela como sempre foi, via `vigentesNoMes()`.
+
+**As abas Mês e Ano continuam 100% por calendário**, sem olhar `ano_safra` —
+são regime de caixa/competência mesmo, de propósito. Só a aba Safra muda de
+comportamento.
+
+Depende de duas migrações rodadas nesta ordem: `lancamentos_ano_safra_01_
+adicionar_coluna.sql` (cria a coluna) e `lancamentos_rateados_03_ano_safra.sql`
+(alarga a view — sem isso o campo fica gravado na tabela mas invisível pros
+Resultados, que leem de `lancamentos_rateados`).
+
 ### Plano de contas
 
 `centros_custo.tipo` ('entrada'/'saida') e `.subcategoria` ('GRUPO | Subcategoria'),
