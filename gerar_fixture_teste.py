@@ -65,7 +65,14 @@ create or replace function auth.uid() returns uuid language sql stable as $$
                        "id bigint generated always as identity primary key",
                        corpo, flags=re.M)
         corpo = re.sub(r"^id uuid NOT NULL", "id uuid primary key", corpo, flags=re.M)
-        partes.append(f"create table {t} (\n  {corpo}\n);")
+        extra = ""
+        if t == "lancamentos_financeiros":
+            # a trava real da tabela, do financeiro_01. Sem ela o teste
+            # aceita o que o Supabase recusa - foi assim que o import
+            # passou aqui e quebrou na tela dele.
+            extra = (",\n  constraint mes_bate_com_data check ("
+                     "data is null or mes = to_char(data, 'YYYY-MM'))")
+        partes.append(f"create table {t} (\n  {corpo}{extra}\n);")
 
     if faltando:
         sys.exit("tabelas ausentes no schema_real.txt: " + ", ".join(faltando))
