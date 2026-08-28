@@ -82,6 +82,19 @@ troca a tabela. A view não tem coluna `id` (é `lancamento_id`; `rateio_id`
 distingue as partes de um mesmo lançamento rateado, útil como chave quando
 precisa de uma por linha).
 
+**`lancamento_id` não é único na view — `fetchAllRows`/`buscarTudo` precisam
+de `.order('lancamento_id').order('rateio_id')`, as duas.** Um lançamento
+rateado em várias fazendas gera várias linhas com o mesmo `lancamento_id`;
+paginando com `.range()` em blocos de 1000 e só `order('lancamento_id')`,
+o Postgres não garante a mesma ordem de desempate entre uma chamada de
+página e a próxima — uma linha pode sumir ou duplicar na fronteira. Achado e
+corrigido em 28/08/2026, junto com a correção acima: sozinho, num teste local
+com Postgres real, isso desviou a soma em ~0,006% (R$ 1.234 num total de
+R$ 20,7 milhões) — real, mas não do tamanho da despesa da Cana ter
+aparentemente dobrado em produção no mesmo dia. Essa segunda causa, maior,
+não foi identificada ainda — ver o que Eduardo reportar a seguir antes de
+supor que este ajuste sozinho resolveu.
+
 Esse ponto ficou destampado até 28/08/2026: `carregarResultadoCana/Cereais/
 Pecuaria` (AEMatriz.html) e o Financeiro só-leitura do AEpecuaria.html liam
 direto de `lancamentos_financeiros`, então a fatia rateada de um custo

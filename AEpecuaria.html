@@ -588,7 +588,7 @@ async function loadAll(){
     // "geral" (titulo do Conag sem atividade propria) pode ter parte do
     // valor rateada pra pecuaria, e filtrar direto na tabela por
     // atividade='pecuaria' perdia essa fatia inteira.
-    buscarTudo(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id')),
+    buscarTudo(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
     buscarTudo(()=>db.from('centros_custo').select('id, nome')),
     buscarTudo(()=>db.from('precos_arroba').select('*').order('id')),
     db.from('config_financeiro').select('*').eq('id', 1),
