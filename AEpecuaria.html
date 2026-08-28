@@ -583,7 +583,12 @@ async function loadAll(){
     // Matriz. A excecao e a receita gerada por uma venda, que continua
     // nascendo aqui porque a venda e uma acao operacional (ver tipo
     // 'venda' em salvarRegistro).
-    buscarTudo(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id')),
+    //
+    // Le da view lancamentos_rateados, nao da tabela direto: um lancamento
+    // "geral" (titulo do Conag sem atividade propria) pode ter parte do
+    // valor rateada pra pecuaria, e filtrar direto na tabela por
+    // atividade='pecuaria' perdia essa fatia inteira.
+    buscarTudo(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id')),
     buscarTudo(()=>db.from('centros_custo').select('id, nome')),
     buscarTudo(()=>db.from('precos_arroba').select('*').order('id')),
     db.from('config_financeiro').select('*').eq('id', 1),
@@ -620,8 +625,12 @@ async function loadAll(){
   const nomeCentro = new Map((cCusto.data||[]).map(x=>[x.id, x.nome]));
   const lancamentos = lanc.data||[];
   state.centroVendasId = (cCusto.data||[]).find(x=>x.nome==='Vendas')?.id ?? null;
+  // id: um lancamento rateado (veio de um titulo "geral") pode aparecer
+  // aqui mais de uma vez, uma por fazenda — rateio_id distingue essas
+  // linhas; num lancamento direto (nao rateado) ele e nulo, e o id do
+  // proprio lancamento basta.
   state.custosFixos = lancamentos.filter(l=>l.tipo==='despesa').map(l=>({
-    id:l.id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
+    id:l.rateio_id ?? l.lancamento_id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
     descricao:'', fornecedor:l.fornecedor||'', valorMensal:l.valor,
     mes:l.mes||null, data:l.data||null, areas:l.areas||[], observacao:l.observacao||'',
     // fazendaId entra na chave de agrupamento do recorrente (ver
@@ -630,11 +639,11 @@ async function loadAll(){
     fazendaId:l.fazenda_id ?? null,
   }));
   state.investimentos = lancamentos.filter(l=>l.tipo==='investimento').map(l=>({
-    id:l.id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
+    id:l.rateio_id ?? l.lancamento_id, nome:l.descricao, categoria:nomeCentro.get(l.centro_custo_id)||'',
     fornecedor:l.fornecedor||'', valor:l.valor, data:l.data,
   }));
   state.receitas = lancamentos.filter(l=>l.tipo==='receita').map(l=>({
-    id:l.id, data:l.data, loteId:l.lote_id, descricao:l.descricao,
+    id:l.rateio_id ?? l.lancamento_id, data:l.data, loteId:l.lote_id, descricao:l.descricao,
     arrobas:l.arrobas, valor:l.valor, observacao:l.observacao||'', vendaId:l.abate_id||null,
   }));
   state.precosArroba = (pa.data||[]).map(rowToPrecoArroba);

@@ -714,7 +714,7 @@ async function carregarResultadoPecuaria(){
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
       dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
       dbPecuaria.from('reproducao_custos').select('data, custo'),
-      fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','pecuaria').order('id')),
+      fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id')),
     ]);
     for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
@@ -775,15 +775,19 @@ async function carregarResultadoPecuaria(){
   render();
 }
 
-// Resultado da Cana. Fonte única: lancamentos_financeiros. Não lê estoque
-// nem aplicações — o custo do insumo já está na despesa lançada quando ele
-// foi comprado; a aplicação no talhão serve para repartir esse custo entre
-// talhões, nunca para somar ao total.
+// Resultado da Cana. Fonte única: lancamentos_rateados (a view, não a
+// tabela) — um lançamento "geral" (contador, escritório, os títulos do
+// Conag sem atividade própria) pode ter parte do valor rateada pra cana;
+// ler direto de lancamentos_financeiros filtrando atividade='cana' perdia
+// essa fatia inteira, deixando a despesa da cana menor do que devia. Não lê
+// estoque nem aplicações — o custo do insumo já está na despesa lançada
+// quando ele foi comprado; a aplicação no talhão serve para repartir esse
+// custo entre talhões, nunca para somar ao total.
 async function carregarResultadoCana(){
   state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
   render();
   try{
-    const lancRes = await fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','cana').order('id'));
+    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','cana').order('lancamento_id'));
     if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
@@ -843,7 +847,7 @@ async function carregarResultadoCereais(){
   state.resultados.cereais = {...state.resultados.cereais, loading:true, erro:''};
   render();
   try{
-    const lancRes = await fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').eq('atividade','graos').order('id'));
+    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','graos').order('lancamento_id'));
     if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 

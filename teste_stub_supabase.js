@@ -15,7 +15,15 @@
 window.supabase = {
   createClient() {
     function tabela(nome) {
-      let linhas = () => (window.__DB__[nome] || []).slice();
+      // lancamentos_rateados e a view que reparte um lancamento "geral" do
+      // Conag entre atividade/fazenda. Nenhum teste monta lancamento
+      // rateado a mao (isso so acontece na importacao do Conag), entao a
+      // view sempre cai no ramo "nao rateado": os mesmos lancamentos, so
+      // com lancamento_id no lugar de id (a view nao tem coluna "id") e
+      // rateio_id/rateado marcando que nao foi rateado.
+      let linhas = nome === 'lancamentos_rateados'
+        ? () => (window.__DB__.lancamentos_financeiros || []).map(r => ({ ...r, lancamento_id: r.id, rateio_id: null, rateado: false }))
+        : () => (window.__DB__[nome] || []).slice();
       const q = {
         _rows: null,
         _filtros: [],

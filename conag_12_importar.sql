@@ -131,6 +131,13 @@ select s.nome,
 -- Uma linha por destino. lancamento_id + atividade e unico: o mesmo titulo
 -- nao pode cair duas vezes na mesma atividade da mesma fazenda.
 -- ------------------------------------------------------------
+alter table lancamentos_financeiros add column if not exists vencimento date;
+
+comment on column lancamentos_financeiros.vencimento is
+  'Quando o titulo vence - fato de caixa. Diferente de data, que e quando o '
+  'custo aconteceu. Nos lancamentos vindos do Conag, data e nula (so se '
+  'conhece o mes de competencia) e o vencimento fica aqui.';
+
 create table if not exists lancamento_rateios (
   id             bigint generated always as identity primary key,
   lancamento_id  bigint not null references lancamentos_financeiros(id) on delete cascade,
@@ -156,14 +163,18 @@ create or replace view lancamentos_rateados as
 select l.id as lancamento_id, r.id as rateio_id, l.tipo,
        r.atividade, r.fazenda_id, r.cultura_id, r.valor,
        l.centro_custo_id, l.descricao, l.fornecedor, l.data, l.mes,
-       l.conag_id, l.contrato, true as rateado
+       l.conag_id, l.contrato, true as rateado,
+       l.observacao, l.talhao_id, l.lote_id, l.areas, l.arrobas, l.abate_id,
+       l.criado_por, l.quantidade, l.unidade, l.safra_id, l.cnpj_nota, l.vencimento
   from lancamentos_financeiros l
   join lancamento_rateios r on r.lancamento_id = l.id
 union all
 select l.id, null, l.tipo,
        l.atividade, l.fazenda_id, l.cultura_id, l.valor,
        l.centro_custo_id, l.descricao, l.fornecedor, l.data, l.mes,
-       l.conag_id, l.contrato, false
+       l.conag_id, l.contrato, false,
+       l.observacao, l.talhao_id, l.lote_id, l.areas, l.arrobas, l.abate_id,
+       l.criado_por, l.quantidade, l.unidade, l.safra_id, l.cnpj_nota, l.vencimento
   from lancamentos_financeiros l
  where not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id);
 
@@ -202,12 +213,6 @@ comment on view lancamentos_rateados is
 --
 -- on conflict do nothing no conag_id: rodar de novo nao duplica.
 -- ------------------------------------------------------------
-alter table lancamentos_financeiros add column if not exists vencimento date;
-
-comment on column lancamentos_financeiros.vencimento is
-  'Quando o titulo vence - fato de caixa. Diferente de data, que e quando o '
-  'custo aconteceu. Nos lancamentos vindos do Conag, data e nula (so se '
-  'conhece o mes de competencia) e o vencimento fica aqui.';
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
    vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
