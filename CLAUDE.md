@@ -158,6 +158,29 @@ O `conag_dashboard_4_corrigir_producao.sql` refaz o import já feito sem
 precisar recarregar o CSV. Cana e Grãos **não** tiveram esse problema — o
 CSV já traz `atividade` separado certo (1.762 cana, 1.689 graos).
 
+### O import do Conag duplicou Cana e Pecuária de jan/2026 em diante
+
+A Cana só passou a ser lançada à mão no app a partir de janeiro/2026 (a
+Pecuária, em volume, também — antes disso só existia um lançamento
+recorrente isolado por mês). A importação do Conag cobre até agosto/2026,
+sem excluir esse período: de jan/2026 a ago/2026, a mesma despesa real
+ficava lançada duas vezes — uma vez à mão, outra vez pelo Conag, cada
+uma com o campo `fornecedor` escrito diferente (por isso um `join` exato
+por fornecedor não encontrava o par; só bateu comparando total por mês).
+Confirmado dia 28/08/2026 e corrigido com
+`conag_dashboard_6_remover_duplicidade.sql`: apagou a despesa **do Conag**
+de Cana/Pecuária a partir de jan/2026 (~R$ 2,51 milhões / 467 títulos de
+Cana, ~R$ 1,02 milhão / 436 títulos de Pecuária), mantendo a lançada à mão
+— decisão do Eduardo, porque é o registro nativo do time. Grãos nunca teve
+lançamento à mão, então não tinha esse risco. Investimento tem uma
+sobreposição menor e mais espalhada no mesmo período (~R$ 463 mil só em
+Pecuária) que ficou de fora dessa limpeza — decidir com mais calma se
+reaparecer.
+
+**Se algum dia reimportar ou expandir o CSV do Conag**: nunca deixar
+título de Cana ou Pecuária com competência (`mes`) a partir de 2026-01
+entrar de novo sem checar contra o que já foi lançado à mão primeiro.
+
 ## Armadilhas que já custaram caro
 
 - **Leia o catálogo vivo, não os arquivos de schema.** `cana_schema.sql` e
