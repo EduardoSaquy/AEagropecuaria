@@ -1,62 +1,85 @@
 # Importar o Conag — instruções para o Code
 
-O Eduardo está no tablet e não consegue colar SQL no dashboard do Supabase.
-Faça você, pelo `psql`.
+O Eduardo está no tablet e não consegue operar o dashboard do Supabase até o
+fim. Faça você, pelo `psql`.
 
-## O que rodar
+## Ordem
 
-Da raiz do repositório:
+**1. Aplique o bundle primeiro.** O CSV que a importação usa
+(`conag/lancamentos_para_importar.csv`) **não está no GitHub** — ele só existe
+nos commits que não subiram. Sem o bundle, o passo 2 quebra no `\copy`.
+
+```
+git bundle verify AEagro_XX_commits.bundle
+git pull AEagro_XX_commits.bundle main
+```
+
+Se der conflito, **pare e mostre o conflito ao Eduardo** — ele e eu mexemos
+nos mesmos arquivos e o merge é decisão dele, não limpeza automática.
+
+**2. Rode a importação**, da raiz do repositório:
 
 ```
 psql "<STRING DE CONEXAO>" -v ON_ERROR_STOP=1 -f conag_tudo.sql
 ```
 
-A string de conexão está em **Supabase → Project Settings → Database →
-Connection string → URI**, modo **Session** (porta 5432). O Eduardo tem a
-senha; peça a ele. **Rode de dentro da pasta do repositório** — o `\copy`
-procura `conag/lancamentos_para_importar.csv` por caminho relativo.
+A string está em **Supabase → Project Settings → Database → Connection string
+→ URI**, modo **Session** (porta 5432). Peça a senha ao Eduardo. **Rode de
+dentro da pasta do repositório**: o `\copy` procura o CSV por caminho relativo.
 
-Se `psql` não estiver instalado: `sudo apt install postgresql-client`.
+Se faltar o cliente: `sudo apt install postgresql-client`.
+
+## Estado atual do banco
+
+O Eduardo já rodou pelo dashboard, e deram certo:
+
+- `centros_05_dois_niveis.sql` → 7 / 1.375 / 2
+- `conag_10_estrutura.sql` → mesa criada
+- carga do CSV em `conag_staging` → 9.400 linhas
+- a primeira parte do `conag_12` → contas de nível 4, `lancamento_rateios`, view
+
+A importação em si **não rodou** — bateu na trava `mes_bate_com_data` e o
+Postgres desfez tudo. Já está corrigido no arquivo (veja abaixo).
+
+`conag_tudo.sql` é seguro rodar por cima disso: ele recria `conag_staging`,
+recarrega o CSV e usa `on conflict do nothing` no `conag_id`. Rodar duas vezes
+dá o mesmo resultado.
+
+## O que mudou desde a versão anterior
+
+`data` agora fica **nula** nos lançamentos do Conag e o vencimento vai para uma
+coluna própria (`lancamentos_financeiros.vencimento`, criada pelo script).
+
+Motivo: a trava `mes_bate_com_data` exige `data is null or mes =
+to_char(data,'YYYY-MM')`, e em 4.836 dos 9.400 títulos (51,4%, R$ 23,6 milhões)
+o vencimento cai em mês diferente da competência — compra em dezembro, boleto
+em janeiro. `data` significa *quando o custo aconteceu*, e o Conag só informa o
+mês. **Não relaxe essa trava**: ela nasceu de um bug real que inflou
+R$ 43.928,73 para R$ 1.230.390,69.
 
 ## O que ele faz
 
-Um arquivo só, seis etapas, 9.400 títulos e R$ 62.609.569,50:
-
-1. cria `conag_staging` e as colunas `conag_id`, `cnpj_nota`, `contrato`
-2. carrega o CSV
-3. cria as 85 contas de nível 4, a tabela `lancamento_rateios` e a view
-   `lancamentos_rateados`
-4. importa os 9.400
-5. rateia os 791 do geral de fazenda e os 2.657 do administrativo
-6. imprime a conferência
-
-Pode rodar mais de uma vez — o índice único em `conag_id` não deixa duplicar.
-Confirmado: duas rodadas seguidas dão resultado idêntico.
-
-## Pré-requisitos
-
-`centros_05_dois_niveis.sql` e `centros_07_de_para.sql` já foram rodados pelo
-Eduardo no dashboard (deram 7 / 1.375 / 2). O `conag_tudo.sql` para na
-primeira linha se algum faltar, e diz qual.
+Seis etapas, 9.400 títulos, R$ 62.609.569,50: mesa de pouso → carga do CSV →
+85 contas de nível 4 + `lancamento_rateios` + view `lancamentos_rateados` →
+importa os 9.400 → rateia os 791 do geral de fazenda e os 2.657 do
+administrativo → confere.
 
 ## O resultado esperado
 
-13 linhas. As duas que decidem:
+14 linhas. As quatro que decidem:
 
 | linha | tem que dizer |
 |---|---|
 | 3 — A view devolve o mesmo dinheiro? | `SIM - bate com a linha 2` |
 | 4 — Título cujo rateio não fecha | `nenhum - todos fecham` |
+| 12 — Lancamentos NOSSOS, anteriores | `2760` (ou `2761`, se o teste id 3234 ainda existir) |
+| 13 — Valor NOSSO, anterior | `10447812.29` (ou `10453612.29`) |
 
-E as linhas 12 e 13 (`Lancamentos NOSSOS, anteriores`) **não podem ter
-mudado**: eram 2.760 e R$ 10.447.812,29 — ou 2.761 e R$ 10.453.612,29 se o
-lançamento de teste id 3234 ainda estiver lá.
+Se qualquer uma sair diferente, **pare e mande a saída inteira** em vez de
+tentar consertar.
 
-Se qualquer uma dessas quatro sair diferente, **pare e mande a saída inteira**
-em vez de tentar consertar.
-
-## Como testar antes, sem tocar no Supabase
+## Testar antes, sem tocar no Supabase
 
 `./ensaio_conag.sh` sobe um Postgres local, monta o banco a partir de
-`schema_real.txt` e roda tudo com o CSV de verdade. É o ensaio que já validou
-este arquivo.
+`schema_real.txt` — já com a trava `mes_bate_com_data` — e roda tudo com o CSV
+de verdade. É o ensaio que validou este arquivo.
