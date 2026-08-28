@@ -714,7 +714,7 @@ async function carregarResultadoPecuaria(){
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
       dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
       dbPecuaria.from('reproducao_custos').select('data, custo'),
-      fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id')),
+      fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
     ]);
     for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
@@ -783,11 +783,18 @@ async function carregarResultadoPecuaria(){
 // estoque nem aplicações — o custo do insumo já está na despesa lançada
 // quando ele foi comprado; a aplicação no talhão serve para repartir esse
 // custo entre talhões, nunca para somar ao total.
+// order('lancamento_id').order('rateio_id') — as duas juntas, nao só a
+// primeira. Um lançamento rateado em várias fazendas aparece várias vezes
+// nesta view com o MESMO lancamento_id; sem o rateio_id como desempate, o
+// Postgres não garante a mesma ordem entre uma chamada de fetchAllRows() e
+// a próxima, e uma linha pode sair duplicada na fronteira de duas páginas
+// de 1000. Foi exatamente isso que dobrou a despesa da cana em produção —
+// só apareceu com volume real de dado, o teste não pegou.
 async function carregarResultadoCana(){
   state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
   render();
   try{
-    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','cana').order('lancamento_id'));
+    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','cana').order('lancamento_id').order('rateio_id'));
     if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
@@ -847,7 +854,7 @@ async function carregarResultadoCereais(){
   state.resultados.cereais = {...state.resultados.cereais, loading:true, erro:''};
   render();
   try{
-    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','graos').order('lancamento_id'));
+    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','graos').order('lancamento_id').order('rateio_id'));
     if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
