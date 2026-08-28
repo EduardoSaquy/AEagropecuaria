@@ -4783,8 +4783,8 @@ function gruposDeBarrasPorAno(pontos, series){
   const zeroY = margemTopo + areaAltura*(maxV/range);
   const n = pontos.length || 1;
   const passo = largura/n;
-  const larguraGrupo = Math.min(140, passo-16);
-  const larguraBarra = larguraGrupo/series.length - 4;
+  const larguraGrupo = Math.min(84, passo-28);
+  const larguraBarra = larguraGrupo/series.length - 6;
   const barras = pontos.map(p=>{
     const xGrupo = p._i*passo + (passo-larguraGrupo)/2;
     const rotulo = `<text x="${(xGrupo+larguraGrupo/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="10" fill="var(--cinza)" font-family="Inter,sans-serif">${p.ano}</text>`;
