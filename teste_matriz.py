@@ -127,6 +127,52 @@ with sync_playwright() as pw:
              "Resultados enxerga a receita de cana migrada",
              f'veio R$ {res["receita"]:,.2f}')
 
+    # ---- ano_safra: venda/despesa remarcada pra outra safra ----
+    safra_calc = page.evaluate(
+        "() => {"
+        "  const despesas = ["
+        "    {mes:'2025-06', anoSafra:null, valor:100, descricao:'a', centroCustoId:1, atividade:'cana', fazendaId:1, areas:[]},"
+        "    {mes:'2025-07', anoSafra:2024, valor:200, descricao:'b', centroCustoId:1, atividade:'cana', fazendaId:1, areas:[]},"
+        "    {mes:'2025-03', anoSafra:2025, valor:300, descricao:'c', centroCustoId:1, atividade:'cana', fazendaId:1, areas:[]},"
+        "    {mes:null, anoSafra:null, valor:50, descricao:'rec', centroCustoId:2, atividade:'cana', fazendaId:1, areas:[]},"
+        "  ];"
+        "  const receitas = ["
+        "    {mes:'2025-06', anoSafra:null, valor:1000, data:'2025-06-10', descricao:'venda a'},"
+        "    {mes:'2025-07', anoSafra:2024, valor:2000, data:'2025-07-01', descricao:'venda b'},"
+        "    {mes:'2025-03', anoSafra:2025, valor:3000, data:'2025-03-01', descricao:'venda c'},"
+        "  ];"
+        "  return {despesa: despesaNaSafra(despesas, 2025), receitas: receitasNaSafra(receitas, 2025)};"
+        "}"
+    )
+    # a (100, dentro da janela, sem override) + c (300, fora da janela, remarcada pra dentro)
+    # + rec (50 x 12 meses da janela = 600) = 1000. b (dentro da janela, remarcada pra fora) some.
+    conf(abs(safra_calc["despesa"] - 1000.0) < 0.01,
+         "despesaNaSafra: soma remarcada pra dentro, tira a remarcada pra fora",
+         f'veio R$ {safra_calc["despesa"]:,.2f}, esperado R$ 1.000,00')
+    receitas_nomes = sorted(r["descricao"] for r in safra_calc["receitas"])
+    conf(receitas_nomes == ["venda a", "venda c"],
+         "receitasNaSafra: mesma regra pra receita (venda a entra, b sai, c é importada)",
+         f'veio {receitas_nomes}')
+
+    # ---- a aba Safra do Resultados usa ano_safra de verdade (nao so o mes) ----
+    page.evaluate(
+        "() => { window.__DB__.lancamentos_financeiros.push("
+        "  {id:6, tipo:'receita', atividade:'cana', fazenda_id:1, centro_custo_id:91,"
+        "   descricao:'Venda remarcada', valor:9000, data:'2026-06-10', mes:'2026-06',"
+        "   ano_safra:2025, areas:[]});"
+        "  return true; }"
+    )
+    page.evaluate("() => carregarResultadoCana()")
+    page.wait_for_timeout(600)
+    aba_safra = page.evaluate(
+        "() => { state.periodo = {tipo:'safra', safra:2026};"
+        "        const r = resultadoOperacaoNoPeriodo('cana');"
+        "        return {receita:r.receita, temRemarcada: r.receitasDetalhe.some(x=>x.descricao==='Venda remarcada')}; }"
+    )
+    conf(not aba_safra["temRemarcada"],
+         "aba Safra: venda de jun/2026 remarcada pra safra 2025 NÃO aparece na safra 2026",
+         f'receita da safra 2026 veio R$ {aba_safra["receita"]:,.2f}')
+
     # ---- mes preservado na edicao (o bug do R$ 1,2 milhao) ----
     row = page.evaluate(
         "() => lancamentoToRow({...rowToLancamento("

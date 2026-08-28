@@ -135,11 +135,27 @@ da migração antiga da Lavoura, sem uso hoje). `ano_safra` é livre, serve
 qualquer atividade incluindo Pecuária, e é uma criação nova, não um resgate
 daquele campo.
 
-**Ainda não está ligado a lugar nenhum de leitura** — a aba "Safra" do
-Resultados continua agrupando por `mes` via `periodoMeses()`, sem olhar
-`ano_safra`. Só a captura foi feita (`lancamentos_ano_safra_01_adicionar_
-coluna.sql`); usar esse campo pra corrigir de fato o Resultado por safra é
-trabalho futuro, ainda não pedido.
+**A aba "Safra" do Resultados usa este campo** (`resultadoOperacaoNoPeriodo()`
+no AEMatriz.html, via `despesaNaSafra()`/`receitasNaSafra()`): um lançamento
+com `mes` dentro da janela maio-abril da safra conta nela A MENOS QUE tenha
+`ano_safra` apontando pra outra; um lançamento de fora da janela com
+`ano_safra` apontando pra esta safra entra mesmo assim. Só afeta a parte que
+vem de `lancamentos_financeiros` — despesa fixa (Pecuária) / despesa geral
+(Cana, Cereais) e a receita inteira. Ração, pasto e reprodução da Pecuária
+vêm de outras tabelas (`saidas_racao`, `pasto`, `reproducao_custos`), não têm
+`ano_safra`, e continuam somadas por calendário dentro da janela — não faz
+sentido remarcar custo variável de ração pra outra safra manualmente.
+Recorrente (despesa sem `mes`) também não usa `ano_safra`: continua vigente
+em toda a janela como sempre foi, via `vigentesNoMes()`.
+
+**As abas Mês e Ano continuam 100% por calendário**, sem olhar `ano_safra` —
+são regime de caixa/competência mesmo, de propósito. Só a aba Safra muda de
+comportamento.
+
+Depende de duas migrações rodadas nesta ordem: `lancamentos_ano_safra_01_
+adicionar_coluna.sql` (cria a coluna) e `lancamentos_rateados_03_ano_safra.sql`
+(alarga a view — sem isso o campo fica gravado na tabela mas invisível pros
+Resultados, que leem de `lancamentos_rateados`).
 
 ### Plano de contas
 

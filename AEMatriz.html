@@ -779,7 +779,9 @@ async function carregarResultadoPecuaria(){
       };
     });
 
-    state.resultados.pecuaria = {loading:false, erro:'', mensal};
+    state.resultados.pecuaria = {loading:false, erro:'', mensal,
+      despesasFinanceiro: despesas, receitasFinanceiro: receitasPec,
+      categoriaSafra: 'fixa', receitaLabelPadrao: 'Receita'};
   } catch(e){
     state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
@@ -849,7 +851,9 @@ async function carregarResultadoCana(){
       };
     });
 
-    state.resultados.cana = {loading:false, erro:'', mensal};
+    state.resultados.cana = {loading:false, erro:'', mensal,
+      despesasFinanceiro: despesas, receitasFinanceiro: receitasCana,
+      categoriaSafra: 'despesaGeral', receitaLabelPadrao: 'Venda de cana'};
   } catch(e){
     state.resultados.cana = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
@@ -894,7 +898,9 @@ async function carregarResultadoCereais(){
       };
     });
 
-    state.resultados.cereais = {loading:false, erro:'', mensal};
+    state.resultados.cereais = {loading:false, erro:'', mensal,
+      despesasFinanceiro: despesas, receitasFinanceiro: receitasGraos,
+      categoriaSafra: 'despesaGeral', receitaLabelPadrao: 'Venda de cereais'};
   } catch(e){
     state.resultados.cereais = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
@@ -1646,8 +1652,72 @@ function resultadoBrutoOperacao(slug){
   if(slug==='cereais') return resultadoComCombustivel(state.resultados.cereais, slug);
   return null;
 }
+// Despesa de uma safra respeitando o campo Safra (ano_safra) do lançamento.
+// Um lançamento com mês dentro da janela da safra conta nela A MENOS QUE
+// tenha ano_safra apontando pra outra; um lançamento de fora da janela com
+// ano_safra apontando pra esta safra entra mesmo assim. Recorrente (sem
+// mês) não tem ano_safra que faça sentido — continua vigente em toda a
+// janela, como sempre foi (é o vigentesNoMes de cada mês que resolve isso).
+function despesaNaSafra(despesas, safra){
+  const janela = periodoMeses({tipo:'safra', safra});
+  let total = janela.reduce((soma,m)=>
+    soma + vigentesNoMes(despesas, m)
+      .filter(l=> !(l.mes && l.anoSafra!=null && Number(l.anoSafra)!==safra))
+      .reduce((a,l)=>a+Number(l.valor||0), 0)
+  , 0);
+  total += despesas
+    .filter(l=> l.mes && Number(l.anoSafra)===safra && !janela.includes(l.mes))
+    .reduce((a,l)=>a+Number(l.valor||0), 0);
+  return total;
+}
+// Mesma ideia pra receita — sem substituição de recorrente (receita não é
+// recorrente): só filtra o que é desta safra (pelo mês ou pelo ano_safra
+// manual) e troca o que foi remarcado pra fora da janela dele.
+function receitasNaSafra(receitas, safra){
+  const janela = periodoMeses({tipo:'safra', safra});
+  const doMes = receitas.filter(r=> r.mes && janela.includes(r.mes)
+    && !(r.anoSafra!=null && Number(r.anoSafra)!==safra));
+  const remarcadas = receitas.filter(r=> r.mes && Number(r.anoSafra)===safra && !janela.includes(r.mes));
+  return [...doMes, ...remarcadas];
+}
+// No filtro Mês/Ano, o resultado é 100% calendário (mensal já traz tudo
+// pronto). No filtro Safra, o total geral e a categoria financeira afetada
+// (despesa fixa da pecuária / despesa geral de cana e cereais, e a receita
+// inteira — as únicas que vêm de lancamentos_financeiros e por isso podem
+// ter ano_safra) são recalculados respeitando o campo Safra; o resto
+// (ração/pasto/reprodução da pecuária, combustível) não tem ano_safra —
+// continua somado por calendário, mês a mês, dentro da janela da safra.
 function resultadoOperacaoNoPeriodo(slug){
-  return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses(state.periodo));
+  const bruto = resultadoBrutoOperacao(slug);
+  const janela = periodoMeses(state.periodo);
+  const agregado = agregarPeriodo(bruto, janela);
+  const raw = state.resultados[slug];
+  if(state.periodo.tipo!=='safra' || !agregado || agregado.erro || !raw || raw.loading || raw.erro || !raw.despesasFinanceiro){
+    return agregado;
+  }
+  const safra = state.periodo.safra;
+  const categoria = raw.categoriaSafra;
+  const label = CATEGORIA_DESPESA_LABEL[categoria];
+  const despesaCategoriaCalendario = janela.reduce((a,m)=>{
+    const mesRow = bruto.mensal.find(x=>x.mes===m);
+    return a + Number((mesRow?.despesaPorCategoria||{})[categoria] || 0);
+  }, 0);
+  const despesaCategoriaSafra = despesaNaSafra(raw.despesasFinanceiro, safra);
+  const receitasSafra = receitasNaSafra(raw.receitasFinanceiro, safra);
+  const receita = receitasSafra.reduce((a,r)=>a+Number(r.valor||0), 0);
+  const despesa = agregado.despesa - despesaCategoriaCalendario + despesaCategoriaSafra;
+  const despesaDetalhe = agregado.despesaDetalhe
+    .map(x=> x.label===label ? {...x, valor: despesaCategoriaSafra} : x)
+    .filter(x=>x.valor>0);
+  if(despesaCategoriaSafra>0 && !despesaDetalhe.some(x=>x.label===label)){
+    despesaDetalhe.push({label, valor: despesaCategoriaSafra});
+  }
+  return {
+    ...agregado, despesa, receita, resultado: receita-despesa, despesaDetalhe,
+    receitasDetalhe: receitasSafra
+      .map(r=>({data:r.data, descricao:r.descricao || raw.receitaLabelPadrao, valor:Number(r.valor||0)}))
+      .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))),
+  };
 }
 // Área (ha) de cada operação — vem direto do cadastro de Fazendas (aba
 // Fazendas, aqui no Matriz), que guarda quanto hectare de cada atividade
