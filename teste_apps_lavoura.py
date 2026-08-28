@@ -107,8 +107,12 @@ def testar(browser, arquivo, rotulo, cfg):
     abas = " | ".join(a.strip() for a in page.locator("[data-nav-group]").all_inner_texts())
     conf("Financeiro" not in abas and "Resultados" not in abas,
          "não tem mais abas de Financeiro nem Resultados", f"abas: {abas}")
-    conf("Cadastros" in abas and "Opera" in abas,
-         "tem Cadastros e Operações", f"abas: {abas}")
+    # AECereais.html trocou a aba única "Operações" por um grupo de menu por
+    # cultura (Milho, Soja, ...) mais "Insumos" à parte — grão roda de
+    # cultura no mesmo talhão, cana não. AECana.html manteve "Operações".
+    conf("Cadastros" in abas and ("Opera" in abas or "Insumos" in abas),
+         "tem Cadastros e Operações (ou, no Cereais, Cadastros + Insumos + cultura)",
+         f"abas: {abas}")
     conf(page.title() == cfg["titulo"],
          f'título da janela é "{cfg["titulo"]}"', f'veio "{page.title()}"')
 
@@ -128,7 +132,10 @@ def testar(browser, arquivo, rotulo, cfg):
     for nome, deve in cfg["fazendas"].items():
         conf((nome in t) == deve, f'fazenda "{nome}" {"aparece" if deve else "NÃO aparece"}')
 
-    page.locator('[data-nav-group="operacoes"]').click()
+    # AECereais.html não tem mais um grupo "operacoes" único (virou "insumos"
+    # + um grupo por cultura); AECana.html manteve "operacoes". A chave do
+    # data-subnav em si (insumos+sufixo) não mudou nos dois.
+    page.locator(f'[data-nav-group="{cfg["grupoOperacoes"]}"]').click()
     page.wait_for_timeout(200)
     page.locator(f'[data-subnav="insumos{cfg["sufixo"]}"]').click()
     page.wait_for_timeout(200)
@@ -197,7 +204,7 @@ with sync_playwright() as pw:
     print("TESTE DOS APPS SEPARADOS")
 
     testar(browser, "AECana.html", "AE Cana", {
-        "titulo": "AE Cana", "sufixo": "Cana",
+        "titulo": "AE Cana", "sufixo": "Cana", "grupoOperacoes": "operacoes",
         "talhoes": {"TALHAO CANA A": True, "TALHAO SOJA B": False, "TALHAO MILHO C": False},
         "culturas": {"Cana planta": True, "Soja": False, "Milho": False, "Capim": False},
         "fazendas": {"Faz. Palhadao": True, "Faz. Invernada": False, "Faz. Santa Alice": False},
@@ -206,7 +213,7 @@ with sync_playwright() as pw:
     })
 
     testar(browser, "AECereais.html", "AE Cereais", {
-        "titulo": "AE Cereais", "sufixo": "Graos",
+        "titulo": "AE Cereais", "sufixo": "Graos", "grupoOperacoes": "insumos",
         "talhoes": {"TALHAO SOJA B": True, "TALHAO MILHO C": True, "TALHAO CANA A": False},
         "culturas": {"Soja": True, "Milho": True, "Cana planta": False, "Capim": False},
         "fazendas": {"Faz. Invernada": True, "Faz. Palhadao": False, "Faz. Santa Alice": False},
