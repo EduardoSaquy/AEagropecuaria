@@ -92,9 +92,11 @@ alter table lancamentos_financeiros
 alter table lancamentos_financeiros
   add column if not exists contrato text;
 
+
 \echo ''
 \echo '== 2/6 carrega o CSV =='
 \copy conag_staging (conag_id,conag_cod,entidade,centro_custo,contrato,cnpj_nota,forma_pagamento,vencimento,competencia,valor,previsao,usuario,atividade_conag,fazenda_conag,atividade,cultura,administrativo) from 'conag/lancamentos_para_importar.csv' with (format csv, header true)
+
 
 \echo ''
 \echo '== 3/6 contas de nivel 4, rateio e view =='
@@ -165,19 +167,27 @@ comment on view lancamentos_rateados is
   'O financeiro ja rateado. Onde ha rateio, entrega as partes; onde nao ha, '
   'entrega o lancamento inteiro. E daqui que os Resultados devem ler.';
 
+
 \echo ''
 \echo '== 4/6 importa os 9.400 =='
+alter table lancamentos_financeiros add column if not exists vencimento date;
+
+comment on column lancamentos_financeiros.vencimento is
+  'Quando o titulo vence - fato de caixa. Diferente de data, que e quando o '
+  'custo aconteceu. Nos lancamentos vindos do Conag, data e nula (so se '
+  'conhece o mes de competencia) e o vencimento fica aqui.';
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
-   fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
+   vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
 select 'despesa',
        s.atividade,
        f.id,
        c.id,
        btrim(s.entidade),
        s.valor::numeric,
-       s.vencimento::date,
+       null::date,
        s.competencia,
+       s.vencimento::date,
        btrim(s.entidade),
        cu.id,
        s.conag_id,
@@ -200,6 +210,7 @@ select 'despesa',
            and plano_norm(nome) = plano_norm(s.cultura)
          limit 1) cu on true
 on conflict (conag_id) where conag_id is not null do nothing;
+
 
 \echo ''
 \echo '== 5/6 rateio =='
@@ -300,9 +311,10 @@ select id, atividade, fazenda_id, round(fr, 6),
   from fechado
 on conflict do nothing;
 
+
 \echo ''
 \echo '== 6/6 conferencia =='
-select 1 as ordem, 'Titulos do Conag importados' as item,
+select 1::numeric as ordem, 'Titulos do Conag importados' as item,
        count(*)::text as valor, 'esperado: 9.400' as situacao
 from lancamentos_financeiros where conag_id is not null
 union all
@@ -357,6 +369,12 @@ select 11, 'Titulos sem centro de custo', count(*)::text,
        case when count(*) = 0 then 'nenhum ficou de fora' else 'PARE E ME AVISE' end
 from conag_staging s
 where not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
+union all
+select 11.5, 'Titulos com vencimento em outro mes', count(*)::text,
+       'esperado: 4.836 - nota a prazo, data fica nula'
+from lancamentos_financeiros
+where conag_id is not null and vencimento is not null
+  and to_char(vencimento,'YYYY-MM') <> mes
 union all
 select 12, 'Lancamentos NOSSOS, anteriores', count(*)::text, 'NAO pode ter mudado'
 from lancamentos_financeiros where conag_id is null

@@ -175,19 +175,51 @@ comment on view lancamentos_rateados is
 -- ------------------------------------------------------------
 -- OS 9.400
 --
+-- DATA FICA NULA, DE PROPOSITO.
+--
+-- lancamentos_financeiros tem a trava mes_bate_com_data:
+--     data is null or mes = to_char(data, 'YYYY-MM')
+--
+-- Ela existe desde o financeiro_01 e o comentario dela ja previa este caso:
+-- com data, o mes tem que ser o dela; SEM data, o mes e livre e significa
+-- competencia mensal - lancamento historico, sem dia especifico.
+--
+-- E exatamente o que estes 9.400 sao. No Conag, competencia e vencimento
+-- sao fatos diferentes: o combustivel foi consumido em dezembro e o boleto
+-- vence em 1o de janeiro. Em 4.836 dos 9.400 titulos (51,4%, R$ 23,6
+-- milhoes) os dois meses nao batem, e 4.169 deles sao de exatamente um mes.
+-- E o comportamento normal de nota a prazo, nao erro de dado.
+--
+-- Entao: mes recebe a competencia, que e o mes que o Resultado usa e de
+-- onde sairam todos os totais por safra ja conferidos. E data fica nula,
+-- porque o dia em que o custo aconteceu o Conag nao informa - so o mes.
+--
+-- O vencimento nao se perde: vai para coluna propria. Nao cabia em data,
+-- que quer dizer "quando aconteceu", e nao "quando vence".
+--
+-- Relaxar a trava seria o caminho errado: ela nasceu de um bug real, que
+-- derivava um campo do outro e inflou R$ 43.928,73 para R$ 1.230.390,69.
+--
 -- on conflict do nothing no conag_id: rodar de novo nao duplica.
 -- ------------------------------------------------------------
+alter table lancamentos_financeiros add column if not exists vencimento date;
+
+comment on column lancamentos_financeiros.vencimento is
+  'Quando o titulo vence - fato de caixa. Diferente de data, que e quando o '
+  'custo aconteceu. Nos lancamentos vindos do Conag, data e nula (so se '
+  'conhece o mes de competencia) e o vencimento fica aqui.';
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
-   fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
+   vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
 select 'despesa',
        s.atividade,
        f.id,
        c.id,
        btrim(s.entidade),
        s.valor::numeric,
-       s.vencimento::date,
+       null::date,
        s.competencia,
+       s.vencimento::date,
        btrim(s.entidade),
        cu.id,
        s.conag_id,
@@ -347,7 +379,7 @@ on conflict do nothing;
 -- tem que devolver o mesmo dinheiro que entrou. Se ela nao bater, nada mais
 -- importa.
 -- ------------------------------------------------------------
-select 1 as ordem, 'Titulos do Conag importados' as item,
+select 1::numeric as ordem, 'Titulos do Conag importados' as item,
        count(*)::text as valor, 'esperado: 9.400' as situacao
 from lancamentos_financeiros where conag_id is not null
 union all
@@ -406,6 +438,12 @@ select 11, 'Titulos sem centro de custo', count(*)::text,
        case when count(*) = 0 then 'nenhum ficou de fora' else 'PARE E ME AVISE' end
 from conag_staging s
 where not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
+union all
+select 11.5, 'Titulos com vencimento em outro mes', count(*)::text,
+       'esperado: 4.836 - nota a prazo, data fica nula'
+from lancamentos_financeiros
+where conag_id is not null and vencimento is not null
+  and to_char(vencimento,'YYYY-MM') <> mes
 union all
 select 12, 'Lancamentos NOSSOS, anteriores', count(*)::text, 'NAO pode ter mudado'
 from lancamentos_financeiros where conag_id is null
