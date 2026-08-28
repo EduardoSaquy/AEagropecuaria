@@ -1,88 +1,56 @@
 -- ============================================================
--- IMPORTACAO DO CONAG - PARTE 2 de 3 (cole no SQL Editor do Supabase)
+-- IMPORTACAO DO CONAG - PARTE 4 de 4, CORRIGE O QUE JA FOI IMPORTADO
 --
--- So cole isto DEPOIS de:
---   1. ter rodado o conag_dashboard_1_antes_do_csv.sql
---   2. ter importado o CSV em conag_staging pelo Table Editor
+-- So cole isto se voce ja rodou as partes 1, 2 e 3 antes desta correcao
+-- existir. A importacao rodou, mas com um erro: TODO titulo do Conag
+-- virou tipo='despesa', inclusive amortizacao de financiamento e compra
+-- de maquina/terra/matriz/gado para investimento - que nao sao despesa.
+-- Isso inflou o total de despesas em cerca de R$ 25 milhoes.
 --
--- Confere antes de colar: no Table Editor, abra conag_staging e veja se
--- tem 9.400 linhas. Se tiver menos, a importacao do CSV nao terminou -
--- nao cole isto ainda.
+-- Cana e Cereais/Graos NAO tem esse problema - conferido: o CSV ja traz
+-- os dois separados certinho (1.762 titulos de cana, 1.689 de graos, sem
+-- misturar).
+--
+-- O QUE ESTE ARQUIVO FAZ, NESTA ORDEM:
+--   1. apaga so os lancamentos do Conag (os que tem conag_id preenchido)
+--      e o rateio deles. NAO toca em nada lancado no proprio app.
+--   2. reimporta direto de conag_staging - que ainda esta com o CSV
+--      carregado, nao precisa importar de novo - agora com:
+--        - AMORTIZACAO DE FINANCIAMENTO de fora (75 titulos,
+--          R$ 17.829.159,91): pagar o principal do emprestimo nao e
+--          despesa, e divida saindo (mesma regra do modulo Financiamentos)
+--        - maquina/terra/matriz/infraestrutura (337 titulos,
+--          R$ 7.212.288,44) como tipo='investimento', nao despesa
+--   3. rateia de novo - os pesos mudam porque 75 titulos saem da conta
+--   4. confere - a mesma tabela de sempre, com as linhas novas 11.6 e 11.7
+--
+-- PRE-REQUISITO: conag_staging ainda com os 9.400 registros. Se essa
+-- tabela foi apagada, recarregue o CSV pelo Table Editor (passo 2 do
+-- arquivo _1_) antes de colar isto.
 -- ============================================================
 
-create or replace function safra_do_mes(mes text)
-returns text language sql immutable as $$
-  select case
-           when mes is null or mes !~ '^\d{4}-\d{2}$' then null
-           when substring(mes,6,2)::int >= 5
-             then substring(mes,1,4) || '/' || (substring(mes,1,4)::int + 1)::text
-             else (substring(mes,1,4)::int - 1)::text || '/' || substring(mes,1,4)
-         end;
-$$;
+do $$
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema='public' and table_name='talhoes_areas') then
+    raise exception 'PROJETO ERRADO - este e o banco unificado kmkystqgpvmzrccxvyaz?';
+  end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema='public' and table_name='conag_staging') then
+    raise exception 'conag_staging nao existe - rode o arquivo _1_ e recarregue o CSV antes';
+  end if;
+  if (select count(*) from conag_staging) < 9000 then
+    raise exception 'conag_staging nao tem os 9.400 registros - recarregue o CSV antes (passo 2 do arquivo _1_)';
+  end if;
+end $$;
 
-insert into centros_custo (nome, tipo, subcategoria, classe, ativo)
-select s.nome,
-       coalesce(p.tipo, 'saida'),
-       case when p.grupo = p.subcategoria then p.grupo
-            else p.grupo || ' | ' || p.subcategoria end,
-       p.classe,
-       true
-  from (select distinct btrim(centro_custo) as nome from conag_staging
-         where coalesce(btrim(centro_custo),'') <> '') s
-  join lateral (
-        select grupo, subcategoria, classe, tipo
-          from conag_plano_contas
-         where plano_norm(conta) = plano_norm(s.nome)
-         order by case when classe = 'DEDUCOES DA RECEITA BRUTA DE VENDAS' then 1 else 0 end
-         limit 1) p on true
- where not exists (select 1 from centros_custo c where plano_norm(c.nome) = plano_norm(s.nome));
+-- 1/4: apaga so o que veio do Conag, para reimportar certo
+delete from lancamento_rateios
+ where lancamento_id in (select id from lancamentos_financeiros where conag_id is not null);
 
-create table if not exists lancamento_rateios (
-  id             bigint generated always as identity primary key,
-  lancamento_id  bigint not null references lancamentos_financeiros(id) on delete cascade,
-  atividade      text   not null,
-  fazenda_id     bigint references fazendas(id),
-  cultura_id     bigint references culturas(id),
-  percentual     numeric(9,6) not null,
-  valor          numeric(12,2) not null,
-  origem         text   not null,
-  created_at     timestamptz not null default now()
-);
+delete from lancamentos_financeiros where conag_id is not null;
 
-comment on table lancamento_rateios is
-  'Onde o custo de um lancamento cai, quando ele nao pertence a uma '
-  'atividade so. O lancamento continua inteiro em lancamentos_financeiros; '
-  'aqui ficam as partes. Sem linha aqui, o lancamento vale por si.';
-
-create unique index if not exists uq_rateio_destino
-  on lancamento_rateios (lancamento_id, atividade, coalesce(fazenda_id, -1));
-create index if not exists ix_rateio_lancamento on lancamento_rateios (lancamento_id);
-
-create or replace view lancamentos_rateados as
-select l.id as lancamento_id, r.id as rateio_id, l.tipo,
-       r.atividade, r.fazenda_id, r.cultura_id, r.valor,
-       l.centro_custo_id, l.descricao, l.fornecedor, l.data, l.mes,
-       l.conag_id, l.contrato, true as rateado
-  from lancamentos_financeiros l
-  join lancamento_rateios r on r.lancamento_id = l.id
-union all
-select l.id, null, l.tipo,
-       l.atividade, l.fazenda_id, l.cultura_id, l.valor,
-       l.centro_custo_id, l.descricao, l.fornecedor, l.data, l.mes,
-       l.conag_id, l.contrato, false
-  from lancamentos_financeiros l
- where not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id);
-
-comment on view lancamentos_rateados is
-  'O financeiro ja rateado. Onde ha rateio, entrega as partes; onde nao ha, '
-  'entrega o lancamento inteiro. E daqui que os Resultados devem ler.';
-
-alter table lancamentos_financeiros add column if not exists vencimento date;
-
-comment on column lancamentos_financeiros.vencimento is
-  'Quando o titulo vence - fato de caixa. Diferente de data, que e quando o '
-  'custo aconteceu. Nos lancamentos vindos do Conag, data e nula (so se '
-  'conhece o mes de competencia) e o vencimento fica aqui.';
+-- 2/4: reimporta, agora com tipo certo e sem amortizacao
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
    vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
@@ -121,25 +89,11 @@ select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' en
          where coalesce(btrim(s.cultura),'') <> ''
            and plano_norm(nome) = plano_norm(s.cultura)
          limit 1) cu on true
- -- lancamentos_financeiros tem "check (valor > 0)" -- a mesma regra que a
- -- tela do Matriz ja cobra no formulario ("valor maior que zero"). 72
- -- titulos do CSV vem com R$ 0,00 (nenhum negativo) e violavam essa trava,
- -- derrubando a importacao inteira. Ficam de fora, contados na conferencia.
- --
- -- AMORTIZACAO DE FINANCIAMENTO fica de fora: pagar o principal de um
- -- emprestimo nao e despesa, e divida saindo (regra do proprio CLAUDE.md,
- -- a mesma do modulo Financiamentos). So o juros vira lancamento, e o
- -- juros esta em conta separada (DESPESAS FINANCEIRAS), que continua
- -- entrando normalmente. Sao 75 titulos, R$ 17.829.159,91 - conferidos na
- -- linha 11.6.
- --
- -- Conta que cai no grupo INVESTIMENTOS do plano do Conag (maquina, terra,
- -- matriz, infraestrutura) vira tipo='investimento', nao despesa - senao
- -- infla o total de despesas com dinheiro que virou patrimonio, nao custo.
  where s.valor::numeric > 0
    and plano_norm(s.centro_custo) <> plano_norm('AMORTIZACAO DE FINANCIAMENTO')
 on conflict (conag_id) where conag_id is not null do nothing;
 
+-- 3/4: rateio - identico ao da parte 2, so refeito em cima dos dados certos
 with base_fs as (
   select l.fazenda_id, safra_do_mes(l.mes) as safra, l.atividade, sum(l.valor) as v
     from lancamentos_financeiros l
@@ -237,6 +191,6 @@ select id, atividade, fazenda_id, round(fr, 6),
   from fechado
 on conflict do nothing;
 
--- Depois de colar isto, cole o conag_dashboard_3_conferencia.sql pra ver
--- se bateu tudo.
-select 'Parte 2 ok. Agora rode o conag_dashboard_3_conferencia.sql.' as proximo_passo;
+-- 4/4: confere - cole o conag_dashboard_3_conferencia.sql em seguida, ou
+-- rode a consulta abaixo, que e a mesma coisa.
+select 'Parte 4 ok. Agora rode o conag_dashboard_3_conferencia.sql (ele mudou: agora sao 17 linhas).' as proximo_passo;
