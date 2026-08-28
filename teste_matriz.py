@@ -173,6 +173,30 @@ with sync_playwright() as pw:
          "aba Safra: venda de jun/2026 remarcada pra safra 2025 NÃO aparece na safra 2026",
          f'receita da safra 2026 veio R$ {aba_safra["receita"]:,.2f}')
 
+    # ---- historico consolidado ano a ano + drill-down por atividade ----
+    page.evaluate("() => { state.page='resultados'; state.periodo={tipo:'ano', ano:2026}; render(); }")
+    page.wait_for_timeout(400)
+    corpo = page.locator("body").inner_text()
+    conf("histórico da empresa" in corpo.lower(), "Resultados mostra o histórico ano a ano")
+    barras = page.locator("[data-consolidado-metrica]")
+    conf(barras.count() > 0, "gráfico consolidado tem colunas clicáveis",
+         f"{barras.count()} colunas")
+    if barras.count() > 0:
+        alvo = page.locator("[data-consolidado-metrica='despesa']").first
+        ano_clicado = alvo.get_attribute("data-consolidado-ano")
+        alvo.click()
+        page.wait_for_timeout(300)
+        modal = page.locator(".modal-head h3").inner_text()
+        conf("Despesa por atividade" in modal, "clicar na coluna Despesa abre o drill-down por atividade",
+             f"título veio {modal!r}")
+        corpo_modal = page.locator(".modal-body").inner_text()
+        conf(ano_clicado in corpo_modal, "o drill-down menciona o ano que foi clicado",
+             f"ano {ano_clicado} não apareceu em {corpo_modal[:200]!r}")
+        for slug in ["Pecuária", "Cana", "Cereais"]:
+            conf(slug in corpo_modal, f"drill-down lista a atividade {slug}")
+        page.locator("[data-close='1']").first.click()
+        page.wait_for_timeout(200)
+
     # ---- mes preservado na edicao (o bug do R$ 1,2 milhao) ----
     row = page.evaluate(
         "() => lancamentoToRow({...rowToLancamento("

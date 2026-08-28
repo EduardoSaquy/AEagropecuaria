@@ -1751,6 +1751,25 @@ function resultadoTotal(campo){
 function algumResultadoCarregando(){
   return state.resultados.pecuaria.loading || state.resultados.cana.loading || state.resultados.cereais.loading || state.resultados.combustivelPorFrente.loading;
 }
+// Histórico ano a ano da empresa (gráfico consolidado dos Resultados) —
+// sempre calendário, independente do filtro Mês/Ano/Safra selecionado:
+// mesma janela que mesesJanela() já carrega (hoje-3 até hoje), então não
+// pede nada novo ao banco.
+function anosHistorico(){
+  const hoje = new Date().getFullYear();
+  const anos = []; for(let a=hoje-3; a<=hoje; a++) anos.push(a); return anos;
+}
+function resultadoOperacaoNoAno(slug, ano){
+  return agregarPeriodo(resultadoBrutoOperacao(slug), periodoMeses({tipo:'ano', ano}));
+}
+function resultadoConsolidadoNoAno(ano){
+  const total = OPERACOES_ORDEM.reduce((acc,slug)=>{
+    const r = resultadoOperacaoNoAno(slug, ano);
+    if(r && !r.erro){ acc.despesa += r.despesa||0; acc.receita += r.receita||0; }
+    return acc;
+  }, {despesa:0, receita:0});
+  return {ano, despesa: total.despesa, receita: total.receita, resultado: total.receita-total.despesa};
+}
 // Só as 3 operações de terra (pecuária, cana, cereais) — combustível é
 // insumo consumido pelas outras, não uma operação com receita/despesa
 // própria, então não entra nesse recorte.
@@ -1923,7 +1942,17 @@ function PageResultados(){
     ${StatCard('Despesa', despesa, 'despesa')}
     ${StatCard('Resultado', resultado, 'resultado')}
   </div>
-  <p class="eyebrow" style="margin-bottom:10px;">Impacto de cada operação</p>
+  <div class="card card-pad" style="margin-top:18px;">
+    <p class="stat-label" style="margin-bottom:2px;">Histórico da empresa — ano a ano</p>
+    <p class="hint" style="margin-bottom:14px;">Receita, despesa e resultado de todas as operações juntas, calendário (não muda com o filtro Mês/Ano/Safra acima). Clique numa coluna pra ver o que cada atividade contribuiu naquele valor, ano a ano.</p>
+    ${GraficoBarrasConsolidadoAno(anosHistorico().map(resultadoConsolidadoNoAno))}
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Receita</span>
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--trigo); display:inline-block;"></span>Despesa</span>
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Resultado (vermelho quando negativo)</span>
+    </div>
+  </div>
+  <p class="eyebrow" style="margin-bottom:10px; margin-top:18px;">Impacto de cada operação</p>
   <div class="donuts-row">
     ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
     ${Donut(fatiasOperacoes('receita'), 'donut-receita', 'Receita por operação')}
@@ -4649,6 +4678,7 @@ function Modal(){
   if(state.modal.type==='trocarSenha') return ModalTrocarSenha();
   if(state.modal.type==='detalheOperacao') return ModalDetalheOperacao();
   if(state.modal.type==='graficoOperacao') return ModalGraficoOperacao();
+  if(state.modal.type==='graficoConsolidadoAno') return ModalGraficoConsolidadoAno();
   return '';
 }
 
@@ -4739,6 +4769,60 @@ function GraficoBarras(pontos){
   </svg>`;
 }
 
+// Monta um grupo de barras lado a lado por ano — usado tanto no histórico
+// consolidado (3 barras: receita/despesa/resultado) quanto no drill-down
+// por atividade (3 barras: pecuária/cana/cereais). `series` é
+// [{chave, label, cor}] — cor null pinta a barra verde/vermelho pelo sinal
+// do valor (caso do Resultado, que pode ser negativo).
+function gruposDeBarrasPorAno(pontos, series){
+  const vals = pontos.flatMap(p=>series.map(s=>Number(p[s.chave]||0)));
+  const maxV = Math.max(0, ...vals), minV = Math.min(0, ...vals);
+  const range = (maxV-minV) || 1;
+  const largura=560, altura=220, margemBaixo=32, margemTopo=10;
+  const areaAltura = altura-margemBaixo-margemTopo;
+  const zeroY = margemTopo + areaAltura*(maxV/range);
+  const n = pontos.length || 1;
+  const passo = largura/n;
+  const larguraGrupo = Math.min(140, passo-16);
+  const larguraBarra = larguraGrupo/series.length - 4;
+  const barras = pontos.map(p=>{
+    const xGrupo = p._i*passo + (passo-larguraGrupo)/2;
+    const rotulo = `<text x="${(xGrupo+larguraGrupo/2).toFixed(1)}" y="${altura-12}" text-anchor="middle" font-size="10" fill="var(--cinza)" font-family="Inter,sans-serif">${p.ano}</text>`;
+    const bars = series.map((s,si)=>{
+      const valor = Number(p[s.chave]||0);
+      const x = xGrupo + si*(larguraBarra+4);
+      const yVal = margemTopo + areaAltura*((maxV-valor)/range);
+      const y = Math.min(zeroY,yVal), h = Math.max(1.5,Math.abs(yVal-zeroY));
+      const cor = s.cor || (valor>=0 ? 'var(--bom)' : 'var(--alerta)');
+      return `<rect class="gbar" data-gbar-valor="R$ ${fmt(valor)}" data-gbar-label="${esc(s.label)} · ${p.ano}"
+        ${s.attrs ? s.attrs(p) : ''}
+        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${cor}"></rect>`;
+    }).join('');
+    return bars + rotulo;
+  }).join('');
+  return `<svg class="grafico-barras-svg" viewBox="0 0 ${largura} ${altura}">
+    <line x1="0" y1="${zeroY.toFixed(1)}" x2="${largura}" y2="${zeroY.toFixed(1)}" stroke="var(--cinza-claro)" stroke-width="1"/>
+    ${barras}
+  </svg>`;
+}
+// Histórico ano a ano da empresa toda: cada ano com 3 barras (receita,
+// despesa, resultado). Clicar em qualquer uma abre o drill-down por
+// atividade daquela métrica.
+const LEGENDA_CONSOLIDADO = ['receita','despesa','resultado'].map(chave=>({
+  chave, label: {receita:'Receita', despesa:'Despesa', resultado:'Resultado'}[chave],
+  cor: {receita:'var(--bom)', despesa:'var(--trigo)', resultado:null}[chave],
+  attrs: p=>`data-consolidado-metrica="${chave}" data-consolidado-ano="${p.ano}"`,
+}));
+function GraficoBarrasConsolidadoAno(pontos){
+  return gruposDeBarrasPorAno(pontos.map((p,i)=>({...p, _i:i})), LEGENDA_CONSOLIDADO);
+}
+// Drill-down: mesma metrica (receita, despesa ou resultado), uma barra por
+// atividade, ano a ano — responde "o que puxou esse número nesse ano".
+function GraficoBarrasAtividadePorAno(pontos){
+  const series = OPERACOES_ORDEM.map(slug=>({chave:slug, label:OPERACOES[slug]||slug, cor:OPERACAO_COR[slug]}));
+  return gruposDeBarrasPorAno(pontos.map((p,i)=>({...p, _i:i})), series);
+}
+
 const METRICA_LABEL = {despesaHa:'Despesa por hectare', receitaHa:'Receita por hectare', resultadoHa:'Lucro por hectare'};
 const METRICA_CAMPO = {despesaHa:'despesa', receitaHa:'receita', resultadoHa:'resultado'};
 function ModalGraficoOperacao(){
@@ -4770,6 +4854,43 @@ function ModalGraficoOperacao(){
     <div class="modal" data-stop="1" style="max-width:640px;">
       <div class="modal-head"><h3>${METRICA_LABEL[metrica]} — ${nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">${corpo}</div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+const METRICA_CONSOLIDADO_LABEL = {receita:'Receita', despesa:'Despesa', resultado:'Resultado'};
+// Drill-down do histórico consolidado: mesma métrica clicada, comparando
+// as atividades ano a ano — "o que puxou a despesa de 2025, e como isso se
+// compara com 2023/2024/2026".
+function ModalGraficoConsolidadoAno(){
+  const {metrica, ano} = state.modal;
+  const anos = anosHistorico();
+  const pontos = anos.map(a=>{
+    const linha = {ano:a};
+    OPERACOES_ORDEM.forEach(slug=>{
+      const r = resultadoOperacaoNoAno(slug, a);
+      linha[slug] = (r && !r.erro && r[metrica]!=null) ? r[metrica] : 0;
+    });
+    return linha;
+  });
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1" style="max-width:640px;">
+      <div class="modal-head"><h3>${METRICA_CONSOLIDADO_LABEL[metrica]} por atividade — ano a ano</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:8px;">${anos.join(' · ')} — comparando com o ano ${ano}, que você clicou.</p>
+        ${GraficoBarrasAtividadePorAno(pontos)}
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
+          ${OPERACOES_ORDEM.map(slug=>`
+            <span class="hint" style="display:flex; align-items:center; gap:6px;">
+              <span style="width:10px; height:10px; border-radius:3px; background:${OPERACAO_COR[slug]}; display:inline-block;"></span>
+              ${esc(OPERACOES[slug]||slug)}
+            </span>`).join('')}
+        </div>
+      </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Fechar</button>
       </div>
@@ -5489,6 +5610,14 @@ function attachEvents(){
   document.querySelectorAll('[data-grafico-op]').forEach(el=>{
     el.onclick = ()=>{
       state.modal = {type:'graficoOperacao', slug: el.dataset.graficoOp, metrica: el.dataset.graficoMetrica};
+      render();
+    };
+  });
+  // histórico consolidado (ano a ano): clicar numa coluna abre o
+  // drill-down por atividade daquela métrica
+  document.querySelectorAll('[data-consolidado-metrica]').forEach(el=>{
+    el.onclick = ()=>{
+      state.modal = {type:'graficoConsolidadoAno', metrica: el.dataset.consolidadoMetrica, ano: Number(el.dataset.consolidadoAno)};
       render();
     };
   });
