@@ -63,6 +63,33 @@ de R$ 43.928,73 virou R$ 1.230.390,69.
 `lancamentoToRow` preserva isso com
 `mes: l.data ? l.data.slice(0,7) : (l.mes || null)`. Não "simplifique".
 
+### Lançamento "geral" pode estar rateado — leia de `lancamentos_rateados`, não da tabela
+
+Um `lancamento_financeiro` sem atividade própria (`atividade='geral'`) pode
+ter o valor repartido entre atividades/fazendas em `lancamento_rateios`
+(criado pela importação do Conag: 791 títulos "geral de uma fazenda" e 2.526
+"administrativo", ratados pela proporção real de gasto de cada
+atividade/fazenda na mesma safra). A tabela `lancamentos_financeiros`
+continua com o lançamento inteiro, atividade `'geral'` — quem filtra
+`.eq('atividade', 'cana')` direto nela **não vê a fatia rateada**, só os
+lançamentos que já nasceram com `atividade='cana'`.
+
+Por isso toda tela que soma despesa/receita por atividade tem que ler da
+view `lancamentos_rateados`, não da tabela: ela devolve os lançamentos
+diretos inteiros e os rateados já divididos, com a `atividade`/`fazenda_id`
+do destino. Chame com `.eq('atividade', X)` do mesmo jeito que antes — só
+troca a tabela. A view não tem coluna `id` (é `lancamento_id`; `rateio_id`
+distingue as partes de um mesmo lançamento rateado, útil como chave quando
+precisa de uma por linha).
+
+Esse ponto ficou destampado até 28/08/2026: `carregarResultadoCana/Cereais/
+Pecuaria` (AEMatriz.html) e o Financeiro só-leitura do AEpecuaria.html liam
+direto de `lancamentos_financeiros`, então a fatia rateada de um custo
+"geral" nunca aparecia no Resultado de nenhuma atividade — a despesa da
+Cana, por exemplo, saía menor do que o Conag mostrava pra mesma atividade.
+Corrigido nos quatro pontos. Se abrir uma tela nova que soma financeiro por
+atividade, comece por `lancamentos_rateados`.
+
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
 `vigentesNoMes(despesas, mesStr)` no AEMatriz.html. Um recorrente vale no mês
