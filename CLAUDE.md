@@ -269,6 +269,13 @@ filtra outros códigos de erro de rede, mas não esse).
   que a política de select exige `tem_permissao(...)`, que depende de
   `auth.uid()` e por isso não é anônima. Se um dia esse app ganhar qualquer
   policy `using (true)` ou papel `anon`, isso vira violação desta regra.
+- `entidades.documento` (AEMatriz.html, pode ter CNPJ/CPF de fornecedor) —
+  achado na varredura de 29/08/2026, checado e **resolvido**: RLS ligado,
+  as 4 policies (select/insert/update/delete) exigem `is_dono()` ou
+  `tem_permissao(...)`, e as duas dependem de `auth.uid()` com curto-circuito
+  seguro por `NULL` (sem sessão, `id = auth.uid()` não bate linha nenhuma,
+  a policy nunca libera). `documento` está vazio em todos os registros hoje,
+  então era risco teórico mesmo antes de confirmar a policy.
 - Senha do banco e credenciais são preenchidas pelo Eduardo, nunca pedidas nem
   digitadas pelo assistente.
 - Contas de usuário são criadas por ele na tela de Usuários do AE Matriz.
