@@ -209,13 +209,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===================== SUPABASE =====================
- * ATENÇÃO: este app usa um projeto Supabase PRÓPRIO, separado do banco
- * do AEpecuaria.html. Antes de usar, crie o projeto (veja o passo a
- * passo no topo de combustivel_schema.sql) e substitua as duas
- * constantes abaixo pelos valores de Project Settings > API. */
+ * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
+ * AECereais.html — não um projeto próprio (o plano original previa um
+ * projeto separado, mas o Supabase free limita a 2 projetos ativos;
+ * decisão do Eduardo em 29/08/2026 foi integrar aqui, reaproveitando
+ * fazendas/talhoes_areas/centros_custo/culturas/safras/funcionarios já
+ * cadastrados em vez de duplicar. O custo de combustível NÃO entra em
+ * lancamentos_financeiros — ver combustivel_unificado_01_schema.sql). */
 const db = supabase.createClient(
-  'https://SUBSTITUA.supabase.co',
-  'SUBSTITUA_PELA_ANON_KEY'
+  'https://kmkystqgpvmzrccxvyaz.supabase.co',
+  'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
 
 /* ===================== HELPERS DE CONVERSÃO ===================== */
@@ -268,9 +271,9 @@ const OPCOES = {
  * Fases futuras (estoque, abastecimento) podem reaproveitar o mesmo motor. */
 const CADASTROS = {
   fazendas: {
-    table:'fazendas', label:'Fazendas', singular:'Fazenda',
-    desc:'Unidades produtivas da empresa, com estado e área total.',
-    emptyHint:'Cadastre a primeira fazenda para começar.',
+    table:'fazendas', label:'Fazendas', singular:'Fazenda', readOnly:true,
+    desc:'Unidades produtivas da empresa, com estado e área total. Só leitura aqui — cadastro é feito no AE Matriz.',
+    emptyHint:'Nenhuma fazenda cadastrada ainda — cadastre no AE Matriz primeiro.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Fazenda Santa Fé'},
       {key:'estado', label:'Estado', type:'select', options:OPCOES.ESTADOS, required:true},
@@ -289,8 +292,8 @@ const CADASTROS = {
     ],
   },
   culturas: {
-    table:'culturas', label:'Culturas', singular:'Cultura',
-    desc:'Culturas e a frente de negócio a que pertencem (cana, grãos ou pecuária).',
+    table:'culturas', label:'Culturas', singular:'Cultura', readOnly:true,
+    desc:'Culturas e a frente de negócio a que pertencem (cana, grãos ou pecuária). Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true},
       {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES, required:true},
@@ -298,7 +301,7 @@ const CADASTROS = {
     ],
   },
   operacoes: {
-    table:'operacoes', label:'Operações', singular:'Operação',
+    table:'operacoes_combustivel', label:'Operações', singular:'Operação',
     desc:'Tipos de atividade de campo usados para ratear o combustível (colheita, plantio, trato, etc.).',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true},
@@ -318,9 +321,9 @@ const CADASTROS = {
     ],
   },
   safras: {
-    table:'safras', label:'Safras', singular:'Safra',
-    desc:'Ano-safra de uma cultura numa fazenda, usado para ratear o combustível por período.',
-    emptyHint:'Cadastre fazenda e cultura antes de criar uma safra.',
+    table:'safras', label:'Safras', singular:'Safra', readOnly:true,
+    desc:'Ano-safra de uma cultura numa fazenda, usado para ratear o combustível por período. Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
+    emptyHint:'Nenhuma safra cadastrada ainda — cadastre no AE Matriz/Lavoura primeiro.',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
@@ -331,9 +334,9 @@ const CADASTROS = {
     ],
   },
   centrosCusto: {
-    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo',
-    desc:'Classificação de rateio para combustível sem talhão/lote específico (transporte, administrativo, gerador).',
-    emptyHint:'Cadastre uma fazenda antes de criar um centro de custo.',
+    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', readOnly:true,
+    desc:'Classificação de rateio para combustível sem talhão/lote específico (transporte, administrativo, gerador). Só leitura aqui — cadastro é feito no AE Matriz.',
+    emptyHint:'Nenhum centro de custo cadastrado ainda — cadastre no AE Matriz primeiro.',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'nome', label:'Nome', type:'text', required:true},
@@ -342,9 +345,9 @@ const CADASTROS = {
     ],
   },
   talhoesAreas: {
-    table:'talhoes_areas', label:'Talhões / Áreas', singular:'Talhão/Área',
-    desc:'Talhões de lavoura (com hectares) ou lotes/currais de pecuária, para ratear o combustível abastecido neles.',
-    emptyHint:'Cadastre uma fazenda antes de criar um talhão/área.',
+    table:'talhoes_areas', label:'Talhões / Áreas', singular:'Talhão/Área', readOnly:true,
+    desc:'Talhões de lavoura (com hectares) ou lotes/currais de pecuária, para ratear o combustível abastecido neles. Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
+    emptyHint:'Nenhum talhão/área cadastrado ainda — cadastre no AE Matriz/Lavoura primeiro.',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'nome', label:'Nome', type:'text', required:true},
@@ -974,7 +977,12 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar');
+  // readOnly: fazendas/culturas/safras/centrosCusto/talhoesAreas vêm do
+  // projeto unificado, compartilhadas com Matriz/Pecuária/Cana/Cereais —
+  // cadastro é feito só lá (mesma regra de "single writer" que o resto
+  // do sistema já segue pra fazenda/talhão), aqui é só leitura pra
+  // popular os seletores de tanque/centro de custo/abastecimento.
+  const podeEditar = !cfg.readOnly && temPermissao(cfg.modulo||'cadastros','editar');
   const termo = state.search.toLowerCase();
   const list = (cfg.semBusca ? state[key] : state[key].filter(item => !termo || (item.nome||'').toLowerCase().includes(termo)));
   const colunas = cfg.fields.filter(f=>f.list!==false);
@@ -982,7 +990,7 @@ function PageCadastro(key){
   <div class="toolbar">
     ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
-    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : (cfg.readOnly ? `<span class="hint">Cadastro feito no AE Matriz${key==='fazendas'||key==='centrosCusto'?'':'/Lavoura'}</span>` : '')}
   </div>
   <div class="card" style="overflow-x:auto;">
     ${list.length===0 ? Empty(`Nenhum(a) ${cfg.singular.toLowerCase()} cadastrado(a)`, cfg.emptyHint||'Cadastre o primeiro registro.') : `
