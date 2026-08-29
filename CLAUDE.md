@@ -213,10 +213,33 @@ Confirmado dia 28/08/2026 e corrigido com
 de Cana/Pecuária a partir de jan/2026 (~R$ 2,51 milhões / 467 títulos de
 Cana, ~R$ 1,02 milhão / 436 títulos de Pecuária), mantendo a lançada à mão
 — decisão do Eduardo, porque é o registro nativo do time. Grãos nunca teve
-lançamento à mão, então não tinha esse risco. Investimento tem uma
-sobreposição menor e mais espalhada no mesmo período (~R$ 463 mil só em
-Pecuária) que ficou de fora dessa limpeza — decidir com mais calma se
-reaparecer.
+lançamento à mão, então não tinha esse risco.
+
+O mesmo padrão apareceu em **receita** e em **investimento**, achado e
+fechado em 29/08/2026:
+
+- **Receita**: a Cana em 2026 estava 100% duplicada (5 títulos), a Pecuária
+  parcialmente (mar/mai/jun/ago, 10 títulos / R$ 1.021.117,93 — jan/fev eram
+  venda nova, sem duplicidade; jul ficou de fora, a soma não batia exato).
+  O Eduardo resolveu a Cana manualmente antes — mas ao contrário da
+  despesa, manteve a versão **do Conag** e apagou a lançada à mão (sem
+  problema, o total bate igual). A Pecuária só foi fechada depois, com
+  `pecuaria_receita_remove_duplicidade_2026.sql` (mantendo a lançada à mão,
+  apagando a do Conag, mesmo critério da despesa) — receita 2026 da
+  Pecuária caiu de R$ 4.399.776,43 pra R$ 3.378.658,50.
+- **Investimento**: dos 7 títulos do Conag em 2026 (Pecuária, ~R$ 463 mil),
+  4 batiam exato (valor e mês) com lançamento manual — duplicidade de
+  verdade, fechada com `pecuaria_investimento_remove_duplicidade_2026.sql`
+  (R$ 252.724,71). Os outros 3 (dois de Renato Mendes Camargo em jan, que
+  parecem uma compra parcelada, e um de Alemar Rodrigues em ago) não
+  tinham par exato — confirmados como investimento novo, ficaram intocados.
+
+**Cuidado ao reusar os scripts de dedup de Cana/receita 2026**: como a Cana
+manteve a versão do Conag (ao contrário de despesa/Pecuária, que mantiveram
+a versão manual), um script que apague `conag_id is not null` pra Cana em
+2026 hoje apagaria a receita inteira da Cana por engano — os arquivos
+antigos que faziam isso (`conag_receita_02/03_...`) foram removidos do
+repositório por causa disso.
 
 **Se algum dia reimportar ou expandir o CSV do Conag**: nunca deixar
 título de Cana ou Pecuária com competência (`mes`) a partir de 2026-01
