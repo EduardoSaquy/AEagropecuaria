@@ -39,8 +39,9 @@ aberto: pausar o projeto no painel do Supabase.
 `log_alteracoes`, ligado por gatilho em `lancamentos_financeiros`, `abates`,
 `profiles` e `centros_custo` (`auditoria_05_registro_de_alteracoes.sql`).
 Só admin lê, ninguém grava pela API (só o gatilho, `security definer`).
-Confirme que rodou antes de assumir que existe — não estava no
-`schema_real.txt` de 22/08.
+**Confirmado em produção em 29/08/2026** (`pontas_soltas_confere_tudo.sql`):
+tabela existe, gatilho `trg_registrar_alteracao` ligado nas 4 tabelas — não
+estava no `schema_real.txt` de 22/08, mas está no banco de verdade.
 
 ### `lancamentos_financeiros` é a única tabela financeira
 
