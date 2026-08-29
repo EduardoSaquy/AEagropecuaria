@@ -1945,16 +1945,6 @@ function PageResultados(){
     ${StatCard('Despesa', despesa, 'despesa')}
     ${StatCard('Resultado', resultado, 'resultado')}
   </div>
-  <div class="card card-pad" style="margin-top:18px;">
-    <p class="stat-label" style="margin-bottom:2px;">Histórico da empresa — ano a ano</p>
-    <p class="hint" style="margin-bottom:14px;">Receita, despesa e resultado de todas as operações juntas, calendário (não muda com o filtro Mês/Ano/Safra acima). Clique numa coluna pra ver o que cada atividade contribuiu naquele valor, ano a ano.</p>
-    ${GraficoBarrasConsolidadoAno(anosHistorico().map(resultadoConsolidadoNoAno))}
-    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
-      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Receita</span>
-      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--trigo); display:inline-block;"></span>Despesa</span>
-      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Resultado (vermelho quando negativo)</span>
-    </div>
-  </div>
   <p class="eyebrow" style="margin-bottom:10px; margin-top:18px;">Impacto de cada operação</p>
   <div class="donuts-row">
     ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
@@ -1981,7 +1971,17 @@ function PageResultados(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:14px;">Números de Pecuária, Cana e Cereais/Grãos calculados a partir da receita e despesa própria lançada em cada app. Combustível ainda não está com banco ligado à matriz (card "em breve" no Painel), então o custo dele não entra nesses números por enquanto. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>`;
+  <p class="hint" style="margin-top:14px;">Números de Pecuária, Cana e Cereais/Grãos calculados a partir da receita e despesa própria lançada em cada app. Combustível ainda não está com banco ligado à matriz (card "em breve" no Painel), então o custo dele não entra nesses números por enquanto. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>
+  <div class="card card-pad" style="margin-top:18px;">
+    <p class="stat-label" style="margin-bottom:2px;">Histórico da empresa — ano a ano</p>
+    <p class="hint" style="margin-bottom:14px;">Receita, despesa e resultado de todas as operações juntas, calendário (não muda com o filtro Mês/Ano/Safra acima). Clique numa coluna pra ver o que cada atividade contribuiu naquele valor, ano a ano.</p>
+    ${GraficoBarrasConsolidadoAno(anosHistorico().map(resultadoConsolidadoNoAno))}
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Receita</span>
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--trigo); display:inline-block;"></span>Despesa</span>
+      <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Resultado (vermelho quando negativo)</span>
+    </div>
+  </div>`;
 }
 
 /* ===================== FAZENDAS (cadastro centralizado) ===================== */
