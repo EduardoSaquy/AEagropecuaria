@@ -220,6 +220,39 @@ with sync_playwright() as pw:
     conf(abs(resumo_depois["jurosPagoAno"] - 11600) < 1,
          "resumo: juros pago no ano soma o juros das duas parcelas pagas (8.000 + 3.600)", str(resumo_depois))
 
+    # ---- capital de giro: juros que NÃO divide certinho por 3 (achado da
+    # varredura - R$3.600/3=R$1.200 exato escondia que a divisão não
+    # arredondava a sobra; 10.000 a 10% a.a. dá R$1.000 de juros, que dá
+    # dízima em 3 partes) ----
+    page.evaluate("() => { state.financiamentoDetalheId = null; state.page='financiamentos'; render(); }")
+    page.wait_for_timeout(300)
+    page.locator('[data-novo-financiamento]').click()
+    page.wait_for_timeout(300)
+    page.fill('#f-bancofin', 'Banco Resto')
+    page.select_option('#f-finalidadefin', 'capital_giro')
+    page.wait_for_timeout(200)
+    page.fill('#f-principalfin', '10000')
+    page.fill('#f-datafin', '2026-01-15')
+    page.fill('#f-taxafin', '10')
+    page.fill('#f-carenciafin', '12')
+    page.locator('[data-save="financiamento"]').click()
+    page.wait_for_timeout(500)
+
+    fin3_id = page.evaluate("() => state.financiamentos.find(f=>f.banco==='Banco Resto').id")
+    page.evaluate(f"() => {{ state.financiamentoDetalheId = {fin3_id}; render(); }}")
+    page.wait_for_timeout(300)
+    page.locator('[data-pagar-parcela]').click()
+    page.wait_for_timeout(500)
+
+    lancs_resto = page.evaluate(
+        "() => state.lancamentos.filter(l=>l.descricao && l.descricao.includes('Banco Resto')).map(l=>l.valor)"
+    )
+    soma_resto = round(sum(lancs_resto), 2)
+    conf(len(lancs_resto) == 3, "juros não-divisível: ainda gera 3 lançamentos", str(lancs_resto))
+    conf(abs(soma_resto - 1000.0) < 0.005,
+         "juros não-divisível: soma das 3 partes bate EXATO com o juros total (R$ 1.000,00), sem sobrar/faltar centavo",
+         f"soma veio R$ {soma_resto:.2f}, partes: {lancs_resto}")
+
     browser.close()
 
 print(f"\n  {passes} passaram, {falhas} falharam")

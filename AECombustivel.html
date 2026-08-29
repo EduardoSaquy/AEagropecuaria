@@ -473,14 +473,35 @@ function rowToLog(r){
   return { id:r.id, tabela:r.tabela, registroId:r.registro_id, acao:r.acao, dadosAntigos:r.dados_antigos, dadosNovos:r.dados_novos, usuarioId:r.usuario_id, criadoEm:r.criado_em };
 }
 
+// O Supabase trunca em 1000 linhas sem avisar (mesma armadilha documentada
+// no CLAUDE.md pros outros apps) — abastecimentos, entradas de estoque,
+// medições e ajustes crescem com o tempo e passam disso mais cedo ou mais
+// tarde. fetchAllRows pagina em blocos de 1000 até acabar.
+async function fetchAllRows(consulta){
+  const PAGINA = 1000;
+  let todas = [], de = 0;
+  while(true){
+    const { data, error } = await consulta().range(de, de + PAGINA - 1);
+    if(error) return { data: todas, error };
+    todas = todas.concat(data || []);
+    if(!data || data.length < PAGINA) break;
+    de += PAGINA;
+  }
+  return { data: todas, error: null };
+}
+
 async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
       const cfg = CADASTROS[k];
-      return db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc});
+      // .order('id') como desempate: sem uma coluna única no order(), duas
+      // linhas com o mesmo orderBy (ex: mesma data) podem sair duplicadas
+      // ou sumir na fronteira entre páginas de 1000 — mesmo bug já
+      // corrigido em lancamentos_rateados, no AE Matriz.
+      return fetchAllRows(()=>db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc}).order('id'));
     }),
-    db.from('profiles').select('*').order('nome'),
-    db.from('alertas').select('*').order('data_hora', {ascending:false}),
+    fetchAllRows(()=>db.from('profiles').select('*').order('nome').order('id')),
+    fetchAllRows(()=>db.from('alertas').select('*').order('data_hora', {ascending:false}).order('id')),
     db.from('log_auditoria').select('*').order('criado_em', {ascending:false}).limit(300),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
@@ -491,7 +512,7 @@ async function loadAll(){
   render();
 }
 async function recarregarAlertas(){
-  const { data } = await db.from('alertas').select('*').order('data_hora', {ascending:false});
+  const { data } = await fetchAllRows(()=>db.from('alertas').select('*').order('data_hora', {ascending:false}).order('id'));
   state.alertas = (data||[]).map(rowToAlerta);
   render();
 }
@@ -1395,7 +1416,21 @@ function ModalAbastecimento(){
 const FRENTE_LABELS = {cana:'Cana-de-açúcar', graos:'Grãos', pecuaria:'Pecuária', geral:'Geral'};
 function labelFrente(f){ return FRENTE_LABELS[f] || f; }
 function pillFrente(f){ return f==='geral' ? 'pill-cat' : 'pill-ok'; }
-function hojeISO(){ return new Date().toISOString().slice(0,10); }
+// Componentes locais, não toISOString(): toISOString() é UTC e, no Brasil,
+// das 21h à meia-noite devolve a data de AMANHÃ (mesma correção já feita
+// nos outros apps — hojeStr() no AEMatriz.html/AEpecuaria.html).
+function hojeISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+// dataHora do abastecimento vem do banco em UTC (timestamptz). Pegar só os
+// 10 primeiros caracteres pega o DIA EM UTC, que no Brasil pode ser um dia
+// à frente do dia local pra abastecimento feito entre 21h e meia-noite —
+// mesma armadilha do toISOString(), aqui na volta (banco -> tela) em vez
+// da ida. Sem isso, um abastecimento tarde da noite aparece no relatório,
+// no rateio e no "consumo do mês" do dia seguinte, não do dia real.
+function dataLocalDoTimestamp(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function primeiroDiaMesISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
 function custoAbastecimento(a){
   const custoUnit = custoMedioPonderado(a.tanqueId, a.dataHora);
@@ -1404,7 +1439,7 @@ function custoAbastecimento(a){
 function abastecimentosNoPeriodo(){
   const { dataInicio, dataFim } = state.rateioFiltro;
   return state.abastecimentos.filter(a=>{
-    const d = String(a.dataHora||'').slice(0,10);
+    const d = dataLocalDoTimestamp(a.dataHora);
     return (!dataInicio || d>=dataInicio) && (!dataFim || d<=dataFim);
   });
 }
@@ -1861,7 +1896,7 @@ function PageAuditoria(){
 function PagePainel(){
   const inicioMes = primeiroDiaMesISO(), fimMes = hojeISO();
   const abastecimentosMes = state.abastecimentos.filter(a=>{
-    const d = String(a.dataHora||'').slice(0,10);
+    const d = dataLocalDoTimestamp(a.dataHora);
     return d>=inicioMes && d<=fimMes;
   });
   const volumeMes = abastecimentosMes.reduce((a,x)=>a+Number(x.volumeLitros||0),0);
@@ -1910,7 +1945,7 @@ function PagePainel(){
 function abastecimentosFiltradosRelatorio(){
   const f = state.relatorioFiltro;
   return state.abastecimentos.filter(a=>{
-    const d = String(a.dataHora||'').slice(0,10);
+    const d = dataLocalDoTimestamp(a.dataHora);
     if(f.dataInicio && d<f.dataInicio) return false;
     if(f.dataFim && d>f.dataFim) return false;
     if(f.fazendaId && String(a.fazendaId)!==String(f.fazendaId)) return false;

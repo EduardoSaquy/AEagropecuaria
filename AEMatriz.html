@@ -2529,13 +2529,23 @@ async function pagarParcela(parcelaId){
   if(!confirm(`Marcar a parcela ${p.numero} (R$ ${fmt(p.valorParcela)}) como paga?\n\nSó o juros (R$ ${fmt(p.valorJuros)}) vira despesa lançada no Resultado — a amortização (R$ ${fmt(p.valorAmortizacao)}) não afeta o resultado, só reduz o saldo devedor.`)) return;
 
   const atividades = f.finalidade==='capital_giro' ? ATIVIDADES_PRODUTIVAS : [f.atividade];
-  const valorPorAtividade = Number(p.valorJuros) / atividades.length;
+  // valor é numeric(12,2) no banco: dividir R$100 por 3 dá R$33,333... e
+  // cada insert arredonda pra R$33,33 sozinho, sem saber dos outros dois -
+  // a soma das partes fecha R$99,99, um centavo a menos que o juros real.
+  // Mesmo problema que o rateio do "geral" já resolve em outro lugar deste
+  // arquivo: arredonda cada parte e devolve a sobra do arredondamento na
+  // primeira, pra soma das partes bater exato com o total.
+  const totalJuros = Number(p.valorJuros);
+  const brutoPorAtividade = Math.round(totalJuros / atividades.length * 100) / 100;
+  const sobra = Math.round((totalJuros - brutoPorAtividade * atividades.length) * 100) / 100;
   const idsGerados = [];
-  for(const atividade of atividades){
+  for(let i=0; i<atividades.length; i++){
+    const atividade = atividades[i];
+    const valor = i===0 ? Math.round((brutoPorAtividade + sobra) * 100) / 100 : brutoPorAtividade;
     const row = lancamentoToRow({
       tipo:'despesa', atividade, fazendaId: f.fazendaId||'', centroCustoId: centro.id,
       descricao: `Juros — ${f.banco} (parcela ${p.numero}/${f.numeroParcelas})`,
-      valor: valorPorAtividade, data: hojeStr(), fornecedor: f.banco, observacao: '', areas: [],
+      valor, data: hojeStr(), fornecedor: f.banco, observacao: '', areas: [],
     });
     const {data, error} = await db.from('lancamentos_financeiros').insert(row).select().single();
     if(error){ alert('Não foi possível lançar o juros: ' + error.message); return; }
