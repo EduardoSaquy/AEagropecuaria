@@ -91,9 +91,10 @@ página e a próxima — uma linha pode sumir ou duplicar na fronteira. Achado e
 corrigido em 28/08/2026, junto com a correção acima: sozinho, num teste local
 com Postgres real, isso desviou a soma em ~0,006% (R$ 1.234 num total de
 R$ 20,7 milhões) — real, mas não do tamanho da despesa da Cana ter
-aparentemente dobrado em produção no mesmo dia. Essa segunda causa, maior,
-não foi identificada ainda — ver o que Eduardo reportar a seguir antes de
-supor que este ajuste sozinho resolveu.
+aparentemente dobrado em produção no mesmo dia. **Essa segunda causa, maior,
+foi identificada no mesmo dia**: duplicação entre o lançamento manual e a
+importação do Conag pra Cana/Pecuária a partir de jan/2026 — ver "O import
+do Conag duplicou Cana e Pecuária de jan/2026 em diante", mais abaixo.
 
 Esse ponto ficou destampado até 28/08/2026: `carregarResultadoCana/Cereais/
 Pecuaria` (AEMatriz.html) e o Financeiro só-leitura do AEpecuaria.html liam
