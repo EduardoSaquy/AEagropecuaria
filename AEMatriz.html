@@ -1626,7 +1626,10 @@ function ultimos12Meses(periodo){
 }
 function anosDisponiveis(){
   const hoje = new Date().getFullYear();
-  return [hoje, hoje-1, hoje-2];
+  // hoje-3, não hoje-2: é a mesma janela que mesesJanela() já carrega —
+  // sem isso, 2023 tinha dado no banco mas só dava pra ver via Safra ou
+  // Mês, nunca pelo filtro Ano.
+  return [hoje, hoje-1, hoje-2, hoje-3];
 }
 function safrasDisponiveis(){
   const hoje = new Date();
