@@ -1395,7 +1395,10 @@ function ModalAbastecimento(){
 const FRENTE_LABELS = {cana:'Cana-de-açúcar', graos:'Grãos', pecuaria:'Pecuária', geral:'Geral'};
 function labelFrente(f){ return FRENTE_LABELS[f] || f; }
 function pillFrente(f){ return f==='geral' ? 'pill-cat' : 'pill-ok'; }
-function hojeISO(){ return new Date().toISOString().slice(0,10); }
+// Componentes locais, não toISOString(): toISOString() é UTC e, no Brasil,
+// das 21h à meia-noite devolve a data de AMANHÃ (mesma correção já feita
+// nos outros apps — hojeStr() no AEMatriz.html/AEpecuaria.html).
+function hojeISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function primeiroDiaMesISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
 function custoAbastecimento(a){
   const custoUnit = custoMedioPonderado(a.tanqueId, a.dataHora);
