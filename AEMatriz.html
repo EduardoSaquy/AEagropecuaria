@@ -4603,7 +4603,12 @@ function numDecimal(v){
  * quantidade entregue do lancamento (que na venda e em @). Depois do
  * primeiro recalculo as 540 @ viravam "540 animais" e o app recusava
  * vender 540 de um lote de 100 cabecas. */
+// O frigorífico já manda o total de @ pronto no relatório (rendimento de
+// carcaça calculado por eles) — o formulário lança esse valor direto
+// (d.arrobasTotais). Sem esse campo (ex.: venda antiga carregada só com
+// pesoMedioKg), cai pro cálculo antigo.
 function arrobasDaVenda(d){
+  if(d.arrobasTotais!=null && d.arrobasTotais!=='') return numDecimal(d.arrobasTotais);
   return (numDecimal(d.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(d.qtdAnimais||0);
 }
 function valorDaVenda(d){
@@ -4653,9 +4658,9 @@ function BlocoVendaAnimais(d){
       </select>
     </div>
     ${tipoVenda==='arroba'?`
-    <div class="field"><label>Peso de carcaça por animal (kg)</label>
-      <input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
-      <span class="hint">Peso de carcaça, não peso vivo — é o que o frigorífico paga. 1 @ = ${KG_POR_ARROBA_CARCACA} kg.</span></div>
+    <div class="field"><label>Arrobas totais (@, do relatório do frigorífico)</label>
+      <input id="f-arrobasvenda" type="text" inputmode="decimal" value="${d.arrobasTotais ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
+      <span class="hint">Rendimento de carcaça já vem calculado pelo frigorífico — lance o total de @ direto do relatório, não o peso.</span></div>
     <div class="field"><label>Valor da arroba paga (R$/@)</label>
       <input id="f-valorarrobavenda" type="text" inputmode="decimal" value="${d.valorArroba ?? ''}" data-recalcula-venda="1" autocomplete="off"/></div>`:''}
     ${tipoVenda==='cabeca'?`
@@ -4694,12 +4699,18 @@ async function salvarVendaAnimais(campos, row){
   const lote = state.lotesPec.find(l=>String(l.id)===String(campos.loteId));
   const qtd = Number(campos.qtdAnimais||0);
 
+  // Peso de carcaça por animal continua gravado (derivado das @ ÷ 15 ×
+  // quantidade) mesmo a pessoa lançando @ direto — histórico e a
+  // produtividade @/ha em Resultados dependem da coluna peso_medio_kg.
+  const pesoMedioKgArroba = qtd>0 ? (numDecimal(campos.arrobasTotais) * KG_POR_ARROBA_CARCACA) / qtd : 0;
   const abateRow = {
     data: campos.data,
     lote_id: Number(campos.loteId),
     quantidade: qtd,
     tipo_venda: campos.tipoVenda || 'arroba',
-    peso_medio_kg: campos.tipoVenda==='cabeca' ? null : numDecimal(campos.pesoMedioKg),
+    peso_medio_kg: campos.tipoVenda==='cabeca' ? null
+      : campos.tipoVenda==='arroba' ? pesoMedioKgArroba
+      : numDecimal(campos.pesoMedioKg),
     valor_arroba: campos.tipoVenda==='arroba' ? numDecimal(campos.valorArroba) : null,
     valor_por_animal: campos.tipoVenda==='cabeca' ? numDecimal(campos.valorPorAnimal) : null,
     valor_kg: campos.tipoVenda==='kg' ? numDecimal(campos.valorKg) : null,
@@ -4740,6 +4751,7 @@ function lerVendaDoFormulario(base){
     qtdAnimais:     v('f-qtdvenda'),
     tipoVenda:      v('f-tipovenda') || 'arroba',
     pesoMedioKg:    document.getElementById('f-pesovenda') ? v('f-pesovenda') : (base.pesoMedioKg ?? ''),
+    arrobasTotais:  document.getElementById('f-arrobasvenda') ? v('f-arrobasvenda') : (base.arrobasTotais ?? ''),
     valorArroba:    document.getElementById('f-valorarrobavenda') ? v('f-valorarrobavenda') : (base.valorArroba ?? ''),
     valorPorAnimal: document.getElementById('f-valorporanimalvenda') ? v('f-valorporanimalvenda') : (base.valorPorAnimal ?? ''),
     valorKg:        document.getElementById('f-valorkgvenda') ? v('f-valorkgvenda') : (base.valorKg ?? ''),
@@ -4757,7 +4769,7 @@ function faltandoNaVenda(d){
     faltando.push(`quantidade menor ou igual às ${fmtInt(lote.numeroAnimais)} cabeças do lote`);
   }
   if(d.tipoVenda==='arroba'){
-    if(!(numDecimal(d.pesoMedioKg) > 0)) faltando.push('peso de carcaça');
+    if(!(numDecimal(d.arrobasTotais) > 0)) faltando.push('arrobas totais');
     if(!(numDecimal(d.valorArroba) > 0)) faltando.push('valor da arroba');
   } else if(d.tipoVenda==='cabeca'){
     if(!(numDecimal(d.valorPorAnimal) > 0)) faltando.push('valor por animal');
