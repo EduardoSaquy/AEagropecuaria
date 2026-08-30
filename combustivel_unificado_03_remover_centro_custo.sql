@@ -39,14 +39,17 @@ drop policy if exists "inserir abastecimentos" on abastecimentos;
 drop policy if exists "atualizar abastecimentos" on abastecimentos;
 drop policy if exists "excluir abastecimentos" on abastecimentos;
 
--- 2. Troca as funções pela versão sem centro de custo. CREATE OR
---    REPLACE não serve aqui -- muda a lista de parâmetros, então criaria
---    uma segunda função ao lado da antiga em vez de substituir; por
---    isso o DROP explícito da assinatura de 2 parâmetros primeiro.
+-- 2. Troca as funções pela versão sem centro de custo. O DROP explícito
+--    da assinatura de 2 parâmetros cobre a primeira vez que este script
+--    roda (CREATE OR REPLACE sozinho não trocaria a lista de parâmetros
+--    -- criaria uma segunda função ao lado da antiga). CREATE OR REPLACE
+--    (em vez de só CREATE) cobre rodar este script de novo depois que já
+--    rodou uma vez -- sem isso, "CREATE FUNCTION" trava dizendo que a
+--    função de 1 parâmetro já existe.
 drop function if exists pode_acessar_frente_combustivel(bigint, bigint);
 drop function if exists frente_do_rateio_combustivel(bigint, bigint);
 
-create function frente_do_rateio_combustivel(p_talhao_area_id bigint) returns text
+create or replace function frente_do_rateio_combustivel(p_talhao_area_id bigint) returns text
 language sql security definer set search_path = public stable as $$
   select coalesce(
     (select c.frente from talhoes_areas t join culturas c on c.id = t.cultura_id where t.id = p_talhao_area_id),
@@ -54,7 +57,7 @@ language sql security definer set search_path = public stable as $$
   );
 $$;
 
-create function pode_acessar_frente_combustivel(p_talhao_area_id bigint) returns boolean
+create or replace function pode_acessar_frente_combustivel(p_talhao_area_id bigint) returns boolean
 language sql security definer set search_path = public stable as $$
   select case
     when is_admin() then true
