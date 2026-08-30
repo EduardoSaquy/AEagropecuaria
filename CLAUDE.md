@@ -30,9 +30,18 @@ projetos ativos, então o Eduardo decidiu integrar ao unificado em vez de
 duplicar cadastro (`fazendas`/`talhoes_areas`/`centros_custo`/`culturas`/
 `safras`/`funcionarios` já existentes). Ver `combustivel_unificado_01_
 schema.sql`/`_02_libera_geo_para_combustivel.sql`/`_03_remover_centro_
-custo.sql`. Combustível **não** grava em `lancamentos_financeiros` — fica
-como controle próprio (litros, rateio por talhão/área), à parte do
+custo.sql`/`_04_abastecimento_no_posto.sql`/`_05_operador_vira_
+funcionario.sql`. Combustível **não** grava em `lancamentos_financeiros`
+— fica como controle próprio (litros, rateio por talhão/área), à parte do
 financeiro, por ora.
+
+**Confirmado em produção em 30/08/2026** (rodados nesta ordem pelo
+Eduardo): abastecimento não tem mais centro de custo (só talhão/área,
+opcional), "Operador" não é mais um cadastro próprio com CPF — lista os
+`funcionarios` do Matriz (exceto cargo "Administrativo"), e a origem do
+abastecimento virou Fazenda (resolve o tanque dela — só existe um por
+fazenda) ou "Posto de gasolina" (sem tanque, sem desconto de estoque).
+A tabela `operadores` foi apagada.
 
 O projeto antigo da Pecuária (`leojfqlbdtlriemdgnyw`) tinha leitura anônima em
 10 tabelas e a Edge Function `atualizar-permissoes` (que faz UPDATE em
@@ -313,10 +322,6 @@ filtra outros códigos de erro de rede, mas não esse).
 ## Restrições de segurança permanentes
 
 - **Nunca** guardar CPF, salário ou Pix em tabela com leitura pela chave anônima.
-  `AECombustivel.html` grava CPF de operador (`operadores.cpf`) — confirmado
-  que a política de select exige `tem_permissao(...)`, que depende de
-  `auth.uid()` e por isso não é anônima. Se um dia esse app ganhar qualquer
-  policy `using (true)` ou papel `anon`, isso vira violação desta regra.
 - `entidades.documento` (AEMatriz.html, pode ter CNPJ/CPF de fornecedor) —
   achado na varredura de 29/08/2026, checado e **resolvido**: RLS ligado,
   as 4 policies (select/insert/update/delete) exigem `is_dono()` ou
