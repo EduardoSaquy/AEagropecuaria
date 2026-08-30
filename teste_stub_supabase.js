@@ -32,6 +32,7 @@ window.supabase = {
         select() { this._rows = linhas(); return this; },
         eq(col, val) { this._filtros.push(r => String(r[col]) === String(val)); return this; },
         order() { return this; },
+        limit(n) { this._limit = n; return this; },
         range(de, ate) {
           const r = this._aplicar();
           return Promise.resolve({ data: r.slice(de, ate + 1), error: null });
@@ -45,6 +46,7 @@ window.supabase = {
           // update/delete precisam mutar o objeto de verdade, nao uma copia.
           let r = this._rows || linhas();
           this._filtros.forEach(f => { r = r.filter(f); });
+          if (this._limit != null) r = r.slice(0, this._limit);
           return r;
         },
         then(res, rej) {

@@ -12,7 +12,7 @@ aberto direto no navegador ou instalado como PWA.
 | `AEpecuaria.html` | gado: lotes, pesagens, ração, reprodução, abate. Financeiro/Resultados/Fazenda daqui migraram pro Matriz — aqui é só leitura |
 | `AECana.html` | cana: talhões, safras, aplicações, colheitas. Sem Financeiro/Resultados próprios (migraram pro Matriz) |
 | `AECereais.html` | grãos: mesma estrutura da cana, outra frente |
-| `AECombustivel.html` | controle de diesel/Arla/gasolina das três frentes. Código completo mas **ainda com credenciais Supabase placeholder** — nunca foi ligado a um banco real |
+| `AECombustivel.html` | controle de diesel/Arla/gasolina das três frentes. Rateio por talhão/área — sem centro de custo, sem entrar em `lancamentos_financeiros` (controle próprio, por ora) |
 | `Adubacao.html` | calculadora de calagem/gessagem/adubação, sem Supabase e sem login (sessão única) |
 | `AELavoura.html` | página de redirecionamento para Cana/Cereais (o app antigo foi dividido) |
 | `sw.js` | service worker único de todos os apps (cache `ae-v4`) |
@@ -23,9 +23,16 @@ país e a operação é independente. Não voltar a unificá-los.
 
 ## Banco
 
-Projeto Supabase único (`kmkystqgpvmzrccxvyaz`) para Matriz, Pecuária, Cana e
-Cereais. `AECombustivel.html` é pensado para ter projeto próprio e separado,
-mas esse projeto ainda não foi criado — o app está com credenciais placeholder.
+Projeto Supabase único (`kmkystqgpvmzrccxvyaz`) para Matriz, Pecuária, Cana,
+Cereais **e, desde 29/08/2026, Combustível também** — o plano original era
+projeto próprio e separado pro Combustível, mas o Supabase free limita a 2
+projetos ativos, então o Eduardo decidiu integrar ao unificado em vez de
+duplicar cadastro (`fazendas`/`talhoes_areas`/`centros_custo`/`culturas`/
+`safras`/`funcionarios` já existentes). Ver `combustivel_unificado_01_
+schema.sql`/`_02_libera_geo_para_combustivel.sql`/`_03_remover_centro_
+custo.sql`. Combustível **não** grava em `lancamentos_financeiros` — fica
+como controle próprio (litros, rateio por talhão/área), à parte do
+financeiro, por ora.
 
 O projeto antigo da Pecuária (`leojfqlbdtlriemdgnyw`) tinha leitura anônima em
 10 tabelas e a Edge Function `atualizar-permissoes` (que faz UPDATE em
@@ -275,14 +282,30 @@ entrar de novo sem checar contra o que já foi lançado à mão primeiro.
 
 ## Testes
 
-`teste_apps_lavoura.py` (44), `teste_matriz.py` (22), `teste_paginacao.py` (2),
-`teste_financiamentos.py` (33). Rodam com Playwright + Python contra um stub
-do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete` gravam de
-verdade em `window.__DB__` desde que o teste de Financiamentos passou a
-clicar em "Salvar"/"Marcar como paga" de verdade, não só ler tela). 101
-testes. Cobrem `AEMatriz.html`/`AEpecuaria.html`/`AECana.html`/`AECereais.html`,
-mas nada ainda de `AECombustivel.html`/`Adubacao.html`.
-Rodar todos antes de entregar qualquer alteração. Em sandbox sem rede pra
+10 arquivos, 317 testes. Rodam com Playwright + Python contra um stub do
+Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete` gravam de
+verdade em `window.__DB__`).
+
+| Arquivo | Testes | Cobre |
+|---|---|---|
+| `teste_apps_lavoura.py` | 44 | AECana.html, AECereais.html |
+| `teste_matriz.py` | 32 | AEMatriz.html |
+| `teste_paginacao.py` | 2 | AEMatriz.html, AEpecuaria.html |
+| `teste_financiamentos.py` | 35 | AEMatriz.html |
+| `teste_venda.py` | 28 | AEMatriz.html |
+| `teste_unidade.py` | 31 | AEMatriz.html |
+| `teste_exclusao.py` | 20 | AEMatriz.html, AEpecuaria.html, AECana.html, AECereais.html |
+| `teste_lote_racao.py` | 15 | AEpecuaria.html |
+| `teste_cereais_cultura.py` | 27 | AECereais.html |
+| `teste_contas.py` | 83 | AEMatriz.html |
+
+Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
+30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
+4 arquivos e 101 testes — ficou pra trás conforme os outros 6 foram
+adicionados; achado ao conferir pendências de teste).
+
+Rodar todos antes de entregar qualquer alteração — `ls teste_*.py` primeiro,
+não confie de cabeça na lista acima ficar completa. Em sandbox sem rede pra
 buscar fonte/CDN externo, espere 2 falhas de `ERR_CONNECTION_RESET` em
 `teste_apps_lavoura.py` — é ruído do ambiente, não regressão (o teste já
 filtra outros códigos de erro de rede, mas não esse).
