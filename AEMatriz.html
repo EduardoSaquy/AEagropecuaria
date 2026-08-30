@@ -614,6 +614,26 @@ async function loadAll(){
   carregarIndicadoresCereais();
   carregarResultadoCereais();
   carregarCombustivel();
+  carregarLancamentosRateados();
+}
+
+// Todas as atividades (inclusive 'geral' — administrativo, nunca rateado
+// pra uma atividade específica) — as três telas de resultado por
+// atividade (carregarResultadoPecuaria/Cana/Cereais) já leem
+// lancamentos_rateados, mas cada uma filtra só a própria atividade. A aba
+// Relatórios (Balancete/Fluxo de Caixa) precisa filtrar por Atividade E
+// por Fazenda ao mesmo tempo, então busca tudo aqui, uma vez só.
+async function carregarLancamentosRateados(){
+  if(!temPermissao('matriz_resultados','visualizar')) return;
+  try{
+    const { data, error } = await fetchAllRows(()=>
+      db.from('lancamentos_rateados').select('*').order('lancamento_id').order('rateio_id'));
+    if(error) throw error;
+    state.lancamentosRateados = (data||[]).map(rowToLancamento);
+  } catch(e){
+    console.error('Erro ao carregar lancamentos_rateados (Relatórios):', e);
+  }
+  render();
 }
 
 // frente de uma cultura ('cana' | 'graos' | 'pecuaria' | null) — mesma
@@ -1021,6 +1041,9 @@ const state = {
   colheitasCana: [],   // {data, toneladas} — pra toneladas/ha no período (aba Operacional)
   colheitasGraos: [],  // {data, sacas} — sacas/ha
   pesagens: [],        // {loteId, data, pesoMedioKg} — ganho de peso -> arrobas/ha
+  lancamentosRateados: [], // TODAS as atividades (inclusive 'geral'), pra Balancete/Fluxo de Caixa (aba Relatórios)
+  filtroAtividadesRelatorio: [], // vazio = todas
+  filtroFazendaRelatorio: '',    // vazio = todas
   lotesPec: [],       // só id e nome, pra vincular receita a um lote
   abaFinanceiro: 'despesa',
   // Contas a pagar / a receber
@@ -1834,6 +1857,126 @@ function despesaPorCentroCustoConsolidada(){
   const total = barras.reduce((a,x)=>a+x.valor,0);
   return barras.map(x=>({...x, pct: total>0 ? x.valor/total*100 : 0}));
 }
+// ===== Resultados > Relatórios: Balancete e Fluxo de Caixa =====
+// Usa lancamentosRateados (TODAS as atividades, inclusive 'geral'), não a
+// soma dos três resultadoOperacaoNoPeriodo() — um lançamento 'geral' que
+// nunca foi rateado pra uma atividade específica (administrativo puro)
+// só existe nessa fonte, e o filtro de Atividade/Fazenda da tela precisa
+// dele.
+function lancamentosFiltradosRelatorio(){
+  const ativs = state.filtroAtividadesRelatorio;
+  const faz = state.filtroFazendaRelatorio;
+  return state.lancamentosRateados.filter(l =>
+    (ativs.length===0 || ativs.includes(l.atividade)) &&
+    (!faz || String(l.fazendaId)===String(faz))
+  );
+}
+// Receita e investimento não têm recorrente (só despesa tem) — entram no
+// período pelo mês, ou pelo ano_safra na receita (mesma regra de
+// receitasNaSafra, mas já operando sobre a lista filtrada por
+// atividade/fazenda desta tela).
+function itensReceitaNoPeriodo(receitas, periodo){
+  if(periodo.tipo!=='safra'){
+    const meses = new Set(periodoMeses(periodo));
+    return receitas.filter(r=>r.mes && meses.has(r.mes));
+  }
+  return receitasNaSafra(receitas, periodo.safra);
+}
+function itensInvestimentoNoPeriodo(investimentos, periodo){
+  const meses = new Set(periodoMeses(periodo));
+  return investimentos.filter(l=>l.mes && meses.has(l.mes));
+}
+function itensRelatorioNoPeriodo(periodo){
+  const base = lancamentosFiltradosRelatorio();
+  return {
+    despesa: itensDespesaComCentroNoPeriodo(base.filter(l=>l.tipo==='despesa'), periodo),
+    receita: itensReceitaNoPeriodo(base.filter(l=>l.tipo==='receita'), periodo),
+    investimento: itensInvestimentoNoPeriodo(base.filter(l=>l.tipo==='investimento'), periodo),
+  };
+}
+// Balancete: cada centro de custo usado no período (despesa, receita e
+// investimento juntos), agrupado pelo grupo do plano de contas do Conag
+// (grupoDoCentro) — já lido em produção, só não tinha relatório nenhum
+// que juntasse os três tipos de lançamento por centro.
+function balanceteRelatorio(periodo){
+  const {despesa, receita, investimento} = itensRelatorioNoPeriodo(periodo);
+  const porCentro = new Map();
+  function acumula(itens, campo){
+    itens.forEach(l=>{
+      const chave = String(l.centroCustoId);
+      if(!porCentro.has(chave)) porCentro.set(chave, {entrada:0, saida:0});
+      porCentro.get(chave)[campo] += Number(l.valor||0);
+    });
+  }
+  acumula(receita, 'entrada');
+  acumula(despesa, 'saida');
+  acumula(investimento, 'saida');
+  const linhas = [...porCentro.entries()].map(([id, v])=>{
+    const c = state.centrosCusto.find(x=>String(x.id)===id);
+    return {
+      centro: c ? c.nome : 'Sem centro de custo',
+      grupo: c ? grupoDoCentro(c) : 'Sem classificação',
+      entrada: v.entrada, saida: v.saida, saldo: v.entrada-v.saida,
+    };
+  }).filter(l=>l.entrada>0 || l.saida>0);
+  linhas.sort((a,b)=> a.grupo.localeCompare(b.grupo,'pt-BR') || (b.entrada+b.saida)-(a.entrada+a.saida));
+  const totalEntrada = linhas.reduce((a,l)=>a+l.entrada,0);
+  const totalSaida = linhas.reduce((a,l)=>a+l.saida,0);
+  return {linhas, totalEntrada, totalSaida, saldo: totalEntrada-totalSaida};
+}
+// Saldo anterior ao período: soma tudo que foi carregado (mesesJanela(),
+// hoje-3 anos) antes do primeiro mês do período, respeitando a mesma
+// regra de recorrente da despesa (vigentesNoMes por mês). Não é
+// necessariamente o saldo "desde a fundação da empresa" — só o que está
+// carregado; "desde" no retorno diz até onde a soma alcança, pra tela
+// deixar isso explícito em vez de fingir precisão que não tem.
+function saldoAnteriorRelatorio(periodo){
+  const inicioPeriodo = periodoMeses(periodo)[0];
+  const mesesAntes = mesesJanela().filter(m=>m<inicioPeriodo);
+  if(mesesAntes.length===0) return {saldo:0, desde:null};
+  const base = lancamentosFiltradosRelatorio();
+  const despesasBase = base.filter(l=>l.tipo==='despesa');
+  const receitasBase = base.filter(l=>l.tipo==='receita');
+  const investBase = base.filter(l=>l.tipo==='investimento');
+  let saldo = 0;
+  mesesAntes.forEach(mesStr=>{
+    saldo -= vigentesNoMes(despesasBase, mesStr).reduce((a,l)=>a+Number(l.valor||0), 0);
+  });
+  saldo += receitasBase.filter(r=>r.mes && mesesAntes.includes(r.mes)).reduce((a,r)=>a+Number(r.valor||0), 0);
+  saldo -= investBase.filter(l=>l.mes && mesesAntes.includes(l.mes)).reduce((a,l)=>a+Number(l.valor||0), 0);
+  return {saldo, desde: mesesAntes[0]};
+}
+// Fluxo de Caixa: saldo anterior + entradas (por grupo) + investimentos +
+// saídas (por grupo) + resultado do período + saldo final — formato
+// padrão de DFC rural (saldo anterior, entradas, investimentos, saídas,
+// total geral).
+function fluxoCaixaRelatorio(periodo){
+  const {despesa, receita, investimento} = itensRelatorioNoPeriodo(periodo);
+  function porGrupo(itens){
+    const m = new Map();
+    itens.forEach(l=>{
+      const c = state.centrosCusto.find(x=>String(x.id)===String(l.centroCustoId));
+      const g = c ? grupoDoCentro(c) : 'Sem classificação';
+      m.set(g, (m.get(g)||0) + Number(l.valor||0));
+    });
+    return [...m.entries()].map(([grupo,valor])=>({grupo,valor})).sort((a,b)=>b.valor-a.valor);
+  }
+  const entradasPorGrupo = porGrupo(receita);
+  const saidasPorGrupo = porGrupo(despesa);
+  const totalEntradas = entradasPorGrupo.reduce((a,x)=>a+x.valor,0);
+  const totalSaidas = saidasPorGrupo.reduce((a,x)=>a+x.valor,0);
+  const totalInvestimento = investimento.reduce((a,l)=>a+Number(l.valor||0), 0);
+  const {saldo: saldoAnterior, desde} = saldoAnteriorRelatorio(periodo);
+  const resultadoPeriodo = totalEntradas - totalSaidas - totalInvestimento;
+  return {
+    saldoAnterior, desde,
+    entradasPorGrupo, totalEntradas,
+    totalInvestimento,
+    saidasPorGrupo, totalSaidas,
+    resultadoPeriodo,
+    saldoFinal: saldoAnterior + resultadoPeriodo,
+  };
+}
 // Área (ha) de cada operação — vem direto do cadastro de Fazendas (aba
 // Fazendas, aqui no Matriz), que guarda quanto hectare de cada atividade
 // (grãos/cana/pecuária) tem em cada fazenda. Não depende mais de somar
@@ -2244,8 +2387,83 @@ function CardResultadoOperacional(slug){
     `}
   </div>`;
 }
+function FiltrosRelatorio(){
+  const ativs = state.filtroAtividadesRelatorio;
+  return `
+  <div class="card card-pad" style="margin-bottom:18px;">
+    <div style="display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start;">
+      <div>
+        <label style="display:block; margin-bottom:6px;">Atividade</label>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          ${ATIVIDADES_LANC.map(([k,l])=>`
+            <label style="display:flex; align-items:center; gap:5px; font-size:13px; font-weight:400; color:var(--grafite);">
+              <input type="checkbox" data-filtro-ativ-relatorio="${k}" ${ativs.length===0||ativs.includes(k)?'checked':''} style="width:auto;"/> ${esc(l)}
+            </label>`).join('')}
+        </div>
+        <p class="hint" style="margin-top:4px;">Nenhuma marcada = todas.</p>
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px;">Fazenda</label>
+        <select id="f-filtro-fazenda-relatorio">
+          <option value="">Todas</option>
+          ${state.fazendasLavoura.map(f=>`<option value="${f.id}" ${String(state.filtroFazendaRelatorio)===String(f.id)?'selected':''}>${esc(f.nome)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div>`;
+}
 function PageResultadosRelatorios(){
-  return `<div class="card card-pad">${Empty('Em construção', 'Balancete e Fluxo de Caixa por atividade/fazenda vêm a seguir.')}</div>`;
+  const bal = balanceteRelatorio(state.periodo);
+  const fc = fluxoCaixaRelatorio(state.periodo);
+  let grupoAtual = null;
+  return `
+  ${FiltrosRelatorio()}
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — Balancete</p>
+  <div class="card" style="overflow-x:auto; margin-bottom:18px;">
+    ${bal.linhas.length===0 ? Empty('Sem lançamento neste filtro', 'Nenhuma despesa, receita ou investimento no período/atividade/fazenda selecionados.') : `
+    <table>
+      <thead><tr><th>Centro de custo</th><th>Entrada</th><th>Saída</th><th>Saldo</th></tr></thead>
+      <tbody>
+        ${bal.linhas.map(l=>{
+          const cabecalhoGrupo = l.grupo!==grupoAtual
+            ? (grupoAtual=l.grupo, `<tr><td colspan="4" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">${esc(l.grupo)}</td></tr>`)
+            : '';
+          return `${cabecalhoGrupo}<tr>
+            <td>${esc(l.centro)}</td>
+            <td class="mono">${l.entrada>0?'R$ '+fmt(l.entrada):'—'}</td>
+            <td class="mono">${l.saida>0?'R$ '+fmt(l.saida):'—'}</td>
+            <td class="mono" style="font-weight:600; ${l.saldo<0?'color:var(--alerta);':''}">R$ ${fmt(l.saldo)}</td>
+          </tr>`;
+        }).join('')}
+        <tr>
+          <td style="font-weight:700;">Total</td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(bal.totalEntrada)}</td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(bal.totalSaida)}</td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(bal.saldo)}</td>
+        </tr>
+      </tbody>
+    </table>`}
+  </div>
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — Fluxo de Caixa</p>
+  <div class="card card-pad">
+    <table>
+      <tbody>
+        <tr><td>Saldo anterior${fc.desde?` (desde ${mesLabel(fc.desde)})`:''}</td><td class="mono" style="text-align:right;">R$ ${fmt(fc.saldoAnterior)}</td></tr>
+        <tr><td colspan="2" style="padding-top:14px; font-weight:700;">Entradas</td></tr>
+        ${fc.entradasPorGrupo.length ? fc.entradasPorGrupo.map(g=>`<tr><td style="padding-left:18px;">${esc(g.grupo)}</td><td class="mono" style="text-align:right;">R$ ${fmt(g.valor)}</td></tr>`).join('') : `<tr><td style="padding-left:18px;" class="hint">Nenhuma</td><td></td></tr>`}
+        <tr><td style="font-weight:600;">Total de entradas</td><td class="mono" style="text-align:right; font-weight:600;">R$ ${fmt(fc.totalEntradas)}</td></tr>
+        <tr><td colspan="2" style="padding-top:14px; font-weight:700;">Investimentos</td></tr>
+        <tr><td style="padding-left:18px;">${fc.totalInvestimento>0?'Compra de bens/animais/máquinas':'<span class="hint">Nenhum</span>'}</td><td class="mono" style="text-align:right;">${fc.totalInvestimento>0?'R$ '+fmt(fc.totalInvestimento):''}</td></tr>
+        <tr><td colspan="2" style="padding-top:14px; font-weight:700;">Saídas</td></tr>
+        ${fc.saidasPorGrupo.length ? fc.saidasPorGrupo.map(g=>`<tr><td style="padding-left:18px;">${esc(g.grupo)}</td><td class="mono" style="text-align:right;">R$ ${fmt(g.valor)}</td></tr>`).join('') : `<tr><td style="padding-left:18px;" class="hint">Nenhuma</td><td></td></tr>`}
+        <tr><td style="font-weight:600;">Total de saídas</td><td class="mono" style="text-align:right; font-weight:600;">R$ ${fmt(fc.totalSaidas)}</td></tr>
+        <tr><td style="padding-top:14px; font-weight:700;">Resultado do período</td><td class="mono" style="text-align:right; padding-top:14px; font-weight:700; ${fc.resultadoPeriodo<0?'color:var(--alerta);':''}">R$ ${fmt(fc.resultadoPeriodo)}</td></tr>
+        <tr><td style="font-weight:700; border-top:2px solid var(--cinza-claro); padding-top:10px;">Saldo final</td><td class="mono" style="text-align:right; font-weight:700; border-top:2px solid var(--cinza-claro); padding-top:10px; ${fc.saldoFinal<0?'color:var(--alerta);':''}">R$ ${fmt(fc.saldoFinal)}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:12px;">Saldo anterior soma o que está carregado (últimos ~4 anos) antes do período — não é necessariamente o saldo desde a fundação da empresa, se houver lançamento mais antigo não carregado aqui. Grupos seguem o plano de contas do Conag (mesma classificação da tela de Centros de Custo).</p>
+  `;
 }
 function PageResultadosOperacional(){
   return `
@@ -5965,6 +6183,16 @@ function attachEvents(){
   document.querySelectorAll('[data-suba-resultados]').forEach(el=>{
     el.onclick = ()=>{ state.subAbaResultados = el.dataset.subaResultados; render(); };
   });
+  // filtros da aba Relatórios (Atividade e Fazenda)
+  document.querySelectorAll('[data-filtro-ativ-relatorio]').forEach(el=>{
+    el.onchange = ()=>{
+      const marcados = [...document.querySelectorAll('[data-filtro-ativ-relatorio]:checked')].map(x=>x.dataset.filtroAtivRelatorio);
+      state.filtroAtividadesRelatorio = marcados.length===ATIVIDADES_LANC.length ? [] : marcados;
+      render();
+    };
+  });
+  const filtroFazendaRelEl = document.getElementById('f-filtro-fazenda-relatorio');
+  if(filtroFazendaRelEl) filtroFazendaRelEl.onchange = (e)=>{ state.filtroFazendaRelatorio = e.target.value; render(); };
   const periodoMesEl = document.getElementById('f-periodo-mes');
   if(periodoMesEl) periodoMesEl.onchange = (e)=>{ if(e.target.value){ state.periodo.mes = e.target.value; render(); } };
   const periodoAnoEl = document.getElementById('f-periodo-ano');
