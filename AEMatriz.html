@@ -758,21 +758,21 @@ async function carregarResultadoPecuaria(){
   state.resultados.pecuaria = {...state.resultados.pecuaria, loading:true, erro:''};
   render();
   try{
-    const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, pesRes] = await Promise.all([
+    const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, vendasRes] = await Promise.all([
       dbPecuaria.from('ingredientes').select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
       dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
       dbPecuaria.from('reproducao_custos').select('data, custo'),
       fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
-      // pesagens: só pra calcular arrobas produzidas/ha na aba Operacional
-      // dos Resultados — ganho de peso do lote (pesagem mais recente menos a
-      // anterior), mesma conta que o AEpecuaria.html já faz.
-      fetchAllRows(()=>dbPecuaria.from('pesagens').select('lote_id, data, peso_medio_kg').order('data')),
+      // abates: só pra calcular arrobas VENDIDAS/ha na aba Operacional dos
+      // Resultados — a pedido do Eduardo, é @ de venda (evento de saída),
+      // não ganho de peso do rebanho.
+      fetchAllRows(()=>dbPecuaria.from('abates').select('data, quantidade, tipo_venda, peso_medio_kg').order('data')),
     ]);
-    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, pesRes]) if(r.error) throw r.error;
+    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, vendasRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
-    state.pesagens = (pesRes.data||[]).map(p=>({loteId:p.lote_id, data:p.data, pesoMedioKg:Number(p.peso_medio_kg||0)}));
+    state.vendasPec = (vendasRes.data||[]).map(a=>({data:a.data, quantidade:Number(a.quantidade||0), tipoVenda:a.tipo_venda, pesoMedioKg:Number(a.peso_medio_kg||0)}));
 
     const ingredientes = ingRes.data||[];
     const custoKgPorDieta = new Map();
@@ -1040,7 +1040,7 @@ const state = {
   subAbaResultados: 'geral', // 'geral' | 'operacional' | 'relatorios'
   colheitasCana: [],   // {data, toneladas} — pra toneladas/ha no período (aba Operacional)
   colheitasGraos: [],  // {data, sacas} — sacas/ha
-  pesagens: [],        // {loteId, data, pesoMedioKg} — ganho de peso -> arrobas/ha
+  vendasPec: [],       // {data, quantidade, tipoVenda, pesoMedioKg} — arrobas vendidas/ha
   lancamentosRateados: [], // TODAS as atividades (inclusive 'geral'), pra Balancete/Fluxo de Caixa (aba Relatórios)
   filtroAtividadesRelatorio: [], // vazio = todas
   filtroFazendaRelatorio: '',    // vazio = todas
@@ -2002,55 +2002,34 @@ function sacasCereaisNoPeriodo(periodo){
   const meses = new Set(periodoMeses(periodo));
   return state.colheitasGraos.filter(c=>c.data && meses.has(c.data.slice(0,7))).reduce((a,c)=>a+c.sacas, 0);
 }
-// Arrobas produzidas na Pecuária é mais complexo: não tem "quantidade
-// colhida", tem GANHO DE PESO do rebanho. A conta (pesagem mais recente até
-// o fim do mês menos a mais recente antes do mês começar, ou primeira x
-// última pesagem dentro do próprio mês na falta de uma anterior) é a MESMA
-// do AEpecuaria.html (ganhoPesoNoMes/arrobasProduzidasNoMes/
-// arrobasProduzidasFazendaNoMes) — portada aqui, não reinventada, pelo
-// mesmo motivo do vigentesNoMes: uma segunda versão da regra divergindo da
-// original já custou caro uma vez neste projeto. Generaliza pra Ano/Safra
-// somando o resultado de cada mês do período, igual toda métrica financeira
-// já faz.
-const KG_POR_ARROBA_PRODUCAO = 30; // peso vivo -- venda/abate usa 15kg de carcaça, não entra aqui
-function pesagensDoLote(loteId){
-  return state.pesagens.filter(p=>p.loteId===loteId).sort((a,b)=>a.data.localeCompare(b.data));
+// Arrobas da Pecuária: a pedido do Eduardo, é @ VENDIDA (mesmo critério de
+// "colhido" que Cana/Cereais usam — um evento de saída, não uma taxa de
+// crescimento), lançada só depois da venda. Cada abate já registra o peso
+// de um jeito diferente conforme o tipo:
+//   'arroba'  peso de CARCAÇA em kg — arrobasVenda() do AEpecuaria.html:
+//             kg ÷ 15 × quantidade de animais.
+//   'kg'      peso VIVO em kg (venda por peso, sem ser abate) — não tem
+//             rendimento de carcaça registrado pra converter certo, então
+//             usa a conversão de peso vivo (kg ÷ 30) — mesma constante que
+//             o AEpecuaria.html usa pra "arrobas de produção".
+//   'cabeca'  venda por valor fechado por animal — NÃO tem peso nenhum
+//             registrado, não tem como converter pra arroba sem inventar
+//             número. Fica de fora da conta (contado à parte, pra avisar
+//             na tela quantas vendas ficaram sem entrar).
+// KG_POR_ARROBA_CARCACA já existe mais abaixo (usada em salvarVendaAnimais) —
+// não redeclara.
+const KG_POR_ARROBA_VIVO = 30;
+function arrobasDoAbate(a){
+  if(a.tipoVenda==='arroba') return (Number(a.pesoMedioKg||0)/KG_POR_ARROBA_CARCACA) * Number(a.quantidade||0);
+  if(a.tipoVenda==='kg') return (Number(a.pesoMedioKg||0)/KG_POR_ARROBA_VIVO) * Number(a.quantidade||0);
+  return null; // 'cabeca' -- sem peso, não converte
 }
-function pesoNaData(loteId, dataLimite, incluirIgual){
-  let resultado = null;
-  pesagensDoLote(loteId).forEach(p=>{
-    if(incluirIgual ? p.data<=dataLimite : p.data<dataLimite) resultado = p;
-  });
-  return resultado;
-}
-function ganhoPesoNoMes(loteId, mesStr){
-  const ano = Number(mesStr.slice(0,4)), mes = Number(mesStr.slice(5,7));
-  const fimMes = new Date(ano, mes, 0).toISOString().slice(0,10);
-  const inicioMes = `${mesStr}-01`;
-  const final = pesoNaData(loteId, fimMes, true);
-  if(!final) return null;
-  let inicial = pesoNaData(loteId, inicioMes, false);
-  if(!inicial){
-    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr) && p.pesoMedioKg>0).sort((a,b)=>a.data.localeCompare(b.data));
-    if(doMes.length<2) return null;
-    inicial = doMes[0];
-  }
-  if(inicial.data>=final.data) return null;
-  return final.pesoMedioKg - inicial.pesoMedioKg;
-}
-function arrobasProduzidasNoMes(loteId, mesStr, numeroAnimais){
-  const ganhoKg = ganhoPesoNoMes(loteId, mesStr);
-  if(ganhoKg==null) return null;
-  return (ganhoKg/KG_POR_ARROBA_PRODUCAO) * Number(numeroAnimais||0);
-}
-function arrobasProduzidasFazendaNoMes(mesStr){
-  return state.lotesPec.filter(l=>!l.dataFim).reduce((a,l)=>{
-    const arrobas = arrobasProduzidasNoMes(l.id, mesStr, l.numeroAnimais);
-    return a + (arrobas||0);
-  }, 0);
-}
-function arrobasProduzidasNoPeriodo(periodo){
-  return periodoMeses(periodo).reduce((a,mesStr)=>a+arrobasProduzidasFazendaNoMes(mesStr), 0);
+function arrobasVendidasNoPeriodo(periodo){
+  const meses = new Set(periodoMeses(periodo));
+  const doPeriodo = state.vendasPec.filter(a=>a.data && meses.has(a.data.slice(0,7)));
+  const total = doPeriodo.reduce((acc,a)=>{ const arr = arrobasDoAbate(a); return arr!=null ? acc+arr : acc; }, 0);
+  const semPeso = doPeriodo.filter(a=>arrobasDoAbate(a)==null);
+  return {total, vendasSemPeso: semPeso.length, animaisSemPeso: semPeso.reduce((a,v)=>a+Number(v.quantidade||0),0)};
 }
 // Ponto único: produtividade de uma operação no período, na unidade certa
 // pra cada uma. null quando não tem hectare cadastrado (mesma regra que
@@ -2060,7 +2039,10 @@ function produtividadeOperacaoNoPeriodo(slug, periodo){
   if(ha<=0) return null;
   if(slug==='cana'){ const total = toneladasCanaNoPeriodo(periodo); return {total, unidade:'t', porHa: total/ha}; }
   if(slug==='cereais'){ const total = sacasCereaisNoPeriodo(periodo); return {total, unidade:'sc', porHa: total/ha}; }
-  if(slug==='pecuaria'){ const total = arrobasProduzidasNoPeriodo(periodo); return {total, unidade:'@', porHa: total/ha}; }
+  if(slug==='pecuaria'){
+    const {total, vendasSemPeso, animaisSemPeso} = arrobasVendidasNoPeriodo(periodo);
+    return {total, unidade:'@', porHa: total/ha, vendasSemPeso, animaisSemPeso};
+  }
   return null;
 }
 // Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
@@ -2362,6 +2344,7 @@ function CardResultadoOperacional(slug){
         <div class="stat-label">Produtividade</div>
         <div class="stat-value" style="font-size:19px;">${prod ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
         <div class="hint" style="margin-top:4px;">${prod ? fmtInt(prod.total)+' '+prod.unidade+' no período' : 'Sem hectare cadastrado'}</div>
+        ${prod && prod.vendasSemPeso ? `<div class="hint" style="margin-top:2px; color:var(--ambar);">${prod.vendasSemPeso} venda(s) por cabeça (${fmtInt(prod.animaisSemPeso)} animais) não entraram — sem peso registrado</div>` : ''}
       </div>
       <div class="stat-card">
         <div class="stat-label">Margem</div>
@@ -2471,7 +2454,7 @@ function PageResultadosOperacional(){
   <div class="donuts-row">
     ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
   </div>
-  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) / arrobas de ganho de peso vivo produzidas (Pecuária) no período, divididas pela área cadastrada em Fazendas. Cana e Cereais somam as colheitas com data dentro do período selecionado; Pecuária soma o ganho de peso mês a mês do rebanho ativo (mesma conta que o AE Pecuária usa).</p>
+  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) / arrobas vendidas (Pecuária) no período, divididas pela área cadastrada em Fazendas. Cana e Cereais somam as colheitas com data dentro do período selecionado; Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado e fica de fora, avisado no card.</p>
   `;
 }
 
