@@ -1680,23 +1680,29 @@ function resultadoBrutoOperacao(slug){
   if(slug==='cereais') return resultadoComCombustivel(state.resultados.cereais, slug);
   return null;
 }
-// Despesa de uma safra respeitando o campo Safra (ano_safra) do lançamento.
-// Um lançamento com mês dentro da janela da safra conta nela A MENOS QUE
-// tenha ano_safra apontando pra outra; um lançamento de fora da janela com
-// ano_safra apontando pra esta safra entra mesmo assim. Recorrente (sem
-// mês) não tem ano_safra que faça sentido — continua vigente em toda a
-// janela, como sempre foi (é o vigentesNoMes de cada mês que resolve isso).
+// Itens de despesa (fixa da Pecuária / geral de Cana e Cereais) que valem
+// no período selecionado — Mês/Ano são pura janela de calendário; Safra
+// respeita o campo Safra (ano_safra) do lançamento: um lançamento com mês
+// dentro da janela da safra conta nela A MENOS QUE tenha ano_safra
+// apontando pra outra; um lançamento de fora da janela com ano_safra
+// apontando pra esta safra entra mesmo assim. Recorrente (sem mês) não tem
+// ano_safra que faça sentido — continua vigente em toda a janela, como
+// sempre foi (é o vigentesNoMes de cada mês que resolve isso). Devolve os
+// lançamentos (não a soma) pra dar pra tanto somar quanto agrupar por
+// centro de custo com o mesmo critério.
+function itensDespesaComCentroNoPeriodo(despesas, periodo){
+  if(periodo.tipo!=='safra'){
+    return [].concat(...periodoMeses(periodo).map(m=>vigentesNoMes(despesas, m)));
+  }
+  const safra = periodo.safra;
+  const janela = periodoMeses(periodo);
+  const doMes = [].concat(...janela.map(m=>vigentesNoMes(despesas, m)))
+    .filter(l=> !(l.mes && l.anoSafra!=null && Number(l.anoSafra)!==safra));
+  const remarcadas = despesas.filter(l=> l.mes && Number(l.anoSafra)===safra && !janela.includes(l.mes));
+  return [...doMes, ...remarcadas];
+}
 function despesaNaSafra(despesas, safra){
-  const janela = periodoMeses({tipo:'safra', safra});
-  let total = janela.reduce((soma,m)=>
-    soma + vigentesNoMes(despesas, m)
-      .filter(l=> !(l.mes && l.anoSafra!=null && Number(l.anoSafra)!==safra))
-      .reduce((a,l)=>a+Number(l.valor||0), 0)
-  , 0);
-  total += despesas
-    .filter(l=> l.mes && Number(l.anoSafra)===safra && !janela.includes(l.mes))
-    .reduce((a,l)=>a+Number(l.valor||0), 0);
-  return total;
+  return itensDespesaComCentroNoPeriodo(despesas, {tipo:'safra', safra}).reduce((a,l)=>a+Number(l.valor||0), 0);
 }
 // Mesma ideia pra receita — sem substituição de recorrente (receita não é
 // recorrente): só filtra o que é desta safra (pelo mês ou pelo ano_safra
@@ -1746,6 +1752,40 @@ function resultadoOperacaoNoPeriodo(slug){
       .map(r=>({data:r.data, descricao:r.descricao || raw.receitaLabelPadrao, valor:Number(r.valor||0)}))
       .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))),
   };
+}
+// Despesa do período selecionado quebrada por centro de custo, juntando
+// as três operações — é o que abre ao clicar no donut "Despesa por
+// operação". Só a parte "com centro de custo" (fixa da Pecuária / geral
+// de Cana e Cereais, que vem de lancamentos_financeiros) dá pra quebrar
+// assim; Ração, Pasto, Reprodução (Pecuária) e Combustível vêm de outra
+// tabela, por animal/kg/litro, sem centro de custo — entram como uma
+// barra própria cada, com o mesmo valor que despesaDetalhe já mostra em
+// Resultados, então a soma das barras bate com o stat card Despesa.
+function despesaPorCentroCustoConsolidada(){
+  const porCentro = new Map();
+  const outras = new Map();
+  OPERACOES_ORDEM.forEach(slug=>{
+    const raw = state.resultados[slug];
+    const r = resultadoOperacaoNoPeriodo(slug);
+    if(!raw || raw.loading || raw.erro || !r || r.erro) return;
+    const labelCentro = CATEGORIA_DESPESA_LABEL[raw.categoriaSafra];
+    (r.despesaDetalhe||[]).forEach(item=>{
+      if(item.label===labelCentro) return;
+      outras.set(item.label, (outras.get(item.label)||0) + item.valor);
+    });
+    itensDespesaComCentroNoPeriodo(raw.despesasFinanceiro||[], state.periodo).forEach(l=>{
+      const chave = String(l.centroCustoId);
+      porCentro.set(chave, (porCentro.get(chave)||0) + Number(l.valor||0));
+    });
+  });
+  const barras = [
+    ...[...porCentro.entries()].map(([id,valor])=>({
+      label: (state.centrosCusto.find(c=>String(c.id)===id)||{}).nome || 'Sem centro de custo', valor,
+    })),
+    ...[...outras.entries()].map(([label,valor])=>({label,valor})),
+  ].filter(x=>x.valor>0).sort((a,b)=>b.valor-a.valor);
+  const total = barras.reduce((a,x)=>a+x.valor,0);
+  return barras.map(x=>({...x, pct: total>0 ? x.valor/total*100 : 0}));
 }
 // Área (ha) de cada operação — vem direto do cadastro de Fazendas (aba
 // Fazendas, aqui no Matriz), que guarda quanto hectare de cada atividade
@@ -1972,7 +2012,10 @@ function PageResultados(){
   </div>
   <p class="eyebrow" style="margin-bottom:10px; margin-top:18px;">Impacto de cada operação</p>
   <div class="donuts-row">
-    ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
+    <div data-abrir-despesa-centro="1" style="cursor:pointer;" title="Clique para ver a despesa por centro de custo">
+      ${Donut(fatiasOperacoes('despesa'), 'donut-despesa', 'Despesa por operação')}
+      <p class="hint" style="text-align:center; margin-top:6px;">Clique para ver por centro de custo →</p>
+    </div>
     ${Donut(fatiasOperacoes('receita'), 'donut-receita', 'Receita por operação')}
     ${Donut(fatiasOperacoes('resultado'), 'donut-lucro', 'Lucro por operação')}
   </div>
@@ -4716,6 +4759,7 @@ function Modal(){
   if(state.modal.type==='detalheOperacao') return ModalDetalheOperacao();
   if(state.modal.type==='graficoOperacao') return ModalGraficoOperacao();
   if(state.modal.type==='graficoConsolidadoAno') return ModalGraficoConsolidadoAno();
+  if(state.modal.type==='despesaPorCentro') return ModalDespesaPorCentro();
   return '';
 }
 
@@ -4770,6 +4814,45 @@ function ModalDetalheOperacao(){
   </div>`;
 }
 
+// Uma coluna por categoria (centro de custo, ou Ração/Pasto/Reprodução/
+// Combustível quando não tem centro de custo) — usado no drill-down de
+// despesa por centro de custo. Todo valor é >=0 aqui (é sempre despesa),
+// então não precisa de linha de zero nem cor por sinal. Rola pro lado
+// quando tem muita categoria (rótulo cabe girado, sem empilhar).
+function GraficoColunasCategorias(itens){
+  const maxV = Math.max(1, ...itens.map(x=>x.valor));
+  const n = itens.length || 1;
+  // margemEsquerda: o rótulo do primeiro centro, girado, escapa pra
+  // esquerda da própria barra. margemBaixo: um rótulo comprido a 45°
+  // desce mais do que uma linha de texto normal — sem sobra suficiente
+  // aqui, a metade de baixo do rótulo (bem onde começa o texto) ficava
+  // cortada pelo overflow-y:auto que o overflow-x:auto força no wrapper
+  // (CSS não deixa um eixo "visible" e o outro rolando ao mesmo tempo).
+  const margemEsquerda = 30, margemDireita = 10;
+  const areaLargura = Math.max(500, n*56);
+  const largura = areaLargura + margemEsquerda + margemDireita;
+  const altura=280, margemBaixo=104, margemTopo=10;
+  const areaAltura = altura-margemBaixo-margemTopo;
+  const passo = areaLargura/n;
+  const larguraBarra = Math.min(36, passo-16);
+  const barras = itens.map((it,i)=>{
+    const x = margemEsquerda + i*passo + (passo-larguraBarra)/2;
+    const h = Math.max(1.5, areaAltura*(it.valor/maxV));
+    const y = margemTopo + areaAltura - h;
+    const xLabel = (x+larguraBarra/2).toFixed(1);
+    const yLabel = (altura-margemBaixo+14).toFixed(1);
+    const rotuloTexto = it.label.length>17 ? it.label.slice(0,16)+'…' : it.label;
+    const rotulo = `<text x="${xLabel}" y="${yLabel}" text-anchor="end" font-size="9.5" fill="var(--cinza)" font-family="Inter,sans-serif" transform="rotate(-45 ${xLabel} ${yLabel})">${esc(rotuloTexto)}</text>`;
+    return `<rect class="gbar" data-gbar-valor="R$ ${fmt(it.valor)} · ${fmt(it.pct,1)}%" data-gbar-label="${esc(it.label)}"
+      x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="var(--trigo)"></rect>${rotulo}`;
+  }).join('');
+  return `<div style="overflow-x:auto; -webkit-overflow-scrolling:touch; flex-shrink:0; min-height:auto;">
+    <svg class="grafico-barras-svg" viewBox="0 0 ${largura} ${altura}" style="width:${largura}px; min-width:100%; height:${altura}px; flex-shrink:0;">
+      <line x1="0" y1="${(margemTopo+areaAltura).toFixed(1)}" x2="${largura}" y2="${(margemTopo+areaAltura).toFixed(1)}" stroke="var(--cinza-claro)" stroke-width="1"/>
+      ${barras}
+    </svg>
+  </div>`;
+}
 // Barras com linha de zero — despesa/receita por hectare são sempre >=0
 // (barra cresce de baixo), lucro/ha pode ser negativo (barra cresce dos
 // dois lados da linha de zero, verde acima e vermelho abaixo).
@@ -4927,6 +5010,43 @@ function ModalGraficoConsolidadoAno(){
               ${esc(OPERACOES[slug]||slug)}
             </span>`).join('')}
         </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+function ModalDespesaPorCentro(){
+  const itens = despesaPorCentroCustoConsolidada();
+  const total = itens.reduce((a,x)=>a+x.valor,0);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1" style="max-width:680px;">
+      <div class="modal-head"><h3>Despesa por centro de custo — ${esc(labelPeriodo(state.periodo))}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${itens.length===0 ? Empty('Sem despesa neste período', 'Não há lançamento de despesa em nenhuma das três operações neste período.') : `
+        <p class="hint" style="margin-bottom:8px;">Pecuária, Cana e Cereais somados. Ração, Pasto, Reprodução e Combustível não têm centro de custo próprio (vêm de outra tabela) e aparecem como uma barra cada.</p>
+        ${GraficoColunasCategorias(itens)}
+        <div class="card" style="overflow-x:auto; margin-top:14px;">
+          <table>
+            <thead><tr><th>Centro de custo</th><th>Valor</th><th>%</th></tr></thead>
+            <tbody>
+              ${itens.map(it=>`
+                <tr>
+                  <td>${esc(it.label)}</td>
+                  <td class="mono">R$ ${fmt(it.valor)}</td>
+                  <td class="mono">${fmt(it.pct,1)}%</td>
+                </tr>
+              `).join('')}
+              <tr>
+                <td style="font-weight:600;">Total</td>
+                <td class="mono" style="font-weight:600;">R$ ${fmt(total)}</td>
+                <td class="mono" style="font-weight:600;">100,0%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Fechar</button>
@@ -5657,6 +5777,11 @@ function attachEvents(){
       state.modal = {type:'graficoConsolidadoAno', metrica: el.dataset.consolidadoMetrica, ano: Number(el.dataset.consolidadoAno)};
       render();
     };
+  });
+  // donut de Despesa por operação: clicar em qualquer lugar dele abre o
+  // drill-down por centro de custo do período selecionado
+  document.querySelectorAll('[data-abrir-despesa-centro]').forEach(el=>{
+    el.onclick = ()=>{ state.modal = {type:'despesaPorCentro'}; render(); };
   });
   // tooltip das barras do gráfico (reaproveita o mesmo tooltip dos donuts)
   document.querySelectorAll('[data-gbar-valor]').forEach(el=>{
