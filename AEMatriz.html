@@ -229,8 +229,10 @@
   /* ---------- RESPONSIVO (celular) ---------- */
   @media (max-width:760px){
     .app{height:auto; overflow:visible;}
-    .topbar{padding:10px 14px; height:auto; flex-wrap:wrap; row-gap:8px; position:-webkit-sticky; position:sticky; top:0; z-index:40;}
+    .topbar{padding:8px 10px; height:auto; flex-wrap:wrap; row-gap:8px; gap:8px; position:-webkit-sticky; position:sticky; top:0; z-index:40;}
     .topbar-user-nome{display:none;}
+    .topbar-user{gap:6px;}
+    .btn-sair{padding:6px 9px; font-size:11px;}
     .tabsrow{padding:8px 10px; position:-webkit-sticky; position:sticky; top:0; z-index:39;}
     .nav-item{padding:8px 11px; font-size:12.5px;}
     .main{padding:20px 16px 48px 16px; max-width:100%; overflow-y:visible;}
@@ -247,6 +249,19 @@
     .painel-resultados{flex-direction:column; align-items:stretch; gap:14px;}
     .donut-wrap{align-self:center;}
     .painel-legenda{min-width:0; width:100%;}
+    /* Tabelas: mais compactas, e a última coluna (sempre Ações, quando
+       existe) fica fixa na borda direita da área que rola — dá pra tocar
+       em Editar/Excluir sem precisar arrastar a tabela inteira pro lado.
+       Sem isso, numa tela de 380px, uma tabela de 6+ colunas escondia os
+       botões de ação bem depois da borda da tela, sem nenhuma pista visual
+       de que dava pra rolar até lá. */
+    table{font-size:12.5px;}
+    th, td{padding:10px 9px;}
+    td:last-child, th:last-child{
+      position:sticky; right:0; background:var(--branco);
+      box-shadow:-8px 0 8px -8px rgba(15,42,74,0.18);
+    }
+    tbody tr:hover td:last-child{background:var(--cinza-bg);}
   }
 </style>
 </head>
@@ -503,7 +518,7 @@ const APPS_REGISTRO = [
   {slug:'pecuaria', nome:'AE Pecuária', descricao:'Confinamento, pasto, cria, dietas e financeiro do rebanho.', url:'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', cor:'#2a78d6', status:'ativo'},
   {slug:'cana', nome:'AE Cana', descricao:'Talhões, plantio, tratos culturais e colheita da cana-de-açúcar (SP).', url:'https://eduardosaquy.github.io/AEagropecuaria/AECana.html', cor:'#eb6834', status:'ativo'},
   {slug:'cereais', nome:'AE Cereais', descricao:'Talhões, plantio, tratos culturais e colheita de soja, milho e demais grãos (TO).', url:'https://eduardosaquy.github.io/AEagropecuaria/AECereais.html', cor:'#1baf7a', status:'ativo'},
-  {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'', cor:'#8a6d3b', status:'em_breve'},
+  {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'https://eduardosaquy.github.io/AEagropecuaria/AECombustivel.html', cor:'#8a6d3b', status:'ativo'},
 ];
 
 /* O Supabase corta toda consulta em 1.000 linhas por padrão e devolve
@@ -939,12 +954,14 @@ function agregarPeriodo(resultado, meses){
   };
 }
 
-// AE Combustível ainda não tem banco real ligado à matriz (card fica "em
-// breve" no Painel, ver APPS_REGISTRO) — sem chamada de rede por enquanto.
-// Quando o schema for criado dentro do projeto do Lavoura, esta função
-// volta a fazer sentido: ler tanques/entradas/abastecimentos e ratear o
-// custo por frente (pecuária/cana/grãos), igual o AECombustivel.html fazia
-// no projeto próprio dele antes da integração.
+// AE Combustível já tem banco real (unificado com Matriz/Pecuária/Cana/
+// Cereais) e card "Ativo" no Painel (ver APPS_REGISTRO), mas o custo dele
+// segue de propósito fora do Financeiro/Resultados — decisão do Eduardo:
+// ver o gasto de combustível por operação sem que ele reduza o lucro
+// calculado aqui (o app é uma leitura de estoque/consumo, não uma segunda
+// fonte de despesa). Por isso esta função continua sem chamada de rede:
+// se um dia quiserem ratear o custo por frente aqui no Painel/Resultados,
+// é aqui que a leitura de tanques/entradas/abastecimentos entraria.
 async function carregarCombustivel(){
   state.indicadores.combustivel = {loading:false, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
   state.resultados.combustivelPorFrente = {loading:false, erro:'', mensal:[]};
@@ -1979,7 +1996,7 @@ function PageResultados(){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:14px;">Números de Pecuária, Cana e Cereais/Grãos calculados a partir da receita e despesa própria lançada em cada app. Combustível ainda não está com banco ligado à matriz (card "em breve" no Painel), então o custo dele não entra nesses números por enquanto. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>
+  <p class="hint" style="margin-top:14px;">Números de Pecuária, Cana e Cereais/Grãos calculados a partir da receita e despesa própria lançada em cada app. O custo de Combustível fica de propósito fora daqui — é controle de estoque/consumo, não uma despesa lançada no Financeiro. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>
   <div class="card card-pad" style="margin-top:18px;">
     <p class="stat-label" style="margin-bottom:2px;">Histórico da empresa — ano a ano</p>
     <p class="hint" style="margin-bottom:14px;">Receita, despesa e resultado de todas as operações juntas, calendário (não muda com o filtro Mês/Ano/Safra acima). Clique numa coluna pra ver o que cada atividade contribuiu naquele valor, ano a ano.</p>
@@ -4374,9 +4391,8 @@ function PageFinanceiro(){
             ${ehDespesa?`<td>${l.atividade==='pecuaria' ? areasLabel(l.areas) : '—'}</td>`:''}
             <td class="mono">R$ ${fmt(l.valor)}</td>
             <td style="display:flex; gap:6px;">
-              ${podeEditarFinanceiro() ? `
-              <button class="btn-ghost btn-sm" data-edit-lancamento="${l.id}">Editar</button>
-              <button class="btn-danger-ghost" data-del-lancamento="${l.id}">Excluir</button>` : ''}
+              ${podeEditarFinanceiro() ? `<button class="btn-ghost btn-sm" data-edit-lancamento="${l.id}">Editar</button>` : ''}
+              ${podeExcluir() ? `<button class="btn-danger-ghost" data-del-lancamento="${l.id}">Excluir</button>` : ''}
             </td>
           </tr>
         `).join('')}
