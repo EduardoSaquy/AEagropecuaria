@@ -708,7 +708,7 @@ language sql security definer set search_path = public stable as $$
     when (select coalesce(cardinality(frentes), 0) from profiles where id = auth.uid()) = 0 then true
     else frente_do_rateio(p_talhao_area_id, p_centro_custo_id) = 'geral'
       or frente_do_rateio(p_talhao_area_id, p_centro_custo_id) = any(
-        select frentes from profiles where id = auth.uid()
+        select unnest(frentes) from profiles where id = auth.uid()
       )
   end;
 $$;
