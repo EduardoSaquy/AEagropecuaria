@@ -333,17 +333,6 @@ const CADASTROS = {
       {key:'ativo', label:'Ativa', type:'checkbox', default:true, list:false},
     ],
   },
-  centrosCusto: {
-    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', readOnly:true,
-    desc:'Classificação de rateio para combustível sem talhão/lote específico (transporte, administrativo, gerador). Só leitura aqui — cadastro é feito no AE Matriz.',
-    emptyHint:'Nenhum centro de custo cadastrado ainda — cadastre no AE Matriz primeiro.',
-    fields:[
-      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
-      {key:'nome', label:'Nome', type:'text', required:true},
-      {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES_GERAL, required:true},
-      {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
-    ],
-  },
   talhoesAreas: {
     table:'talhoes_areas', label:'Talhões / Áreas', singular:'Talhão/Área', readOnly:true,
     desc:'Talhões de lavoura (com hectares) ou lotes/currais de pecuária, para ratear o combustível abastecido neles. Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
@@ -375,14 +364,13 @@ const CADASTROS = {
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
-  operadores: {
-    table:'operadores', label:'Operadores', singular:'Operador',
-    desc:'Motoristas, abastecedores e operadores de máquina.',
-    emptyHint:'Cadastre uma fazenda antes de criar um operador.',
+  funcionarios: {
+    table:'funcionarios', label:'Funcionários', singular:'Funcionário', readOnly:true,
+    desc:'Colaboradores cadastrados no AE Matriz — elegíveis como operador do abastecimento, exceto cargo Administrativo. Só leitura aqui — cadastro é feito no AE Matriz.',
+    emptyHint:'Nenhum funcionário cadastrado ainda — cadastre no AE Matriz primeiro.',
     fields:[
-      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'nome', label:'Nome', type:'text', required:true},
-      {key:'cpf', label:'CPF', type:'text'},
+      {key:'cargo', label:'Cargo', type:'text'},
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
     ],
   },
@@ -452,7 +440,7 @@ const CADASTROS = {
     fields:[
       {key:'fazendaId'}, {key:'tanqueId'}, {key:'equipamentoId'}, {key:'operadorId'},
       {key:'dataHora'}, {key:'volumeLitros'}, {key:'leituraMedidor'},
-      {key:'talhaoAreaId'}, {key:'centroCustoId'}, {key:'operacaoId'}, {key:'observacao'},
+      {key:'talhaoAreaId'}, {key:'operacaoId'}, {key:'observacao'},
     ],
   },
 };
@@ -541,7 +529,7 @@ const state = {
   logAuditoria: [],
   alertasMostrarResolvidos: false,
   // ---- painel & relatórios ----
-  relatorioFiltro: { tipo:'abastecimentos', dataInicio: primeiroDiaMesISO(), dataFim: hojeISO(), fazendaId:'', equipamentoId:'', centroCustoId:'', culturaId:'' },
+  relatorioFiltro: { tipo:'abastecimentos', dataInicio: primeiroDiaMesISO(), dataFim: hojeISO(), fazendaId:'', equipamentoId:'', culturaId:'' },
   // ---- autenticação ----
   authChecked: false,
   session: null,
@@ -800,7 +788,6 @@ const GROUPS = {
   ]},
   estrutura: {label:'Estrutura', icon:iconFazenda(), pages:[
     {key:'fazendas', label:'Fazendas'},
-    {key:'centrosCusto', label:'Centros de Custo'},
   ]},
   cultivo: {label:'Cultivo & Pecuária', icon:iconLeaf(), pages:[
     {key:'culturas', label:'Culturas'},
@@ -813,7 +800,7 @@ const GROUPS = {
     {key:'fornecedores', label:'Fornecedores'},
     {key:'tanques', label:'Tanques'},
     {key:'equipamentos', label:'Equipamentos'},
-    {key:'operadores', label:'Operadores'},
+    {key:'funcionarios', label:'Funcionários'},
   ]},
   estoque: {label:'Estoque', icon:iconEstoque(), pages:[
     {key:'estoqueResumo', label:'Resumo'},
@@ -827,7 +814,6 @@ const GROUPS = {
   rateio: {label:'Rateio & Indicadores', icon:iconRateio(), pages:[
     {key:'rateioFrente', label:'Por Frente'},
     {key:'rateioTalhao', label:'Por Talhão / Área'},
-    {key:'rateioCentroCusto', label:'Por Centro de Custo'},
     {key:'rateioEquipamento', label:'Por Equipamento'},
   ]},
   oversight: {label:'Alertas & Auditoria', icon:iconAlerta(), pages:[
@@ -911,7 +897,7 @@ function Header(){
     return headerHtml('Estoque','Resumo','Saldo teórico por tanque, conciliação com a última medição física e alertas de estoque baixo.');
   }
   if(state.page==='abastecimentos'){
-    return headerHtml('Abastecimento','Abastecimentos','Registro de abastecimento em campo (comboio) ou no tanque fixo, com leitura de medidor e rateio por talhão/centro de custo. Funciona offline — os registros sincronizam sozinhos quando a conexão voltar.');
+    return headerHtml('Abastecimento','Abastecimentos','Registro de abastecimento no tanque da fazenda ou num posto de gasolina, com leitura de medidor e rateio por talhão/área. Funciona offline — os registros sincronizam sozinhos quando a conexão voltar.');
   }
   if(RATEIO_PAGES[state.page]){
     const r = RATEIO_PAGES[state.page];
@@ -966,6 +952,11 @@ function fkNome(entityKey, id){
   const item = (state[entityKey]||[]).find(x=>String(x.id)===String(id));
   return item ? esc(item.nome) : '—';
 }
+// Sem tanque = abastecimento feito num posto de gasolina externo, não
+// num tanque da empresa (regra: só existe um tanque por fazenda).
+function origemAbastecimento(a){
+  return a.tanqueId==null ? 'Posto de gasolina' : fkNome('tanques', a.tanqueId);
+}
 function celulaValor(f, item){
   const val = item[f.key];
   if(f.format) return f.format(val, item);
@@ -977,11 +968,11 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  // readOnly: fazendas/culturas/safras/centrosCusto/talhoesAreas vêm do
+  // readOnly: fazendas/culturas/safras/talhoesAreas/funcionarios vêm do
   // projeto unificado, compartilhadas com Matriz/Pecuária/Cana/Cereais —
   // cadastro é feito só lá (mesma regra de "single writer" que o resto
   // do sistema já segue pra fazenda/talhão), aqui é só leitura pra
-  // popular os seletores de tanque/centro de custo/abastecimento.
+  // popular os seletores de tanque/operador/abastecimento.
   const podeEditar = !cfg.readOnly && temPermissao(cfg.modulo||'combustivel_cadastros','editar');
   const termo = state.search.toLowerCase();
   const list = (cfg.semBusca ? state[key] : state[key].filter(item => !termo || (item.nome||'').toLowerCase().includes(termo)));
@@ -990,7 +981,7 @@ function PageCadastro(key){
   <div class="toolbar">
     ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
-    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : (cfg.readOnly ? `<span class="hint">Cadastro feito no AE Matriz${key==='fazendas'||key==='centrosCusto'?'':'/Lavoura'}</span>` : '')}
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : (cfg.readOnly ? `<span class="hint">Cadastro feito no AE Matriz${key==='fazendas'||key==='funcionarios'?'':'/Lavoura'}</span>` : '')}
   </div>
   <div class="card" style="overflow-x:auto;">
     ${list.length===0 ? Empty(`Nenhum(a) ${cfg.singular.toLowerCase()} cadastrado(a)`, cfg.emptyHint||'Cadastre o primeiro registro.') : `
@@ -1150,18 +1141,18 @@ function PageAbastecimentos(){
     ${linhas.length===0 ? Empty('Nenhum abastecimento registrado','Registre o primeiro abastecimento — funciona mesmo sem internet.') : `
     <table>
       <thead><tr>
-        <th>Data/Hora</th><th>Tanque</th><th>Equipamento</th><th>Operador</th><th>Volume</th><th>Leitura</th><th>Rateio</th><th>Status</th><th></th>
+        <th>Data/Hora</th><th>Origem</th><th>Equipamento</th><th>Operador</th><th>Volume</th><th>Leitura</th><th>Rateio</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${linhas.map(a=>`
           <tr>
             <td class="mono">${fmtDataHora(a.dataHora)}</td>
-            <td>${fkNome('tanques', a.tanqueId)}</td>
+            <td>${origemAbastecimento(a)}</td>
             <td>${fkNome('equipamentos', a.equipamentoId)}</td>
-            <td>${fkNome('operadores', a.operadorId)}</td>
+            <td>${fkNome('funcionarios', a.operadorId)}</td>
             <td class="mono">${fmtInt(a.volumeLitros)} L</td>
             <td class="mono">${a.leituraMedidor!=null && a.leituraMedidor!=='' ? fmt(a.leituraMedidor,1) : '—'}</td>
-            <td>${a.talhaoAreaId ? fkNome('talhoesAreas', a.talhaoAreaId) : (a.centroCustoId ? fkNome('centrosCusto', a.centroCustoId) : '—')}</td>
+            <td>${a.talhaoAreaId ? fkNome('talhoesAreas', a.talhaoAreaId) : '—'}</td>
             <td>${statusAbastecimentoPill(a)}</td>
             <td style="display:flex; gap:6px;">
               ${a._origem==='servidor' && podeEditar ? `
@@ -1176,14 +1167,21 @@ function PageAbastecimentos(){
     </table>`}
   </div>`;
 }
+// Elegível a operador: funcionário ativo, cargo diferente de
+// Administrativo (decisão do Eduardo em 30/08/2026 — quem abastece é
+// sempre alguém de fora do administrativo).
+function operadoresElegiveis(){
+  return state.funcionarios.filter(f=>f.ativo!==false && f.cargo!=='Administrativo');
+}
 function abrirNovoAbastecimento(){
   editDraft = {
     tanqueId: state.tanques.find(t=>t.ativo!==false)?.id ?? '',
+    origemPosto: false, fazendaPostoId: '',
     equipamentoId: state.equipamentos.find(e=>e.ativo!==false)?.id ?? '',
-    operadorId: state.operadores.find(o=>o.ativo!==false)?.id ?? '',
+    operadorId: operadoresElegiveis()[0]?.id ?? '',
     dataHora: agoraDatetimeLocal(),
     volumeLitros: '', leituraMedidor: '',
-    talhaoAreaId: '', centroCustoId: '', operacaoId: '',
+    talhaoAreaId: '', operacaoId: '',
     observacao: '',
   };
   state.abastecimentoError = '';
@@ -1192,7 +1190,9 @@ function abrirNovoAbastecimento(){
 function abrirEditarAbastecimento(id){
   const item = state.abastecimentos.find(a=>a.id===id);
   if(!item) return;
-  editDraft = { ...item, dataHora: isoParaDatetimeLocal(item.dataHora), _editId: item.id };
+  const origemPosto = item.tanqueId==null;
+  editDraft = { ...item, dataHora: isoParaDatetimeLocal(item.dataHora), _editId: item.id,
+    origemPosto, fazendaPostoId: origemPosto ? (item.fazendaId ?? '') : '' };
   state.abastecimentoError = '';
   state.modal = {type:'abastecimento'};
 }
@@ -1209,14 +1209,16 @@ async function excluirDaFila(clientUuid){
 }
 async function salvarAbastecimento(){
   const d = editDraft;
-  const tanqueId = Number(document.getElementById('f-ab-tanque').value) || null;
+  const origemVal = document.getElementById('f-ab-origem').value;
+  const ehPosto = origemVal === 'posto';
+  const tanqueId = ehPosto ? null : (Number(origemVal) || null);
+  const fazendaPostoId = ehPosto ? (Number(document.getElementById('f-ab-fazenda-posto')?.value) || null) : null;
   const equipamentoId = Number(document.getElementById('f-ab-equipamento').value) || null;
   const operadorId = Number(document.getElementById('f-ab-operador').value) || null;
   const dataHoraLocal = document.getElementById('f-ab-data-hora').value;
   const volumeLitros = Number(document.getElementById('f-ab-volume').value) || 0;
   const leituraRaw = document.getElementById('f-ab-leitura').value;
   const talhaoAreaId = Number(document.getElementById('f-ab-talhao').value) || null;
-  const centroCustoId = Number(document.getElementById('f-ab-centro-custo').value) || null;
   const operacaoId = Number(document.getElementById('f-ab-operacao').value) || null;
   const observacao = document.getElementById('f-ab-observacao').value || null;
   const equipamento = state.equipamentos.find(e=>e.id===equipamentoId);
@@ -1226,17 +1228,17 @@ async function salvarAbastecimento(){
   // erro, o render() do estado de erro reconstrói o modal a partir do
   // editDraft, e sem isso o formulário voltaria em branco pro usuário.
   Object.assign(d, {
-    tanqueId, equipamentoId, operadorId, dataHora: dataHoraLocal,
-    volumeLitros, leituraMedidor: leituraRaw, talhaoAreaId, centroCustoId, operacaoId, observacao,
+    tanqueId, origemPosto: ehPosto, fazendaPostoId, equipamentoId, operadorId, dataHora: dataHoraLocal,
+    volumeLitros, leituraMedidor: leituraRaw, talhaoAreaId, operacaoId, observacao,
   });
 
   let erro = '';
-  if(!tanqueId) erro = erro || 'Selecione o tanque/comboio de origem.';
+  if(!origemVal) erro = erro || 'Selecione a origem do abastecimento (fazenda ou posto de gasolina).';
+  if(ehPosto && !fazendaPostoId) erro = erro || 'Selecione a fazenda deste abastecimento feito no posto.';
   if(!equipamentoId) erro = erro || 'Selecione o equipamento/veículo abastecido.';
   if(!operadorId) erro = erro || 'Selecione o operador.';
   if(!dataHoraLocal) erro = erro || 'Informe a data/hora do abastecimento.';
   if(!volumeLitros || volumeLitros<=0) erro = erro || 'Informe um volume abastecido maior que zero.';
-  if(!talhaoAreaId && !centroCustoId) erro = erro || 'Selecione um talhão/área ou um centro de custo para o rateio.';
   if(equipamento && equipamento.tipoMedidor!=='nenhum' && leituraMedidor===null){
     erro = erro || `Informe a leitura do ${equipamento.tipoMedidor==='horimetro'?'horímetro':'hodômetro'} deste equipamento.`;
   }
@@ -1252,11 +1254,11 @@ async function salvarAbastecimento(){
   if(erro){ state.abastecimentoError = erro; render(); return; }
 
   const draft = {
-    fazendaId: state.tanques.find(t=>t.id===tanqueId)?.fazendaId || null,
+    fazendaId: ehPosto ? fazendaPostoId : (state.tanques.find(t=>t.id===tanqueId)?.fazendaId || null),
     tanqueId, equipamentoId, operadorId,
     dataHora: new Date(dataHoraLocal).toISOString(),
     volumeLitros, leituraMedidor,
-    talhaoAreaId, centroCustoId, operacaoId, observacao,
+    talhaoAreaId, operacaoId, observacao,
   };
 
   state.abastecimentoLoading = true; state.abastecimentoError = ''; render();
@@ -1330,11 +1332,17 @@ function atualizarAlertaCapacidadeTanque(){
 function ModalAbastecimento(){
   const d = editDraft;
   const tanques = state.tanques.filter(t=>t.ativo!==false);
+  // Um tanque por fazenda (regra do Eduardo) -- a pessoa escolhe a
+  // fazenda, não o tanque; o tanque é resolvido por trás. "Posto de
+  // gasolina" é a origem quando não vem de nenhum tanque da empresa --
+  // sem desconto de estoque, sem custo médio ponderado (é compra
+  // externa, o valor entra em Lançamentos Financeiros à parte).
+  const tanquePorFazenda = new Map(tanques.map(t=>[t.fazendaId, t]));
+  const fazendasComTanque = state.fazendas.filter(fz=>tanquePorFazenda.has(fz.id));
   const equipamentos = state.equipamentos.filter(e=>e.ativo!==false);
-  const operadores = state.operadores.filter(o=>o.ativo!==false);
+  const operadores = operadoresElegiveis();
   const frentesPermitidas = frentesPermitidasUsuario();
-  const talhoes = state.talhoesAreas.filter(t=>t.ativo!==false && frentePermitida(frenteDoRateio(t.id, null), frentesPermitidas));
-  const centros = state.centrosCusto.filter(c=>c.ativo!==false && frentePermitida(c.frente, frentesPermitidas));
+  const talhoes = state.talhoesAreas.filter(t=>t.ativo!==false && frentePermitida(frenteDoRateio(t.id), frentesPermitidas));
   const operacoes = state.operacoes.filter(o=>o.ativo!==false);
   const equipamentoAtual = state.equipamentos.find(e=>e.id===Number(d.equipamentoId));
   const precisaLeitura = equipamentoAtual && equipamentoAtual.tipoMedidor!=='nenhum';
@@ -1348,12 +1356,14 @@ function ModalAbastecimento(){
       <div class="modal-body">
         ${state.abastecimentoError ? `<div class="login-error">${state.abastecimentoError}</div>` : ''}
         <div class="field-row">
-          <div class="field"><label>Tanque / Comboio de origem</label>
-            <select id="f-ab-tanque" data-ab-tanque-change="1">
-              ${tanques.length===0?'<option value="">—</option>':''}
-              ${tanques.map(t=>`<option value="${t.id}" ${String(d.tanqueId)===String(t.id)?'selected':''}>${esc(t.nome)}</option>`).join('')}
+          <div class="field"><label>Origem</label>
+            <select id="f-ab-origem" data-ab-origem-change="1">
+              <option value="">—</option>
+              ${fazendasComTanque.map(fz=>{ const t = tanquePorFazenda.get(fz.id); return `<option value="${t.id}" ${!d.origemPosto && String(d.tanqueId)===String(t.id)?'selected':''}>${esc(fz.nome)}</option>`; }).join('')}
+              <option value="posto" ${d.origemPosto?'selected':''}>Posto de gasolina</option>
             </select>
-            ${tanqueAtual ? `<span class="hint">${tanqueAtual.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanqueAtual.produtoId)}</span>` : ''}
+            ${!d.origemPosto && tanqueAtual ? `<span class="hint">${tanqueAtual.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanqueAtual.produtoId)}</span>` : ''}
+            ${d.origemPosto ? `<span class="hint">Compra fora da fazenda — não desconta do estoque de nenhum tanque.</span>` : ''}
           </div>
           <div class="field"><label>Equipamento / Veículo</label>
             <select id="f-ab-equipamento" data-ab-equipamento-change="1">
@@ -1362,6 +1372,14 @@ function ModalAbastecimento(){
             </select>
           </div>
         </div>
+        ${d.origemPosto ? `
+        <div class="field"><label>Fazenda</label>
+          <select id="f-ab-fazenda-posto">
+            <option value="">—</option>
+            ${state.fazendas.map(fz=>`<option value="${fz.id}" ${String(d.fazendaPostoId)===String(fz.id)?'selected':''}>${esc(fz.nome)}</option>`).join('')}
+          </select>
+        </div>
+        ` : ''}
         <div class="field-row">
           <div class="field"><label>Operador</label>
             <select id="f-ab-operador">
@@ -1379,7 +1397,7 @@ function ModalAbastecimento(){
           </div>
         </div>
         <div id="alerta-capacidade-tanque"></div>
-        <p class="hint">Rateio — escolha o talhão/área ou o centro de custo (pelo menos um dos dois).${frentesPermitidas ? ` Mostrando só opções de: ${frentesPermitidas.map(labelFrente).join(', ')} (e "Geral").` : ''}</p>
+        <p class="hint">Talhão/área e operação são opcionais — servem pra ratear o volume por frente/trabalho. O custo em R$ entra em Lançamentos Financeiros à parte, não aqui.${frentesPermitidas ? ` Mostrando só opções de: ${frentesPermitidas.map(labelFrente).join(', ')} (e "Geral").` : ''}</p>
         <div class="field-row">
           <div class="field"><label>Talhão / Área</label>
             <select id="f-ab-talhao">
@@ -1387,18 +1405,12 @@ function ModalAbastecimento(){
               ${talhoes.map(t=>`<option value="${t.id}" ${String(d.talhaoAreaId)===String(t.id)?'selected':''}>${esc(t.nome)}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Centro de Custo</label>
-            <select id="f-ab-centro-custo">
+          <div class="field"><label>Operação</label>
+            <select id="f-ab-operacao">
               <option value="">—</option>
-              ${centros.map(c=>`<option value="${c.id}" ${String(d.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+              ${operacoes.map(o=>`<option value="${o.id}" ${String(d.operacaoId)===String(o.id)?'selected':''}>${esc(o.nome)}</option>`).join('')}
             </select>
           </div>
-        </div>
-        <div class="field"><label>Operação</label>
-          <select id="f-ab-operacao">
-            <option value="">—</option>
-            ${operacoes.map(o=>`<option value="${o.id}" ${String(d.operacaoId)===String(o.id)?'selected':''}>${esc(o.nome)}</option>`).join('')}
-          </select>
         </div>
         <div class="field"><label>Observação</label><textarea id="f-ab-observacao" rows="2">${esc(d.observacao)}</textarea></div>
       </div>
@@ -1454,19 +1466,15 @@ function abastecimentosNoPeriodo(){
 // frente de negócio de um rateio (talhão/área tem prioridade; sem
 // nenhum dos dois, ou sem cultura/frente definida, cai em "geral" —
 // mesma regra usada no banco por pode_acessar_frente().
-function frenteDoRateio(talhaoAreaId, centroCustoId){
+function frenteDoRateio(talhaoAreaId){
   if(talhaoAreaId){
     const talhao = state.talhoesAreas.find(t=>t.id===talhaoAreaId);
     const cultura = talhao?.culturaId ? state.culturas.find(c=>c.id===talhao.culturaId) : null;
     return cultura?.frente || 'geral';
   }
-  if(centroCustoId){
-    const cc = state.centrosCusto.find(c=>c.id===centroCustoId);
-    return cc?.frente || 'geral';
-  }
   return 'geral';
 }
-function frenteDoAbastecimento(a){ return frenteDoRateio(a.talhaoAreaId, a.centroCustoId); }
+function frenteDoAbastecimento(a){ return frenteDoRateio(a.talhaoAreaId); }
 // Frentes às quais o usuário logado está restrito (null = sem
 // restrição — perfil sem frente atribuída, ou administrador). Usado só
 // pra filtrar as opções mostradas nos formulários; a regra que vale de
@@ -1510,21 +1518,6 @@ function agruparPorTalhao(lista){
       volumePorHa: areaHa ? g.volume/areaHa : null,
       custoPorHa: areaHa ? g.custo/areaHa : null,
     };
-  }).sort((a,b)=>b.custo-a.custo);
-}
-function agruparPorCentroCusto(lista){
-  const grupos = {};
-  lista.forEach(a=>{
-    if(!a.centroCustoId) return;
-    if(!grupos[a.centroCustoId]) grupos[a.centroCustoId] = {centroCustoId:a.centroCustoId, volume:0, custo:0, qtd:0};
-    grupos[a.centroCustoId].volume += Number(a.volumeLitros||0);
-    grupos[a.centroCustoId].qtd += 1;
-    const c = custoAbastecimento(a);
-    if(c!=null) grupos[a.centroCustoId].custo += c;
-  });
-  return Object.values(grupos).map(g=>{
-    const cc = state.centrosCusto.find(c=>c.id===g.centroCustoId);
-    return {...g, nome: cc?.nome || '—', frente: cc?.frente || 'geral'};
   }).sort((a,b)=>b.custo-a.custo);
 }
 function agruparPorEquipamento(lista){
@@ -1615,28 +1608,6 @@ function PageRateioTalhao(){
     </table>`}
   </div>`;
 }
-function PageRateioCentroCusto(){
-  const lista = abastecimentosNoPeriodo();
-  const grupos = agruparPorCentroCusto(lista);
-  return `
-  ${FiltroPeriodoRateio()}
-  <div class="card" style="overflow-x:auto;">
-    ${grupos.length===0 ? Empty('Nenhum abastecimento com centro de custo no período','Abastecimentos rateados por talhão/área aparecem na aba Por Talhão/Área.') : `
-    <table>
-      <thead><tr><th>Centro de Custo</th><th>Frente</th><th>Volume</th><th>Custo</th></tr></thead>
-      <tbody>
-        ${grupos.map(g=>`
-          <tr>
-            <td><strong>${esc(g.nome)}</strong></td>
-            <td><span class="pill ${pillFrente(g.frente)}">${labelFrente(g.frente)}</span></td>
-            <td class="mono">${fmtInt(g.volume)} L</td>
-            <td class="mono">R$ ${fmt(g.custo)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
-}
 function PageRateioEquipamento(){
   const lista = abastecimentosNoPeriodo();
   const grupos = agruparPorEquipamento(lista);
@@ -1665,7 +1636,6 @@ function PageRateioEquipamento(){
 const RATEIO_PAGES = {
   rateioFrente: {label:'Por Frente', desc:'Custo e volume de combustível por frente de negócio (cana, grãos, pecuária) no período selecionado.', render:PageRateioFrente},
   rateioTalhao: {label:'Por Talhão / Área', desc:'Custo e volume por talhão/área, com litros e custo por hectare quando a área é conhecida.', render:PageRateioTalhao},
-  rateioCentroCusto: {label:'Por Centro de Custo', desc:'Custo e volume por centro de custo (transporte, administrativo, gerador etc.).', render:PageRateioCentroCusto},
   rateioEquipamento: {label:'Por Equipamento', desc:'Consumo (L/h ou L/km) e custo por equipamento no período, para comparar eficiência e ranquear os maiores consumidores.', render:PageRateioEquipamento},
 };
 
@@ -1958,7 +1928,6 @@ function abastecimentosFiltradosRelatorio(){
     if(f.dataFim && d>f.dataFim) return false;
     if(f.fazendaId && String(a.fazendaId)!==String(f.fazendaId)) return false;
     if(f.equipamentoId && String(a.equipamentoId)!==String(f.equipamentoId)) return false;
-    if(f.centroCustoId && String(a.centroCustoId)!==String(f.centroCustoId)) return false;
     if(f.culturaId){
       const talhao = state.talhoesAreas.find(t=>t.id===a.talhaoAreaId);
       if(!talhao || String(talhao.culturaId)!==String(f.culturaId)) return false;
@@ -1973,13 +1942,12 @@ const RELATORIO_TIPOS = {
     colunas: [
       {label:'Data/Hora', get:l=>fmtDataHora(l.dataHora)},
       {label:'Fazenda', get:l=>fkNome('fazendas', l.fazendaId)},
-      {label:'Tanque', get:l=>fkNome('tanques', l.tanqueId)},
+      {label:'Origem', get:l=>origemAbastecimento(l)},
       {label:'Equipamento', get:l=>fkNome('equipamentos', l.equipamentoId)},
-      {label:'Operador', get:l=>fkNome('operadores', l.operadorId)},
+      {label:'Operador', get:l=>fkNome('funcionarios', l.operadorId)},
       {label:'Volume (L)', get:l=>fmtInt(l.volumeLitros)},
       {label:'Leitura', get:l=>l.leituraMedidor!=null ? fmt(l.leituraMedidor,1) : '—'},
       {label:'Talhão/Área', get:l=>l.talhaoAreaId ? fkNome('talhoesAreas', l.talhaoAreaId) : '—'},
-      {label:'Centro de Custo', get:l=>l.centroCustoId ? fkNome('centrosCusto', l.centroCustoId) : '—'},
       {label:'Operação', get:l=>l.operacaoId ? fkNome('operacoes', l.operacaoId) : '—'},
       {label:'Custo (R$)', get:l=>l.custo!=null ? fmt(l.custo,2) : '—'},
     ],
@@ -2004,16 +1972,6 @@ const RELATORIO_TIPOS = {
       {label:'L/ha', get:g=>g.volumePorHa!=null ? fmt(g.volumePorHa,2) : '—'},
       {label:'Custo (R$)', get:g=>fmt(g.custo,2)},
       {label:'R$/ha', get:g=>g.custoPorHa!=null ? fmt(g.custoPorHa,2) : '—'},
-    ],
-  },
-  centroCusto: {
-    label:'Resumo por Centro de Custo',
-    linhas: ()=> agruparPorCentroCusto(abastecimentosFiltradosRelatorio()),
-    colunas: [
-      {label:'Centro de Custo', get:g=>g.nome},
-      {label:'Frente', get:g=>labelFrente(g.frente)},
-      {label:'Volume (L)', get:g=>fmtInt(g.volume)},
-      {label:'Custo (R$)', get:g=>fmt(g.custo,2)},
     ],
   },
   equipamento: {
@@ -2068,9 +2026,6 @@ function FiltroRelatorio(){
       </div>
       <div class="field" style="margin:0;"><label>Equipamento</label>
         <select data-relatorio-campo="equipamentoId"><option value="">Todos</option>${state.equipamentos.map(e=>`<option value="${e.id}" ${String(f.equipamentoId)===String(e.id)?'selected':''}>${esc(e.nome)}</option>`).join('')}</select>
-      </div>
-      <div class="field" style="margin:0;"><label>Centro de Custo</label>
-        <select data-relatorio-campo="centroCustoId"><option value="">Todos</option>${state.centrosCusto.map(c=>`<option value="${c.id}" ${String(f.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
       </div>
       <div class="field" style="margin:0;"><label>Cultura</label>
         <select data-relatorio-campo="culturaId"><option value="">Todas</option>${state.culturas.map(c=>`<option value="${c.id}" ${String(f.culturaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
@@ -2131,7 +2086,7 @@ function abrirEditarCadastro(key, id){
   state.cadastroError = '';
   state.modal = {type:'cadastro', key};
 }
-const CAMPO_FILA_POR_CADASTRO = { tanques:'tanqueId', equipamentos:'equipamentoId', operadores:'operadorId', talhoesAreas:'talhaoAreaId' };
+const CAMPO_FILA_POR_CADASTRO = { tanques:'tanqueId', equipamentos:'equipamentoId', talhoesAreas:'talhaoAreaId' };
 async function excluirCadastro(key, id){
   const cfg = CADASTROS[key];
   const campoFila = CAMPO_FILA_POR_CADASTRO[key];
@@ -2489,11 +2444,21 @@ function attachEvents(){
   document.querySelectorAll('[data-ab-volume-change]').forEach(el=>{
     el.oninput = ()=> atualizarAlertaCapacidadeTanque();
   });
-  document.querySelectorAll('[data-ab-tanque-change]').forEach(el=>{
+  document.querySelectorAll('[data-ab-origem-change]').forEach(el=>{
+    // Escolher "Posto de gasolina" precisa abrir um campo Fazenda novo
+    // (o abastecimento não tem tanque pra derivar a fazenda dele) --
+    // isso muda a estrutura do formulário, não só um texto de apoio,
+    // então precisa de render() completo (mesmo padrão do toggle de
+    // forma de venda no AE Matriz). Guarda o valor de Fazenda já
+    // escolhido antes de re-renderizar, senão alternar Posto -> Fazenda
+    // -> Posto de novo perde o que já tinha sido selecionado.
     el.onchange = (e)=>{
-      const tanque = state.tanques.find(t=>t.id===Number(e.target.value));
-      const hintEl = e.target.parentElement.querySelector('.hint');
-      if(tanque && hintEl) hintEl.textContent = `${tanque.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanque.produtoId)}`;
+      const fazendaPostoEl = document.getElementById('f-ab-fazenda-posto');
+      if(fazendaPostoEl) editDraft.fazendaPostoId = fazendaPostoEl.value;
+      const val = e.target.value;
+      editDraft.origemPosto = val === 'posto';
+      editDraft.tanqueId = editDraft.origemPosto ? null : (Number(val) || '');
+      render();
     };
   });
   document.querySelectorAll('[data-rateio-periodo]').forEach(el=>{
