@@ -897,7 +897,7 @@ function Header(){
     return headerHtml('Estoque','Resumo','Saldo teórico por tanque, conciliação com a última medição física e alertas de estoque baixo.');
   }
   if(state.page==='abastecimentos'){
-    return headerHtml('Abastecimento','Abastecimentos','Registro de abastecimento em campo (comboio) ou no tanque fixo, com leitura de medidor e rateio por talhão/centro de custo. Funciona offline — os registros sincronizam sozinhos quando a conexão voltar.');
+    return headerHtml('Abastecimento','Abastecimentos','Registro de abastecimento no tanque da fazenda ou num posto de gasolina, com leitura de medidor e rateio por talhão/área. Funciona offline — os registros sincronizam sozinhos quando a conexão voltar.');
   }
   if(RATEIO_PAGES[state.page]){
     const r = RATEIO_PAGES[state.page];
@@ -951,6 +951,11 @@ function fkNome(entityKey, id){
   if(id===null || id===undefined || id==='') return '—';
   const item = (state[entityKey]||[]).find(x=>String(x.id)===String(id));
   return item ? esc(item.nome) : '—';
+}
+// Sem tanque = abastecimento feito num posto de gasolina externo, não
+// num tanque da empresa (regra: só existe um tanque por fazenda).
+function origemAbastecimento(a){
+  return a.tanqueId==null ? 'Posto de gasolina' : fkNome('tanques', a.tanqueId);
 }
 function celulaValor(f, item){
   const val = item[f.key];
@@ -1136,13 +1141,13 @@ function PageAbastecimentos(){
     ${linhas.length===0 ? Empty('Nenhum abastecimento registrado','Registre o primeiro abastecimento — funciona mesmo sem internet.') : `
     <table>
       <thead><tr>
-        <th>Data/Hora</th><th>Tanque</th><th>Equipamento</th><th>Operador</th><th>Volume</th><th>Leitura</th><th>Rateio</th><th>Status</th><th></th>
+        <th>Data/Hora</th><th>Origem</th><th>Equipamento</th><th>Operador</th><th>Volume</th><th>Leitura</th><th>Rateio</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>
         ${linhas.map(a=>`
           <tr>
             <td class="mono">${fmtDataHora(a.dataHora)}</td>
-            <td>${fkNome('tanques', a.tanqueId)}</td>
+            <td>${origemAbastecimento(a)}</td>
             <td>${fkNome('equipamentos', a.equipamentoId)}</td>
             <td>${fkNome('funcionarios', a.operadorId)}</td>
             <td class="mono">${fmtInt(a.volumeLitros)} L</td>
@@ -1171,6 +1176,7 @@ function operadoresElegiveis(){
 function abrirNovoAbastecimento(){
   editDraft = {
     tanqueId: state.tanques.find(t=>t.ativo!==false)?.id ?? '',
+    origemPosto: false, fazendaPostoId: '',
     equipamentoId: state.equipamentos.find(e=>e.ativo!==false)?.id ?? '',
     operadorId: operadoresElegiveis()[0]?.id ?? '',
     dataHora: agoraDatetimeLocal(),
@@ -1184,7 +1190,9 @@ function abrirNovoAbastecimento(){
 function abrirEditarAbastecimento(id){
   const item = state.abastecimentos.find(a=>a.id===id);
   if(!item) return;
-  editDraft = { ...item, dataHora: isoParaDatetimeLocal(item.dataHora), _editId: item.id };
+  const origemPosto = item.tanqueId==null;
+  editDraft = { ...item, dataHora: isoParaDatetimeLocal(item.dataHora), _editId: item.id,
+    origemPosto, fazendaPostoId: origemPosto ? (item.fazendaId ?? '') : '' };
   state.abastecimentoError = '';
   state.modal = {type:'abastecimento'};
 }
@@ -1201,7 +1209,10 @@ async function excluirDaFila(clientUuid){
 }
 async function salvarAbastecimento(){
   const d = editDraft;
-  const tanqueId = Number(document.getElementById('f-ab-tanque').value) || null;
+  const origemVal = document.getElementById('f-ab-origem').value;
+  const ehPosto = origemVal === 'posto';
+  const tanqueId = ehPosto ? null : (Number(origemVal) || null);
+  const fazendaPostoId = ehPosto ? (Number(document.getElementById('f-ab-fazenda-posto')?.value) || null) : null;
   const equipamentoId = Number(document.getElementById('f-ab-equipamento').value) || null;
   const operadorId = Number(document.getElementById('f-ab-operador').value) || null;
   const dataHoraLocal = document.getElementById('f-ab-data-hora').value;
@@ -1217,12 +1228,13 @@ async function salvarAbastecimento(){
   // erro, o render() do estado de erro reconstrói o modal a partir do
   // editDraft, e sem isso o formulário voltaria em branco pro usuário.
   Object.assign(d, {
-    tanqueId, equipamentoId, operadorId, dataHora: dataHoraLocal,
+    tanqueId, origemPosto: ehPosto, fazendaPostoId, equipamentoId, operadorId, dataHora: dataHoraLocal,
     volumeLitros, leituraMedidor: leituraRaw, talhaoAreaId, operacaoId, observacao,
   });
 
   let erro = '';
-  if(!tanqueId) erro = erro || 'Selecione o tanque/comboio de origem.';
+  if(!origemVal) erro = erro || 'Selecione a origem do abastecimento (fazenda ou posto de gasolina).';
+  if(ehPosto && !fazendaPostoId) erro = erro || 'Selecione a fazenda deste abastecimento feito no posto.';
   if(!equipamentoId) erro = erro || 'Selecione o equipamento/veículo abastecido.';
   if(!operadorId) erro = erro || 'Selecione o operador.';
   if(!dataHoraLocal) erro = erro || 'Informe a data/hora do abastecimento.';
@@ -1242,7 +1254,7 @@ async function salvarAbastecimento(){
   if(erro){ state.abastecimentoError = erro; render(); return; }
 
   const draft = {
-    fazendaId: state.tanques.find(t=>t.id===tanqueId)?.fazendaId || null,
+    fazendaId: ehPosto ? fazendaPostoId : (state.tanques.find(t=>t.id===tanqueId)?.fazendaId || null),
     tanqueId, equipamentoId, operadorId,
     dataHora: new Date(dataHoraLocal).toISOString(),
     volumeLitros, leituraMedidor,
@@ -1320,6 +1332,13 @@ function atualizarAlertaCapacidadeTanque(){
 function ModalAbastecimento(){
   const d = editDraft;
   const tanques = state.tanques.filter(t=>t.ativo!==false);
+  // Um tanque por fazenda (regra do Eduardo) -- a pessoa escolhe a
+  // fazenda, não o tanque; o tanque é resolvido por trás. "Posto de
+  // gasolina" é a origem quando não vem de nenhum tanque da empresa --
+  // sem desconto de estoque, sem custo médio ponderado (é compra
+  // externa, o valor entra em Lançamentos Financeiros à parte).
+  const tanquePorFazenda = new Map(tanques.map(t=>[t.fazendaId, t]));
+  const fazendasComTanque = state.fazendas.filter(fz=>tanquePorFazenda.has(fz.id));
   const equipamentos = state.equipamentos.filter(e=>e.ativo!==false);
   const operadores = operadoresElegiveis();
   const frentesPermitidas = frentesPermitidasUsuario();
@@ -1337,12 +1356,14 @@ function ModalAbastecimento(){
       <div class="modal-body">
         ${state.abastecimentoError ? `<div class="login-error">${state.abastecimentoError}</div>` : ''}
         <div class="field-row">
-          <div class="field"><label>Tanque / Comboio de origem</label>
-            <select id="f-ab-tanque" data-ab-tanque-change="1">
-              ${tanques.length===0?'<option value="">—</option>':''}
-              ${tanques.map(t=>`<option value="${t.id}" ${String(d.tanqueId)===String(t.id)?'selected':''}>${esc(t.nome)}</option>`).join('')}
+          <div class="field"><label>Origem</label>
+            <select id="f-ab-origem" data-ab-origem-change="1">
+              <option value="">—</option>
+              ${fazendasComTanque.map(fz=>{ const t = tanquePorFazenda.get(fz.id); return `<option value="${t.id}" ${!d.origemPosto && String(d.tanqueId)===String(t.id)?'selected':''}>${esc(fz.nome)}</option>`; }).join('')}
+              <option value="posto" ${d.origemPosto?'selected':''}>Posto de gasolina</option>
             </select>
-            ${tanqueAtual ? `<span class="hint">${tanqueAtual.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanqueAtual.produtoId)}</span>` : ''}
+            ${!d.origemPosto && tanqueAtual ? `<span class="hint">${tanqueAtual.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanqueAtual.produtoId)}</span>` : ''}
+            ${d.origemPosto ? `<span class="hint">Compra fora da fazenda — não desconta do estoque de nenhum tanque.</span>` : ''}
           </div>
           <div class="field"><label>Equipamento / Veículo</label>
             <select id="f-ab-equipamento" data-ab-equipamento-change="1">
@@ -1351,6 +1372,14 @@ function ModalAbastecimento(){
             </select>
           </div>
         </div>
+        ${d.origemPosto ? `
+        <div class="field"><label>Fazenda</label>
+          <select id="f-ab-fazenda-posto">
+            <option value="">—</option>
+            ${state.fazendas.map(fz=>`<option value="${fz.id}" ${String(d.fazendaPostoId)===String(fz.id)?'selected':''}>${esc(fz.nome)}</option>`).join('')}
+          </select>
+        </div>
+        ` : ''}
         <div class="field-row">
           <div class="field"><label>Operador</label>
             <select id="f-ab-operador">
@@ -1913,7 +1942,7 @@ const RELATORIO_TIPOS = {
     colunas: [
       {label:'Data/Hora', get:l=>fmtDataHora(l.dataHora)},
       {label:'Fazenda', get:l=>fkNome('fazendas', l.fazendaId)},
-      {label:'Tanque', get:l=>fkNome('tanques', l.tanqueId)},
+      {label:'Origem', get:l=>origemAbastecimento(l)},
       {label:'Equipamento', get:l=>fkNome('equipamentos', l.equipamentoId)},
       {label:'Operador', get:l=>fkNome('funcionarios', l.operadorId)},
       {label:'Volume (L)', get:l=>fmtInt(l.volumeLitros)},
@@ -2415,11 +2444,21 @@ function attachEvents(){
   document.querySelectorAll('[data-ab-volume-change]').forEach(el=>{
     el.oninput = ()=> atualizarAlertaCapacidadeTanque();
   });
-  document.querySelectorAll('[data-ab-tanque-change]').forEach(el=>{
+  document.querySelectorAll('[data-ab-origem-change]').forEach(el=>{
+    // Escolher "Posto de gasolina" precisa abrir um campo Fazenda novo
+    // (o abastecimento não tem tanque pra derivar a fazenda dele) --
+    // isso muda a estrutura do formulário, não só um texto de apoio,
+    // então precisa de render() completo (mesmo padrão do toggle de
+    // forma de venda no AE Matriz). Guarda o valor de Fazenda já
+    // escolhido antes de re-renderizar, senão alternar Posto -> Fazenda
+    // -> Posto de novo perde o que já tinha sido selecionado.
     el.onchange = (e)=>{
-      const tanque = state.tanques.find(t=>t.id===Number(e.target.value));
-      const hintEl = e.target.parentElement.querySelector('.hint');
-      if(tanque && hintEl) hintEl.textContent = `${tanque.tipo==='comboio'?'Comboio (abastecimento móvel em campo)':'Tanque fixo'} · ${fkNome('produtos', tanque.produtoId)}`;
+      const fazendaPostoEl = document.getElementById('f-ab-fazenda-posto');
+      if(fazendaPostoEl) editDraft.fazendaPostoId = fazendaPostoEl.value;
+      const val = e.target.value;
+      editDraft.origemPosto = val === 'posto';
+      editDraft.tanqueId = editDraft.origemPosto ? null : (Number(val) || '');
+      render();
     };
   });
   document.querySelectorAll('[data-rateio-periodo]').forEach(el=>{
