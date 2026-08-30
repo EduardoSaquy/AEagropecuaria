@@ -1855,7 +1855,7 @@ function openNewModal(type){
       return false;
     }
     const primeiroLote = lotesElegiveis[0];
-    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
+    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
     state.modal = {type:'venda'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', descricao:'', fornecedor:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
@@ -3973,7 +3973,14 @@ function numDecimal(v){
 }
 // Só faz sentido calcular @ na venda por abate (tipoVenda==='arroba') — nos
 // outros dois tipos o preço já não depende de arroba nenhuma.
-function arrobasVenda(v){ return (numDecimal(v.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(v.quantidade||0); }
+// O frigorífico já manda o total de @ pronto no relatório (rendimento de
+// carcaça calculado por eles) — o formulário lança esse valor direto
+// (v.arrobasTotais). pesoMedioKg fica só no rascunho de venda carregado do
+// banco (venda já salva, sem o campo de digitação), daí o fallback.
+function arrobasVenda(v){
+  if(v.arrobasTotais!=null && v.arrobasTotais!=='') return numDecimal(v.arrobasTotais);
+  return (numDecimal(v.pesoMedioKg)/KG_POR_ARROBA_CARCACA) * Number(v.quantidade||0);
+}
 // Valor total de uma venda, de acordo com o tipo escolhido:
 // - 'arroba' (abate): arrobas de carcaça × valor da arroba paga.
 // - 'cabeca' (venda por animal): valor fechado por animal × quantidade.
@@ -6006,7 +6013,7 @@ function ModalVenda(){
         </div>
         ${tipoVenda==='arroba' ? `
         <div class="field-row">
-          <div class="field"><label>Peso de carcaça por animal (kg, do frigorífico)</label><input id="f-pesovenda" type="text" inputmode="decimal" value="${d.pesoMedioKg}"/></div>
+          <div class="field"><label>Arrobas totais (@, do relatório do frigorífico)</label><input id="f-arrobasvenda" type="text" inputmode="decimal" value="${d.arrobasTotais}"/></div>
           <div class="field"><label>Valor da arroba paga (R$/@)</label><input id="f-valorarrobavenda" type="text" inputmode="decimal" value="${d.valorArroba}"/></div>
         </div>
         ` : ''}
@@ -6022,7 +6029,7 @@ function ModalVenda(){
         <div class="total-bar ok">
           <span>${tipoVenda==='arroba' ? `${fmt(arrobas,2)} @ produzidas` : `${fmtInt(Number(d.quantidade)||0)} animais`}</span><span>R$ ${fmt(valorTotal)}</span>
         </div>
-        <p class="hint">${tipoVenda==='arroba' ? 'Peso de carcaça (não peso vivo) — 1 @ = 15 kg. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro.' : tipoVenda==='cabeca' ? 'Valor fechado por animal, sem depender de peso.' : 'Valor por kg de peso vivo — comum em venda de bezerros/animais magros.'} Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
+        <p class="hint">${tipoVenda==='arroba' ? 'Total de @ já calculado pelo frigorífico (rendimento de carcaça) — lance o valor do relatório, não o peso. Valor da arroba é o preço realmente pago nessa venda, não a estimativa diária mostrada em Financeiro.' : tipoVenda==='cabeca' ? 'Valor fechado por animal, sem depender de peso.' : 'Valor por kg de peso vivo — comum em venda de bezerros/animais magros.'} Ao salvar, desconta ${fmtInt(Number(d.quantidade)||0)} animais do número de animais do lote${lote && Number(d.quantidade||0)>=Number(lote.numeroAnimais||0) && Number(d.quantidade||0)>0 ? ' (encerra o lote automaticamente, já que zera os animais)' : ''} e lança o valor total como receita em Resultados.</p>
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obsvenda" rows="2">${esc(d.observacao||'')}</textarea></div>
       </div>
       <div class="modal-foot">
@@ -6515,7 +6522,7 @@ function attachEvents(){
     el.onclick = ()=>{
       const lote = state.lotes.find(l=>l.id===Number(el.dataset.venderLote));
       if(!lote) return;
-      editDraft = {tipo: loteTipo(lote), loteId: lote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
+      editDraft = {tipo: loteTipo(lote), loteId: lote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
       state.modal = {type:'venda'};
       render();
     };
@@ -6719,7 +6726,8 @@ function attachEvents(){
       // formulário sobrescreve editDraft.quantidade/loteId a cada tecla, e a
       // reversão no lote antigo precisa do valor de antes da edição, não do
       // que está sendo digitado agora.
-      editDraft = {...v, tipo: lote?loteTipo(lote):'confinamento', _editId: v.id, _quantidadeOriginal: v.quantidade, _loteIdOriginal: v.loteId};
+      editDraft = {...v, tipo: lote?loteTipo(lote):'confinamento', _editId: v.id, _quantidadeOriginal: v.quantidade, _loteIdOriginal: v.loteId,
+        arrobasTotais: v.tipoVenda==='arroba' ? arrobasVenda(v) : ''};
       state.modal = {type:'venda'};
       render();
     };
@@ -6836,6 +6844,7 @@ function attachEvents(){
   if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.tipoVenda = e.target.value; render(); };
   refazVendaInput('f-qtdvenda', 'quantidade');
   refazVendaInput('f-pesovenda', 'pesoMedioKg', true);
+  refazVendaInput('f-arrobasvenda', 'arrobasTotais', true);
   refazVendaInput('f-valorarrobavenda', 'valorArroba', true);
   refazVendaInput('f-valorporanimalvenda', 'valorPorAnimal', true);
   refazVendaInput('f-valorkgvenda', 'valorKg', true);
@@ -7868,7 +7877,8 @@ function attachEvents(){
         const observacao = document.getElementById('f-obsvenda').value;
         if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais']])) return;
         if(Number(qtdVal)<=0){ alert('A quantidade de animais precisa ser maior que zero.'); return; }
-        let pesoMedioKg=0, valorArroba=0, valorPorAnimal=0, valorKg=0;
+        const quantidade = Number(qtdVal);
+        let pesoMedioKg=0, valorArroba=0, valorPorAnimal=0, valorKg=0, arrobasTotais='';
         if(tipoVenda==='cabeca'){
           valorPorAnimal = numDecimal(document.getElementById('f-valorporanimalvenda').value);
           if(valorPorAnimal<=0){ alert('O valor por animal precisa ser maior que zero.'); return; }
@@ -7878,13 +7888,16 @@ function attachEvents(){
           if(pesoMedioKg<=0){ alert('O peso por animal precisa ser maior que zero.'); return; }
           if(valorKg<=0){ alert('O valor do kg precisa ser maior que zero.'); return; }
         } else {
-          pesoMedioKg = numDecimal(document.getElementById('f-pesovenda').value);
+          arrobasTotais = numDecimal(document.getElementById('f-arrobasvenda').value);
           valorArroba = numDecimal(document.getElementById('f-valorarrobavenda').value);
-          if(pesoMedioKg<=0){ alert('O peso de carcaça precisa ser maior que zero.'); return; }
+          if(arrobasTotais<=0){ alert('As arrobas totais precisam ser maiores que zero.'); return; }
           if(valorArroba<=0){ alert('O valor da arroba precisa ser maior que zero.'); return; }
+          // Peso de carcaça por animal continua gravado (derivado das @ ÷ 15
+          // × quantidade) — histórico e "kg carcaça" na lista de vendas
+          // dependem dele, mesmo sem a pessoa digitar peso diretamente.
+          pesoMedioKg = (arrobasTotais * KG_POR_ARROBA_CARCACA) / quantidade;
         }
-        const quantidade = Number(qtdVal);
-        const campos = {quantidade, tipoVenda, pesoMedioKg, valorArroba, valorPorAnimal, valorKg};
+        const campos = {quantidade, tipoVenda, pesoMedioKg, valorArroba, valorPorAnimal, valorKg, arrobasTotais};
         const arrobas = tipoVenda==='arroba' ? arrobasVenda(campos) : null;
         const valorTotal = valorVenda(campos);
         if(editDraft._editId){
@@ -7952,7 +7965,7 @@ function attachEvents(){
             }
           }
         } else {
-          const resultado = await salvarOuEnfileirar(type, {loteId, data, quantidade, tipoVenda, pesoMedioKg, valorArroba, valorPorAnimal, valorKg, observacao});
+          const resultado = await salvarOuEnfileirar(type, {loteId, data, quantidade, tipoVenda, pesoMedioKg, arrobasTotais, valorArroba, valorPorAnimal, valorKg, observacao});
           if(resultado.enfileirado){
             alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
             state.modal = null; editDraft = null; render();
