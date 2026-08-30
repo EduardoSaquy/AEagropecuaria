@@ -27,12 +27,12 @@ Projeto Supabase único (`kmkystqgpvmzrccxvyaz`) para Matriz, Pecuária, Cana e
 Cereais. `AECombustivel.html` é pensado para ter projeto próprio e separado,
 mas esse projeto ainda não foi criado — o app está com credenciais placeholder.
 
-O projeto antigo da Pecuária (`leojfqlbdtlriemdgnyw`) está parado mas AINDA tem
-leitura anônima em 10 tabelas, e a Edge Function `atualizar-permissoes` (que
-faz UPDATE em `profiles` com a chave de serviço sem checar quem chamou)
-continua publicada lá — órfã (nenhum app mais chama), mas exposta a quem tiver
-a anon key antiga, recuperável no histórico do git. Pendência de segurança em
-aberto: pausar o projeto no painel do Supabase.
+O projeto antigo da Pecuária (`leojfqlbdtlriemdgnyw`) tinha leitura anônima em
+10 tabelas e a Edge Function `atualizar-permissoes` (que faz UPDATE em
+`profiles` com a chave de serviço sem checar quem chamou) publicada lá — órfã
+(nenhum app mais chama), mas exposta a quem tivesse a anon key antiga,
+recuperável no histórico do git. **Pausado pelo Eduardo em 30/08/2026** —
+projeto parado no painel do Supabase, risco fechado.
 
 ### Registro de alterações
 
