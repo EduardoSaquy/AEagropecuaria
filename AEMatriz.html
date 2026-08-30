@@ -2083,6 +2083,16 @@ function PageResultados(){
       <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--trigo); display:inline-block;"></span>Despesa</span>
       <span class="hint" style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--bom); display:inline-block;"></span>Resultado (vermelho quando negativo)</span>
     </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px dashed var(--cinza-claro);">
+      ${anosHistorico().map(resultadoConsolidadoNoAno).map(r=>{
+        const margem = r.receita>0 ? r.resultado/r.receita*100 : null;
+        return `<div class="stat-card" style="flex:1; min-width:110px; padding:12px 14px;">
+          <div class="stat-label">Margem ${r.ano}</div>
+          <div class="stat-value ${margem==null?'':(margem>=0?'bom':'alerta')}" style="font-size:17px; margin-top:4px;">${margem==null?'—':fmt(margem,1)+'%'}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <p class="hint" style="margin-top:8px;">Margem = Resultado ÷ Receita do ano, todas as operações juntas.</p>
   </div>`;
 }
 
