@@ -333,3 +333,8 @@ filtra outros códigos de erro de rede, mas não esse).
 Respostas diretas, técnicas, com número e tabela quando couber. Discordar
 abertamente quando a premissa dele estiver errada. Não enfeitar. Português do
 Brasil.
+
+**SQL só como bloco de código na mensagem, nunca como arquivo anexado
+(SendUserFile).** Confirmado em 30/08/2026 — os cartões de arquivo não abrem
+no aparelho dele. Cola o SQL direto no texto da resposta, pra ele segurar o
+dedo e selecionar tudo.
