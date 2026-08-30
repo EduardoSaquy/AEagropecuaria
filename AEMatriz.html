@@ -1074,6 +1074,12 @@ const state = {
 };
 
 let editDraft = null;
+// Qual state.page estava de pé no fim do último render() — usado só pra
+// saber se este render() é navegação de verdade (trocou de aba, aí faz
+// sentido voltar pro topo) ou uma ação em cima da mesma tela (salvar,
+// editar, conceder permissão etc.), caso em que a rolagem não deveria
+// se mexer. Ver o restauro de scrollMainAntes dentro de render().
+let paginaAnteriorRender = null;
 
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
@@ -1170,6 +1176,21 @@ function render(){
   // perde a cada re-render (ex: abrir o formulário de criar acesso jogava a
   // tela pro topo). Guarda antes e restaura depois.
   const scrollModalAntes = document.querySelector('.modal-body')?.scrollTop;
+  // Mesma coisa pra rolagem da tela principal — mas só quando o render() é
+  // uma ação em cima da MESMA página (salvar lançamento, editar funcionário,
+  // conceder permissão, abrir/fechar modal etc.): qualquer clique disparava
+  // render() e o innerHTML novo sempre nasce rolado pro topo, então toda
+  // ação jogava a tela pra cima. Se a página mudou de verdade (clicou noutra
+  // aba), aí sim faz sentido abrir do topo.
+  //
+  // No desktop quem rola é o .main (.app tem altura fixa); no celular
+  // (media query <=760px) .app/.main viram overflow:visible e quem rola é a
+  // própria janela — guarda os dois, só um dos dois vai ter valor >0 de
+  // cada vez.
+  const mudouDePagina = state.page !== paginaAnteriorRender;
+  const scrollMainAntes = !mudouDePagina ? document.querySelector('.main')?.scrollTop : 0;
+  const scrollJanelaAntes = !mudouDePagina ? window.scrollY : 0;
+  paginaAnteriorRender = state.page;
   // Guarda também qual campo estava em edição e onde estava o cursor.
   //
   // Formulários que recalculam ao mudar um campo (o de título, com o aviso
@@ -1192,6 +1213,19 @@ function render(){
     </div>
     ${modalHtml}
   `;
+  if(scrollMainAntes){
+    const main = document.querySelector('.main');
+    if(main){
+      void main.scrollHeight;
+      main.scrollTop = scrollMainAntes;
+      requestAnimationFrame(()=>{ main.scrollTop = scrollMainAntes; });
+    }
+  }
+  if(scrollJanelaAntes){
+    void document.documentElement.scrollHeight;
+    window.scrollTo(0, scrollJanelaAntes);
+    requestAnimationFrame(()=>{ window.scrollTo(0, scrollJanelaAntes); });
+  }
   if(scrollModalAntes){
     const corpoModal = document.querySelector('.modal-body');
     if(corpoModal){
