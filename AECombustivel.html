@@ -209,13 +209,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ===================== SUPABASE =====================
- * ATENÇÃO: este app usa um projeto Supabase PRÓPRIO, separado do banco
- * do AEpecuaria.html. Antes de usar, crie o projeto (veja o passo a
- * passo no topo de combustivel_schema.sql) e substitua as duas
- * constantes abaixo pelos valores de Project Settings > API. */
+ * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
+ * AECereais.html — não um projeto próprio (o plano original previa um
+ * projeto separado, mas o Supabase free limita a 2 projetos ativos;
+ * decisão do Eduardo em 29/08/2026 foi integrar aqui, reaproveitando
+ * fazendas/talhoes_areas/centros_custo/culturas/safras/funcionarios já
+ * cadastrados em vez de duplicar. O custo de combustível NÃO entra em
+ * lancamentos_financeiros — ver combustivel_unificado_01_schema.sql). */
 const db = supabase.createClient(
-  'https://SUBSTITUA.supabase.co',
-  'SUBSTITUA_PELA_ANON_KEY'
+  'https://kmkystqgpvmzrccxvyaz.supabase.co',
+  'sb_publishable_YclssD8pzNZhWO_Om0anMg_SwaZHQOa'
 );
 
 /* ===================== HELPERS DE CONVERSÃO ===================== */
@@ -268,9 +271,9 @@ const OPCOES = {
  * Fases futuras (estoque, abastecimento) podem reaproveitar o mesmo motor. */
 const CADASTROS = {
   fazendas: {
-    table:'fazendas', label:'Fazendas', singular:'Fazenda',
-    desc:'Unidades produtivas da empresa, com estado e área total.',
-    emptyHint:'Cadastre a primeira fazenda para começar.',
+    table:'fazendas', label:'Fazendas', singular:'Fazenda', readOnly:true,
+    desc:'Unidades produtivas da empresa, com estado e área total. Só leitura aqui — cadastro é feito no AE Matriz.',
+    emptyHint:'Nenhuma fazenda cadastrada ainda — cadastre no AE Matriz primeiro.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true, placeholder:'Ex: Fazenda Santa Fé'},
       {key:'estado', label:'Estado', type:'select', options:OPCOES.ESTADOS, required:true},
@@ -289,8 +292,8 @@ const CADASTROS = {
     ],
   },
   culturas: {
-    table:'culturas', label:'Culturas', singular:'Cultura',
-    desc:'Culturas e a frente de negócio a que pertencem (cana, grãos ou pecuária).',
+    table:'culturas', label:'Culturas', singular:'Cultura', readOnly:true,
+    desc:'Culturas e a frente de negócio a que pertencem (cana, grãos ou pecuária). Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true},
       {key:'frente', label:'Frente', type:'select', options:OPCOES.FRENTES, required:true},
@@ -298,7 +301,7 @@ const CADASTROS = {
     ],
   },
   operacoes: {
-    table:'operacoes', label:'Operações', singular:'Operação',
+    table:'operacoes_combustivel', label:'Operações', singular:'Operação',
     desc:'Tipos de atividade de campo usados para ratear o combustível (colheita, plantio, trato, etc.).',
     fields:[
       {key:'nome', label:'Nome', type:'text', required:true},
@@ -318,9 +321,9 @@ const CADASTROS = {
     ],
   },
   safras: {
-    table:'safras', label:'Safras', singular:'Safra',
-    desc:'Ano-safra de uma cultura numa fazenda, usado para ratear o combustível por período.',
-    emptyHint:'Cadastre fazenda e cultura antes de criar uma safra.',
+    table:'safras', label:'Safras', singular:'Safra', readOnly:true,
+    desc:'Ano-safra de uma cultura numa fazenda, usado para ratear o combustível por período. Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
+    emptyHint:'Nenhuma safra cadastrada ainda — cadastre no AE Matriz/Lavoura primeiro.',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'culturaId', label:'Cultura', type:'fk', refEntity:'culturas', required:true},
@@ -331,9 +334,9 @@ const CADASTROS = {
     ],
   },
   centrosCusto: {
-    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo',
-    desc:'Classificação de rateio para combustível sem talhão/lote específico (transporte, administrativo, gerador).',
-    emptyHint:'Cadastre uma fazenda antes de criar um centro de custo.',
+    table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', readOnly:true,
+    desc:'Classificação de rateio para combustível sem talhão/lote específico (transporte, administrativo, gerador). Só leitura aqui — cadastro é feito no AE Matriz.',
+    emptyHint:'Nenhum centro de custo cadastrado ainda — cadastre no AE Matriz primeiro.',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'nome', label:'Nome', type:'text', required:true},
@@ -342,9 +345,9 @@ const CADASTROS = {
     ],
   },
   talhoesAreas: {
-    table:'talhoes_areas', label:'Talhões / Áreas', singular:'Talhão/Área',
-    desc:'Talhões de lavoura (com hectares) ou lotes/currais de pecuária, para ratear o combustível abastecido neles.',
-    emptyHint:'Cadastre uma fazenda antes de criar um talhão/área.',
+    table:'talhoes_areas', label:'Talhões / Áreas', singular:'Talhão/Área', readOnly:true,
+    desc:'Talhões de lavoura (com hectares) ou lotes/currais de pecuária, para ratear o combustível abastecido neles. Só leitura aqui — cadastro é feito no AE Matriz/Lavoura.',
+    emptyHint:'Nenhum talhão/área cadastrado ainda — cadastre no AE Matriz/Lavoura primeiro.',
     fields:[
       {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
       {key:'nome', label:'Nome', type:'text', required:true},
@@ -399,7 +402,7 @@ const CADASTROS = {
     ],
   },
   entradasEstoque: {
-    table:'entradas_estoque', label:'Entradas (NF)', singular:'Entrada', semStatus:true, semBusca:true, modulo:'estoque',
+    table:'entradas_estoque', label:'Entradas (NF)', singular:'Entrada', semStatus:true, semBusca:true, modulo:'combustivel_estoque',
     orderBy:'data', orderDesc:true,
     desc:'Entradas de combustível por nota fiscal — cada entrada credita volume no tanque de destino.',
     emptyHint:'Cadastre um tanque e um fornecedor antes de lançar uma entrada.',
@@ -414,7 +417,7 @@ const CADASTROS = {
     ],
   },
   medicoesFisicas: {
-    table:'medicoes_fisicas', label:'Medições Físicas', singular:'Medição', semStatus:true, semBusca:true, modulo:'estoque',
+    table:'medicoes_fisicas', label:'Medições Físicas', singular:'Medição', semStatus:true, semBusca:true, modulo:'combustivel_estoque',
     orderBy:'data', orderDesc:true,
     desc:'Leitura de régua/sensor do tanque, para conciliar com o saldo teórico do estoque.',
     emptyHint:'Cadastre um tanque antes de registrar uma medição.',
@@ -427,7 +430,7 @@ const CADASTROS = {
     ],
   },
   ajustesEstoque: {
-    table:'ajustes_estoque', label:'Ajustes de Estoque', singular:'Ajuste', semStatus:true, semBusca:true, modulo:'estoque',
+    table:'ajustes_estoque', label:'Ajustes de Estoque', singular:'Ajuste', semStatus:true, semBusca:true, modulo:'combustivel_estoque',
     orderBy:'data', orderDesc:true,
     desc:'Correções manuais de saldo do tanque — sempre com justificativa; quem ajustou fica registrado na auditoria.',
     emptyHint:'Cadastre um tanque antes de registrar um ajuste.',
@@ -444,7 +447,7 @@ const CADASTROS = {
   // (offline, leitura de medidor, rateio) são inteiramente sob medida,
   // então esta entidade nunca passa por PageCadastro/ModalCadastro.
   abastecimentos: {
-    table:'abastecimentos', label:'Abastecimentos', singular:'Abastecimento', modulo:'abastecimento',
+    table:'abastecimentos', label:'Abastecimentos', singular:'Abastecimento', modulo:'combustivel_abastecimento',
     orderBy:'data_hora', orderDesc:true,
     fields:[
       {key:'fazendaId'}, {key:'tanqueId'}, {key:'equipamentoId'}, {key:'operadorId'},
@@ -838,19 +841,19 @@ const GROUPS = {
 function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
-  if(key==='estoque') return temPermissao('estoque','visualizar');
-  if(key==='abastecimento') return temPermissao('abastecimento','visualizar');
-  if(key==='rateio') return temPermissao('rateio','visualizar');
-  if(key==='oversight') return temPermissao('alertas','visualizar') || temPermissao('auditoria','visualizar');
-  if(key==='painelRelatorios') return temPermissao('estoque','visualizar') || temPermissao('abastecimento','visualizar') || temPermissao('rateio','visualizar') || temPermissao('alertas','visualizar');
-  return temPermissao('cadastros','visualizar');
+  if(key==='estoque') return temPermissao('combustivel_estoque','visualizar');
+  if(key==='abastecimento') return temPermissao('combustivel_abastecimento','visualizar');
+  if(key==='rateio') return temPermissao('combustivel_rateio','visualizar');
+  if(key==='oversight') return temPermissao('combustivel_alertas','visualizar') || temPermissao('combustivel_auditoria','visualizar');
+  if(key==='painelRelatorios') return temPermissao('combustivel_estoque','visualizar') || temPermissao('combustivel_abastecimento','visualizar') || temPermissao('combustivel_rateio','visualizar') || temPermissao('combustivel_alertas','visualizar');
+  return temPermissao('combustivel_cadastros','visualizar');
 }
 // algumas páginas dentro de um grupo visível podem exigir um módulo
 // próprio (ex: dentro de Alertas & Auditoria, cada aba tem seu módulo).
 function paginaVisivel(key){
-  if(key==='alertas') return temPermissao('alertas','visualizar');
-  if(key==='auditoria') return temPermissao('auditoria','visualizar');
-  if(key==='relatorios') return temPermissao('rateio','visualizar');
+  if(key==='alertas') return temPermissao('combustivel_alertas','visualizar');
+  if(key==='auditoria') return temPermissao('combustivel_auditoria','visualizar');
+  if(key==='relatorios') return temPermissao('combustivel_rateio','visualizar');
   return true;
 }
 // combina a visibilidade do grupo (aba do menu) com a da página
@@ -927,7 +930,7 @@ function Header(){
     return headerHtml('Painel & Relatórios','Relatórios','Relatórios por período, fazenda, cultura, equipamento e centro de custo, exportáveis em CSV (Excel) ou PDF.');
   }
   const cfg = CADASTROS[state.page];
-  const eyebrow = cfg.modulo==='estoque' ? 'Estoque' : 'Cadastro';
+  const eyebrow = cfg.modulo==='combustivel_estoque' ? 'Estoque' : 'Cadastro';
   return headerHtml(eyebrow, cfg.label, cfg.desc);
 }
 function headerHtml(eyebrow,title,desc){
@@ -974,7 +977,12 @@ function celulaValor(f, item){
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
-  const podeEditar = temPermissao(cfg.modulo||'cadastros','editar');
+  // readOnly: fazendas/culturas/safras/centrosCusto/talhoesAreas vêm do
+  // projeto unificado, compartilhadas com Matriz/Pecuária/Cana/Cereais —
+  // cadastro é feito só lá (mesma regra de "single writer" que o resto
+  // do sistema já segue pra fazenda/talhão), aqui é só leitura pra
+  // popular os seletores de tanque/centro de custo/abastecimento.
+  const podeEditar = !cfg.readOnly && temPermissao(cfg.modulo||'combustivel_cadastros','editar');
   const termo = state.search.toLowerCase();
   const list = (cfg.semBusca ? state[key] : state[key].filter(item => !termo || (item.nome||'').toLowerCase().includes(termo)));
   const colunas = cfg.fields.filter(f=>f.list!==false);
@@ -982,7 +990,7 @@ function PageCadastro(key){
   <div class="toolbar">
     ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
-    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : (cfg.readOnly ? `<span class="hint">Cadastro feito no AE Matriz${key==='fazendas'||key==='centrosCusto'?'':'/Lavoura'}</span>` : '')}
   </div>
   <div class="card" style="overflow-x:auto;">
     ${list.length===0 ? Empty(`Nenhum(a) ${cfg.singular.toLowerCase()} cadastrado(a)`, cfg.emptyHint||'Cadastre o primeiro registro.') : `
@@ -1118,7 +1126,7 @@ function statusAbastecimentoPill(a){
   return '<span class="pill pill-warn">Pendente</span>';
 }
 function PageAbastecimentos(){
-  const podeEditar = temPermissao('abastecimento','editar');
+  const podeEditar = temPermissao('combustivel_abastecimento','editar');
   const pendentes = state.filaAbastecimentos.length;
   const comErro = state.filaAbastecimentos.filter(a=>a.erroSincronizacao).length;
 
@@ -1681,7 +1689,7 @@ function pillSeveridade(sev){
 }
 function chaveAlerta(a){ return `${a.tipo}:${a.tanqueId||''}:${a.equipamentoId||''}:${a.abastecimentoId||''}`; }
 async function detectarAlertas(){
-  if(!temPermissao('alertas','visualizar')) return;
+  if(!temPermissao('combustivel_alertas','visualizar')) return;
   const abertosPorChave = {};
   state.alertas.filter(a=>a.status==='aberto').forEach(a=>{ abertosPorChave[chaveAlerta(a)] = a; });
   const todasAsChaves = new Set(state.alertas.map(chaveAlerta));
@@ -1773,7 +1781,7 @@ async function detectarAlertas(){
     });
   }
   // resolver sozinho só quem também tem permissão de editar (a policy de update exige isso)
-  if(temPermissao('alertas','editar')){
+  if(temPermissao('combustivel_alertas','editar')){
     for(const { alerta, motivo } of resolverAutomaticamente){
       await db.from('alertas').update({ status:'resolvido', resolvido_em:new Date().toISOString(), resolvido_por:null, observacao_resolucao:motivo }).eq('id', alerta.id);
     }
@@ -1781,10 +1789,10 @@ async function detectarAlertas(){
   if(novos.length || resolverAutomaticamente.length) await recarregarAlertas();
 }
 function PageAlertas(){
-  if(!temPermissao('alertas','visualizar')){
+  if(!temPermissao('combustivel_alertas','visualizar')){
     return `<div class="card">${Empty('Sem acesso a Alertas','Fale com o administrador para liberar o módulo Alertas.')}</div>`;
   }
-  const podeResolver = temPermissao('alertas','editar');
+  const podeResolver = temPermissao('combustivel_alertas','editar');
   const abertos = state.alertas.filter(a=>a.status==='aberto');
   const lista = state.alertasMostrarResolvidos ? state.alertas : abertos;
   const contagem = {
@@ -1863,7 +1871,7 @@ function camposAlterados(log){
   return alterados;
 }
 function PageAuditoria(){
-  if(!temPermissao('auditoria','visualizar')){
+  if(!temPermissao('combustivel_auditoria','visualizar')){
     return `<div class="card">${Empty('Sem acesso à Trilha de Auditoria','Fale com o administrador para liberar o módulo Auditoria.')}</div>`;
   }
   const lista = state.logAuditoria;
@@ -1902,10 +1910,10 @@ function PagePainel(){
   const volumeMes = abastecimentosMes.reduce((a,x)=>a+Number(x.volumeLitros||0),0);
   const custoMes = abastecimentosMes.reduce((a,x)=>{ const c = custoAbastecimento(x); return a+(c||0); }, 0);
   const estoqueTotal = state.tanques.filter(t=>t.ativo!==false).reduce((a,t)=>a+saldoTanque(t.id),0);
-  const podeVerEstoque = temPermissao('estoque','visualizar');
-  const podeVerConsumo = temPermissao('abastecimento','visualizar');
-  const podeVerCusto = temPermissao('rateio','visualizar');
-  const podeVerAlertas = temPermissao('alertas','visualizar');
+  const podeVerEstoque = temPermissao('combustivel_estoque','visualizar');
+  const podeVerConsumo = temPermissao('combustivel_abastecimento','visualizar');
+  const podeVerCusto = temPermissao('combustivel_rateio','visualizar');
+  const podeVerAlertas = temPermissao('combustivel_alertas','visualizar');
   const alertasAbertos = state.alertas.filter(a=>a.status==='aberto');
   const porFrenteMes = agruparPorFrente(abastecimentosMes);
   return `
@@ -2071,7 +2079,7 @@ function FiltroRelatorio(){
   </div>`;
 }
 function PageRelatorios(){
-  if(!temPermissao('rateio','visualizar')){
+  if(!temPermissao('combustivel_rateio','visualizar')){
     return `<div class="card">${Empty('Sem acesso a Relatórios','Fale com o administrador para liberar o módulo Rateio & Indicadores.')}</div>`;
   }
   const cfg = RELATORIO_TIPOS[state.relatorioFiltro.tipo];
@@ -2227,12 +2235,12 @@ async function salvarCadastro(key){
 
 /* ===================== ADMINISTRAÇÃO: USUÁRIOS ===================== */
 const MODULOS_PERMISSAO = [
-  ['cadastros','Cadastros'],
-  ['estoque','Estoque'],
-  ['abastecimento','Abastecimento'],
-  ['rateio','Rateio & Indicadores'],
-  ['alertas','Alertas'],
-  ['auditoria','Trilha de Auditoria'],
+  ['combustivel_cadastros','Cadastros'],
+  ['combustivel_estoque','Estoque'],
+  ['combustivel_abastecimento','Abastecimento'],
+  ['combustivel_rateio','Rateio & Indicadores'],
+  ['combustivel_alertas','Alertas'],
+  ['combustivel_auditoria','Trilha de Auditoria'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
