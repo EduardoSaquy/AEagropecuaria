@@ -660,17 +660,20 @@ async function carregarIndicadoresCana(){
   try{
     const [planRes, colRes] = await Promise.all([
       db.from('plantios_cana').select('id, ativo'),
-      db.from('colheitas_cana').select('data, toneladas'),
+      // fetchAllRows: sem paginação, corte de 1000 linhas do Supabase
+      // subestimava toneladasMes/produtividade em silêncio numa safra grande.
+      fetchAllRows(()=>db.from('colheitas_cana').select('data, toneladas').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
+    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0)}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cana = {
       loading:false, erro:'',
       talhoes: talhoesPorFrente('cana').length,
       plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
-      toneladasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.toneladas||0),0),
+      toneladasMes: state.colheitasCana.filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+c.toneladas,0),
     };
   } catch(e){
     state.indicadores.cana = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, toneladasMes:null};
@@ -689,17 +692,18 @@ async function carregarIndicadoresCereais(){
   try{
     const [planRes, colRes] = await Promise.all([
       db.from('plantios_graos').select('id, ativo'),
-      db.from('colheitas_graos').select('data, sacas'),
+      fetchAllRows(()=>db.from('colheitas_graos').select('data, sacas').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
+    state.colheitasGraos = (colRes.data||[]).map(c=>({data:c.data, sacas:Number(c.sacas||0)}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cereais = {
       loading:false, erro:'',
       talhoes: talhoesPorFrente('graos').length,
       plantiosAtivos: (planRes.data||[]).filter(p=>p.ativo).length,
-      sacasMes: (colRes.data||[]).filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+Number(c.sacas||0),0),
+      sacasMes: state.colheitasGraos.filter(c=>c.data && c.data.startsWith(mesAtual)).reduce((a,c)=>a+c.sacas,0),
     };
   } catch(e){
     state.indicadores.cereais = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, sacasMes:null};
@@ -734,16 +738,21 @@ async function carregarResultadoPecuaria(){
   state.resultados.pecuaria = {...state.resultados.pecuaria, loading:true, erro:''};
   render();
   try{
-    const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes] = await Promise.all([
+    const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, pesRes] = await Promise.all([
       dbPecuaria.from('ingredientes').select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
       dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
       dbPecuaria.from('reproducao_custos').select('data, custo'),
       fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
+      // pesagens: só pra calcular arrobas produzidas/ha na aba Operacional
+      // dos Resultados — ganho de peso do lote (pesagem mais recente menos a
+      // anterior), mesma conta que o AEpecuaria.html já faz.
+      fetchAllRows(()=>dbPecuaria.from('pesagens').select('lote_id, data, peso_medio_kg').order('data')),
     ]);
-    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes]) if(r.error) throw r.error;
+    for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, pesRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
+    state.pesagens = (pesRes.data||[]).map(p=>({loteId:p.lote_id, data:p.data, pesoMedioKg:Number(p.peso_medio_kg||0)}));
 
     const ingredientes = ingRes.data||[];
     const custoKgPorDieta = new Map();
@@ -1008,6 +1017,10 @@ const state = {
   lancamentos: [],    // modelo único: despesa, receita e investimento de todas as atividades
   centrosCusto: [],
   filtroAtividade: '',
+  subAbaResultados: 'geral', // 'geral' | 'operacional' | 'relatorios'
+  colheitasCana: [],   // {data, toneladas} — pra toneladas/ha no período (aba Operacional)
+  colheitasGraos: [],  // {data, sacas} — sacas/ha
+  pesagens: [],        // {loteId, data, pesoMedioKg} — ganho de peso -> arrobas/ha
   lotesPec: [],       // só id e nome, pra vincular receita a um lote
   abaFinanceiro: 'despesa',
   // Contas a pagar / a receber
@@ -1835,6 +1848,78 @@ function hectaresPorOperacao(slug){
   if(!atividade) return 0;
   return state.fazendaAtividades.filter(a=>a.atividade===atividade).reduce((s,a)=>s+Number(a.areaHa||0),0);
 }
+// ===== Produtividade por hectare (aba Operacional dos Resultados) =====
+// Toneladas de cana e sacas de grãos são simples: soma o que foi colhido
+// (colheitas_cana/colheitas_graos) nos meses do período selecionado.
+function toneladasCanaNoPeriodo(periodo){
+  const meses = new Set(periodoMeses(periodo));
+  return state.colheitasCana.filter(c=>c.data && meses.has(c.data.slice(0,7))).reduce((a,c)=>a+c.toneladas, 0);
+}
+function sacasCereaisNoPeriodo(periodo){
+  const meses = new Set(periodoMeses(periodo));
+  return state.colheitasGraos.filter(c=>c.data && meses.has(c.data.slice(0,7))).reduce((a,c)=>a+c.sacas, 0);
+}
+// Arrobas produzidas na Pecuária é mais complexo: não tem "quantidade
+// colhida", tem GANHO DE PESO do rebanho. A conta (pesagem mais recente até
+// o fim do mês menos a mais recente antes do mês começar, ou primeira x
+// última pesagem dentro do próprio mês na falta de uma anterior) é a MESMA
+// do AEpecuaria.html (ganhoPesoNoMes/arrobasProduzidasNoMes/
+// arrobasProduzidasFazendaNoMes) — portada aqui, não reinventada, pelo
+// mesmo motivo do vigentesNoMes: uma segunda versão da regra divergindo da
+// original já custou caro uma vez neste projeto. Generaliza pra Ano/Safra
+// somando o resultado de cada mês do período, igual toda métrica financeira
+// já faz.
+const KG_POR_ARROBA_PRODUCAO = 30; // peso vivo -- venda/abate usa 15kg de carcaça, não entra aqui
+function pesagensDoLote(loteId){
+  return state.pesagens.filter(p=>p.loteId===loteId).sort((a,b)=>a.data.localeCompare(b.data));
+}
+function pesoNaData(loteId, dataLimite, incluirIgual){
+  let resultado = null;
+  pesagensDoLote(loteId).forEach(p=>{
+    if(incluirIgual ? p.data<=dataLimite : p.data<dataLimite) resultado = p;
+  });
+  return resultado;
+}
+function ganhoPesoNoMes(loteId, mesStr){
+  const ano = Number(mesStr.slice(0,4)), mes = Number(mesStr.slice(5,7));
+  const fimMes = new Date(ano, mes, 0).toISOString().slice(0,10);
+  const inicioMes = `${mesStr}-01`;
+  const final = pesoNaData(loteId, fimMes, true);
+  if(!final) return null;
+  let inicial = pesoNaData(loteId, inicioMes, false);
+  if(!inicial){
+    const doMes = state.pesagens.filter(p=>p.loteId===loteId && p.data.startsWith(mesStr) && p.pesoMedioKg>0).sort((a,b)=>a.data.localeCompare(b.data));
+    if(doMes.length<2) return null;
+    inicial = doMes[0];
+  }
+  if(inicial.data>=final.data) return null;
+  return final.pesoMedioKg - inicial.pesoMedioKg;
+}
+function arrobasProduzidasNoMes(loteId, mesStr, numeroAnimais){
+  const ganhoKg = ganhoPesoNoMes(loteId, mesStr);
+  if(ganhoKg==null) return null;
+  return (ganhoKg/KG_POR_ARROBA_PRODUCAO) * Number(numeroAnimais||0);
+}
+function arrobasProduzidasFazendaNoMes(mesStr){
+  return state.lotesPec.filter(l=>!l.dataFim).reduce((a,l)=>{
+    const arrobas = arrobasProduzidasNoMes(l.id, mesStr, l.numeroAnimais);
+    return a + (arrobas||0);
+  }, 0);
+}
+function arrobasProduzidasNoPeriodo(periodo){
+  return periodoMeses(periodo).reduce((a,mesStr)=>a+arrobasProduzidasFazendaNoMes(mesStr), 0);
+}
+// Ponto único: produtividade de uma operação no período, na unidade certa
+// pra cada uma. null quando não tem hectare cadastrado (mesma regra que
+// despesa/receita por hectare já usam).
+function produtividadeOperacaoNoPeriodo(slug, periodo){
+  const ha = hectaresPorOperacao(slug);
+  if(ha<=0) return null;
+  if(slug==='cana'){ const total = toneladasCanaNoPeriodo(periodo); return {total, unidade:'t', porHa: total/ha}; }
+  if(slug==='cereais'){ const total = sacasCereaisNoPeriodo(periodo); return {total, unidade:'sc', porHa: total/ha}; }
+  if(slug==='pecuaria'){ const total = arrobasProduzidasNoPeriodo(periodo); return {total, unidade:'@', porHa: total/ha}; }
+  return null;
+}
 // Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
 // não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
 // consumido pelas outras operações, não uma operação com receita própria.
@@ -2030,14 +2115,28 @@ function PagePorHectare(){
   </div>`;
 }
 
+function SubAbasResultados(){
+  const abas = [['geral','Geral'], ['operacional','Operacional'], ['relatorios','Relatórios']];
+  return `<div class="periodo-tabs" style="margin-bottom:18px;">
+    ${abas.map(([k,l])=>`<button class="periodo-tab ${state.subAbaResultados===k?'active':''}" data-suba-resultados="${k}">${l}</button>`).join('')}
+  </div>`;
+}
 function PageResultados(){
   if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz para ver os resultados aqui.');
   if(algumResultadoCarregando()){
     return `${FiltroPeriodo()}<div class="card card-pad"><p class="hint">Carregando resultados...</p></div>`;
   }
-  const despesa = resultadoTotal('despesa'), receita = resultadoTotal('receita'), resultado = receita-despesa;
   return `
   ${FiltroPeriodo()}
+  ${SubAbasResultados()}
+  ${state.subAbaResultados==='operacional' ? PageResultadosOperacional()
+    : state.subAbaResultados==='relatorios' ? PageResultadosRelatorios()
+    : PageResultadosGeral()}
+  `;
+}
+function PageResultadosGeral(){
+  const despesa = resultadoTotal('despesa'), receita = resultadoTotal('receita'), resultado = receita-despesa;
+  return `
   <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — todas as operações</p>
   <div class="stat-row">
     ${StatCard('Receita', receita, 'receita')}
@@ -2094,6 +2193,68 @@ function PageResultados(){
     </div>
     <p class="hint" style="margin-top:8px;">Margem = Resultado ÷ Receita do ano, todas as operações juntas.</p>
   </div>`;
+}
+
+// ===== Resultados > Operacional: produtividade + financeiro detalhado
+// por atividade, no período selecionado (Mês/Ano/Safra, mesmo filtro do
+// resto de Resultados). =====
+function CardResultadoOperacional(slug){
+  const app = state.apps.find(a=>a.slug===slug) || {slug, nome: OPERACOES[slug]||slug, cor: OPERACAO_COR[slug]};
+  const r = resultadoOperacaoNoPeriodo(slug);
+  const ha = hectaresPorOperacao(slug);
+  const prod = produtividadeOperacaoNoPeriodo(slug, state.periodo);
+  const semDados = !r || r.erro;
+  return `
+  <div class="card card-pad">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <span class="op-chip-ic" style="background:${hexToRgba(app.cor,0.14)}; color:${app.cor}; width:34px; height:34px;">${iconOperacao(slug, app.nome)}</span>
+      <div>
+        <div style="font-family:'Fraunces',serif; font-weight:700; font-size:17px; color:var(--grafite);">${esc(app.nome)}</div>
+        <div class="hint">${ha>0 ? fmtInt(ha)+' ha cadastrados' : 'Sem hectare cadastrado em Fazendas'}</div>
+      </div>
+    </div>
+    ${semDados ? Empty('Sem dados ainda', r?.erro || 'Nenhum lançamento neste período.') : `
+    <div class="stat-row" style="grid-template-columns:repeat(2,1fr); margin-bottom:14px;">
+      <div class="stat-card">
+        <div class="stat-label">Produtividade</div>
+        <div class="stat-value" style="font-size:19px;">${prod ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${prod ? fmtInt(prod.total)+' '+prod.unidade+' no período' : 'Sem hectare cadastrado'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Margem</div>
+        <div class="stat-value ${r.receita>0 ? (r.resultado>=0?'bom':'alerta') : ''}" style="font-size:19px;">${r.receita>0 ? fmt(r.resultado/r.receita*100,1)+'%' : '—'}</div>
+        <div class="hint" style="margin-top:4px;">Resultado ÷ Receita</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th></th><th>Total</th><th>Por hectare</th></tr></thead>
+      <tbody>
+        <tr><td>Receita</td><td class="mono">R$ ${fmt(r.receita)}</td><td class="mono">${ha>0?'R$ '+fmt(r.receita/ha):'—'}</td></tr>
+        <tr><td>Despesa</td><td class="mono">R$ ${fmt(r.despesa)}</td><td class="mono">${ha>0?'R$ '+fmt(r.despesa/ha):'—'}</td></tr>
+        <tr><td style="font-weight:600;">Resultado</td><td class="mono" style="font-weight:600;">R$ ${fmt(r.resultado)}</td><td class="mono" style="font-weight:600;">${ha>0?'R$ '+fmt(r.resultado/ha):'—'}</td></tr>
+      </tbody>
+    </table>
+    ${(r.despesaDetalhe||[]).length ? `
+    <p class="hint" style="margin-top:12px; margin-bottom:6px;">Despesa por categoria</p>
+    <table style="font-size:12.5px;">
+      <tbody>
+        ${r.despesaDetalhe.map(d=>`<tr><td>${esc(d.label)}</td><td class="mono" style="text-align:right;">R$ ${fmt(d.valor)}</td></tr>`).join('')}
+      </tbody>
+    </table>` : ''}
+    `}
+  </div>`;
+}
+function PageResultadosRelatorios(){
+  return `<div class="card card-pad">${Empty('Em construção', 'Balancete e Fluxo de Caixa por atividade/fazenda vêm a seguir.')}</div>`;
+}
+function PageResultadosOperacional(){
+  return `
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — resultado operacional por atividade</p>
+  <div class="donuts-row">
+    ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
+  </div>
+  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) / arrobas de ganho de peso vivo produzidas (Pecuária) no período, divididas pela área cadastrada em Fazendas. Cana e Cereais somam as colheitas com data dentro do período selecionado; Pecuária soma o ganho de peso mês a mês do rebanho ativo (mesma conta que o AE Pecuária usa).</p>
+  `;
 }
 
 /* ===================== FAZENDAS (cadastro centralizado) ===================== */
@@ -5799,6 +5960,10 @@ function attachEvents(){
   // filtro de período (Mês / Ano / Safra)
   document.querySelectorAll('[data-periodo-tipo]').forEach(el=>{
     el.onclick = ()=>{ state.periodo.tipo = el.dataset.periodoTipo; render(); };
+  });
+  // sub-abas de Resultados (Geral / Operacional / Relatórios)
+  document.querySelectorAll('[data-suba-resultados]').forEach(el=>{
+    el.onclick = ()=>{ state.subAbaResultados = el.dataset.subaResultados; render(); };
   });
   const periodoMesEl = document.getElementById('f-periodo-mes');
   if(periodoMesEl) periodoMesEl.onchange = (e)=>{ if(e.target.value){ state.periodo.mes = e.target.value; render(); } };
