@@ -9,17 +9,20 @@
 --
 -- Este script preserva o acesso de quem já tinha 'matriz_painel'
 -- liberado: copia o mesmo nível (visualizar/editar) pras 4 chaves
--- novas. A chave antiga 'matriz_painel' fica no banco sem uso — não
--- precisa apagar, só não governa mais nenhuma tela.
+-- novas. A chave antiga 'matriz_painel' fica no banco sem uso.
+--
+-- NOTA: este banco é único (unificado — Matriz, Pecuária, Cana,
+-- Cereais e Combustível no mesmo projeto), então a guarda abaixo só
+-- confere que existe uma tabela 'profiles'. O AE Matriz não tem
+-- tabela 'apps' — a lista de apps do Painel é fixa no código
+-- (APPS_REGISTRO), não vem do banco.
 -- ============================================================
 
 do $$
 begin
   if not exists (select 1 from information_schema.tables
-                 where table_schema='public' and table_name='profiles')
-     or not exists (select 1 from information_schema.columns
-                 where table_schema='public' and table_name='apps') then
-    raise exception 'PROJETO ERRADO — este nao parece ser o banco do AE Matriz.';
+                 where table_schema='public' and table_name='profiles') then
+    raise exception 'PROJETO ERRADO — esta tabela nao existe aqui.';
   end if;
 end $$;
 
