@@ -60,6 +60,7 @@
   .btn-sair{background:rgba(255,255,255,0.1); border:none; color:#fff; padding:7px 11px; border-radius:8px; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;}
   .btn-sair:hover{background:rgba(255,255,255,0.2);}
   .tabsrow{background:var(--branco); border-bottom:1px solid var(--cinza-claro); display:flex; gap:6px; padding:10px 20px; overflow-x:auto; flex-shrink:0;}
+  .mobile-nav-toggle{display:none;}
   .nav-item{display:flex; align-items:center; gap:7px; font-family:'Inter',sans-serif; font-size:13px; font-weight:700; color:var(--cinza); background:none; border:none; padding:9px 14px; border-radius:10px; cursor:pointer; white-space:nowrap; transition:background 0.12s, color 0.12s;}
   .nav-item svg{opacity:0.72; flex-shrink:0;}
   .nav-item:hover{background:var(--cinza-bg); color:var(--verde-escuro);}
@@ -233,8 +234,27 @@
     .topbar-user-nome{display:none;}
     .topbar-user{gap:6px;}
     .btn-sair{padding:6px 9px; font-size:11px;}
-    .tabsrow{padding:8px 10px; position:-webkit-sticky; position:sticky; top:0; z-index:39;}
-    .nav-item{padding:8px 11px; font-size:12.5px;}
+    .mobile-nav-toggle{
+      display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+      background:var(--branco); border:none; border-bottom:1px solid var(--cinza-claro);
+      padding:12px 16px; font-family:'Inter',sans-serif; font-size:13.5px; font-weight:700;
+      color:var(--grafite); cursor:pointer; position:-webkit-sticky; position:sticky; top:0; z-index:39;
+    }
+    .mobile-nav-toggle-label{display:flex; align-items:center; gap:8px;}
+    .mobile-nav-toggle-chevron{transition:transform 0.15s;}
+    .mobile-nav-toggle[aria-expanded="true"] .mobile-nav-toggle-chevron{transform:rotate(180deg);}
+    /* No desktop o tabsrow é uma fileira horizontal de abas; no celular
+       vira um painel escondido por padrão (display:none), que só some
+       do lugar quando o hambúrguer acima é clicado (.aberto) — em vez
+       de ficar sempre visível quebrando/rolando de lado, feio numa tela
+       estreita. */
+    .tabsrow{
+      display:none; position:-webkit-sticky; position:sticky; top:45px; z-index:38;
+      flex-direction:column; gap:2px; padding:8px; overflow-x:visible;
+      box-shadow:0 6px 12px rgba(0,0,0,0.08);
+    }
+    .tabsrow.aberto{display:flex;}
+    .nav-item{padding:10px 12px; font-size:13.5px; justify-content:flex-start;}
     .main{padding:20px 16px 48px 16px; max-width:100%; overflow-y:visible;}
     .page-header{flex-direction:column; align-items:flex-start; gap:14px;}
     h1{font-size:22px;}
@@ -1031,6 +1051,7 @@ function resultadoComCombustivel(baseResultado, slug){
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'painel',
+  mobileNavAberto: false,
   fazendasLavoura: [], // {id, nome, estado, areaHa, ativo} — cadastro único, feito aqui no Matriz
   fazendaAtividades: [], // {id, fazendaId, atividade, areaHa} — área de cada atividade em cada fazenda
   talhoes: [], // {id, fazendaId, areaHa, culturaId, ativo} — talhoes_areas do Lavoura
@@ -1490,6 +1511,8 @@ function brandMark(){
   </svg>`;
 }
 function iconPainel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`; }
+function iconMenu(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>`; }
+function iconChevronDown(){ return `<svg class="mobile-nav-toggle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`; }
 function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconFuncionarios(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`; }
@@ -1607,8 +1630,13 @@ function Topbar(){
   </div>`;
 }
 function TabsRow(){
+  const paginaAtual = paginasVisiveis().find(p=>p.key===state.page);
   return `
-  <div class="tabsrow">
+  <button class="mobile-nav-toggle" data-mobile-nav-toggle="1" aria-expanded="${state.mobileNavAberto?'true':'false'}">
+    <span class="mobile-nav-toggle-label">${iconMenu()} ${esc(paginaAtual?.label || 'Menu')}</span>
+    ${iconChevronDown()}
+  </button>
+  <div class="tabsrow ${state.mobileNavAberto?'aberto':''}">
     ${paginasVisiveis().map(p=>`
       <button class="nav-item ${state.page===p.key?'active':''}" data-nav="${p.key}">
         ${p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():p.key==='funcionarios'?iconFuncionarios():p.key==='financiamentos'?iconFinanciamento():iconAdmin()} ${p.label}
@@ -5503,8 +5531,10 @@ function attachEvents(){
     el.onclick = async ()=>{ await loadPerfil(); render(); if(state.perfil?.ativo) loadAll(); };
   });
   document.querySelectorAll('[data-nav]').forEach(el=>{
-    el.onclick = ()=>{ state.page = el.dataset.nav; state.financiamentoDetalheId = null; render(); };
+    el.onclick = ()=>{ state.page = el.dataset.nav; state.financiamentoDetalheId = null; state.mobileNavAberto = false; render(); };
   });
+  const mobileNavToggle = document.querySelector('[data-mobile-nav-toggle]');
+  if(mobileNavToggle) mobileNavToggle.onclick = ()=>{ state.mobileNavAberto = !state.mobileNavAberto; render(); };
   const voltarErroBtn = document.querySelector('[data-voltar-erro]');
   if(voltarErroBtn) voltarErroBtn.onclick = ()=>{ state.page = 'painel'; render(); };
 
