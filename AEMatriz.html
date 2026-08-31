@@ -607,11 +607,14 @@ async function loadAll(){
   state.financiamentos = (fin.data||[]).map(rowToFinanciamento);
   state.parcelasFinanciamento = (parcFin.data||[]).map(rowToParcela);
   render();
-  carregarIndicadoresPecuaria();
+  // Indicadores do Painel só buscam o app se a pessoa tiver a permissão
+  // daquele app específico — evita chamar o banco de outro app sem
+  // necessidade (e sem permissão) só pra descartar o resultado depois.
+  if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
-  carregarIndicadoresCana();
+  if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
   carregarResultadoCana();
-  carregarIndicadoresCereais();
+  if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
   carregarResultadoCereais();
   carregarCombustivel();
   carregarLancamentosRateados();
@@ -1312,8 +1315,12 @@ const DOMINIO_LOGIN = 'aeagropecuaria.local';
 //
 // Usuários continua exclusivo de admin, de propósito: quem mexe em login e
 // permissão precisa ser administrador, não é algo pra liberar por módulo.
+const PAINEL_MODULOS_POR_APP = ['matriz_painel_pecuaria','matriz_painel_cana','matriz_painel_cereais','matriz_painel_combustivel'];
 const PAGES = [
-  {key:'painel', label:'Painel', modulo:'matriz_painel'},
+  // Painel é visível com QUALQUER uma das permissões por app abaixo —
+  // cada card só aparece de verdade se a pessoa tiver a permissão
+  // daquele app específico (ver PagePainel/AppCard).
+  {key:'painel', label:'Painel', moduloAny:PAINEL_MODULOS_POR_APP},
   {key:'resultados', label:'Resultados', modulo:'matriz_resultados'},
   {key:'financeiro', label:'Financeiro', modulo:'matriz_financeiro'},
   {key:'fazendas', label:'Fazendas', modulo:'matriz_fazendas'},
@@ -1343,7 +1350,7 @@ function temPermissao(modulo, nivel){
   return atual === 'editar';
 }
 function paginasVisiveis(){
-  return PAGES.filter(p => p.adminOnly ? souAdmin() : temPermissao(p.modulo, 'visualizar'));
+  return PAGES.filter(p => p.adminOnly ? souAdmin() : p.moduloAny ? p.moduloAny.some(m=>temPermissao(m,'visualizar')) : temPermissao(p.modulo, 'visualizar'));
 }
 function pareceErroDeRede(error){
   const msg = String(error?.message||'').toLowerCase();
@@ -1533,7 +1540,10 @@ const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gesto
 // outros papéis.
 const MODULOS_PERMISSAO = [
   ['Matriz', [
-    ['matriz_painel','Painel (indicadores de cada app)'],
+    ['matriz_painel_pecuaria','Painel — indicadores da Pecuária'],
+    ['matriz_painel_cana','Painel — indicadores da Cana'],
+    ['matriz_painel_cereais','Painel — indicadores dos Cereais'],
+    ['matriz_painel_combustivel','Painel — indicadores do Combustível'],
     ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
     ['matriz_financeiro','Financeiro (lançar despesa, receita e investimento)'],
     ['contas','Contas a Pagar e a Receber (exige também o Financeiro acima)'],
@@ -1678,9 +1688,14 @@ function AppCard(a){
   </div>`;
 }
 
+function appsVisiveisNoPainel(){
+  return state.apps.filter(a => temPermissao(`matriz_painel_${a.slug}`, 'visualizar'));
+}
 function PagePainel(){
   if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz (Pecuária, Combustível, Cana, Cereais...).');
-  return `<div class="app-grid">${state.apps.map(AppCard).join('')}</div>`;
+  const visiveis = appsVisiveisNoPainel();
+  if(visiveis.length===0) return Empty('Nenhum indicador liberado', 'Fale com o administrador para liberar o painel de algum app pra você.');
+  return `<div class="app-grid">${visiveis.map(AppCard).join('')}</div>`;
 }
 
 /* ===================== FILTRO DE PERÍODO (Mês / Ano / Safra) ===================== */

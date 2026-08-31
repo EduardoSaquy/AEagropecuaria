@@ -2134,7 +2134,7 @@ function campoHtml(f, d){
   if(f.type==='number'){
     return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${esc(val)}"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
-  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${esc(val)}" ${f.placeholder?`placeholder="${esc(f.placeholder)}"`:''}/></div>`;
+  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${esc(val)}" autocomplete="off" ${f.placeholder?`placeholder="${esc(f.placeholder)}"`:''}/></div>`;
 }
 function ModalCadastro(){
   const key = state.modal.key;
