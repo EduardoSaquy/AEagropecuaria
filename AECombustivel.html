@@ -251,6 +251,7 @@ const OPCOES = {
   FRENTES: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'}],
   FRENTES_GERAL: [{value:'cana',label:'Cana-de-açúcar'},{value:'graos',label:'Grãos'},{value:'pecuaria',label:'Pecuária'},{value:'geral',label:'Geral'}],
   TIPOS_TALHAO: [{value:'talhao',label:'Talhão'},{value:'lote_curral',label:'Lote/Curral'}],
+  TIPOS_MANUTENCAO: [{value:'troca_oleo',label:'Troca de óleo'},{value:'troca_filtro',label:'Troca de filtro'}],
   TIPOS_EQUIPAMENTO: [
     {value:'colhedora_cana',label:'Colhedora de Cana'}, {value:'transbordo',label:'Transbordo'},
     {value:'caminhao_canavieiro',label:'Caminhão Canavieiro'}, {value:'colhedora_graos',label:'Colhedora de Grãos'},
@@ -441,6 +442,21 @@ const CADASTROS = {
       {key:'fazendaId'}, {key:'tanqueId'}, {key:'equipamentoId'}, {key:'operadorId'},
       {key:'dataHora'}, {key:'volumeLitros'}, {key:'leituraMedidor'},
       {key:'talhaoAreaId'}, {key:'operacaoId'}, {key:'observacao'},
+    ],
+  },
+  manutencoes: {
+    table:'manutencoes', label:'Manutenção', singular:'Manutenção', modulo:'combustivel_manutencao',
+    desc:'Trocas de óleo e filtro por equipamento, com a leitura do horímetro/hodômetro no momento e o intervalo até a próxima.',
+    emptyHint:'Cadastre um equipamento antes de lançar uma manutenção.',
+    orderBy:'data', orderDesc:true, semBusca:true, semStatus:true,
+    fields:[
+      {key:'fazendaId', label:'Fazenda', type:'fk', refEntity:'fazendas', required:true},
+      {key:'equipamentoId', label:'Equipamento', type:'fk', refEntity:'equipamentos', required:true},
+      {key:'tipo', label:'Tipo', type:'select', options:OPCOES.TIPOS_MANUTENCAO, required:true},
+      {key:'data', label:'Data', type:'date', required:true},
+      {key:'leitura', label:'Leitura do horímetro/hodômetro nesta manutenção', type:'number', step:'0.01', required:true},
+      {key:'intervalo', label:'Intervalo até a próxima (horas ou km)', type:'number', step:'0.01', required:true},
+      {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
 };
@@ -656,6 +672,7 @@ function render(){
         ${state.page==='adminUsuarios' ? PageAdminUsuarios()
           : state.page==='estoqueResumo' ? PageEstoqueResumo()
           : state.page==='abastecimentos' ? PageAbastecimentos()
+          : state.page==='manutencoes' ? PageManutencoes()
           : state.page==='alertas' ? PageAlertas()
           : state.page==='auditoria' ? PageAuditoria()
           : state.page==='painel' ? PagePainel()
@@ -811,6 +828,9 @@ const GROUPS = {
   abastecimento: {label:'Abastecimento', icon:iconAbastecimento(), pages:[
     {key:'abastecimentos', label:'Abastecimentos'},
   ]},
+  manutencao: {label:'Manutenção', icon:iconManutencao(), pages:[
+    {key:'manutencoes', label:'Manutenção'},
+  ]},
   rateio: {label:'Rateio & Indicadores', icon:iconRateio(), pages:[
     {key:'rateioFrente', label:'Por Frente'},
     {key:'rateioTalhao', label:'Por Talhão / Área'},
@@ -829,6 +849,7 @@ function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='estoque') return temPermissao('combustivel_estoque','visualizar');
   if(key==='abastecimento') return temPermissao('combustivel_abastecimento','visualizar');
+  if(key==='manutencao') return temPermissao('combustivel_manutencao','visualizar');
   if(key==='rateio') return temPermissao('combustivel_rateio','visualizar');
   if(key==='oversight') return temPermissao('combustivel_alertas','visualizar') || temPermissao('combustivel_auditoria','visualizar');
   if(key==='painelRelatorios') return temPermissao('combustivel_estoque','visualizar') || temPermissao('combustivel_abastecimento','visualizar') || temPermissao('combustivel_rateio','visualizar') || temPermissao('combustivel_alertas','visualizar');
@@ -937,6 +958,7 @@ function iconEstoque(){ return `<svg width="16" height="16" viewBox="0 0 24 24" 
 function iconAbastecimento(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>`; }
 function iconRateio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12V3a9 9 0 1 1-9 9h9Z"/><path d="M21 12A9 9 0 0 0 12 3v9h9Z" opacity="0.45"/></svg>`; }
 function iconAlerta(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.7 18a1.6 1.6 0 0 0 1.4 2.4h15.8a1.6 1.6 0 0 0 1.4-2.4L13.7 3.9a1.6 1.6 0 0 0-2.8 0Z"/></svg>`; }
+function iconManutencao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19v3h3l7.3-7.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2Z"/></svg>`; }
 function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function Empty(title, sub){
@@ -1115,6 +1137,121 @@ function statusAbastecimentoPill(a){
   if(a._origem==='servidor') return '<span class="pill pill-ok">Sincronizado</span>';
   if(a.erroSincronizacao) return `<span class="pill pill-alerta" title="${esc(a.erroSincronizacao)}">Erro ao sincronizar</span>`;
   return '<span class="pill pill-warn">Pendente</span>';
+}
+/* ===================== MANUTENÇÃO (troca de óleo/filtro) =====================
+ * Reminder por horímetro/hodômetro: a leitura "atual" de um equipamento
+ * vem do abastecimento mais recente dele com leitura registrada (não
+ * existe um campo de leitura corrente separado) — a pedido do usuário.
+ * Próxima troca prevista = leitura da última manutenção daquele tipo +
+ * intervalo definido nela. Sem nenhuma manutenção lançada ainda pro
+ * tipo, não dá pra prever nada — a linha fica sem status até a
+ * primeira ser registrada. */
+function ultimaLeituraEquipamento(equipamentoId){
+  const comLeitura = state.abastecimentos.filter(a=>a.equipamentoId===equipamentoId && a.leituraMedidor!=null);
+  if(comLeitura.length===0) return null;
+  const ordenados = comLeitura.slice().sort((a,b)=> b.dataHora.localeCompare(a.dataHora));
+  return Number(ordenados[0].leituraMedidor);
+}
+function ultimaManutencao(equipamentoId, tipo){
+  const doTipo = state.manutencoes.filter(m=>m.equipamentoId===equipamentoId && m.tipo===tipo);
+  if(doTipo.length===0) return null;
+  return doTipo.slice().sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
+}
+// Faltando <=15% do intervalo (ou já negativo) conta como "próxima" —
+// mesmo threshold percentual serve pra horímetro (horas) e hodômetro (km).
+const LIMIAR_MANUTENCAO_PROXIMA = 0.15;
+function statusManutencao(equipamentoId, tipo){
+  const ultima = ultimaManutencao(equipamentoId, tipo);
+  if(!ultima) return {status:'sem_registro', ultima:null, leituraAtual:null, previsao:null, faltam:null};
+  const leituraAtual = ultimaLeituraEquipamento(equipamentoId);
+  const previsao = Number(ultima.leitura) + Number(ultima.intervalo);
+  if(leituraAtual==null) return {status:'sem_leitura', ultima, leituraAtual, previsao, faltam:null};
+  const faltam = previsao - leituraAtual;
+  const status = faltam<=0 ? 'atrasada' : faltam <= Number(ultima.intervalo)*LIMIAR_MANUTENCAO_PROXIMA ? 'proxima' : 'ok';
+  return {status, ultima, leituraAtual, previsao, faltam};
+}
+function pillStatusManutencao(status){
+  if(status==='atrasada') return '<span class="pill pill-alerta">Atrasada</span>';
+  if(status==='proxima') return '<span class="pill pill-warn">Próxima</span>';
+  if(status==='ok') return '<span class="pill pill-ok">Em dia</span>';
+  if(status==='sem_leitura') return '<span class="pill pill-warn">Sem leitura recente</span>';
+  return '<span class="pill">Sem registro</span>';
+}
+function PageManutencoes(){
+  const podeEditar = temPermissao('combustivel_manutencao','editar');
+  const equipsComMedidor = state.equipamentos.filter(e=>e.ativo!==false && e.tipoMedidor!=='nenhum');
+  const linhasStatus = [];
+  equipsComMedidor.forEach(e=>{
+    OPCOES.TIPOS_MANUTENCAO.forEach(t=>{
+      const r = statusManutencao(e.id, t.value);
+      if(r.status==='sem_registro') return; // sem nenhuma manutenção lançada — nada a mostrar ainda
+      linhasStatus.push({equipamento:e, tipo:t, ...r});
+    });
+  });
+  const ordem = {atrasada:0, proxima:1, sem_leitura:2, ok:3};
+  linhasStatus.sort((a,b)=> (ordem[a.status]??9)-(ordem[b.status]??9));
+  const atrasadas = linhasStatus.filter(l=>l.status==='atrasada').length;
+  const proximas = linhasStatus.filter(l=>l.status==='proxima').length;
+
+  const historico = state.manutencoes.slice().sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id);
+
+  const unidadeMedidor = e => e?.tipoMedidor==='horimetro' ? 'h' : e?.tipoMedidor==='hodometro' ? 'km' : '';
+
+  return `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Atrasadas</div><div class="stat-value ${atrasadas>0?'alerta':''}">${atrasadas}</div></div>
+    <div class="stat-card"><div class="stat-label">Próximas</div><div class="stat-value">${proximas}</div></div>
+    <div class="stat-card"><div class="stat-label">Equipamentos com medidor</div><div class="stat-value">${equipsComMedidor.length}</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto; margin-bottom:16px;">
+    ${linhasStatus.length===0 ? Empty('Nenhuma manutenção com status ainda', 'Lance a primeira troca de óleo/filtro de um equipamento pra começar a acompanhar.') : `
+    <table>
+      <thead><tr><th>Equipamento</th><th>Tipo</th><th>Última troca</th><th>Leitura atual</th><th>Prevista para</th><th>Faltam</th><th>Status</th></tr></thead>
+      <tbody>
+        ${linhasStatus.map(l=>`
+          <tr>
+            <td><strong>${esc(l.equipamento.nome)}</strong></td>
+            <td>${l.tipo.label}</td>
+            <td class="mono">${fmtData(l.ultima.data)} — ${fmt(l.ultima.leitura,2)} ${unidadeMedidor(l.equipamento)}</td>
+            <td class="mono">${l.leituraAtual==null?'—':`${fmt(l.leituraAtual,2)} ${unidadeMedidor(l.equipamento)}`}</td>
+            <td class="mono">${fmt(l.previsao,2)} ${unidadeMedidor(l.equipamento)}</td>
+            <td class="mono">${l.faltam==null?'—':`${fmt(l.faltam,2)} ${unidadeMedidor(l.equipamento)}`}</td>
+            <td>${pillStatusManutencao(l.status)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>
+  <div class="toolbar">
+    <span class="hint">${historico.length} lançamento(s) de manutenção</span>
+    ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="manutencoes">+ Nova Manutenção</button>` : ''}
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${historico.length===0 ? Empty('Nenhuma manutenção lançada', 'Registre a primeira troca de óleo ou filtro.') : `
+    <table>
+      <thead><tr><th>Data</th><th>Equipamento</th><th>Tipo</th><th>Leitura</th><th>Intervalo</th><th></th></tr></thead>
+      <tbody>
+        ${historico.map(m=>{
+          const equip = state.equipamentos.find(e=>e.id===m.equipamentoId);
+          const tipoLabel = (OPCOES.TIPOS_MANUTENCAO.find(t=>t.value===m.tipo)||{}).label || m.tipo;
+          return `
+          <tr>
+            <td>${fmtData(m.data)}</td>
+            <td>${equip?esc(equip.nome):'—'}</td>
+            <td>${tipoLabel}</td>
+            <td class="mono">${fmt(m.leitura,2)} ${unidadeMedidor(equip)}</td>
+            <td class="mono">${fmt(m.intervalo,2)} ${unidadeMedidor(equip)}</td>
+            <td style="display:flex; gap:6px;">
+              ${podeEditar ? `
+              <button class="btn-ghost btn-sm" data-edit-cadastro="manutencoes:${m.id}">Editar</button>
+              <button class="btn-danger-ghost" data-del-cadastro="manutencoes:${m.id}">Excluir</button>
+              ` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
 }
 function PageAbastecimentos(){
   const podeEditar = temPermissao('combustivel_abastecimento','editar');
@@ -1742,6 +1879,31 @@ async function detectarAlertas(){
     }
   });
 
+  // E. Manutenção (troca de óleo/filtro) atrasada ou próxima, por
+  // leitura de horímetro/hodômetro (condição viva — se resolve sozinha
+  // quando uma nova manutenção daquele tipo é lançada, o que muda a
+  // previsão e tira a condição).
+  state.equipamentos.filter(e=>e.ativo!==false && e.tipoMedidor!=='nenhum').forEach(equip=>{
+    OPCOES.TIPOS_MANUTENCAO.forEach(t=>{
+      const tipoAlerta = `manutencao_pendente_${t.value}`;
+      const chave = `${tipoAlerta}:${equip.id}::`;
+      const existente = abertosPorChave[chave];
+      const r = statusManutencao(equip.id, t.value);
+      if(r.status==='atrasada' || r.status==='proxima'){
+        if(!existente){
+          const unidade = equip.tipoMedidor==='horimetro' ? 'h' : 'km';
+          novos.push({ tipo:tipoAlerta, severidade: r.status==='atrasada' ? 'critico' : 'atencao', tanqueId:null, equipamentoId:equip.id, abastecimentoId:null,
+            titulo:`${t.label} ${r.status==='atrasada'?'atrasada':'próxima'} — ${equip.nome}`,
+            descricao: r.status==='atrasada'
+              ? `Prevista para ${fmt(r.previsao,2)} ${unidade}, leitura atual já em ${fmt(r.leituraAtual,2)} ${unidade}.`
+              : `Prevista para ${fmt(r.previsao,2)} ${unidade}, faltam ${fmt(r.faltam,2)} ${unidade} pela leitura atual (${fmt(r.leituraAtual,2)} ${unidade}).` });
+        }
+      } else if(existente){
+        resolverAutomaticamente.push({ alerta:existente, motivo: r.status==='sem_registro' ? 'Nova manutenção lançada, previsão recalculada.' : 'Leitura ou nova manutenção tiraram a condição de atrasada/próxima.' });
+      }
+    });
+  });
+
   for(const alerta of novos){
     const fazendaId = alerta.tanqueId ? state.tanques.find(t=>t.id===alerta.tanqueId)?.fazendaId
       : alerta.equipamentoId ? state.equipamentos.find(e=>e.id===alerta.equipamentoId)?.fazendaId : null;
@@ -2196,6 +2358,7 @@ const MODULOS_PERMISSAO = [
   ['combustivel_rateio','Rateio & Indicadores'],
   ['combustivel_alertas','Alertas'],
   ['combustivel_auditoria','Trilha de Auditoria'],
+  ['combustivel_manutencao','Manutenção'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
 function papelPill(papel){
