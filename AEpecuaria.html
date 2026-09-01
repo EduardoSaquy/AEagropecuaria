@@ -166,7 +166,14 @@
   .modal-body{padding:22px 24px; display:flex; flex-direction:column; gap:14px; max-height:70vh; overflow-y:auto;}
   .modal-foot{padding:16px 24px; border-top:1px solid var(--cinza-claro); display:flex; justify-content:flex-end; gap:10px;}
   .field{display:flex; flex-direction:column; gap:5px; min-width:0;}
-  .field select, .field input:not([type="checkbox"]):not([type="radio"]){min-width:0; width:100%;}
+  /* max-width (não só min-width/width) porque o input[type=date] do Safari
+     (iOS) ignora min-width/width dentro de grid/flex e usa a largura
+     "natural" dele -- que muda de tamanho com o formato de data por
+     extenso do idioma ("1 de set. de 2026" é bem mais largo que
+     09/01/2026) -- e estoura pra fora da caixa, empurrando/sobrepondo o
+     campo vizinho. max-width é a propriedade que o Safari respeita pra
+     essa caixa em particular. */
+  .field select, .field input:not([type="checkbox"]):not([type="radio"]){min-width:0; width:100%; max-width:100%;}
   .field-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   label{font-size:12px; font-weight:600; color:var(--grafite);}
   input, select, textarea{font-family:'Inter',sans-serif; font-size:13.5px; padding:9px 12px; border:1px solid var(--cinza-claro); border-radius:9px; background:var(--branco); color:var(--grafite); outline:none; width:100%;}
