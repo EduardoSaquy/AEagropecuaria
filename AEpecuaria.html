@@ -826,7 +826,7 @@ function render(){
       <div class="main">${conteudo}</div>
     </div>
     ${modalHtml}
-    ${!semModulos ? FabMenu() : ''}
+    ${!semModulos && !state.modal ? FabMenu() : ''}
   `;
 
   // EXCLUIR E SO DE ADMIN OU PROPRIETARIO, em todo o app - a mesma regra
