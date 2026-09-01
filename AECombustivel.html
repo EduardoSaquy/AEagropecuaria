@@ -493,7 +493,7 @@ async function loadAll(){
     }),
     fetchAllRows(()=>db.from('profiles').select('*').order('nome').order('id')),
     fetchAllRows(()=>db.from('alertas').select('*').order('data_hora', {ascending:false}).order('id')),
-    db.from('log_auditoria').select('*').order('criado_em', {ascending:false}).limit(300),
+    db.from('log_auditoria_combustivel').select('*').order('criado_em', {ascending:false}).limit(300),
   ]);
   CADASTRO_KEYS.forEach((k,i)=>{ state[k] = (results[i].data||[]).map(row=>rowToCadastro(row, CADASTROS[k])); });
   state.perfis = (results[CADASTRO_KEYS.length].data||[]).map(rowToPerfil);
