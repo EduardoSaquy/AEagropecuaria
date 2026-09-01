@@ -549,10 +549,15 @@ async function fetchAllRows(consulta){
 
 async function loadAll(){
   state.apps = APPS_REGISTRO;
-  // Centro de custo também carrega para quem só tem Financiamentos (sem
+  // Centro de custo também carrega pra quem só tem Financiamentos (sem
   // Financeiro): marcar parcela como paga precisa achar o centro "Juros e
-  // Encargos de Financiamento" pra lançar o juros.
-  const vePecuniaOuFinanciamentos = temPermissao('matriz_financeiro','visualizar') || temPermissao('matriz_financiamentos','visualizar');
+  // Encargos de Financiamento" pra lançar o juros. E pra quem só tem Contas
+  // (sem Financeiro): todo título exige um centro de custo no rateio, e sem
+  // isso o select fica vazio e ninguém consegue salvar título nenhum. Dar
+  // Financeiro só pra isso exporia todos os lançamentos (inclusive
+  // recebimentos) pra quem só devia mexer em boleto -- decisão do Eduardo
+  // em 01/09/2026.
+  const vePecuniaOuFinanciamentos = temPermissao('matriz_financeiro','visualizar') || temPermissao('matriz_financiamentos','visualizar') || temPermissao('contas','visualizar');
   const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec, fin, parcFin] = await Promise.all([
     db.from('fazendas').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
@@ -1322,9 +1327,10 @@ const PAGES = [
   // lá quando o Financeiro veio pra cá, e sem esta tela ninguém mais
   // conseguiria criar ou corrigir um centro de custo.
   {key:'centrosCusto', label:'Centros de Custo', modulo:'matriz_financeiro'},
-  // Pagar/Receber exige a chave propria 'contas' ALEM do financeiro - a
-  // RLS do banco pede as duas. Aqui basta pedir 'contas': quem nao tem
-  // matriz_financeiro nao chega a ver dado nenhum de qualquer forma.
+  // Pagar/Receber usa só a chave própria 'contas' -- não depende mais de
+  // matriz_financeiro (RLS mudou em 01/09/2026, contas_08_solta_do_
+  // financeiro.sql): decisão do Eduardo, quem só mexe em boleto não
+  // precisa enxergar todos os lançamentos e recebimentos do Financeiro.
   {key:'contas', label:'Pagar/Receber', modulo:'contas'},
   {key:'financiamentos', label:'Financiamentos', modulo:'matriz_financiamentos'},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
@@ -1536,7 +1542,7 @@ const MODULOS_PERMISSAO = [
     ['matriz_painel','Painel (indicadores de cada app)'],
     ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
     ['matriz_financeiro','Financeiro (lançar despesa, receita e investimento)'],
-    ['contas','Contas a Pagar e a Receber (exige também o Financeiro acima)'],
+    ['contas','Contas a Pagar e a Receber'],
     ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
     ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
     ['matriz_financiamentos','Financiamentos (empréstimos, juros e parcelas)'],
