@@ -890,6 +890,11 @@ const ACAO_MODULOS = {
   // ver o rateio "resultados"/margem continua exclusivo de Resultados.
   receita:['pec_financeiro','pec_resultados'], metaMargem:['pec_resultados'], investimento:['pec_resultados'],
 };
+// Ações que "Manejo: Editar" libera sozinho, sem precisar da permissão do
+// módulo do lote (Confinamento/Pasto/Cria) -- não é todo ACAO_MODULOS, só
+// as de manejo de verdade (Insumos/Dietas/Financeiro continuam exigindo a
+// permissão própria deles).
+const MANEJO_ACAO_TYPES = new Set(['reproducaoCusto','diagnosticoGestacional','parto','desmama','pesagem']);
 // Dentro do Manejo, cada ação pertence a um módulo diferente -- entrar no
 // Manejo só pede editar em QUALQUER área (confinamento/pasto/cria), mas
 // isso não deveria liberar TODAS as ações pra todo mundo: um colaborador só
@@ -899,6 +904,10 @@ const ACAO_MODULOS = {
 // de reprodução, então sempre exigem Cria especificamente.
 function acaoManejoPermitida(acao, lote){
   if(!lote) return false;
+  // "Manejo: Editar" libera qualquer ação em qualquer lote sozinho, sem
+  // olhar o tipo -- confirmado com o Eduardo em 01/09/2026 (antes essa
+  // chave só controlava se a aba Manejo aparecia).
+  if(temPermissao('manejo','editar')) return true;
   const moduloDoLote = TIPO_MODULO[loteTipo(lote)];
   if(acao==='pesagem') return temPermissao(moduloDoLote,'editar');
   if(acao==='desmama') return temPermissao('cria','editar') || temPermissao(moduloDoLote,'editar');
@@ -917,12 +926,14 @@ function podeExcluir(){
 // pode excluir nada -- o botão Excluir some pra esse papel em toda a tela,
 // mesmo onde antes aparecia junto com o Editar.
 function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
-/// Acesso "de cargo" (não pela tabela de permissões por módulo) à aba Lotes
-// (visão geral) e a criar lote direto por lá. Colaborador ainda consegue
-// lançar entrada de animais (novo lote ou somar num existente) pela aba
-// Cadastro, desde que tenha permissão de editar em algum módulo (ver
-// grupoVisivel('cadastro')).
-function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
+// Acesso de cargo (admin/consultor) OU permissão explícita em "Lotes (visão
+// geral)"/"Cadastro" -- essas 2 chaves antes só controlavam se a aba
+// aparecia (grupoVisivel), sem liberar nada de verdade: um colaborador
+// com "Cadastro: Editar" via a aba mas não conseguia criar lote/animal
+// (só Confinamento/Pasto/Cria editar resolvia isso). Confirmado com o
+// Eduardo em 01/09/2026 -- agora as duas realmente criam/editam lote e
+// animal sozinhas, sem precisar da permissão do módulo do lote também.
+function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consultor' || temPermissao('lotesGeral','editar') || temPermissao('cadastro','editar'); }
 // Consultor formula dieta e precisa saber/lançar preço de insumo, custo de
 // dieta/ração/pasto e valor em estoque pra isso -- mas não deve ver o
 // financeiro geral da fazenda (custo por curral, receitas/despesas,
@@ -936,15 +947,22 @@ function temPermissao(modulo, nivel){
   return atual==='editar';
 }
 function podeEditarAcao(type){
+  // "Manejo: Editar" libera as ações de manejo (ver MANEJO_ACAO_TYPES)
+  // sozinho -- não as de Insumos/Dietas/Financeiro, que continuam exigindo
+  // a permissão própria delas.
+  if(MANEJO_ACAO_TYPES.has(type) && temPermissao('manejo','editar')) return true;
   return (ACAO_MODULOS[type]||[]).some(m=>temPermissao(m,'editar'));
 }
 // Venda (abate, venda por animal ou por kg) lança uma Receita
 // automaticamente (módulo Resultados, mantido separado do resto de
 // propósito pra controlar quem vê receita/resultado da operação) — por
 // isso exige editar tanto no módulo do lote (Confinamento/Pasto/Cria)
-// quanto em Resultados, não só um dos dois.
+// quanto em Resultados, não só um dos dois. "Vendas: Editar" é um atalho
+// à parte pra essa mesma ação -- combinado com nenhuma outra permissão,
+// já basta (confirmado com o Eduardo em 01/09/2026: antes só controlava
+// se a aba aparecia, sem liberar a venda de fato).
 function podeRegistrarVenda(tipo){
-  return temPermissao(TIPO_MODULO[tipo],'editar') && temPermissao('pec_resultados','editar');
+  return temPermissao('vendas','editar') || (temPermissao(TIPO_MODULO[tipo],'editar') && temPermissao('pec_resultados','editar'));
 }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
@@ -2320,7 +2338,7 @@ const ACAO_MANEJO_LABEL = {
   diagnostico:'Diagnóstico gestacional', desmama:'Desmama',
 };
 function lotesElegiveisManejo(){
-  return state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
+  return state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao('manejo','editar') || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
 }
 function PageManejoInicio(){
   if(state.manejoDetalheId) return PageManejoDetalhe();
