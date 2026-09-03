@@ -1854,15 +1854,15 @@ function receitasNaSafra(receitas, safra){
 // ter ano_safra) são recalculados respeitando o campo Safra; o resto
 // (ração/pasto/reprodução da pecuária, combustível) não tem ano_safra —
 // continua somado por calendário, mês a mês, dentro da janela da safra.
-function resultadoOperacaoNoPeriodo(slug){
+function resultadoOperacaoNoPeriodo(slug, periodo=state.periodo){
   const bruto = resultadoBrutoOperacao(slug);
-  const janela = periodoMeses(state.periodo);
+  const janela = periodoMeses(periodo);
   const agregado = agregarPeriodo(bruto, janela);
   const raw = state.resultados[slug];
-  if(state.periodo.tipo!=='safra' || !agregado || agregado.erro || !raw || raw.loading || raw.erro || !raw.despesasFinanceiro){
+  if(periodo.tipo!=='safra' || !agregado || agregado.erro || !raw || raw.loading || raw.erro || !raw.despesasFinanceiro){
     return agregado;
   }
-  const safra = state.periodo.safra;
+  const safra = periodo.safra;
   const categoria = raw.categoriaSafra;
   const label = CATEGORIA_DESPESA_LABEL[categoria];
   const despesaCategoriaCalendario = janela.reduce((a,m)=>{
@@ -2161,8 +2161,14 @@ function linhasResultadoPorUnidade(periodo){
   const meses = new Set(periodoMeses(periodo));
   const linhas = [];
 
-  // Cana -- cultura única, usa o mesmo total já calculado pra produtividade
-  const rCana = resultadoOperacaoNoPeriodo('cana');
+  // Cana -- cultura única, usa o mesmo total já calculado pra produtividade.
+  // Passa o periodo explicitamente -- resultadoOperacaoNoPeriodo, sem o
+  // segundo argumento, usa state.periodo (o filtro GLOBAL da tela), que é
+  // errado aqui: cada linha do comparativo por safra tem que trazer a
+  // despesa/receita DAQUELA safra, não da safra que está selecionada no
+  // filtro no momento (bug relatado pelo Eduardo em 03/09/2026 -- mudar o
+  // ano no filtro alterava os valores das safras passadas na tabela).
+  const rCana = resultadoOperacaoNoPeriodo('cana', periodo);
   const prodCana = produtividadeOperacaoNoPeriodo('cana', periodo);
   if(rCana && !rCana.erro && prodCana && prodCana.total>0){
     linhas.push({nome:'Cana', cor:OPERACAO_COR.cana, unidade:'t',
@@ -2197,7 +2203,7 @@ function linhasResultadoPorUnidade(periodo){
   // Despesa não separa por categoria (ração/pasto são da atividade toda,
   // não de uma venda específica) -- usa a MESMA despesa total da Pecuária
   // pra cada categoria, só a receita e a arroba produzida é que mudam.
-  const rPec = resultadoOperacaoNoPeriodo('pecuaria');
+  const rPec = resultadoOperacaoNoPeriodo('pecuaria', periodo); // mesmo motivo do rCana acima
   const resPec = state.resultados.pecuaria;
   if(rPec && !rPec.erro && resPec && !resPec.erro){
     const vendasPeriodo = state.vendasPec.filter(a=>a.data && meses.has(a.data.slice(0,7)) && a.categoria);
