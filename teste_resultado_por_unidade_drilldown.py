@@ -68,9 +68,24 @@ DB = {
         {"id": 9, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
          "descricao": "Venda de abate", "valor": 12000.00, "data": f"{MES}-10", "mes": MES, "areas": [],
          "abate_id": 501},
+        # ---- safra 2025 (maio/2025-abril/2026) -- valores DIFERENTES do
+        # periodo corrente (setembro/2026), pra pegar o bug de 03/09/2026:
+        # o comparativo por safra usava resultadoOperacaoNoPeriodo(slug) sem
+        # passar a safra pedida, entao Cana e Pecuaria sempre traziam a
+        # despesa/receita do FILTRO GLOBAL da tela, nao da safra da linha.
+        {"id": 10, "tipo": "despesa", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Adubo cana 25", "valor": 3000.00, "data": "2025-08-05", "mes": "2025-08", "areas": []},
+        {"id": 11, "tipo": "receita", "atividade": "cana", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Venda cana 25", "valor": 5000.00, "data": "2025-09-15", "mes": "2025-09", "areas": []},
+        {"id": 12, "tipo": "despesa", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Racao 25", "valor": 2000.00, "data": "2025-08-02", "mes": "2025-08", "areas": []},
+        {"id": 13, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Venda de abate 25", "valor": 6600.00, "data": "2025-09-10", "mes": "2025-09", "areas": [],
+         "abate_id": 502},
     ],
     "colheitas_cana": [
         {"id": 1, "talhao_id": 1, "safra_id": None, "data": f"{MES}-18", "corte": 1, "toneladas": 3600.00, "observacao": ""},
+        {"id": 2, "talhao_id": 1, "safra_id": None, "data": "2025-09-18", "corte": 1, "toneladas": 2000.00, "observacao": ""},
     ],
     "colheitas_graos": [
         {"id": 1, "talhao_id": 2, "cultura_id": 1, "safra_id": None, "data": f"{MES}-19", "sacas": 700.00, "observacao": ""},
@@ -78,6 +93,8 @@ DB = {
     ],
     "abates": [
         {"id": 501, "data": f"{MES}-10", "lote_id": None, "quantidade": 20, "tipo_venda": "arroba",
+         "peso_medio_kg": 270, "categoria": "abate", "sexo": "macho", "observacao": ""},
+        {"id": 502, "data": "2025-09-10", "lote_id": None, "quantidade": 10, "tipo_venda": "arroba",
          "peso_medio_kg": 270, "categoria": "abate", "sexo": "macho", "observacao": ""},
     ],
     "lotes": [], "funcionarios": [], "funcionario_atividades": [],
@@ -206,6 +223,34 @@ with sync_playwright() as pw:
     # nao quebrar dividindo por zero.
     linhasSafra2024 = page.evaluate("() => linhasResultadoPorUnidade({tipo:'safra', safra:2024})")
     conf(linhasSafra2024 == [], "safra 2024 (sem nenhum dado) nao gera linha nenhuma", str(linhasSafra2024))
+
+    # ---- 2d. regressao do bug relatado pelo Eduardo em 03/09/2026: "quando
+    # eu mudo o ano esta alterando os valores" -- resultadoOperacaoNoPeriodo
+    # era chamado sem o periodo, entao Cana/Pecuaria no comparativo por
+    # safra sempre traziam a despesa/receita do FILTRO GLOBAL da tela
+    # (state.periodo), nao da safra de cada linha. safra 2025 tem despesa/
+    # receita propria e diferente da do periodo corrente (setembro/2026) --
+    # tem que bater com os dados DELA, e nao mudar quando o filtro global
+    # muda de ano.
+    linhasSafra2025_a = page.evaluate("() => linhasResultadoPorUnidade({tipo:'safra', safra:2025})")
+    cana2025_a = next((l for l in linhasSafra2025_a if l["nome"]=="Cana"), None)
+    abate2025_a = next((l for l in linhasSafra2025_a if l["nome"]=="Abate"), None)
+    conf(cana2025_a is not None and abs(cana2025_a["custo"] - 3000/2000) < 0.01 and abs(cana2025_a["receita"] - 5000/2000) < 0.01,
+         "safra 2025 da Cana usa a despesa/receita PROPRIA dela (3000/5000), nao a do periodo corrente (6000/12000)",
+         str(cana2025_a))
+    conf(abate2025_a is not None and abs(abate2025_a["custo"] - 2000/180) < 0.01 and abs(abate2025_a["receita"] - 6600/180) < 0.01,
+         "safra 2025 do Abate usa a despesa/receita PROPRIA dela (2000/6600), nao a do periodo corrente",
+         str(abate2025_a))
+
+    # muda o filtro global (o "ano" que o Eduardo troca na tela) e pede a
+    # MESMA safra 2025 de novo -- tem que dar exatamente o mesmo resultado.
+    page.evaluate("() => { state.periodo = {tipo:'ano', ano:2024}; }")
+    linhasSafra2025_b = page.evaluate("() => linhasResultadoPorUnidade({tipo:'safra', safra:2025})")
+    cana2025_b = next((l for l in linhasSafra2025_b if l["nome"]=="Cana"), None)
+    conf(cana2025_b is not None and abs(cana2025_b["custo"] - cana2025_a["custo"]) < 0.01 and abs(cana2025_b["receita"] - cana2025_a["receita"]) < 0.01,
+         "safra 2025 da Cana NAO muda quando o filtro global (ano/mes/safra da tela) muda",
+         f"antes={cana2025_a}  depois de mudar o filtro global={cana2025_b}")
+    page.evaluate("() => { state.periodo = {tipo:'mes', mes:'2026-09'}; }")  # devolve o filtro global
 
     # ---- 3. o modal de detalhe da receita mostra o agrupamento ----
     page.evaluate("""() => {
