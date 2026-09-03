@@ -165,7 +165,7 @@ with sync_playwright() as pw:
     page.evaluate("""() => { window.__ESCRITAS__=[];
       editDraft={tipo:'receita', atividade:'pecuaria', fazendaId:'', centroCustoId:92,
         descricao:'Venda de boi', valor:'', data:'2026-09-10',
-        ehVenda:true, tipoVenda:'arroba', loteId:1, qtdAnimais:30,
+        ehVenda:true, tipoVenda:'arroba', categoria:'abate', sexo:'macho', loteId:1, qtdAnimais:30,
         arrobasTotais:'540', valorArroba:'320', areas:[]};
       state.modal={type:'lancamento'}; render(); }""")
     page.wait_for_timeout(250)

@@ -435,7 +435,7 @@ function rowToLancamento(r){
   return {id:r.id, tipo:r.tipo, atividade:r.atividade, fazendaId:r.fazenda_id, centroCustoId:r.centro_custo_id,
           descricao:r.descricao||'', valor:r.valor, data:r.data||null, mes:r.mes||null,
           fornecedor:r.fornecedor||'', observacao:r.observacao||'',
-          talhaoId:r.talhao_id||null, loteId:r.lote_id||null, areas:r.areas||[], arrobas:r.arrobas??null,
+          talhaoId:r.talhao_id||null, loteId:r.lote_id||null, abateId:r.abate_id||null, areas:r.areas||[], arrobas:r.arrobas??null,
           // quanto foi entregue (tonelada na cana, saca nos cereais) e a
           // safra — vieram das receitas de lavoura na migração. Ainda não
           // aparecem no formulário; ficam aqui para não se perderem e para
@@ -523,7 +523,7 @@ const TIPO_LABEL = {despesa:'despesa', receita:'receita', investimento:'investim
 // mais do que existe) e se o lote esta encerrado.
 function rowToLotePec(r){
   return {id:r.id, nome:r.nome, numeroAnimais:Number(r.numero_animais||0),
-          destino:r.destino||'pasto', dataFim:r.data_fim||null};
+          destino:r.destino||'pasto', sexo:r.sexo||'', dataFim:r.data_fim||null};
 }
 
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
@@ -593,7 +593,7 @@ async function loadAll(){
     vePecuniaOuFinanciamentos ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
     // numero_animais, destino e data_fim sao do lancamento de venda de animais:
     // ele precisa saber quantas cabecas o lote tem e se ja foi encerrado.
-    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, data_fim').order('nome') : Promise.resolve({data:[]}),
+    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, sexo, data_fim').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_financiamentos','visualizar') ? db.from('financiamentos').select('*').order('data_contratacao', {ascending:false}) : Promise.resolve({data:[]}),
     temPermissao('matriz_financiamentos','visualizar') ? fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero')) : Promise.resolve({data:[]}),
   ]);
@@ -746,12 +746,14 @@ async function carregarIndicadoresCereais(){
     const [planRes, colRes] = await Promise.all([
       db.from('plantios_graos').select('id, ativo'),
       // talhao_id entra pelo mesmo motivo do colheitas_cana acima
-      // (areaColhidaNoPeriodo).
-      fetchAllRows(()=>db.from('colheitas_graos').select('data, sacas, talhao_id').order('id')),
+      // (areaColhidaNoPeriodo). cultura_id entra pra separar produtividade/
+      // custo por saca por cultura (soja/milho/feijão...), não só "Cereais"
+      // como um todo (linhasResultadoPorUnidade).
+      fetchAllRows(()=>db.from('colheitas_graos').select('data, sacas, talhao_id, cultura_id').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
-    state.colheitasGraos = (colRes.data||[]).map(c=>({data:c.data, sacas:Number(c.sacas||0), talhaoId:c.talhao_id}));
+    state.colheitasGraos = (colRes.data||[]).map(c=>({data:c.data, sacas:Number(c.sacas||0), talhaoId:c.talhao_id, culturaId:c.cultura_id??null}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cereais = {
@@ -803,11 +805,13 @@ async function carregarResultadoPecuaria(){
       // abates: só pra calcular arrobas VENDIDAS/ha na aba Operacional dos
       // Resultados — a pedido do Eduardo, é @ de venda (evento de saída),
       // não ganho de peso do rebanho.
-      fetchAllRows(()=>dbPecuaria.from('abates').select('data, quantidade, tipo_venda, peso_medio_kg').order('data')),
+      // categoria e sexo entram pra separar a receita da Pecuária por
+      // categoria (Resultados > Operacional -- drill-down da rosquinha).
+      fetchAllRows(()=>dbPecuaria.from('abates').select('id, data, quantidade, tipo_venda, peso_medio_kg, categoria, sexo, lote_id').order('data')),
     ]);
     for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, vendasRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
-    state.vendasPec = (vendasRes.data||[]).map(a=>({data:a.data, quantidade:Number(a.quantidade||0), tipoVenda:a.tipo_venda, pesoMedioKg:Number(a.peso_medio_kg||0)}));
+    state.vendasPec = (vendasRes.data||[]).map(a=>({id:a.id, data:a.data, quantidade:Number(a.quantidade||0), tipoVenda:a.tipo_venda, pesoMedioKg:Number(a.peso_medio_kg||0), categoria:a.categoria||null, sexo:a.sexo||null, loteId:a.lote_id}));
 
     const ingredientes = ingRes.data||[];
     const custoKgPorDieta = new Map();
@@ -2138,6 +2142,111 @@ function custoPorUnidadeProduzida(despesa, prod){
   if(!prod || !prod.total) return null;
   return despesa/prod.total;
 }
+// Categoria de cada abate, por id -- usado pra juntar a receita (que só
+// sabe o abate_id) com a categoria escolhida na venda (bezerro/abate/
+// venda_viva). Map, não objeto, porque a chave é o id numérico do abate.
+function categoriaDoAbate(abateId){
+  const a = state.vendasPec.find(v=>v.id===abateId);
+  return a ? (a.categoria || null) : null;
+}
+// ===== Resultado por unidade produzida (Resultados > Operacional) =====
+// Uma linha por cultura (Cereais) / categoria de venda (Pecuária) / a
+// própria operação (Cana, cultura única) -- pedido do Eduardo pra ver
+// custo, receita e sobra por tonelada/saca/@, separado por cultura em vez
+// de um número só pra "Cereais" inteiro.
+function linhasResultadoPorUnidade(periodo){
+  const meses = new Set(periodoMeses(periodo));
+  const linhas = [];
+
+  // Cana -- cultura única, usa o mesmo total já calculado pra produtividade
+  const rCana = resultadoOperacaoNoPeriodo('cana');
+  const prodCana = produtividadeOperacaoNoPeriodo('cana', periodo);
+  if(rCana && !rCana.erro && prodCana && prodCana.total>0){
+    linhas.push({nome:'Cana', cor:OPERACAO_COR.cana, unidade:'t',
+      produzido:prodCana.total, custo:rCana.despesa/prodCana.total, receita:rCana.receita/prodCana.total});
+  }
+
+  // Cereais -- uma linha por cultura (soja/milho/feijão/...). Lançamento
+  // sem cultura definida (custo/receita que serve a todas) vira "Geral".
+  const resCer = state.resultados.cereais;
+  if(resCer && !resCer.erro){
+    const despPeriodo = (resCer.despesasFinanceiro||[]).filter(l=>l.mes && meses.has(l.mes));
+    const recPeriodo = (resCer.receitasFinanceiro||[]).filter(l=>l.mes && meses.has(l.mes));
+    const sacasPeriodo = state.colheitasGraos.filter(c=>c.data && meses.has(c.data.slice(0,7)));
+    const chaves = new Set([
+      ...despPeriodo.map(l=>l.culturaId??'geral'),
+      ...recPeriodo.map(l=>l.culturaId??'geral'),
+      ...sacasPeriodo.map(c=>c.culturaId??'geral'),
+    ]);
+    for(const chave of chaves){
+      if(chave==='geral') continue; // sem cultura pra atribuir sozinho, não dá pra achar sacas/ha dele
+      const sacas = sacasPeriodo.filter(c=>c.culturaId===chave).reduce((a,c)=>a+Number(c.sacas||0),0);
+      if(sacas<=0) continue;
+      const desp = despPeriodo.filter(l=>l.culturaId===chave).reduce((a,l)=>a+Number(l.valor||0),0);
+      const rec = recPeriodo.filter(l=>l.culturaId===chave).reduce((a,l)=>a+Number(l.valor||0),0);
+      const cultura = state.culturas.find(c=>c.id===chave);
+      linhas.push({nome:cultura?cultura.nome:'Cultura sem nome', cor:OPERACAO_COR.cereais, unidade:'sc',
+        produzido:sacas, custo:desp/sacas, receita:rec/sacas});
+    }
+  }
+
+  // Pecuária -- uma linha por categoria de venda (bezerro/abate/venda_viva).
+  // Despesa não separa por categoria (ração/pasto são da atividade toda,
+  // não de uma venda específica) -- usa a MESMA despesa total da Pecuária
+  // pra cada categoria, só a receita e a arroba produzida é que mudam.
+  const rPec = resultadoOperacaoNoPeriodo('pecuaria');
+  const resPec = state.resultados.pecuaria;
+  if(rPec && !rPec.erro && resPec && !resPec.erro){
+    const vendasPeriodo = state.vendasPec.filter(a=>a.data && meses.has(a.data.slice(0,7)) && a.categoria);
+    const recPeriodo = (resPec.receitasFinanceiro||[]).filter(l=>l.mes && meses.has(l.mes));
+    const categorias = new Set(vendasPeriodo.map(a=>a.categoria));
+    for(const cat of categorias){
+      const doGrupo = vendasPeriodo.filter(a=>a.categoria===cat);
+      const arrobas = doGrupo.reduce((acc,a)=>{ const arr=arrobasDoAbate(a); return arr!=null?acc+arr:acc; },0);
+      if(arrobas<=0) continue;
+      const rec = recPeriodo.filter(l=>l.abateId!=null && categoriaDoAbate(l.abateId)===cat).reduce((a,l)=>a+Number(l.valor||0),0);
+      linhas.push({nome:CATEGORIA_VENDA_LABEL[cat]||cat, cor:OPERACAO_COR.pecuaria, unidade:'@',
+        produzido:arrobas, custo:rPec.despesa/arrobas, receita:rec/arrobas});
+    }
+  }
+
+  return linhas;
+}
+
+// Receita do período, agrupada por fazenda (Cana) / cultura (Cereais) /
+// categoria de venda (Pecuária) -- drill-down ao clicar numa fatia do
+// donut de Receita por operação, em Resultados > Geral. Retorna
+// [{label, valor}], maior primeiro; [] quando a operação não tem esse
+// tipo de agrupamento (não deveria acontecer pras 3 do OPERACOES_ORDEM).
+function receitaDetalheAgrupado(slug, periodo){
+  const meses = new Set(periodoMeses(periodo));
+  const resOp = state.resultados[slug];
+  if(!resOp || resOp.erro) return [];
+  const recPeriodo = (resOp.receitasFinanceiro||[]).filter(l=>l.mes && meses.has(l.mes));
+  const grupos = new Map();
+  const soma = (label, valor)=> grupos.set(label, (grupos.get(label)||0) + valor);
+
+  if(slug==='cana'){
+    for(const l of recPeriodo){
+      const fazenda = state.fazendasLavoura.find(f=>f.id===l.fazendaId);
+      soma(fazenda ? fazenda.nome : 'Geral (sem fazenda)', Number(l.valor||0));
+    }
+  } else if(slug==='cereais'){
+    for(const l of recPeriodo){
+      const cultura = l.culturaId!=null ? state.culturas.find(c=>c.id===l.culturaId) : null;
+      soma(cultura ? cultura.nome : 'Geral (sem cultura)', Number(l.valor||0));
+    }
+  } else if(slug==='pecuaria'){
+    for(const l of recPeriodo){
+      const cat = l.abateId!=null ? categoriaDoAbate(l.abateId) : null;
+      soma(cat ? (CATEGORIA_VENDA_LABEL[cat]||cat) : 'Sem categoria (venda antiga)', Number(l.valor||0));
+    }
+  } else {
+    return [];
+  }
+  return [...grupos.entries()].map(([label,valor])=>({label,valor})).sort((a,b)=>b.valor-a.valor);
+}
+
 // Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
 // não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
 // consumido pelas outras operações, não uma operação com receita própria.
@@ -2433,7 +2542,7 @@ function CardResultadoOperacional(slug){
       </div>
     </div>
     ${semDados ? Empty('Sem dados ainda', r?.erro || 'Nenhum lançamento neste período.') : `
-    <div class="stat-row" style="grid-template-columns:repeat(3,1fr); margin-bottom:14px;">
+    <div class="stat-row" style="grid-template-columns:repeat(2,1fr); margin-bottom:14px;">
       <div class="stat-card">
         <div class="stat-label">Produtividade</div>
         <div class="stat-value" style="font-size:19px;">${prod && prod.porHa!=null ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
@@ -2547,13 +2656,83 @@ function PageResultadosRelatorios(){
   <p class="hint" style="margin-top:12px;">Saldo anterior soma o que está carregado (últimos ~4 anos) antes do período — não é necessariamente o saldo desde a fundação da empresa, se houver lançamento mais antigo não carregado aqui. Grupos seguem o plano de contas do Conag (mesma classificação da tela de Centros de Custo).</p>
   `;
 }
+// Os N anos-safra mais recentes, o atual por último -- mesma janela
+// maio-abril usada em todo o resto de Resultados (periodoMeses tipo
+// 'safra'). Ano-safra "atual": se estamos em jan-abr, a safra corrente
+// começou em maio do ano ANTERIOR (ainda não virou abril).
+function safrasRecentes(qtd){
+  const hoje = new Date();
+  const safraAtual = (hoje.getMonth()+1) >= 5 ? hoje.getFullYear() : hoje.getFullYear()-1;
+  const safras = [];
+  for(let i=qtd-1; i>=0; i--) safras.push(safraAtual-i);
+  return safras;
+}
+// Um card por cultura/categoria (mesmo padrão visual dos cards de
+// Produtividade/Custo/Margem logo acima) -- Eduardo pediu quadrado em vez
+// de tabela, seguindo o padrão de cima, com o comparativo das últimas 3
+// safras (só a sobra por unidade, pra caber no quadrado).
+function CardCulturaResultadoUnidade(l, linhasPorSafra){
+  const sobra = l.receita - l.custo;
+  const historico = linhasPorSafra.map(({safra, linhas})=>{
+    const x = linhas.find(y=>y.nome===l.nome);
+    return {safra, sobra: x ? (x.receita-x.custo) : null};
+  });
+  return `
+  <div class="card card-pad">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+      <span style="width:12px; height:12px; border-radius:4px; background:${l.cor}; display:inline-block; flex-shrink:0;"></span>
+      <div style="font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--grafite);">${esc(l.nome)}</div>
+    </div>
+    <div class="stat-row" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card">
+        <div class="stat-label">Produzido</div>
+        <div class="stat-value" style="font-size:19px;">${fmtInt(l.produzido)} ${l.unidade}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Custo/${l.unidade}</div>
+        <div class="stat-value" style="font-size:19px;">R$ ${fmt(l.custo)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Receita/${l.unidade}</div>
+        <div class="stat-value" style="font-size:19px;">R$ ${fmt(l.receita)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Sobra/${l.unidade}</div>
+        <div class="stat-value ${sobra>=0?'bom':'alerta'}" style="font-size:19px;">${sobra>=0?'+':''}R$ ${fmt(sobra)}</div>
+      </div>
+    </div>
+    <p class="hint" style="margin:12px 0 8px;">Sobra/${l.unidade} por safra</p>
+    <div style="display:flex; gap:8px;">
+      ${historico.map(h=>`
+        <div class="stat-card" style="flex:1; padding:10px 12px;">
+          <div class="stat-label">${h.safra}/${String(h.safra+1).slice(2)}</div>
+          <div class="stat-value ${h.sobra==null?'':(h.sobra>=0?'bom':'alerta')}" style="font-size:14.5px; margin-top:4px;">${h.sobra==null?'—':(h.sobra>=0?'+':'')+'R$ '+fmt(h.sobra)}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+function TabelaResultadoPorUnidade(){
+  const linhas = linhasResultadoPorUnidade(state.periodo);
+  // Calcula o resultado por unidade das últimas 3 safras UMA VEZ (não por
+  // card) -- os cards todos comparam a mesma janela de safras.
+  const linhasPorSafra = safrasRecentes(3).map(safra=>({safra, linhas: linhasResultadoPorUnidade({tipo:'safra', safra})}));
+  return `
+  <p class="eyebrow" style="margin-top:18px; margin-bottom:10px;">Resultado por unidade produzida</p>
+  ${linhas.length===0 ? `<div class="card card-pad">${Empty('Sem produção no período', 'Nenhuma colheita ou venda com quantidade produzida nesse período.')}</div>` : `
+  <div class="donuts-row">
+    ${linhas.map(l=>CardCulturaResultadoUnidade(l, linhasPorSafra)).join('')}
+  </div>`}
+  `;
+}
 function PageResultadosOperacional(){
   return `
   <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — resultado operacional por atividade</p>
   <div class="donuts-row">
     ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
   </div>
-  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) / arrobas vendidas (Pecuária) no período, divididas pela área cadastrada em Fazendas. Cana e Cereais somam as colheitas com data dentro do período selecionado; Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado e fica de fora, avisado no card.</p>
+  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado e fica de fora, avisado no card.</p>
+  ${TabelaResultadoPorUnidade()}
   `;
 }
 
@@ -4688,6 +4867,10 @@ const TIPO_VENDA_LABEL = {
   cabeca: 'Em pé — valor fechado por cabeça',
   kg:     'Em pé — valor por kg de peso vivo',
 };
+// Categoria da venda (o que está sendo vendido) -- independente da forma de
+// pagamento acima (TIPO_VENDA_LABEL). Usada em Resultados > Operacional
+// pra separar a receita da Pecuária por categoria.
+const CATEGORIA_VENDA_LABEL = {bezerro:'Venda de bezerro', abate:'Abate', venda_viva:'Venda viva (não abate)'};
 
 // Aceita virgula: no celular o teclado numerico brasileiro entrega "12,5" e
 // Number("12,5") e NaN.
@@ -4751,6 +4934,18 @@ function BlocoVendaAnimais(d){
              value="${d.qtdAnimais ?? ''}" data-recalcula-venda="1" autocomplete="off"/>
       ${lote?`<span class="hint">O lote tem ${fmtInt(disponiveis)} ${disponiveis===1?'cabeça':'cabeças'}.${zeraOLote?' Esta venda zera o lote e ele será encerrado.':''}</span>`:''}
     </div>
+    <div class="field"><label>Categoria da venda</label>
+      <select id="f-categoriavenda" data-recalcula-venda="1">
+        ${Object.entries(CATEGORIA_VENDA_LABEL).map(([k,l])=>`<option value="${k}" ${(d.categoria||'abate')===k?'selected':''}>${l}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>Sexo</label>
+      <select id="f-sexovenda" data-recalcula-venda="1">
+        <option value="" ${!d.sexo?'selected':''}>— Selecione —</option>
+        <option value="macho" ${d.sexo==='macho'?'selected':''}>Macho</option>
+        <option value="femea" ${d.sexo==='femea'?'selected':''}>Fêmea</option>
+      </select>
+    </div>
     <div class="field"><label>Forma da venda</label>
       <select id="f-tipovenda" data-recalcula-venda="1">
         ${Object.entries(TIPO_VENDA_LABEL).map(([k,l])=>`<option value="${k}" ${tipoVenda===k?'selected':''}>${l}</option>`).join('')}
@@ -4813,6 +5008,8 @@ async function salvarVendaAnimais(campos, row){
     valor_arroba: campos.tipoVenda==='arroba' ? numDecimal(campos.valorArroba) : null,
     valor_por_animal: campos.tipoVenda==='cabeca' ? numDecimal(campos.valorPorAnimal) : null,
     valor_kg: campos.tipoVenda==='kg' ? numDecimal(campos.valorKg) : null,
+    categoria: campos.categoria || null,
+    sexo: campos.sexo || null,
     observacao: campos.observacao || null,
     criado_por: state.perfil?.nome || null,
   };
@@ -4844,10 +5041,18 @@ async function salvarVendaAnimais(campos, row){
 function lerVendaDoFormulario(base){
   const v = (id)=> document.getElementById(id)?.value ?? '';
   if(!document.getElementById('f-lotevenda')) return base;
+  const loteId = v('f-lotevenda');
+  // Sexo acompanha o lote quando ele é fixo (Confinamento/Pasto com sexo
+  // definido) -- mesma regra do AEpecuaria.html. Lote misto não mexe no
+  // que já estava selecionado.
+  const loteVal = state.lotesPec.find(l=>String(l.id)===String(loteId));
+  const sexoFixoLote = loteVal && (loteVal.sexo==='macho'||loteVal.sexo==='femea') ? loteVal.sexo : null;
   return {
     ...base,
-    loteId:         v('f-lotevenda'),
+    loteId,
     qtdAnimais:     v('f-qtdvenda'),
+    categoria:      v('f-categoriavenda') || 'abate',
+    sexo:           sexoFixoLote || v('f-sexovenda'),
     tipoVenda:      v('f-tipovenda') || 'arroba',
     pesoMedioKg:    document.getElementById('f-pesovenda') ? v('f-pesovenda') : (base.pesoMedioKg ?? ''),
     arrobasTotais:  document.getElementById('f-arrobasvenda') ? v('f-arrobasvenda') : (base.arrobasTotais ?? ''),
@@ -4863,6 +5068,7 @@ function faltandoNaVenda(d){
   const lote = state.lotesPec.find(l=>String(l.id)===String(d.loteId));
   const qtd = Number(d.qtdAnimais||0);
   if(!d.loteId) faltando.push('lote vendido');
+  if(!d.sexo) faltando.push('sexo');
   if(!(qtd > 0)) faltando.push('quantidade de animais');
   else if(lote && qtd > Number(lote.numeroAnimais||0)){
     faltando.push(`quantidade menor ou igual às ${fmtInt(lote.numeroAnimais)} cabeças do lote`);
@@ -5305,7 +5511,20 @@ function ModalDetalheOperacao(){
     titulo = `${ehDespesa?'Despesa':'Receita'} — ${nome} (${rotuloPeriodo})`;
     const linhas = semDadosBase ? [] : ehDespesa ? r.despesaDetalhe : r.receitasDetalhe;
     const semDados = semDadosBase || !linhas || linhas.length===0;
+    // Só a receita ganha o agrupamento (fazenda/cultura/categoria) -- a
+    // pedido do Eduardo, pra ver de onde vem a receita dentro de cada
+    // operação, não só o total. Despesa continua só com a lista.
+    const agrupado = (!ehDespesa && !semDados) ? receitaDetalheAgrupado(slug, state.periodo) : [];
+    const totalAgrupado = agrupado.reduce((a,g)=>a+g.valor,0);
     corpo = semDados ? Empty('Sem dados ainda', vazioMsg) : `
+        ${agrupado.length>0 ? `
+        <p class="hint" style="margin-bottom:8px;">${slug==='cana'?'Por fazenda':slug==='cereais'?'Por cultura':'Por categoria de venda'}</p>
+        ${GraficoColunasCategorias(agrupado.map(g=>({label:g.label, valor:g.valor, pct: totalAgrupado>0 ? g.valor/totalAgrupado*100 : 0})))}
+        <div style="margin:10px 0 18px;">
+          ${agrupado.map(g=>`<div class="total-bar" style="padding:6px 0;"><span>${esc(g.label)}</span><span class="mono">R$ ${fmt(g.valor)} (${fmt(totalAgrupado>0?g.valor/totalAgrupado*100:0,1)}%)</span></div>`).join('')}
+        </div>
+        <p class="hint" style="margin-bottom:8px;">Lançamentos</p>
+        ` : ''}
         <table>
           <thead><tr>${ehDespesa ? '<th>Origem</th>' : '<th>Data</th><th>Descrição</th>'}<th>Valor</th></tr></thead>
           <tbody>
