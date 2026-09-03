@@ -172,10 +172,10 @@ with sync_playwright() as pw:
     }""")
     page.wait_for_timeout(300)
     pagina_html = page.evaluate("() => document.querySelector('.donuts-row:last-of-type')?.innerHTML || document.body.innerHTML")
-    conf("Sobra/t por safra" in pagina_html or "por safra" in pagina_html,
-         "cada quadrado mostra 'Sobra/... por safra'")
+    conf("Lucro/t" in pagina_html or "por safra" in pagina_html,
+         "cada quadrado mostra 'Lucro/... por safra'")
 
-    # ---- 2c. margem (%) ao lado da Sobra do periodo + tabela por safra com Producao ----
+    # ---- 2c. margem (%) ao lado do Lucro do periodo + tabela por safra com Producao ----
     # Pedido do Eduardo em 03/09/2026: % pequena do lucro so no card do
     # periodo atual (nao repetir em cada linha da tabela de safras, polui).
     canaCardHtml = page.evaluate("""() => {
@@ -183,7 +183,7 @@ with sync_playwright() as pw:
       return cards[0] ? cards[0].innerHTML : '';
     }""")
     # Cana: sobra/t = (12000-6000)/3600, receita/t = 12000/3600 -> margem = 6000/12000 = 50%
-    conf("50,0%" in canaCardHtml, "card da Cana mostra a margem (50,0%) ao lado da Sobra do periodo", canaCardHtml[:400])
+    conf("50,0%" in canaCardHtml, "card da Cana mostra a margem (50,0%) ao lado do Lucro do periodo", canaCardHtml[:400])
     conf("Produção" in canaCardHtml, "tabela de safras tem coluna Produção", canaCardHtml[:400])
     linhasTabelaSafra = page.evaluate("""() => {
       const cards = document.querySelectorAll('.donuts-row-larga > .card');
