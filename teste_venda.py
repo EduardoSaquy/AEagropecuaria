@@ -109,7 +109,7 @@ with sync_playwright() as pw:
       state.page='financeiro'; state.abaFinanceiro='receita'; state.erroLancamento='';
       editDraft = {tipo:'receita', atividade:'pecuaria', fazendaId:'', centroCustoId:92,
                    descricao:'Venda de boi gordo', valor:'', data:'2026-09-10',
-                   ehVenda:true, tipoVenda:'arroba', loteId:1, qtdAnimais:30,
+                   ehVenda:true, tipoVenda:'arroba', categoria:'abate', sexo:'macho', loteId:1, qtdAnimais:30,
                    arrobasTotais:'540', valorArroba:'320', areas:[]};
       state.modal = {type:'lancamento'}; render();
     }""")
@@ -166,7 +166,7 @@ with sync_playwright() as pw:
       window.__ESCRITAS__ = [];
       editDraft = {tipo:'receita', atividade:'pecuaria', fazendaId:'', centroCustoId:92,
                    descricao:'Venda total', valor:'', data:'2026-09-20',
-                   ehVenda:true, tipoVenda:'cabeca', loteId:1, qtdAnimais:100,
+                   ehVenda:true, tipoVenda:'cabeca', categoria:'abate', sexo:'femea', loteId:1, qtdAnimais:100,
                    valorPorAnimal:'2800', areas:[]};
       state.modal = {type:'lancamento'}; render();
     }""")
