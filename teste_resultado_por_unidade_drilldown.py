@@ -175,6 +175,24 @@ with sync_playwright() as pw:
     conf("Sobra/t por safra" in pagina_html or "por safra" in pagina_html,
          "cada quadrado mostra 'Sobra/... por safra'")
 
+    # ---- 2c. margem (%) ao lado da Sobra do periodo + tabela por safra com Producao ----
+    # Pedido do Eduardo em 03/09/2026: % pequena do lucro so no card do
+    # periodo atual (nao repetir em cada linha da tabela de safras, polui).
+    canaCardHtml = page.evaluate("""() => {
+      const cards = document.querySelectorAll('.donuts-row-larga > .card');
+      return cards[0] ? cards[0].innerHTML : '';
+    }""")
+    # Cana: sobra/t = (12000-6000)/3600, receita/t = 12000/3600 -> margem = 6000/12000 = 50%
+    conf("50,0%" in canaCardHtml, "card da Cana mostra a margem (50,0%) ao lado da Sobra do periodo", canaCardHtml[:400])
+    conf("Produção" in canaCardHtml, "tabela de safras tem coluna Produção", canaCardHtml[:400])
+    linhasTabelaSafra = page.evaluate("""() => {
+      const cards = document.querySelectorAll('.donuts-row-larga > .card');
+      const tbody = cards[0]?.querySelector('table tbody');
+      return tbody ? [...tbody.querySelectorAll('tr')].map(tr=>tr.innerHTML) : [];
+    }""")
+    conf(len(linhasTabelaSafra)==3 and all('%' not in tr for tr in linhasTabelaSafra),
+         "linhas da tabela de safras NAO repetem a porcentagem (so o card do topo tem)", str(linhasTabelaSafra))
+
     # safra 2026 (maio/2026-abril/2027) cobre setembro/2026, onde esta toda
     # a producao do fixture -- a sobra da Cana nessa safra tem que bater com
     # a do periodo do mes (mesmos dados, mesma janela).

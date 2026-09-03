@@ -115,6 +115,8 @@
 
   /* ---------- DONUTS (Resultados por operação) ---------- */
   .donuts-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px; margin-bottom:22px;}
+  .donuts-row-larga{display:grid; grid-template-columns:repeat(auto-fit, minmax(430px, 1fr)); gap:18px; margin-bottom:22px;}
+  .tabela-compacta th, .tabela-compacta td{padding:8px 8px; font-size:12.5px; white-space:nowrap;}
   .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
   .donut-wrap{flex-shrink:0;}
   .donut-svg{display:block;}
@@ -261,6 +263,7 @@
     .btn{width:100%; justify-content:center;}
     .stat-row{grid-template-columns:1fr; gap:10px;}
     .donuts-row{grid-template-columns:1fr;}
+    .donuts-row-larga{grid-template-columns:1fr;}
     .toolbar{flex-direction:column; align-items:stretch;}
     .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
     .field-row{grid-template-columns:1fr;}
@@ -2667,15 +2670,26 @@ function safrasRecentes(qtd){
   for(let i=qtd-1; i>=0; i--) safras.push(safraAtual-i);
   return safras;
 }
+// Texto do lucro/sobra por unidade, com a margem (% sobre a receita) ao
+// lado, pequena -- pedido do Eduardo em 03/09/2026. A % é a mesma calculada
+// em cima do total ou da unidade (é a mesma razão receita/sobra).
+function textoLucroComPct(sobra, receita){
+  const pct = receita>0 ? sobra/receita*100 : null;
+  const pctTxt = pct!=null ? ` <span style="font-size:11px; font-weight:600; opacity:0.7;">(${pct>=0?'+':''}${fmt(pct,1)}%)</span>` : '';
+  return `${sobra>=0?'+':''}R$ ${fmt(sobra)}${pctTxt}`;
+}
 // Um card por cultura/categoria (mesmo padrão visual dos cards de
 // Produtividade/Custo/Margem logo acima) -- Eduardo pediu quadrado em vez
-// de tabela, seguindo o padrão de cima, com o comparativo das últimas 3
-// safras (só a sobra por unidade, pra caber no quadrado).
+// de tabela pro resumo do período corrente. Só o comparativo entre safras é
+// que virou tabela de verdade (colunas Produção/Custo/Receita/Lucro por
+// unidade, uma linha por safra) -- pedido do Eduardo em 03/09/2026, pra ver
+// os anos parelhos um do outro em vez de cards pequenos lado a lado.
 function CardCulturaResultadoUnidade(l, linhasPorSafra){
   const sobra = l.receita - l.custo;
   const historico = linhasPorSafra.map(({safra, linhas})=>{
     const x = linhas.find(y=>y.nome===l.nome);
-    return {safra, sobra: x ? (x.receita-x.custo) : null};
+    return {safra, produzido: x?x.produzido:null, custo: x?x.custo:null, receita: x?x.receita:null,
+            sobra: x ? (x.receita-x.custo) : null};
   });
   return `
   <div class="card card-pad">
@@ -2698,17 +2712,24 @@ function CardCulturaResultadoUnidade(l, linhasPorSafra){
       </div>
       <div class="stat-card">
         <div class="stat-label">Sobra/${l.unidade}</div>
-        <div class="stat-value ${sobra>=0?'bom':'alerta'}" style="font-size:19px;">${sobra>=0?'+':''}R$ ${fmt(sobra)}</div>
+        <div class="stat-value ${sobra>=0?'bom':'alerta'}" style="font-size:19px;">${textoLucroComPct(sobra, l.receita)}</div>
       </div>
     </div>
-    <p class="hint" style="margin:12px 0 8px;">Sobra/${l.unidade} por safra</p>
-    <div style="display:flex; gap:8px;">
-      ${historico.map(h=>`
-        <div class="stat-card" style="flex:1; padding:10px 12px;">
-          <div class="stat-label">${h.safra}/${String(h.safra+1).slice(2)}</div>
-          <div class="stat-value ${h.sobra==null?'':(h.sobra>=0?'bom':'alerta')}" style="font-size:14.5px; margin-top:4px;">${h.sobra==null?'—':(h.sobra>=0?'+':'')+'R$ '+fmt(h.sobra)}</div>
-        </div>
-      `).join('')}
+    <p class="hint" style="margin:12px 0 8px;">Comparativo por safra (${l.unidade})</p>
+    <div style="overflow-x:auto;">
+    <table class="tabela-compacta" style="margin:0;">
+      <thead><tr><th>Safra</th><th>Produção</th><th>Custo</th><th>Receita</th><th>Lucro</th></tr></thead>
+      <tbody>
+        ${historico.map(h=>`
+        <tr>
+          <td class="mono">${h.safra}/${String(h.safra+1).slice(2)}</td>
+          <td class="mono">${h.produzido==null?'—':fmtInt(h.produzido)}</td>
+          <td class="mono">${h.custo==null?'—':'R$ '+fmt(h.custo)}</td>
+          <td class="mono">${h.receita==null?'—':'R$ '+fmt(h.receita)}</td>
+          <td class="mono" style="${h.sobra==null?'':`color:${h.sobra>=0?'var(--bom)':'var(--alerta)'};`}">${h.sobra==null?'—':(h.sobra>=0?'+':'')+'R$ '+fmt(h.sobra)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
     </div>
   </div>`;
 }
@@ -2720,7 +2741,7 @@ function TabelaResultadoPorUnidade(){
   return `
   <p class="eyebrow" style="margin-top:18px; margin-bottom:10px;">Resultado por unidade produzida</p>
   ${linhas.length===0 ? `<div class="card card-pad">${Empty('Sem produção no período', 'Nenhuma colheita ou venda com quantidade produzida nesse período.')}</div>` : `
-  <div class="donuts-row">
+  <div class="donuts-row-larga">
     ${linhas.map(l=>CardCulturaResultadoUnidade(l, linhasPorSafra)).join('')}
   </div>`}
   `;
