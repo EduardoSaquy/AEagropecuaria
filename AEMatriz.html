@@ -710,11 +710,16 @@ async function carregarIndicadoresCana(){
       db.from('plantios_cana').select('id, ativo'),
       // fetchAllRows: sem paginação, corte de 1000 linhas do Supabase
       // subestimava toneladasMes/produtividade em silêncio numa safra grande.
-      fetchAllRows(()=>db.from('colheitas_cana').select('data, toneladas').order('id')),
+      // talhao_id entra pra dar pra somar a área REALMENTE colhida no
+      // período (areaColhidaNoPeriodo) -- produtividade por hectare tem
+      // que dividir pela área que foi colhida, não pela área total
+      // cadastrada em Fazendas (essa serve pra despesa/receita por
+      // hectare, não pra produtividade).
+      fetchAllRows(()=>db.from('colheitas_cana').select('data, toneladas, talhao_id').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
-    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0)}));
+    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0), talhaoId:c.talhao_id}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cana = {
@@ -740,11 +745,13 @@ async function carregarIndicadoresCereais(){
   try{
     const [planRes, colRes] = await Promise.all([
       db.from('plantios_graos').select('id, ativo'),
-      fetchAllRows(()=>db.from('colheitas_graos').select('data, sacas').order('id')),
+      // talhao_id entra pelo mesmo motivo do colheitas_cana acima
+      // (areaColhidaNoPeriodo).
+      fetchAllRows(()=>db.from('colheitas_graos').select('data, sacas, talhao_id').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
-    state.colheitasGraos = (colRes.data||[]).map(c=>({data:c.data, sacas:Number(c.sacas||0)}));
+    state.colheitasGraos = (colRes.data||[]).map(c=>({data:c.data, sacas:Number(c.sacas||0), talhaoId:c.talhao_id}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cereais = {
@@ -2080,19 +2087,56 @@ function arrobasVendidasNoPeriodo(periodo){
   const semPeso = doPeriodo.filter(a=>arrobasDoAbate(a)==null);
   return {total, vendasSemPeso: semPeso.length, animaisSemPeso: semPeso.reduce((a,v)=>a+Number(v.quantidade||0),0)};
 }
+// Área REALMENTE colhida no período — soma a área (cadastro do talhão)
+// de cada talhão DISTINTO que teve colheita nos meses do período. Não é
+// o mesmo que hectaresPorOperacao() (área total cadastrada em Fazendas
+// pra essa atividade): produtividade (ton/ha, sacas/ha) tem que dividir
+// pelo que foi colhido, não pelo total da fazenda — um talhão em reforma
+// (sem colheita nenhuma) não pode "diluir" a produtividade dos talhões
+// que colheram de verdade. Despesa/receita por hectare continuam usando
+// hectaresPorOperacao() -- essas fazem sentido pela área toda cuidada,
+// colhida ou não. Só Cana e Cereais têm "colheita" nesse sentido;
+// Pecuária não (pasto/confinamento não "colhe", continua por hectaresPorOperacao).
+function areaColhidaNoPeriodo(slug, periodo){
+  const meses = new Set(periodoMeses(periodo));
+  const colheitas = slug==='cana' ? state.colheitasCana : slug==='cereais' ? state.colheitasGraos : null;
+  if(!colheitas) return null;
+  const talhoesColhidos = new Set(
+    colheitas.filter(c=>c.data && meses.has(c.data.slice(0,7)) && c.talhaoId!=null).map(c=>c.talhaoId)
+  );
+  return [...talhoesColhidos].reduce((soma,id)=>{
+    const t = state.talhoes.find(x=>x.id===id);
+    return soma + Number(t?.areaHa||0);
+  }, 0);
+}
 // Ponto único: produtividade de uma operação no período, na unidade certa
 // pra cada uma. null quando não tem hectare cadastrado (mesma regra que
 // despesa/receita por hectare já usam).
 function produtividadeOperacaoNoPeriodo(slug, periodo){
   const ha = hectaresPorOperacao(slug);
   if(ha<=0) return null;
-  if(slug==='cana'){ const total = toneladasCanaNoPeriodo(periodo); return {total, unidade:'t', porHa: total/ha}; }
-  if(slug==='cereais'){ const total = sacasCereaisNoPeriodo(periodo); return {total, unidade:'sc', porHa: total/ha}; }
+  if(slug==='cana'){
+    const total = toneladasCanaNoPeriodo(periodo);
+    const areaColhida = areaColhidaNoPeriodo('cana', periodo);
+    return {total, unidade:'t', porHa: areaColhida>0 ? total/areaColhida : null, areaColhida};
+  }
+  if(slug==='cereais'){
+    const total = sacasCereaisNoPeriodo(periodo);
+    const areaColhida = areaColhidaNoPeriodo('cereais', periodo);
+    return {total, unidade:'sc', porHa: areaColhida>0 ? total/areaColhida : null, areaColhida};
+  }
   if(slug==='pecuaria'){
     const {total, vendasSemPeso, animaisSemPeso} = arrobasVendidasNoPeriodo(periodo);
     return {total, unidade:'@', porHa: total/ha, vendasSemPeso, animaisSemPeso};
   }
   return null;
+}
+// Custo por unidade produzida (R$/tonelada, R$/saca, R$/@) -- despesa do
+// período (mesma que já aparece na tabela de baixo) dividida pelo total
+// produzido no período. null sem produção nenhuma (não dá pra dividir).
+function custoPorUnidadeProduzida(despesa, prod){
+  if(!prod || !prod.total) return null;
+  return despesa/prod.total;
 }
 // Só as operações de terra (mesmo recorte de OPERACOES_ORDEM) — Combustível
 // não entra aqui pelo mesmo motivo que não entra nos donuts: é custo
@@ -2378,6 +2422,7 @@ function CardResultadoOperacional(slug){
   const ha = hectaresPorOperacao(slug);
   const prod = produtividadeOperacaoNoPeriodo(slug, state.periodo);
   const semDados = !r || r.erro;
+  const custoUnidade = !semDados ? custoPorUnidadeProduzida(r.despesa, prod) : null;
   return `
   <div class="card card-pad">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
@@ -2388,12 +2433,17 @@ function CardResultadoOperacional(slug){
       </div>
     </div>
     ${semDados ? Empty('Sem dados ainda', r?.erro || 'Nenhum lançamento neste período.') : `
-    <div class="stat-row" style="grid-template-columns:repeat(2,1fr); margin-bottom:14px;">
+    <div class="stat-row" style="grid-template-columns:repeat(3,1fr); margin-bottom:14px;">
       <div class="stat-card">
         <div class="stat-label">Produtividade</div>
-        <div class="stat-value" style="font-size:19px;">${prod ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
-        <div class="hint" style="margin-top:4px;">${prod ? fmtInt(prod.total)+' '+prod.unidade+' no período' : 'Sem hectare cadastrado'}</div>
+        <div class="stat-value" style="font-size:19px;">${prod && prod.porHa!=null ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${prod ? fmtInt(prod.total)+' '+prod.unidade+' no período' : 'Sem hectare cadastrado'}${prod && prod.areaColhida!=null ? ' · '+fmt(prod.areaColhida)+' ha colhidos' : ''}</div>
         ${prod && prod.vendasSemPeso ? `<div class="hint" style="margin-top:2px; color:var(--ambar);">${prod.vendasSemPeso} venda(s) por cabeça (${fmtInt(prod.animaisSemPeso)} animais) não entraram — sem peso registrado</div>` : ''}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Custo por ${prod ? prod.unidade : 'unidade'}</div>
+        <div class="stat-value" style="font-size:19px;">${custoUnidade!=null ? 'R$ '+fmt(custoUnidade) : '—'}</div>
+        <div class="hint" style="margin-top:4px;">Despesa ÷ produzido no período</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Margem</div>
