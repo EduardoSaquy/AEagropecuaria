@@ -515,8 +515,8 @@ function producaoRacaoToRow(p){ return {data:p.data, dieta_id:p.dietaId, quantid
 // Guardado na tabela "abates" (nome antigo, de quando só existia venda por
 // abate) — mantido por já estar em produção; agora cobre qualquer venda de
 // animais (abate por @, por animal ou por kg vivo), diferenciada por tipoVenda.
-function rowToVenda(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantidade:r.quantidade, tipoVenda:r.tipo_venda||'arroba', pesoMedioKg:r.peso_medio_kg, valorArroba:r.valor_arroba, valorPorAnimal:r.valor_por_animal, valorKg:r.valor_kg, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
-function vendaToRow(v){ return {data:v.data, lote_id:v.loteId, quantidade:v.quantidade, tipo_venda:v.tipoVenda||'arroba', peso_medio_kg:v.pesoMedioKg||null, valor_arroba:v.valorArroba||null, valor_por_animal:v.valorPorAnimal||null, valor_kg:v.valorKg||null, observacao:v.observacao||''}; }
+function rowToVenda(r){ return {id:r.id, data:r.data, loteId:r.lote_id, quantidade:r.quantidade, tipoVenda:r.tipo_venda||'arroba', pesoMedioKg:r.peso_medio_kg, valorArroba:r.valor_arroba, valorPorAnimal:r.valor_por_animal, valorKg:r.valor_kg, categoria:r.categoria||'', sexo:r.sexo||'', observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
+function vendaToRow(v){ return {data:v.data, lote_id:v.loteId, quantidade:v.quantidade, tipo_venda:v.tipoVenda||'arroba', peso_medio_kg:v.pesoMedioKg||null, valor_arroba:v.valorArroba||null, valor_por_animal:v.valorPorAnimal||null, valor_kg:v.valorKg||null, categoria:v.categoria||null, sexo:v.sexo||null, observacao:v.observacao||''}; }
 function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor, sexo:r.sexo||'macho'}; }
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor, sexo:p.sexo||'macho'}; }
 // Sugestões de centro de custo e fornecedor pra preencher os datalists dos
@@ -1900,7 +1900,7 @@ function openNewModal(type){
       return false;
     }
     const primeiroLote = lotesElegiveis[0];
-    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', observacao:''};
+    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', categoria:'abate', sexo:sexoFixoDoLote(primeiroLote.id)||'', observacao:''};
     state.modal = {type:'venda'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', descricao:'', fornecedor:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
@@ -2962,7 +2962,7 @@ function PageVendasGeral(){
   <div class="card">
     ${rv.itens.length===0 ? (vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Pasto ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : Empty('Nenhuma venda hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Tipo</th><th>Qtd. animais</th><th>Preço</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Categoria</th><th>Sexo</th><th>Tipo</th><th>Qtd. animais</th><th>Preço</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
       <tbody>
         ${rv.itens.map(v=>{
           const lote = state.lotes.find(l=>l.id===v.loteId);
@@ -2971,6 +2971,8 @@ function PageVendasGeral(){
             <td class="mono">${v.data.split('-').reverse().join('/')}</td>
             <td>${lote?esc(lote.nome):'<span class="hint">— lote excluído —</span>'}</td>
             <td>${tipo ? `<span class="pill pill-cat">${TIPO_PESAGEM_LABEL[tipo]}</span>` : '—'}</td>
+            <td>${v.categoria ? CATEGORIA_VENDA_LABEL[v.categoria]||v.categoria : '—'}</td>
+            <td>${v.sexo==='macho'?'Macho':v.sexo==='femea'?'Fêmea':'—'}</td>
             <td><span class="pill pill-ok">${TIPO_VENDA_LABEL[v.tipoVenda]||'Abate'}</span></td>
             <td class="mono">${fmtInt(v.quantidade)}</td>
             <td class="mono">${detalhePrecoVenda(v)}</td>
@@ -4008,6 +4010,7 @@ const KG_POR_ARROBA = 30;
 // parte de peso vivo).
 const KG_POR_ARROBA_CARCACA = 15;
 const TIPO_VENDA_LABEL = {arroba:'Abate', cabeca:'Venda por animal', kg:'Venda por kg'};
+const CATEGORIA_VENDA_LABEL = {bezerro:'Bezerro', abate:'Abate', venda_viva:'Venda viva'};
 // Campos de peso/valor da Venda aceitam vírgula decimal (padrão brasileiro) —
 // Number('480,5') dá NaN, então esses campos passam por aqui em vez de Number()
 // direto. Valores já numéricos (vindos do banco) passam direto, sem mudança.
@@ -6048,6 +6051,22 @@ function ModalVenda(){
           <div class="field"><label>Data</label><input id="f-datavenda" type="date" value="${d.data}"/></div>
           <div class="field"><label>Quantidade de animais</label><input id="f-qtdvenda" type="number" step="1" value="${d.quantidade}"/></div>
         </div>
+        <div class="field-row">
+          <div class="field"><label>Categoria da venda</label>
+            <select id="f-categoriavenda">
+              <option value="bezerro" ${d.categoria==='bezerro'?'selected':''}>Venda de bezerro</option>
+              <option value="abate" ${!d.categoria||d.categoria==='abate'?'selected':''}>Abate</option>
+              <option value="venda_viva" ${d.categoria==='venda_viva'?'selected':''}>Venda viva (não abate)</option>
+            </select>
+          </div>
+          <div class="field"><label>Sexo</label>
+            <select id="f-sexovenda">
+              <option value="" ${!d.sexo?'selected':''}>— Selecione —</option>
+              <option value="macho" ${d.sexo==='macho'?'selected':''}>Macho</option>
+              <option value="femea" ${d.sexo==='femea'?'selected':''}>Fêmea</option>
+            </select>
+          </div>
+        </div>
         <div class="field">
           <label>Tipo de venda</label>
           <select id="f-tipovenda">
@@ -6880,11 +6899,28 @@ function attachEvents(){
   function sincronizarDataObsVenda(){
     const dataEl = document.getElementById('f-datavenda');
     const obsEl = document.getElementById('f-obsvenda');
+    const categoriaEl = document.getElementById('f-categoriavenda');
+    const sexoEl = document.getElementById('f-sexovenda');
     if(dataEl) editDraft.data = dataEl.value;
     if(obsEl) editDraft.observacao = obsEl.value;
+    if(categoriaEl) editDraft.categoria = categoriaEl.value;
+    if(sexoEl) editDraft.sexo = sexoEl.value;
   }
   const loteVendaEl = document.getElementById('f-lotevenda');
-  if(loteVendaEl) loteVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.loteId = Number(e.target.value); render(); };
+  if(loteVendaEl) loteVendaEl.onchange = (e)=>{
+    sincronizarDataObsVenda();
+    editDraft.loteId = Number(e.target.value);
+    // Sexo acompanha o lote quando ele é fixo (Confinamento/Pasto com sexo
+    // definido) -- troca de lote muda o que está sendo vendido de verdade.
+    // Lote misto (sem sexo fixo) não mexe no que já estava selecionado.
+    const sexoFixoNovoLote = sexoFixoDoLote(editDraft.loteId);
+    if(sexoFixoNovoLote) editDraft.sexo = sexoFixoNovoLote;
+    render();
+  };
+  const categoriaVendaEl = document.getElementById('f-categoriavenda');
+  if(categoriaVendaEl) categoriaVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.categoria = e.target.value; render(); };
+  const sexoVendaEl = document.getElementById('f-sexovenda');
+  if(sexoVendaEl) sexoVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.sexo = e.target.value; render(); };
   const tipoVendaEl = document.getElementById('f-tipovenda');
   if(tipoVendaEl) tipoVendaEl.onchange = (e)=>{ sincronizarDataObsVenda(); editDraft.tipoVenda = e.target.value; render(); };
   refazVendaInput('f-qtdvenda', 'quantidade');
@@ -7924,8 +7960,10 @@ function attachEvents(){
         const data = document.getElementById('f-datavenda').value;
         const qtdVal = document.getElementById('f-qtdvenda').value;
         const tipoVenda = document.getElementById('f-tipovenda').value;
+        const categoria = document.getElementById('f-categoriavenda').value;
+        const sexo = document.getElementById('f-sexovenda').value;
         const observacao = document.getElementById('f-obsvenda').value;
-        if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais']])) return;
+        if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais'],[sexo,'Sexo']])) return;
         if(Number(qtdVal)<=0){ alert('A quantidade de animais precisa ser maior que zero.'); return; }
         const quantidade = Number(qtdVal);
         let pesoMedioKg=0, valorArroba=0, valorPorAnimal=0, valorKg=0, arrobasTotais='';
@@ -7960,7 +7998,7 @@ function attachEvents(){
           // receitas falhassem em seguida, ficava um número de animais
           // inflado no banco sem a edição de verdade ter ido adiante (e sem
           // aviso, já que o app não recarrega o estado nesse erro).
-          const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, observacao};
+          const row = {data, lote_id: loteId, quantidade, tipo_venda: tipoVenda, peso_medio_kg: pesoMedioKg||null, valor_arroba: valorArroba||null, valor_por_animal: valorPorAnimal||null, valor_kg: valorKg||null, categoria: categoria||null, sexo: sexo||null, observacao};
           ({error} = await db.from('abates').update(row).eq('id', vendaId));
           if(!error){
             const lote = state.lotes.find(l=>l.id===loteId);
@@ -8015,7 +8053,7 @@ function attachEvents(){
             }
           }
         } else {
-          const resultado = await salvarOuEnfileirar(type, {loteId, data, quantidade, tipoVenda, pesoMedioKg, arrobasTotais, valorArroba, valorPorAnimal, valorKg, observacao});
+          const resultado = await salvarOuEnfileirar(type, {loteId, data, quantidade, tipoVenda, pesoMedioKg, arrobasTotais, valorArroba, valorPorAnimal, valorKg, categoria, sexo, observacao});
           if(resultado.enfileirado){
             alert('Sem conexão — o lançamento foi salvo neste aparelho e será enviado automaticamente quando a internet voltar.');
             state.modal = null; editDraft = null; render();
