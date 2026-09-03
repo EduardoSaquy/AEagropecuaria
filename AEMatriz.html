@@ -2656,31 +2656,74 @@ function PageResultadosRelatorios(){
   <p class="hint" style="margin-top:12px;">Saldo anterior soma o que está carregado (últimos ~4 anos) antes do período — não é necessariamente o saldo desde a fundação da empresa, se houver lançamento mais antigo não carregado aqui. Grupos seguem o plano de contas do Conag (mesma classificação da tela de Centros de Custo).</p>
   `;
 }
+// Os N anos-safra mais recentes, o atual por último -- mesma janela
+// maio-abril usada em todo o resto de Resultados (periodoMeses tipo
+// 'safra'). Ano-safra "atual": se estamos em jan-abr, a safra corrente
+// começou em maio do ano ANTERIOR (ainda não virou abril).
+function safrasRecentes(qtd){
+  const hoje = new Date();
+  const safraAtual = (hoje.getMonth()+1) >= 5 ? hoje.getFullYear() : hoje.getFullYear()-1;
+  const safras = [];
+  for(let i=qtd-1; i>=0; i--) safras.push(safraAtual-i);
+  return safras;
+}
+// Um card por cultura/categoria (mesmo padrão visual dos cards de
+// Produtividade/Custo/Margem logo acima) -- Eduardo pediu quadrado em vez
+// de tabela, seguindo o padrão de cima, com o comparativo das últimas 3
+// safras (só a sobra por unidade, pra caber no quadrado).
+function CardCulturaResultadoUnidade(l, linhasPorSafra){
+  const sobra = l.receita - l.custo;
+  const historico = linhasPorSafra.map(({safra, linhas})=>{
+    const x = linhas.find(y=>y.nome===l.nome);
+    return {safra, sobra: x ? (x.receita-x.custo) : null};
+  });
+  return `
+  <div class="card card-pad">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+      <span style="width:12px; height:12px; border-radius:4px; background:${l.cor}; display:inline-block; flex-shrink:0;"></span>
+      <div style="font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--grafite);">${esc(l.nome)}</div>
+    </div>
+    <div class="stat-row" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card">
+        <div class="stat-label">Produzido</div>
+        <div class="stat-value" style="font-size:19px;">${fmtInt(l.produzido)} ${l.unidade}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Custo/${l.unidade}</div>
+        <div class="stat-value" style="font-size:19px;">R$ ${fmt(l.custo)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Receita/${l.unidade}</div>
+        <div class="stat-value" style="font-size:19px;">R$ ${fmt(l.receita)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Sobra/${l.unidade}</div>
+        <div class="stat-value ${sobra>=0?'bom':'alerta'}" style="font-size:19px;">${sobra>=0?'+':''}R$ ${fmt(sobra)}</div>
+      </div>
+    </div>
+    <p class="hint" style="margin:12px 0 8px;">Sobra/${l.unidade} por safra</p>
+    <div style="display:flex; gap:8px;">
+      ${historico.map(h=>`
+        <div class="stat-card" style="flex:1; padding:10px 12px;">
+          <div class="stat-label">${h.safra}/${String(h.safra+1).slice(2)}</div>
+          <div class="stat-value ${h.sobra==null?'':(h.sobra>=0?'bom':'alerta')}" style="font-size:14.5px; margin-top:4px;">${h.sobra==null?'—':(h.sobra>=0?'+':'')+'R$ '+fmt(h.sobra)}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
 function TabelaResultadoPorUnidade(){
   const linhas = linhasResultadoPorUnidade(state.periodo);
+  // Calcula o resultado por unidade das últimas 3 safras UMA VEZ (não por
+  // card) -- os cards todos comparam a mesma janela de safras.
+  const linhasPorSafra = safrasRecentes(3).map(safra=>({safra, linhas: linhasResultadoPorUnidade({tipo:'safra', safra})}));
   return `
-  <div class="card card-pad" style="margin-top:18px;">
-    <p class="stat-label" style="margin-bottom:4px;">Resultado por unidade produzida</p>
-    <p class="hint" style="margin-bottom:14px;">Custo e receita por tonelada (Cana), por saca (Cereais, uma linha por cultura) e por arroba (Pecuária, uma linha por categoria de venda) — só entra quem produziu alguma coisa no período.</p>
-    ${linhas.length===0 ? Empty('Sem produção no período', 'Nenhuma colheita ou venda com quantidade produzida nesse período.') : `
-    <div style="overflow-x:auto;">
-    <table>
-      <thead><tr><th>Cultura / categoria</th><th>Produzido</th><th>Custo/un.</th><th>Receita/un.</th><th>Sobra/un.</th></tr></thead>
-      <tbody>
-        ${linhas.map(l=>{
-          const sobra = l.receita - l.custo;
-          return `<tr>
-            <td><span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:${l.cor}; display:inline-block;"></span>${esc(l.nome)}</span></td>
-            <td class="mono">${fmtInt(l.produzido)} ${l.unidade}</td>
-            <td class="mono">R$ ${fmt(l.custo)}/${l.unidade}</td>
-            <td class="mono">R$ ${fmt(l.receita)}/${l.unidade}</td>
-            <td class="mono" style="font-weight:700; color:${sobra>=0?'var(--bom)':'var(--alerta)'};">${sobra>=0?'+':''}R$ ${fmt(sobra)}/${l.unidade}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-    </div>`}
-  </div>`;
+  <p class="eyebrow" style="margin-top:18px; margin-bottom:10px;">Resultado por unidade produzida</p>
+  ${linhas.length===0 ? `<div class="card card-pad">${Empty('Sem produção no período', 'Nenhuma colheita ou venda com quantidade produzida nesse período.')}</div>` : `
+  <div class="donuts-row">
+    ${linhas.map(l=>CardCulturaResultadoUnidade(l, linhasPorSafra)).join('')}
+  </div>`}
+  `;
 }
 function PageResultadosOperacional(){
   return `

@@ -162,6 +162,33 @@ with sync_playwright() as pw:
     conf(porCategoriaMap.get("Abate") == 12000,
          "Pecuaria: receita por categoria de venda (Abate 12000, via abate_id)", str(porCategoriaMap))
 
+    # ---- 2b. comparativo de safra dentro de cada quadrado ----
+    safras = page.evaluate("() => safrasRecentes(3)")
+    conf(safras == [2024, 2025, 2026], "safrasRecentes(3) traz as 3 ultimas, a atual (2026) por ultimo", str(safras))
+
+    page.evaluate("""() => {
+      state.page = 'resultados'; state.subAbaResultados = 'operacional';
+      render();
+    }""")
+    page.wait_for_timeout(300)
+    pagina_html = page.evaluate("() => document.querySelector('.donuts-row:last-of-type')?.innerHTML || document.body.innerHTML")
+    conf("Sobra/t por safra" in pagina_html or "por safra" in pagina_html,
+         "cada quadrado mostra 'Sobra/... por safra'")
+
+    # safra 2026 (maio/2026-abril/2027) cobre setembro/2026, onde esta toda
+    # a producao do fixture -- a sobra da Cana nessa safra tem que bater com
+    # a do periodo do mes (mesmos dados, mesma janela).
+    linhasSafraAtual = page.evaluate("() => linhasResultadoPorUnidade({tipo:'safra', safra:2026})")
+    canaSafra = next((l for l in linhasSafraAtual if l["nome"]=="Cana"), None)
+    conf(canaSafra is not None and abs((canaSafra["receita"]-canaSafra["custo"]) - (cana["receita"]-cana["custo"])) < 0.01,
+         "safra 2026 (atual) da Cana bate com o periodo do mes -- mesma janela, mesmos dados",
+         str(canaSafra))
+
+    # safra 2024 nao tem dado nenhum no fixture -- sobra tem que vir null,
+    # nao quebrar dividindo por zero.
+    linhasSafra2024 = page.evaluate("() => linhasResultadoPorUnidade({tipo:'safra', safra:2024})")
+    conf(linhasSafra2024 == [], "safra 2024 (sem nenhum dado) nao gera linha nenhuma", str(linhasSafra2024))
+
     # ---- 3. o modal de detalhe da receita mostra o agrupamento ----
     page.evaluate("""() => {
       state.modal = {type:'detalheOperacao', panelId:'donut-receita', slug:'cereais'};
