@@ -424,36 +424,44 @@ function rowToProtocoloInseminacao(r){ return {id:r.id, manejoId:r.manejo_id, lo
 function protocoloInseminacaoToRow(p){ return {manejo_id:p.manejoId, lote_id:p.loteId, numero_animal:p.numeroAnimal, data:p.data}; }
 function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', status:r.status||'ativo', dataMorte:r.data_morte||null, criadoPor:r.criado_por||''}; }
 function animalToRow(a){ return {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null}; }
-// Animal já cadastrado com esse número (em qualquer lote) -- número é único
-// na fazenda inteira, nunca pode haver dois animais com o mesmo número.
-function animalCadastrado(numero){
+// Animal já cadastrado com esse número. O número SOZINHO não identifica o
+// animal -- pode haver macho e fêmea com o mesmo número (são dois animais
+// diferentes que por acaso repetem o número do brinco). Passe sexo pra
+// achar só o desse sexo; sem sexo, acha qualquer um com esse número (uso
+// só informativo -- nunca pra decidir se é "o mesmo" animal antes de
+// gravar, isso é o que causava a troca de sexo/lote de um animal por outro
+// só porque compartilhavam número).
+function animalCadastrado(numero, sexo){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return null;
-  return state.animais.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase()) || null;
+  return state.animais.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase() && (!sexo || a.sexo===sexo)) || null;
 }
-// Raça já conhecida desse número, se ele já tiver cadastro -- usado pra
+// Raça já conhecida desse número+sexo, se ele já tiver cadastro -- usado pra
 // pré-preencher o campo de raça nos formulários que referenciam um animal
 // (Inseminação, Diagnóstico, Parto), sem obrigar redigitar o que já se sabe.
-function racaConhecida(numero){
-  const a = animalCadastrado(numero);
+function racaConhecida(numero, sexo){
+  const a = animalCadastrado(numero, sexo);
   return a ? (a.raca||'') : '';
 }
 // Todo lançamento que referencia um número de animal (Inseminação,
 // Diagnóstico, Parto, Pesagem individual, Nova entrada de animais) precisa
-// ou já ter o animal cadastrado, ou informar sexo+raça ali mesmo -- não dá
-// pra criar um cadastro pela metade nem duplicar. Retorna null se pode
-// prosseguir, ou a mensagem de erro pra mostrar (e bloquear o lançamento
-// inteiro, não só o cadastro do animal).
+// ou já ter o animal (nesse número+sexo) cadastrado, ou informar sexo+raça
+// ali mesmo -- não dá pra criar um cadastro pela metade nem duplicar.
+// Retorna null se pode prosseguir, ou a mensagem de erro pra mostrar (e
+// bloquear o lançamento inteiro, não só o cadastro do animal).
 function validarAnimalNovo(numero, sexo, raca){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return null; // sem número aqui -- quem valida isso é validarObrigatorios
-  if(animalCadastrado(numeroNorm)) return null; // já existe, upsertAnimal só atualiza
+  if(animalCadastrado(numeroNorm, sexo)) return null; // já existe esse número+sexo, upsertAnimal só atualiza
   if(!sexo || !raca) return `O animal número ${numeroNorm} ainda não está cadastrado. Informe sexo e raça dele antes de lançar.`;
   return null;
 }
-// Cadastra ou move um animal pro lote informado, por número -- número é
-// único na fazenda inteira, então se já existir (em qualquer lote) só
-// atualiza o lote (e sexo/raça, quando informados) em vez de duplicar.
+// Cadastra ou move um animal pro lote informado, por número+sexo -- número
+// sozinho NÃO é único na fazenda (pode repetir entre macho e fêmea), então
+// a identidade do animal é o par número+sexo: se já existir um animal com
+// esse número+sexo, só atualiza o lote (e raça, quando informada); senão,
+// cria um cadastro novo -- nunca funde um macho e uma fêmea que só
+// coincidem no número.
 // Usado pelos ganchos em outros lançamentos (Nova entrada de animais,
 // Nova inseminação, Peso por animal) -- não existe cadastro direto de
 // animal, só edição de um que já foi criado por um desses ganchos.
@@ -467,8 +475,20 @@ async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return {error:null};
   extra = extra || {};
-  const jaNestaLeva = criadosNestaLeva && criadosNestaLeva.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase());
-  const existente = jaNestaLeva || animalCadastrado(numeroNorm);
+  const jaNestaLeva = criadosNestaLeva && criadosNestaLeva.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase() && (!extra.sexo || a.sexo===extra.sexo));
+  if(!extra.sexo && !jaNestaLeva){
+    // Sem sexo informado pra desambiguar: se esse número já existe em MAIS
+    // DE UM sexo, animalCadastrado(numero) (sem sexo) acharia um dos dois
+    // às cegas -- teria fundido o cadastro errado. Bloqueia nesse caso em
+    // vez de arriscar.
+    const sexosDistintos = new Set(
+      state.animais.filter(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase()).map(a=>a.sexo||'?')
+    );
+    if(sexosDistintos.size > 1){
+      return {error:{message:`Existe mais de um animal ${numeroNorm} cadastrado (sexos diferentes) -- informe o sexo pra confirmar qual é.`}};
+    }
+  }
+  const existente = jaNestaLeva || animalCadastrado(numeroNorm, extra.sexo);
   const row = {numero: numeroNorm, lote_id: loteId};
   if(extra.sexo) row.sexo = extra.sexo;
   if(extra.raca) row.raca = extra.raca;
@@ -479,7 +499,7 @@ async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
     return {error:{message:`O animal ${numeroNorm} ainda não está cadastrado -- informe sexo e raça antes de lançar.`}};
   }
   const res = await db.from('animais').insert({...row, criado_por:autorAtual()}).select().single();
-  if(!res.error && criadosNestaLeva) criadosNestaLeva.push({numero:numeroNorm, id:res.data?.id});
+  if(!res.error && criadosNestaLeva) criadosNestaLeva.push({numero:numeroNorm, id:res.data?.id, sexo:extra.sexo});
   return res;
 }
 // "128, 129 130\n131" -> ['128','129','130','131'] -- aceita vírgula, espaço
@@ -2434,11 +2454,11 @@ function PageManejoAtivo(){
   // preenchido pros outros campos desse mesmo animal.
   const draft = m.draftAtual || (m.draftAtual = {});
   const numeroAtual = (m.numeroAtualDraft||'').trim();
-  const animalNovo = numeroAtual && !animalCadastrado(numeroAtual);
   // O sexo fixo (quando o lote não é misto) tem que ser do lote onde o
   // animal VAI FICAR -- se o manejo move de lote, é o destino que manda,
   // não o lote de origem que está sendo manejado agora.
   const sexoLoteFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
+  const animalNovo = numeroAtual && !animalCadastrado(numeroAtual, sexoLoteFixo||undefined);
   const lote = state.lotes.find(l=>l.id===m.loteId);
   const partosDisponiveis = acoesAtivas.includes('desmama') ? partosSemDesmama(m.loteId) : [];
   // Sem ação nenhuma marcada que precise do número (inseminação,
@@ -5411,9 +5431,9 @@ function ModalLote(){
   const destinosPermitidosLote = ['confinamento','pasto','cria'].filter(t=>podeCriarLote() || temPermissao(t,'editar'));
   const lotesExistentesPermitidos = state.lotes.filter(l=>!l.dataFim && (podeCriarLote() || temPermissao(TIPO_MODULO[loteTipo(l)],'editar')));
   const numerosAnimaisListaAtual = !d._editId ? parseNumerosAnimais(d.numerosAnimais||'') : [];
-  const algumAnimalNovoLote = numerosAnimaisListaAtual.some(n=>!animalCadastrado(n));
   const loteExistenteAtualLote = !modoNovo ? state.lotes.find(l=>l.id==d.loteExistenteId) : null;
   const sexoLoteAtualLote = modoNovo ? (d.sexo||'') : (loteExistenteAtualLote?.sexo||'');
+  const algumAnimalNovoLote = numerosAnimaisListaAtual.some(n=>!animalCadastrado(n, (sexoLoteAtualLote==='macho'||sexoLoteAtualLote==='femea') ? sexoLoteAtualLote : undefined));
   const precisaSexoAnimalNovoLote = algumAnimalNovoLote && sexoLoteAtualLote!=='macho' && sexoLoteAtualLote!=='femea';
   const camposAnimalNovoLote = algumAnimalNovoLote ? `
         <div class="field-row">
@@ -5718,8 +5738,8 @@ function ModalPasto(){
 
 function ModalReproducaoCusto(){
   const d = editDraft;
-  const racaVacaAtual = d.racaVaca!==undefined ? d.racaVaca : racaConhecida(d.numeroVaca);
-  const vacaJaCadastrada = !!animalCadastrado(d.numeroVaca);
+  const racaVacaAtual = d.racaVaca!==undefined ? d.racaVaca : racaConhecida(d.numeroVaca, 'femea');
+  const vacaJaCadastrada = !!animalCadastrado(d.numeroVaca, 'femea');
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -5776,8 +5796,8 @@ function ModalReproducaoCusto(){
 
 function ModalDiagnostico(){
   const d = editDraft;
-  const racaVacaAtual = d.racaVaca!==undefined ? d.racaVaca : racaConhecida(d.numeroVaca);
-  const vacaJaCadastrada = !!animalCadastrado(d.numeroVaca);
+  const racaVacaAtual = d.racaVaca!==undefined ? d.racaVaca : racaConhecida(d.numeroVaca, 'femea');
+  const vacaJaCadastrada = !!animalCadastrado(d.numeroVaca, 'femea');
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -5822,8 +5842,8 @@ function ModalDiagnostico(){
 
 function ModalParto(){
   const d = editDraft;
-  const racaMaeAtual = d.racaMae!==undefined ? d.racaMae : racaConhecida(d.numeroMae);
-  const maeJaCadastrada = !!animalCadastrado(d.numeroMae);
+  const racaMaeAtual = d.racaMae!==undefined ? d.racaMae : racaConhecida(d.numeroMae, 'femea');
+  const maeJaCadastrada = !!animalCadastrado(d.numeroMae, 'femea');
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -5935,8 +5955,8 @@ function ModalPesagem(){
   const entradas = d.entradasPesagem||[];
   const mediaCalculada = entradas.length>0 ? entradas.reduce((a,e)=>a+Number(e.pesoKg),0)/entradas.length : null;
   const numeroAtual = (d.pesagemNumeroDraft||'').trim();
-  const animalNovoPesagem = numeroAtual && !animalCadastrado(numeroAtual);
   const sexoLoteFixoPesagem = sexoFixoDoLote(d.loteId);
+  const animalNovoPesagem = numeroAtual && !animalCadastrado(numeroAtual, sexoLoteFixoPesagem||undefined);
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
@@ -6997,7 +7017,7 @@ function attachEvents(){
       const previsaoEl = document.getElementById('f-previsaoparto');
       if(previsaoEl) editDraft.previsaoParto = previsaoEl.value;
       editDraft.resultado = document.getElementById('f-resultadodg').value;
-      editDraft.racaVaca = racaConhecida(e.target.value);
+      editDraft.racaVaca = racaConhecida(e.target.value, 'femea');
       render();
     };
   }
@@ -7012,7 +7032,7 @@ function attachEvents(){
       editDraft.racaTouro = document.getElementById('f-racatouro').value;
       editDraft.qualInseminacao = document.getElementById('f-qualinsem').value;
       editDraft.custo = document.getElementById('f-custoreproducao').value;
-      editDraft.racaVaca = racaConhecida(e.target.value);
+      editDraft.racaVaca = racaConhecida(e.target.value, 'femea');
       render();
     };
   }
@@ -7030,7 +7050,7 @@ function attachEvents(){
       editDraft.data = document.getElementById('f-data').value;
       editDraft.sexoBezerro = document.getElementById('f-sexobezerro').value;
       editDraft.racaBezerro = document.getElementById('f-racabezerro').value;
-      editDraft.racaMae = racaConhecida(e.target.value);
+      editDraft.racaMae = racaConhecida(e.target.value, 'femea');
       render();
     };
   }
@@ -7098,9 +7118,9 @@ function attachEvents(){
       const peso = pesoEl.value;
       if(!peso || Number(peso)<=0){ alert('Informe um peso maior que zero.'); return; }
       const loteIdAtual = Number(document.getElementById('f-lotepesagem').value);
+      const sexoFixo = sexoFixoDoLote(loteIdAtual);
       let sexoNovo = '', racaNovo = '';
-      if(numero && !animalCadastrado(numero)){
-        const sexoFixo = sexoFixoDoLote(loteIdAtual);
+      if(numero && !animalCadastrado(numero, sexoFixo||undefined)){
         const sexoEl = document.getElementById('f-sexopesado');
         sexoNovo = sexoFixo || (sexoEl ? sexoEl.value : '');
         racaNovo = document.getElementById('f-racapesado')?.value || '';
@@ -7260,12 +7280,16 @@ function attachEvents(){
       const numero = (numEl.value||'').trim();
       const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a)) || !!m.loteDestinoId;
       if(precisaNumero && !numero){ alert('Informe o número do animal — obrigatório pra inseminação, diagnóstico, protocolo de inseminação ou mudança de lote.'); return; }
-      let sexoNovo = '', racaNovo = '';
-      const eraNovo = numero && !animalCadastrado(numero);
+      // Mesmo raciocínio do template: o sexo fixo é do lote de destino
+      // (quando o manejo move de lote), não do lote sendo manejado.
+      const sexoFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
+      // Já parte do sexo fixo do lote (quando ele não é misto) mesmo pra
+      // animal já cadastrado -- sem isso, o upsertAnimal mais abaixo ia sem
+      // sexo pra desambiguar, e um número repetido entre macho e fêmea
+      // podia achar o animal errado.
+      let sexoNovo = sexoFixo || '', racaNovo = '';
+      const eraNovo = numero && !animalCadastrado(numero, sexoFixo||undefined);
       if(eraNovo){
-        // Mesmo raciocínio do template: o sexo fixo é do lote de destino
-        // (quando o manejo move de lote), não do lote sendo manejado.
-        const sexoFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
         const sexoEl = document.getElementById('f-sexomanejo');
         sexoNovo = sexoFixo || (sexoEl ? sexoEl.value : '');
         racaNovo = document.getElementById('f-racamanejo')?.value || '';
@@ -7314,7 +7338,7 @@ function attachEvents(){
       // dele ATUAL for realmente o de origem -- rebipar por engano um
       // animal que já estava no destino (ou de um terceiro lote) não pode
       // descontar do lote de origem um animal que nunca esteve lá.
-      const animalAntesDoManejo = numero ? animalCadastrado(numero) : null;
+      const animalAntesDoManejo = numero ? animalCadastrado(numero, sexoNovo||undefined) : null;
       const veioDoOrigem = !animalAntesDoManejo || animalAntesDoManejo.loteId===m.loteId;
       // Só precisa mover a CONTAGEM se o animal realmente ainda não estava
       // no lote de destino -- num retry (depois de um passo mais adiante
@@ -7332,7 +7356,7 @@ function attachEvents(){
         if(eraNovo){
           state.animais.push({id: resAnimalManejo.data?.id, numero, loteId: loteAlvo, sexo: sexoNovo, raca: racaNovo, criadoPor: autorAtual()||''});
         } else {
-          const existente = animalCadastrado(numero);
+          const existente = animalCadastrado(numero, sexoNovo||undefined);
           if(existente){ existente.loteId = loteAlvo; if(sexoNovo) existente.sexo = sexoNovo; if(racaNovo) existente.raca = racaNovo; }
         }
         // Ajusta o total de animais dos dois lotes NA HORA, animal por
@@ -7601,8 +7625,9 @@ function attachEvents(){
           const criadosNestaLeva = [];
           for(const numero of numerosAnimaisLista){
             const numeroNorm = String(numero).trim().toLowerCase();
-            const ehNovo = !animalCadastrado(numero) && !criadosNestaLeva.find(a=>a.numero.toLowerCase()===numeroNorm);
-            const sexoParaEsse = (sexoLote==='macho'||sexoLote==='femea') ? sexoLote : (ehNovo ? sexoNovosVal : undefined);
+            const sexoLoteFixoReg = (sexoLote==='macho'||sexoLote==='femea') ? sexoLote : undefined;
+            const ehNovo = !animalCadastrado(numero, sexoLoteFixoReg) && !criadosNestaLeva.find(a=>a.numero.toLowerCase()===numeroNorm && (!sexoLoteFixoReg || a.sexo===sexoLoteFixoReg));
+            const sexoParaEsse = sexoLoteFixoReg || (ehNovo ? sexoNovosVal : undefined);
             // Raça informada aqui só se aplica a quem está sendo numerado
             // agora — não sobrescreve a raça de um animal que já existia e
             // só está sendo movido de lote.
@@ -7691,9 +7716,9 @@ function attachEvents(){
         const sexoAnimalVal = document.getElementById('f-sexoanimal').value;
         const racaAnimalVal = document.getElementById('f-racaanimal').value;
         if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote'],[sexoAnimalVal,'Sexo'],[racaAnimalVal,'Raça']])) return;
-        const animalComEsseNumero = animalCadastrado(numeroAnimalVal);
+        const animalComEsseNumero = animalCadastrado(numeroAnimalVal, sexoAnimalVal);
         if(animalComEsseNumero && animalComEsseNumero.id!==editDraft._editId){
-          alert(`Já existe um animal cadastrado com o número ${numeroAnimalVal}. Escolha um número diferente.`);
+          alert(`Já existe um animal ${sexoAnimalVal==='macho'?'macho':'fêmea'} cadastrado com o número ${numeroAnimalVal}. Escolha um número diferente.`);
           return;
         }
         const rowAnimal = animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal});
