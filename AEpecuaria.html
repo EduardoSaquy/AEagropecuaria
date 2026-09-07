@@ -3592,14 +3592,23 @@ function PageDesmama(){
 // GMD médio e @ produzidas) de cada lote lado a lado, sem precisar
 // escolher/filtrar um lote de cada vez pra ver o resultado.
 // Nº de animais pra multiplicar o ganho por animal e achar a arroba total
-// do lote. Lote ativo: usa numeroAnimais normal. Lote já encerrado (vendido
-// -- numeroAnimais zerado pela venda): sem isso, a @ produzida do período
-// inteiro (que inclui quando o lote ainda tinha os animais) dava 0,0 @,
-// mesmo com ganho de peso real registrado nas pesagens -- usa o total
-// vendido (state.vendas) como o efetivo que existia durante o período.
-function numeroAnimaisParaArroba(lote){
+// do lote. Lote ativo: usa numeroAnimais normal (nunca muda esse caso).
+// Lote já encerrado (vendido -- numeroAnimais zerado pela venda): sem
+// isso, a @ produzida do período inteiro (que inclui quando o lote ainda
+// tinha os animais) dava 0,0 @, mesmo com ganho de peso real registrado
+// nas pesagens. Prioridade pra reconstituir o efetivo:
+//   1) quantos animais foram pesados individualmente na ÚLTIMA pesagem
+//      (pesagens_animais) -- é o numero mais preciso, ligado direto ao
+//      periodo medido; um lote pode ter mais de uma venda ao longo da
+//      vida (ex: 2 vendas, 67 animais no total), e usar a SOMA de todas
+//      as vendas superestimaria a @ do periodo desta pesagem especifica.
+//   2) sem detalhe por animal na ultima pesagem, cai pro total vendido
+//      (state.vendas) -- aproximacao, mas melhor que dar zero.
+function numeroAnimaisParaArroba(lote, ultimaPesagem){
   const atual = Number(lote.numeroAnimais||0);
   if(atual>0) return atual;
+  const pesadosNaUltima = state.pesagensAnimais.filter(pa=>pa.pesagemId===ultimaPesagem.id).length;
+  if(pesadosNaUltima>0) return pesadosNaUltima;
   return state.vendas.filter(v=>v.loteId===lote.id).reduce((a,v)=>a+Number(v.quantidade||0),0);
 }
 function PainelResultadoLotes(lotesTipo){
@@ -3610,7 +3619,7 @@ function PainelResultadoLotes(lotesTipo){
     const ganhoTotal = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
     const gmdMedio = gmdEntre(Number(primeira.pesoMedioKg), Number(ultima.pesoMedioKg), primeira.data, ultima.data);
     const arrobaPorAnimal = ganhoTotal/KG_POR_ARROBA;
-    const arrobaTotal = arrobaPorAnimal * numeroAnimaisParaArroba(l);
+    const arrobaTotal = arrobaPorAnimal * numeroAnimaisParaArroba(l, ultima);
     return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaTotal};
   });
   return `
