@@ -1,5 +1,5 @@
 -- ============================================================
--- Pecuaria - lanca a pesagem retroativa do lote "Vacas de descarte
+-- Pecuaria - lanca a pesagem retroativa do lote "Vacas de Descarte
 -- 2026", feita em 20/08/2026 (o lote ja foi vendido/abatido depois --
 -- Eduardo tinha a caderneta em papel e nao tinha lancado ainda). 47
 -- animais, numero + peso (kg) cada, tirados da foto da caderneta e
@@ -34,13 +34,13 @@ declare
   v_media      numeric;
   v_qtd        int;
 begin
-  select id into v_lote_id from lotes where trim(nome) = 'Vacas de descarte 2026';
+  select id into v_lote_id from lotes where trim(nome) ilike 'Vacas de Descarte 2026';
   if v_lote_id is null then
-    raise exception 'lote "Vacas de descarte 2026" nao encontrado - confira o nome cadastrado';
+    raise exception 'lote "Vacas de Descarte 2026" nao encontrado - confira o nome cadastrado';
   end if;
 
   if exists (select 1 from pesagens where lote_id = v_lote_id and data = v_data) then
-    raise notice 'ja existe uma pesagem do lote "Vacas de descarte 2026" em % - nada feito (confira antes de rodar de novo)', v_data;
+    raise notice 'ja existe uma pesagem do lote "Vacas de Descarte 2026" em % - nada feito (confira antes de rodar de novo)', v_data;
     return;
   end if;
 
@@ -71,7 +71,7 @@ begin
     ('064',477),('706',409),('724',466),('711',407),('696',433),('664',476),('872',389)
   ) as t(numero, peso);
 
-  raise notice 'pesagem id % criada no lote "Vacas de descarte 2026" (id %) em %, % animais, media % kg',
+  raise notice 'pesagem id % criada no lote "Vacas de Descarte 2026" (id %) em %, % animais, media % kg',
     v_pesagem_id, v_lote_id, v_data, v_qtd, round(v_media,2);
 end $$;
 
@@ -80,12 +80,12 @@ end $$;
 -- batendo com round(22017/47, 2) = 468,45 kg
 -- ============================================================
 select 1::numeric as ordem, item, valor, situacao from (
-  select 'pesagem do lote "Vacas de descarte 2026" em 20/08/2026' as item,
+  select 'pesagem do lote "Vacas de Descarte 2026" em 20/08/2026' as item,
          'peso medio ' || p.peso_medio_kg || ' kg' as valor,
          case when p.peso_medio_kg = 468.45 then 'OK, bate com 468,45' else 'DIFERENTE do esperado (468,45) - confira' end as situacao
     from pesagens p
     join lotes l on l.id = p.lote_id
-   where trim(l.nome) = 'Vacas de descarte 2026' and p.data = '2026-08-20'
+   where trim(l.nome) ilike 'Vacas de Descarte 2026' and p.data = '2026-08-20'
 ) x
 union all
 select 2::numeric, item, valor, situacao from (
@@ -95,6 +95,6 @@ select 2::numeric, item, valor, situacao from (
     from pesagens p
     join lotes l on l.id = p.lote_id
     join pesagens_animais pa on pa.pesagem_id = p.id
-   where trim(l.nome) = 'Vacas de descarte 2026' and p.data = '2026-08-20'
+   where trim(l.nome) ilike 'Vacas de Descarte 2026' and p.data = '2026-08-20'
 ) x
 order by 1;
