@@ -4307,7 +4307,12 @@ function composicaoCentrosCustoAno(){
   return composicaoCentrosCusto(todosFixos);
 }
 
-function dadosFinanceiro(){
+// Tudo que dadosFinanceiro() precisa, exceto arrobasMes/custoPorArrobaMes --
+// separado porque esses dois dependem de custosDiariosPorLote() (pra usar a
+// janela de pesagem do Confinamento, não só o mês), e custosDiariosPorLote()
+// por sua vez precisa do resto destes dados (fixoConfinamento etc.) -- sem
+// essa separação, as duas funções chamariam uma a outra sem parar.
+function dadosFinanceiroBase(){
   const hoje = hojeStr();
   const mes = mesAtualStr();
 
@@ -4366,12 +4371,12 @@ function dadosFinanceiro(){
   const resultadoMes = receitaMes - fixosMes;
   const margemAtualPct = receitaMes>0 ? (resultadoMes/receitaMes*100) : null;
 
-  const arrobasMes = arrobasProduzidasFazendaNoMes(mes);
-  const custoPorArrobaMes = arrobasMes>0 ? totalMes/arrobasMes : null;
-
   // Acumulado do ano (janeiro até o mês atual) -- mesmo critério já usado no
   // "Por hectare" e nos painéis de Resultados: soma mês a mês em vez de só
-  // mostrar o mês corrente, consolidando conforme o ano avança.
+  // mostrar o mês corrente, consolidando conforme o ano avança. Continua por
+  // calendário mesmo pro Confinamento -- a janela primeira/última pesagem
+  // (abaixo, só pro card do Mês) não mapeia num "ano" sem também redesenhar
+  // o acumulado mês a mês, o que fica pra quando isso for pedido.
   const mesesAno = mesesDoAnoAteAgora();
   const variavelAno = mesesAno.reduce((a,m)=>a+custoVariavelDoMes(m),0);
   const fixosAno = mesesAno.reduce((a,m)=>a+fixosDoMes(m),0);
@@ -4384,8 +4389,24 @@ function dadosFinanceiro(){
     racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
     fixoConfinamento, fixoPasto, fixoCria, detalhesPorArea,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, animaisConfinamento, animaisPasto, animaisCria, receitaMes, resultadoMes, margemAtualPct,
-    totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque, arrobasMes, custoPorArrobaMes,
+    totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque,
     variavelAno, fixosAno, totalAno, custoTotalPorAnimalAno, arrobasAno, custoPorArrobaAno};
+}
+
+// @ produzidas/custo por @ da fazenda no mês -- soma os mesmos números já
+// calculados por lote em custosDiariosPorLote() (que usa a janela
+// primeira/última pesagem pro Confinamento, não o mês -- ver comentário lá),
+// em vez de recalcular por conta própria. Sem isso, o card do topo do
+// Financeiro voltava a mostrar custo/@ artificialmente baixo pro Confinamento
+// pelo mesmo motivo já corrigido no relatório Por Lote (achado pelo Eduardo
+// em 07/09/2026, card do topo corrigido em 09/09/2026).
+function dadosFinanceiro(){
+  const base = dadosFinanceiroBase();
+  const {custoPorAreaMes} = custosDiariosPorLote();
+  const arrobasMes = custoPorAreaMes.reduce((a,r)=>a+r.totalArrobas, 0);
+  const custoParaArrobaMes = custoPorAreaMes.reduce((a,r)=>a+r.custoParaArrobaTotal, 0);
+  const custoPorArrobaMes = arrobasMes>0 ? custoParaArrobaMes/arrobasMes : null;
+  return {...base, arrobasMes, custoPorArrobaMes};
 }
 
 /* ---- Financeiro: Resumo ---- */
@@ -4557,7 +4578,7 @@ function PageResultadosResumo(){
 // aproximado por animal, pra estimar o custo de manutenção de um
 // bezerro do nascimento até a desmama).
 function custosDiariosPorLote(){
-  const d = dadosFinanceiro();
+  const d = dadosFinanceiroBase();
 
   const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
   const diasDecorridosMes = Number(d.hoje.split('-')[2]);
@@ -4644,16 +4665,23 @@ function custosDiariosPorLote(){
     const fixoAlocado = fixoLoteAlocado(l, fixoAreaMes[loteTipo(l)]);
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    let arrobas, custoPorArroba;
+    // custoParaArroba é o custo que efetivamente comparece na razão custo/@:
+    // pro Confinamento é o custo da JANELA da pesagem (pode não bater com
+    // "total", que é sempre o custo do mês corrente -- os dois aparecem
+    // juntos na tela só pra referência, não são a mesma coisa); pros demais é
+    // o próprio total do mês, já que ali "arrobas" também é do mês.
+    let arrobas, custoPorArroba, custoParaArroba;
     if(loteTipo(l)==='confinamento'){
       const jp = custoPorArrobaJanelaPesagem(l);
       arrobas = jp ? jp.arrobas : null;
       custoPorArroba = jp ? jp.custoPorArroba : null;
+      custoParaArroba = jp ? jp.custoJanela : null;
     } else {
       arrobas = arrobasProduzidasNoMes(l.id, d.mes, l.numeroAnimais);
       custoPorArroba = arrobas>0 ? total/arrobas : null;
+      custoParaArroba = total;
     }
-    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
+    return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba, custoParaArroba};
   }).sort((a,b)=> b.total-a.total);
 
   // Média diária real (não "só hoje" nem "só esse mês"): ração/pasto/cria
@@ -4692,9 +4720,13 @@ function custosDiariosPorLote(){
     const totalAnimais = lotesArea.reduce((a,r)=>a+Number(r.lote.numeroAnimais||0),0);
     const totalCusto = lotesArea.reduce((a,r)=>a+r.total,0);
     const totalArrobas = lotesArea.reduce((a,r)=>a+(r.arrobas||0),0);
+    // custoParaArrobaTotal usa a mesma janela do numerador de cada lote (ver
+    // custoParaArroba acima) -- "Total no mês" (totalCusto) continua sendo
+    // sempre o gasto do mês corrente, pra não confundir a coluna da tela.
+    const custoParaArrobaTotal = lotesArea.reduce((a,r)=>a+(r.custoParaArroba||0),0);
     return {
-      tipo, label: TIPO_PESAGEM_LABEL[tipo], numeroLotes: lotesArea.length, totalAnimais, totalCusto, totalArrobas,
-      custoPorArroba: totalArrobas>0 ? totalCusto/totalArrobas : null,
+      tipo, label: TIPO_PESAGEM_LABEL[tipo], numeroLotes: lotesArea.length, totalAnimais, totalCusto, totalArrobas, custoParaArrobaTotal,
+      custoPorArroba: totalArrobas>0 ? custoParaArrobaTotal/totalArrobas : null,
       custoPorAnimal: totalAnimais>0 ? totalCusto/totalAnimais : null,
     };
   }).filter(r=>r.numeroLotes>0);
