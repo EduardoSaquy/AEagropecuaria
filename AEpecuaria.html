@@ -4607,6 +4607,35 @@ function custosDiariosPorLote(){
     return Math.max(1, Math.round((new Date(d.hoje+'T00:00:00') - new Date(inicio+'T00:00:00'))/86400000) + 1);
   }
 
+  // Confinamento: ciclo curto, então @ produzida SEMPRE compara a mesma
+  // janela pro ganho de peso e pro custo -- da primeira à última pesagem
+  // do lote, não o mês corrente. Sem isso, um lote com pesagens espaçadas
+  // (ex: 21/07 e 03/09, sem pesagem no início do mês) tinha o ganho de
+  // peso de MESES inteiros creditado só ao mês corrente (que só carrega o
+  // custo desse mês) -- @ produzida inflada, custo/@ artificialmente
+  // baixo. Achado pelo Eduardo em 07/09/2026. Pasto/Cria continuam usando
+  // a janela do mês (ciclo mais longo, sem o mesmo problema).
+  const totalAnimaisConfinamento = lotesAtivos.filter(l=>loteTipo(l)==='confinamento').reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  function custoPorArrobaJanelaPesagem(lote){
+    const historico = pesagensDoLote(lote.id);
+    if(historico.length<2) return null;
+    const primeira = historico[0], ultima = historico[historico.length-1];
+    const ganho = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
+    const arrobas = (ganho/KG_POR_ARROBA) * numeroAnimaisParaArroba(lote, ultima);
+    if(arrobas<=0) return {arrobas, custoJanela:0, custoPorArroba:null};
+    const racaoJanela = state.saidasRacao.filter(s=>s.loteId===lote.id && s.data>=primeira.data && s.data<=ultima.data).reduce((a,s)=>a+custoSaidaRacao(s),0);
+    const pastoJanela = state.pasto.filter(p=>p.loteId===lote.id && p.data>=primeira.data && p.data<=ultima.data).reduce((a,p)=>a+custoPasto(p),0);
+    const reproducaoJanela = state.reproducao.filter(r=>r.loteId===lote.id && r.data>=primeira.data && r.data<=ultima.data).reduce((a,r)=>a+custoReproducao(r),0);
+    const diasJanela = Math.max(1, Math.round((new Date(ultima.data+'T00:00:00') - new Date(primeira.data+'T00:00:00'))/86400000));
+    // Custo fixo: taxa diaria por animal (custo fixo do mes / 30 / total de
+    // animais do confinamento hoje), aplicada aos dias e animais desta
+    // janela -- mesma taxa usada em outras contas do app, só que multiplicada
+    // pelos dias da janela da pesagem em vez do mes corrente.
+    const fixoPorAnimalDia = totalAnimaisConfinamento>0 ? fixoAreaMes.confinamento/30/totalAnimaisConfinamento : 0;
+    const fixoJanela = fixoPorAnimalDia * Number(lote.numeroAnimais||numeroAnimaisParaArroba(lote,ultima)) * diasJanela;
+    const custoJanela = racaoJanela + pastoJanela + reproducaoJanela + fixoJanela;
+    return {arrobas, custoJanela, custoPorArroba: custoJanela/arrobas, diasJanela, primeira, ultima};
+  }
   const custosMesPorLote = lotesAtivos.map(l=>{
     const racao = state.saidasRacao.filter(s=>s.data.startsWith(d.mes) && s.loteId===l.id).reduce((a,s)=>a+custoSaidaRacao(s),0);
     const pasto = state.pasto.filter(p=>p.data.startsWith(d.mes) && p.loteId===l.id).reduce((a,p)=>a+custoPasto(p),0);
@@ -4615,8 +4644,15 @@ function custosDiariosPorLote(){
     const fixoAlocado = fixoLoteAlocado(l, fixoAreaMes[loteTipo(l)]);
     const total = variavel + fixoAlocado;
     const porAnimal = l.numeroAnimais>0 ? total/l.numeroAnimais : 0;
-    const arrobas = arrobasProduzidasNoMes(l.id, d.mes, l.numeroAnimais);
-    const custoPorArroba = arrobas>0 ? total/arrobas : null;
+    let arrobas, custoPorArroba;
+    if(loteTipo(l)==='confinamento'){
+      const jp = custoPorArrobaJanelaPesagem(l);
+      arrobas = jp ? jp.arrobas : null;
+      custoPorArroba = jp ? jp.custoPorArroba : null;
+    } else {
+      arrobas = arrobasProduzidasNoMes(l.id, d.mes, l.numeroAnimais);
+      custoPorArroba = arrobas>0 ? total/arrobas : null;
+    }
     return {lote:l, racao, pasto, reproducao, fixoAlocado, total, porAnimal, arrobas, custoPorArroba};
   }).sort((a,b)=> b.total-a.total);
 
