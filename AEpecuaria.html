@@ -4111,9 +4111,35 @@ function arrobasProduzidasNoMes(loteId, mesStr, numeroAnimais){
   if(!ganho) return null;
   return (ganho.ganhoKg/KG_POR_ARROBA) * Number(numeroAnimais||0);
 }
+// Um lote esteve ativo NUM MÊS se já tinha começado até o fim dele e, se já
+// encerrou, encerrou depois que o mês começou -- não basta olhar se ele está
+// ativo HOJE (!dataFim), senão um lote vendido em julho sumiria até de
+// março, abril, maio e junho, quando ele estava lá e gerando custo/arroba de
+// verdade. Achado em 10/09/2026 ao revisar o card "Custo por @ produzida no
+// ano": o custo desse lote (lançado por loteId, sem olhar status atual)
+// continuava contando, só a arroba sumia -- inflava o custo/@ do ano sem
+// motivo real.
+function loteAtivoNoMes(lote, mesStr){
+  const fimMes = new Date(Number(mesStr.slice(0,4)), Number(mesStr.slice(5,7)), 0).toISOString().slice(0,10);
+  const inicioMes = `${mesStr}-01`;
+  const comecouAteOFimDoMes = !lote.dataInicio || lote.dataInicio<=fimMes;
+  const naoEncerrouAntesDoMes = !lote.dataFim || lote.dataFim>=inicioMes;
+  return comecouAteOFimDoMes && naoEncerrouAntesDoMes;
+}
 function arrobasProduzidasFazendaNoMes(mesStr){
-  return state.lotes.filter(l=>!l.dataFim).reduce((a,l)=>{
-    const arrobas = arrobasProduzidasNoMes(l.id, mesStr, l.numeroAnimais);
+  return state.lotes.filter(l=>loteAtivoNoMes(l, mesStr)).reduce((a,l)=>{
+    // lote já encerrado tem numeroAnimais zerado (a venda zera) -- sem isso,
+    // um lote vendido este ano contava custo mas nunca arroba, em NENHUM mês
+    // dele, não só nos meses depois da venda. numeroAnimaisParaArroba já
+    // resolve isso (pesagens_animais da última pesagem do lote, ou soma de
+    // vendas) -- mesma conta usada no Painel de Resultado dos Lotes.
+    let numeroAnimais = Number(l.numeroAnimais||0);
+    if(numeroAnimais<=0){
+      const historico = pesagensDoLote(l.id);
+      const ultima = historico[historico.length-1];
+      if(ultima) numeroAnimais = numeroAnimaisParaArroba(l, ultima);
+    }
+    const arrobas = arrobasProduzidasNoMes(l.id, mesStr, numeroAnimais);
     return a + (arrobas||0);
   }, 0);
 }
