@@ -3611,7 +3611,46 @@ function numeroAnimaisParaArroba(lote, ultimaPesagem){
   if(pesadosNaUltima>0) return pesadosNaUltima;
   return state.vendas.filter(v=>v.loteId===lote.id).reduce((a,v)=>a+Number(v.quantidade||0),0);
 }
+// Custo fixo/animal/dia de cada área (Confinamento/Pasto/Cria), pra
+// espalhar pela janela de cada lote no Painel de Resultado dos Lotes --
+// mesma conta (custo fixo do mês corrente ÷ 30 ÷ nº de animais ativos da
+// área hoje) já usada no Custo/@ do Confinamento da tela Financeiro
+// (ver custoPorArrobaJanelaPesagem lá), só generalizada pras três áreas.
+// Aproximação assumida ali também vale aqui: usa a taxa de HOJE (custo
+// fixo e composição de animais atuais) pra todos os dias da janela, já
+// que o app não guarda histórico de custo fixo/efetivo mês a mês.
+function fixoPorAnimalDiaPorTipo(){
+  const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
+  const animaisPorTipo = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
+  const animaisConfinamento = animaisPorTipo('confinamento');
+  const animaisPasto = animaisPorTipo('pasto');
+  const animaisCria = animaisPorTipo('reproducao');
+  const ctxArea = {animaisConfinamento, animaisPasto, animaisCria, animaisPastoCria: animaisPasto+animaisCria, totalAnimais: animaisConfinamento+animaisPasto+animaisCria};
+  const alocacaoArea = alocarDespesasPorArea(custosFixosDoMes(mesAtualStr()), ctxArea);
+  const totalAnimaisPorTipo = {confinamento: animaisConfinamento, pasto: animaisPasto, reproducao: animaisCria};
+  const fixoAreaMes = {confinamento: alocacaoArea.confinamento, pasto: alocacaoArea.pasto, reproducao: alocacaoArea.cria};
+  const resultado = {};
+  ['confinamento','pasto','reproducao'].forEach(tipo=>{
+    resultado[tipo] = totalAnimaisPorTipo[tipo]>0 ? fixoAreaMes[tipo]/30/totalAnimaisPorTipo[tipo] : 0;
+  });
+  return resultado;
+}
+// Custo/@ na mesma janela (primeira pesagem -> última) que já forma o
+// "@ produzidas" da linha -- ração+pasto+cria lançados no período + fatia
+// de custo fixo (ver fixoPorAnimalDiaPorTipo). Sem pesagem em dobro ou
+// arroba zerada, não dá pra dividir -- volta null (mostra "—").
+function custoPorArrobaJanelaLote(lote, primeira, ultima, arrobaTotal, numeroAnimaisArroba, fixoPorAnimalDiaTipo){
+  if(arrobaTotal<=0) return null;
+  const racaoJanela = state.saidasRacao.filter(s=>s.loteId===lote.id && s.data>=primeira.data && s.data<=ultima.data).reduce((a,s)=>a+custoSaidaRacao(s),0);
+  const pastoJanela = state.pasto.filter(p=>p.loteId===lote.id && p.data>=primeira.data && p.data<=ultima.data).reduce((a,p)=>a+custoPasto(p),0);
+  const reproducaoJanela = state.reproducao.filter(r=>r.loteId===lote.id && r.data>=primeira.data && r.data<=ultima.data).reduce((a,r)=>a+custoReproducao(r),0);
+  const diasJanela = Math.max(1, Math.round((new Date(ultima.data+'T00:00:00') - new Date(primeira.data+'T00:00:00'))/86400000));
+  const fixoJanela = fixoPorAnimalDiaTipo * Number(lote.numeroAnimais||numeroAnimaisArroba) * diasJanela;
+  const custoJanela = racaoJanela + pastoJanela + reproducaoJanela + fixoJanela;
+  return custoJanela/arrobaTotal;
+}
 function PainelResultadoLotes(lotesTipo){
+  const fixoPorAnimalDia = fixoPorAnimalDiaPorTipo();
   const linhas = lotesTipo.map(l=>{
     const historico = pesagensDoLote(l.id);
     if(historico.length===0) return {lote:l, semDados:true};
@@ -3619,33 +3658,37 @@ function PainelResultadoLotes(lotesTipo){
     const ganhoTotal = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
     const gmdMedio = gmdEntre(Number(primeira.pesoMedioKg), Number(ultima.pesoMedioKg), primeira.data, ultima.data);
     const arrobaPorAnimal = ganhoTotal/KG_POR_ARROBA;
-    const arrobaTotal = arrobaPorAnimal * numeroAnimaisParaArroba(l, ultima);
-    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaTotal};
+    const numeroAnimaisArroba = numeroAnimaisParaArroba(l, ultima);
+    const arrobaTotal = arrobaPorAnimal * numeroAnimaisArroba;
+    const custoPorArroba = custoPorArrobaJanelaLote(l, primeira, ultima, arrobaTotal, numeroAnimaisArroba, fixoPorAnimalDia[loteTipo(l)]||0);
+    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaPorAnimal, arrobaTotal, custoPorArroba};
   });
   return `
   <div class="card">
     <table>
       <thead><tr>
-        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@ produzidas</th>
+        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@/animal</th><th>@ produzidas</th><th>Custo/@</th>
       </tr></thead>
       <tbody>
         ${linhas.map(r=>`
           <tr>
             <td><button class="link-nome" data-ver-lote="${r.lote.id}">${esc(r.lote.nome)}</button></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
-            ${r.semDados ? `<td class="mono" colspan="5">Nenhuma pesagem registrada ainda</td>` : `
+            ${r.semDados ? `<td class="mono" colspan="7">Nenhuma pesagem registrada ainda</td>` : `
             <td class="mono">${fmt(Number(r.primeira.pesoMedioKg),1)} kg <span class="hint">(${r.primeira.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${fmt(Number(r.ultima.pesoMedioKg),1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${r.ganhoTotal>=0?'+':''}${fmt(r.ganhoTotal,1)} kg</td>
             <td class="mono">${r.gmdMedio!==null?fmt(r.gmdMedio,3)+' kg/dia':'—'}</td>
+            <td class="mono">${fmt(r.arrobaPorAnimal,2)} @</td>
             <td class="mono">${fmt(r.arrobaTotal,1)} @</td>
+            <td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>
             `}
           </tr>
         `).join('')}
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:10px 0 18px;">Ganho e @ produzidas contam desde a primeira pesagem lançada de cada lote até a mais recente. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho.</p>`;
+  <p class="hint" style="margin:10px 0 18px;">Ganho, @/animal, @ produzidas e Custo/@ contam desde a primeira pesagem lançada de cada lote até a mais recente. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. "@/animal" é o ganho por cabeça (ganho no período ÷ 30 kg); "@ produzidas" é o total do lote (@/animal × nº de animais). Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.</p>`;
 }
 
 function PagePesagem(tipo){
