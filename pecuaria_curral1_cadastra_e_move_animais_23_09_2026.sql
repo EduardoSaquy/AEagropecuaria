@@ -46,8 +46,10 @@ begin
   end if;
 
   -- Passo A: cadastra os 87 numeros sem cadastro nenhum
+  -- raca em minusculo -- e o que o check constraint animais_raca_check
+  -- aceita ('angus','nelore','outro'), igual o app grava pelo <select>
   insert into animais (numero, lote_id, sexo, raca, criado_por)
-  select t.numero, v_lote_id, 'macho', 'Nelore', 'Eduardo (cadastro via SQL a partir da pesagem de 23/09/2026)'
+  select t.numero, v_lote_id, 'macho', 'nelore', 'Eduardo (cadastro via SQL a partir da pesagem de 23/09/2026)'
     from (values
       ('002'), ('003'), ('005'), ('008'), ('010'), ('016'), ('021'), ('033'), ('053'), ('058'),
       ('063'), ('075'), ('079'), ('103'), ('111'), ('121'), ('126'), ('128'), ('139'), ('141'),
@@ -81,7 +83,7 @@ begin
        )
   )
   update animais a
-     set lote_id = v_lote_id, sexo = 'macho', raca = coalesce(a.raca, 'Nelore')
+     set lote_id = v_lote_id, sexo = 'macho', raca = coalesce(a.raca, 'nelore')
     from alvo
    where a.id = alvo.id;
   get diagnostics v_movidos = row_count;
