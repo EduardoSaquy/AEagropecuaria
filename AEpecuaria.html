@@ -3661,24 +3661,25 @@ function PainelResultadoLotes(lotesTipo){
     const numeroAnimaisArroba = numeroAnimaisParaArroba(l, ultima);
     const arrobaTotal = arrobaPorAnimal * numeroAnimaisArroba;
     const custoPorArroba = custoPorArrobaJanelaLote(l, primeira, ultima, arrobaTotal, numeroAnimaisArroba, fixoPorAnimalDia[loteTipo(l)]||0);
-    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaTotal, custoPorArroba};
+    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaPorAnimal, arrobaTotal, custoPorArroba};
   });
   return `
   <div class="card">
     <table>
       <thead><tr>
-        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@ produzidas</th><th>Custo/@</th>
+        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@/animal</th><th>@ produzidas</th><th>Custo/@</th>
       </tr></thead>
       <tbody>
         ${linhas.map(r=>`
           <tr>
             <td><button class="link-nome" data-ver-lote="${r.lote.id}">${esc(r.lote.nome)}</button></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
-            ${r.semDados ? `<td class="mono" colspan="6">Nenhuma pesagem registrada ainda</td>` : `
+            ${r.semDados ? `<td class="mono" colspan="7">Nenhuma pesagem registrada ainda</td>` : `
             <td class="mono">${fmt(Number(r.primeira.pesoMedioKg),1)} kg <span class="hint">(${r.primeira.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${fmt(Number(r.ultima.pesoMedioKg),1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${r.ganhoTotal>=0?'+':''}${fmt(r.ganhoTotal,1)} kg</td>
             <td class="mono">${r.gmdMedio!==null?fmt(r.gmdMedio,3)+' kg/dia':'—'}</td>
+            <td class="mono">${fmt(r.arrobaPorAnimal,2)} @</td>
             <td class="mono">${fmt(r.arrobaTotal,1)} @</td>
             <td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>
             `}
@@ -3687,7 +3688,7 @@ function PainelResultadoLotes(lotesTipo){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:10px 0 18px;">Ganho, @ produzidas e Custo/@ contam desde a primeira pesagem lançada de cada lote até a mais recente. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.</p>`;
+  <p class="hint" style="margin:10px 0 18px;">Ganho, @/animal, @ produzidas e Custo/@ contam desde a primeira pesagem lançada de cada lote até a mais recente. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. "@/animal" é o ganho por cabeça (ganho no período ÷ 30 kg); "@ produzidas" é o total do lote (@/animal × nº de animais). Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.</p>`;
 }
 
 function PagePesagem(tipo){

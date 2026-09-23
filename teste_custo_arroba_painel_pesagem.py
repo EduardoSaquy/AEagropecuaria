@@ -117,6 +117,8 @@ with sync_playwright() as pw:
       const alvo = linhas.find(tr => tr.textContent.includes('Curral Teste'));
       return alvo ? alvo.textContent.replace(/\\s+/g,' ').trim() : null;
     }""")
+    conf(linhaConf is not None and '2,00 @' in linhaConf,
+         "Confinamento: @/animal = 2,00 @ (ganho 60kg / 30)", str(linhaConf))
     conf(linhaConf is not None and '20,0 @' in linhaConf,
          "Confinamento: @ produzidas = 20,0 @ (igual antes, nao mudou)", str(linhaConf))
     conf(linhaConf is not None and 'R$ 97,50' in linhaConf,
