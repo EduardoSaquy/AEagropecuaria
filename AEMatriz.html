@@ -718,11 +718,11 @@ async function carregarIndicadoresCana(){
       // que dividir pela área que foi colhida, não pela área total
       // cadastrada em Fazendas (essa serve pra despesa/receita por
       // hectare, não pra produtividade).
-      fetchAllRows(()=>db.from('colheitas_cana').select('data, toneladas, talhao_id').order('id')),
+      fetchAllRows(()=>db.from('colheitas_cana').select('data, toneladas, talhao_id, ano_safra').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
-    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0), talhaoId:c.talhao_id}));
+    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0), talhaoId:c.talhao_id, anoSafra:c.ano_safra??null}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cana = {
@@ -2057,7 +2057,20 @@ function hectaresPorOperacao(slug){
 // ===== Produtividade por hectare (aba Operacional dos Resultados) =====
 // Toneladas de cana e sacas de grãos são simples: soma o que foi colhido
 // (colheitas_cana/colheitas_graos) nos meses do período selecionado.
+// No filtro Safra, respeita o campo Safra (ano_safra) da colheita — mesma
+// regra do financeiro (despesaNaSafra/receitasNaSafra): a usina às vezes já
+// conta um corte do início do ano (ex: abril) na safra SEGUINTE antes do
+// calendário virar; sem isso esse corte ficava de fora da Safra na aba
+// Safra do Matriz, mesmo a usina já contando ele lá.
+function colheitasCanaNaSafra(safra){
+  const janela = periodoMeses({tipo:'safra', safra});
+  const doMes = state.colheitasCana.filter(c=>c.data && janela.includes(c.data.slice(0,7))
+    && !(c.anoSafra!=null && Number(c.anoSafra)!==safra));
+  const remarcadas = state.colheitasCana.filter(c=>c.data && Number(c.anoSafra)===safra && !janela.includes(c.data.slice(0,7)));
+  return [...doMes, ...remarcadas];
+}
 function toneladasCanaNoPeriodo(periodo){
+  if(periodo.tipo==='safra') return colheitasCanaNaSafra(periodo.safra).reduce((a,c)=>a+c.toneladas, 0);
   const meses = new Set(periodoMeses(periodo));
   return state.colheitasCana.filter(c=>c.data && meses.has(c.data.slice(0,7))).reduce((a,c)=>a+c.toneladas, 0);
 }
@@ -2105,6 +2118,13 @@ function arrobasVendidasNoPeriodo(periodo){
 // colhida ou não. Só Cana e Cereais têm "colheita" nesse sentido;
 // Pecuária não (pasto/confinamento não "colhe", continua por hectaresPorOperacao).
 function areaColhidaNoPeriodo(slug, periodo){
+  if(slug==='cana' && periodo.tipo==='safra'){
+    const talhoesColhidos = new Set(colheitasCanaNaSafra(periodo.safra).filter(c=>c.talhaoId!=null).map(c=>c.talhaoId));
+    return [...talhoesColhidos].reduce((soma,id)=>{
+      const t = state.talhoes.find(x=>x.id===id);
+      return soma + Number(t?.areaHa||0);
+    }, 0);
+  }
   const meses = new Set(periodoMeses(periodo));
   const colheitas = slug==='cana' ? state.colheitasCana : slug==='cereais' ? state.colheitasGraos : null;
   if(!colheitas) return null;

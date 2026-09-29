@@ -411,6 +411,14 @@ const CADASTROS = {
         const t = state.talhoes.find(x=>x.id===item.talhaoId);
         return (t && t.areaHa) ? fmt(Number(item.toneladas||0)/Number(t.areaHa)) : '—';
       }},
+      // Mesma ideia do campo Safra (ano_safra) do financeiro no Matriz: em
+      // branco, conta pelo mês da data de corte, como sempre foi. A usina já
+      // rotula corte do início do ano (ex: abril) como pertencente à safra
+      // SEGUINTE (maio a maio) antes mesmo do calendário virar — sem isso, um
+      // corte de abril/2026 ficava de fora da Safra 2026/2027 na aba Safra do
+      // Matriz, mesmo a usina já contando ele lá.
+      {key:'anoSafra', label:'Safra (opcional)', type:'number', step:'1', dec:0,
+       hint:'Preencha só se a usina já conta esse corte em outra safra (ex: corte de abril que a usina já lança na safra seguinte). Ano de início — 2026 = safra 2026/2027. Em branco, conta pelo mês da data.'},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
