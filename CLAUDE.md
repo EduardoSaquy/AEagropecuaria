@@ -264,6 +264,14 @@ entrar de novo sem checar contra o que já foi lançado à mão primeiro.
 
 ## Armadilhas que já custaram caro
 
+- **Offline com login vencido.** O token do Supabase vale 1 h; vencido e
+  sem rede, `db.auth.getSession()` fica ~25 s tentando renovar e depois
+  devolve "sem sessão" (medido com supabase-js 2.117 em 13/10/2026). Por
+  isso todo app abre com `sessaoInicial()` (sessão guardada no aparelho se
+  a biblioteca demorar ou não houver rede) e `buscarPerfilDoBanco()` (último
+  perfil conhecido). Nunca voltar a `await db.auth.getSession()` direto no
+  `initAuth`.
+
 - **Leia o catálogo vivo, não os arquivos de schema.** `cana_schema.sql` e
   `supabase_schema.sql` estão desatualizados e já enganaram quatro vezes.
   `schema_real.txt` é a referência.
@@ -307,7 +315,7 @@ verdade em `window.__DB__`).
 | `teste_lote_racao.py` | 15 | AEpecuaria.html |
 | `teste_cereais_cultura.py` | 27 | AECereais.html |
 | `teste_contas.py` | 83 | AEMatriz.html |
-| `teste_offline.py` | 19 | sw.js (offline dos 5 apps), botão ← Painel, cards do Painel na mesma janela |
+| `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só

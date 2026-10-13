@@ -667,11 +667,69 @@ function temPermissao(modulo, nivel){
   return atual==='editar';
 }
 
+const PERFIL_CACHE_KEY = 'aecana_perfil_cache_v1';
+function lerPerfilCache(uid){
+  try{
+    const cache = JSON.parse(localStorage.getItem(PERFIL_CACHE_KEY)||'null');
+    return (cache && cache.uid===uid) ? cache.perfil : null;
+  }catch(e){ return null; }
+}
+function salvarPerfilCache(uid, perfil){
+  try{ localStorage.setItem(PERFIL_CACHE_KEY, JSON.stringify({uid, perfil})); }
+  catch(e){ /* localStorage indisponivel (modo privado etc.) */ }
+}
+// ---- Abertura sem internet (login e perfil guardados no aparelho) ----
+// O token de acesso do Supabase vale 1 h. Vencido e sem internet, o
+// getSession() da biblioteca tenta renovar e repete por ~25 s antes de
+// desistir -- e ainda devolve "sem sessao", jogando pra tela de login, que
+// offline nao funciona. Medido em 13/10/2026 com supabase-js 2.117: 25,5 s
+// de tela branca e depois o login. Toda consulta ao banco com o token
+// vencido repete a mesma espera.
+// Por isso: sem rede (ou se a biblioteca demorar mais que o limite), o app
+// abre com a sessao guardada no aparelho e o ultimo perfil conhecido.
+// Quando a internet volta, a biblioteca renova o token sozinha e o
+// onAuthStateChange recarrega tudo. Se o login tiver sido revogado, a
+// biblioteca apaga a sessao guardada e o app volta pro login normalmente.
+const CHAVE_SESSAO_SUPABASE = 'sb-kmkystqgpvmzrccxvyaz-auth-token';
+const LIMITE_ESPERA_LOGIN_MS = 3000;
+function aparelhoSemRede(){ return typeof navigator!=='undefined' && navigator.onLine===false; }
+function sessaoGuardadaNoAparelho(){
+  try{
+    const s = JSON.parse(localStorage.getItem(CHAVE_SESSAO_SUPABASE)||'null');
+    return (s && s.user && s.access_token) ? s : null;
+  }catch(e){ return null; }
+}
+async function sessaoInicial(){
+  const daBiblioteca = db.auth.getSession().then(r=>r.data.session).catch(()=>null);
+  if(!sessaoGuardadaNoAparelho()) return daBiblioteca;
+  const limite = new Promise(res=>setTimeout(()=>res(undefined), aparelhoSemRede() ? 0 : LIMITE_ESPERA_LOGIN_MS));
+  const s = await Promise.race([daBiblioteca, limite]);
+  // null = a biblioteca respondeu "sem sessao": se foi por login revogado
+  // ela ja apagou a guardada (volta pro login); se foi por falta de rede,
+  // a guardada continua la e o app abre com ela.
+  return s || sessaoGuardadaNoAparelho();
+}
+// Perfil: sem rede nem tenta (cairia na mesma espera de ~25 s); com rede
+// lenta, desiste no limite e usa o ultimo perfil guardado.
+function buscarPerfilDoBanco(uid){
+  if(aparelhoSemRede()) return Promise.resolve({data:null, error:{message:'Failed to fetch (aparelho sem rede)'}});
+  const busca = db.from('profiles').select('*').eq('id', uid).single();
+  const limite = new Promise(res=>setTimeout(()=>res({data:null, error:{message:'Failed to fetch (demorou demais)'}}), LIMITE_ESPERA_LOGIN_MS + 1000));
+  return Promise.race([busca, limite]);
+}
 async function loadPerfil(){
   const uid = state.session?.user?.id;
   if(!uid){ state.perfil = null; return; }
-  const { data } = await db.from('profiles').select('*').eq('id', uid).single();
-  state.perfil = data ? rowToPerfil(data) : null;
+  const { data, error } = await buscarPerfilDoBanco(uid);
+  if(data){
+    state.perfil = rowToPerfil(data);
+    salvarPerfilCache(uid, state.perfil);
+  } else {
+    // sem rede: ultimo perfil conhecido deste usuario (null se nunca abriu online)
+    const msg = String(error?.message||'').toLowerCase();
+    const deRede = aparelhoSemRede() || msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
+    state.perfil = deRede ? lerPerfilCache(uid) : null;
+  }
   if(state.perfil?.ativo && !paginaAcessivel(state.page)){
     const primeira = primeiraPaginaVisivel();
     if(primeira) state.page = primeira;
@@ -680,8 +738,7 @@ async function loadPerfil(){
 
 async function initAuth(){
   carregarCacheLocal();
-  const { data } = await db.auth.getSession();
-  state.session = data.session;
+  state.session = await sessaoInicial();
   if(state.session) await loadPerfil();
   state.authChecked = true;
   render();

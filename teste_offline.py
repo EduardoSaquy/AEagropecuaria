@@ -9,7 +9,14 @@ depois - e o caso real: offline, o script do CDN so existe se o service
 worker tiver guardado.
 
 Antes da v5 do sw.js o CDN nunca era guardado e este teste falhava.
+
+Na recarga offline o getSession() da biblioteca fica pendurado de
+proposito: e o que o supabase-js real faz com o token vencido (>1 h) e
+sem rede -- tenta renovar por ~25 s (medido: 25,5 s) e depois devolve
+"sem sessao". O app tem que abrir mesmo assim, rapido, com a sessao e o
+perfil guardados no aparelho.
 """
+import time
 import functools, http.server, json, os, socketserver, sys, threading
 from pathlib import Path
 os.environ.setdefault("PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS", "1")
@@ -89,16 +96,31 @@ with sync_playwright() as pw:
 
         online["v"] = False
         ctx.set_offline(True)
+        # sessao guardada no aparelho (formato do supabase-js) e getSession
+        # pendurado, como o supabase-js real com o token vencido e sem rede
+        ctx.add_init_script("""
+          localStorage.setItem('sb-kmkystqgpvmzrccxvyaz-auth-token',
+            JSON.stringify({access_token:'x', refresh_token:'rt', expires_at:1, user:{id:'u1'}}));
+          Object.defineProperty(window, 'supabase', {configurable:true,
+            get(){ return this.__sb; },
+            set(v){ const orig = v.createClient; v.createClient = (...a)=>{ const c = orig(...a);
+              c.auth.getSession = ()=>new Promise(()=>{}); return c; }; this.__sb = v; }});
+        """)
         erros.clear()
         try:
+            t0 = time.time()
             page.reload(timeout=15000)
-            page.wait_for_timeout(1500)
+            seletor = 'a[href="./AEMatriz.html"]' if nome else '.app-card'
+            page.wait_for_selector(seletor, timeout=5000)
+            demorou = time.time() - t0
             abriu = True
         except Exception as e:
             abriu = False
             erros.append(str(e))
         tem_supabase = abriu and page.evaluate("typeof window.supabase === 'object' && !!window.supabase")
         conf(abriu and tem_supabase, "offline: abre do cache, com a biblioteca do Supabase", " | ".join(erros[:2]))
+        conf(abriu and demorou < 3, "offline com login vencido: abre em menos de 3 s (sem esperar a renovação)",
+             f"{demorou:.1f} s" if abriu else "não abriu")
         if nome:
             texto = page.inner_text("body") if abriu else ""
             conf(nome in texto, f"offline: a tela do app aparece ({nome})", texto[:120].replace("\n", " "))
