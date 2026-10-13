@@ -868,6 +868,7 @@ function Topbar(){
     <div class="brand">${brandMark()}<span class="brand-name">AE Cereais</span></div>
     <div class="topbar-user">
       <span class="topbar-user-nome">${nome}</span>
+      <a class="btn-sair" href="./AEMatriz.html" style="text-decoration:none;" title="Voltar ao Painel do AE Matriz">← Painel</a>
       <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
       <button class="btn-sair" data-logout="1">Sair</button>
       <div class="avatar">${inicial}</div>
@@ -1635,7 +1636,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}));
 }
 </script>
 </body>

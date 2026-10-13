@@ -537,11 +537,13 @@ function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:
 // Cana e Grãos apontam pro mesmo AE Lavoura (app único, duas frentes) mas
 // aparecem como cards/operações separados porque cada um tem talhões,
 // indicadores e resultado financeiro próprios.
+// url relativa e sem target=_blank: no app instalado (PWA) o app abre na
+// mesma janela, e o botão "← Painel" de cada app volta pra cá.
 const APPS_REGISTRO = [
-  {slug:'pecuaria', nome:'AE Pecuária', descricao:'Confinamento, pasto, cria, dietas e financeiro do rebanho.', url:'https://eduardosaquy.github.io/AEagropecuaria/AEpecuaria.html', cor:'#2a78d6', status:'ativo'},
-  {slug:'cana', nome:'AE Cana', descricao:'Talhões, plantio, tratos culturais e colheita da cana-de-açúcar (SP).', url:'https://eduardosaquy.github.io/AEagropecuaria/AECana.html', cor:'#eb6834', status:'ativo'},
-  {slug:'cereais', nome:'AE Cereais', descricao:'Talhões, plantio, tratos culturais e colheita de soja, milho e demais grãos (TO).', url:'https://eduardosaquy.github.io/AEagropecuaria/AECereais.html', cor:'#1baf7a', status:'ativo'},
-  {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'https://eduardosaquy.github.io/AEagropecuaria/AECombustivel.html', cor:'#8a6d3b', status:'ativo'},
+  {slug:'pecuaria', nome:'AE Pecuária', descricao:'Confinamento, pasto, cria, dietas e financeiro do rebanho.', url:'./AEpecuaria.html', cor:'#2a78d6', status:'ativo'},
+  {slug:'cana', nome:'AE Cana', descricao:'Talhões, plantio, tratos culturais e colheita da cana-de-açúcar (SP).', url:'./AECana.html', cor:'#eb6834', status:'ativo'},
+  {slug:'cereais', nome:'AE Cereais', descricao:'Talhões, plantio, tratos culturais e colheita de soja, milho e demais grãos (TO).', url:'./AECereais.html', cor:'#1baf7a', status:'ativo'},
+  {slug:'combustivel', nome:'AE Combustível', descricao:'Controle de tanques, abastecimentos e rateio de combustível por frente.', url:'./AECombustivel.html', cor:'#8a6d3b', status:'ativo'},
 ];
 
 /* O Supabase corta toda consulta em 1.000 linhas por padrão e devolve
@@ -1731,7 +1733,7 @@ function AppCard(a){
     ${a.descricao ? `<div class="app-card-desc">${esc(a.descricao)}</div>` : ''}
     ${stats}
     <div class="app-card-actions">
-      ${a.status==='ativo' && a.url ? `<a class="btn btn-ghost btn-sm" href="${a.url}" target="_blank" rel="noopener">${iconAbrir()} Abrir app</a>` : ''}
+      ${a.status==='ativo' && a.url ? `<a class="btn btn-ghost btn-sm" href="${a.url}">${iconAbrir()} Abrir app</a>` : ''}
     </div>
   </div>`;
 }
@@ -6597,7 +6599,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}));
 }
 </script>
 </body>

@@ -1678,6 +1678,7 @@ function Topbar(){
     <div class="topbar-user">
       ${pendentes>0 ? `<button class="btn-pendencias" data-ver-pendencias="1">⏳ ${pendentes} pendente(s)</button>` : ''}
       <span class="topbar-user-nome">${esc(nome)}</span>
+      <a class="btn-sair" href="./AEMatriz.html" style="text-decoration:none;" title="Voltar ao Painel do AE Matriz">← Painel</a>
       <button class="btn-sair" data-trocar-senha-abrir="1">Trocar senha</button>
       <button class="btn-sair" data-logout="1">Sair</button>
       <div class="avatar">${inicial}</div>
@@ -8520,7 +8521,7 @@ function attachEvents(){
 initAuth();
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}));
 }
 
 // tenta sincronizar a fila offline assim que o navegador avisar que voltou

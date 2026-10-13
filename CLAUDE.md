@@ -15,7 +15,7 @@ aberto direto no navegador ou instalado como PWA.
 | `AECombustivel.html` | controle de diesel/Arla/gasolina das três frentes. Rateio por talhão/área — sem centro de custo, sem entrar em `lancamentos_financeiros` (controle próprio, por ora) |
 | `Adubacao.html` | calculadora de calagem/gessagem/adubação, sem Supabase e sem login (sessão única) |
 | `AELavoura.html` | página de redirecionamento para Cana/Cereais (o app antigo foi dividido) |
-| `sw.js` | service worker único de todos os apps (cache `ae-v4`) |
+| `sw.js` | service worker único de todos os apps (cache `ae-v5`). Página do site: rede primeiro (revalida sempre, cai pro cache após 4 s sem resposta) e atualiza o cache a cada abertura online; CDN do Supabase e fontes: cache primeiro. Sem a biblioteca do Supabase no cache o app não abre offline — foi o bug até a v4 |
 | `gerar_apps_lavoura.py` | gera AECana e AECereais a partir de `AELavoura_app_completo.html.bak` |
 
 Cana e Cereais são propositalmente separados: ficam em estados diferentes do
@@ -307,6 +307,7 @@ verdade em `window.__DB__`).
 | `teste_lote_racao.py` | 15 | AEpecuaria.html |
 | `teste_cereais_cultura.py` | 27 | AECereais.html |
 | `teste_contas.py` | 83 | AEMatriz.html |
+| `teste_offline.py` | 19 | sw.js (offline dos 5 apps), botão ← Painel, cards do Painel na mesma janela |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
