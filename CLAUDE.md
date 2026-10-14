@@ -262,6 +262,29 @@ repositório por causa disso.
 título de Cana ou Pecuária com competência (`mes`) a partir de 2026-01
 entrar de novo sem checar contra o que já foi lançado à mão primeiro.
 
+### O custo da Pecuária NÃO se divide por categoria de venda
+
+As despesas fixas (mão de obra, energia, manutenção…) são 81% do custo da
+Pecuária em 2026 (R$ 1,57 mi de R$ 1,93 mi) e 100% dos lançamentos estão como
+"Geral" (sem área); só ração e pasto (19%) vêm marcados por lote/área, e mesmo
+essas são do rebanho inteiro. Dividir a despesa total pelas @ de uma categoria
+(bezerro/abate) cobrava o custo de tudo de uma categoria só e mostrou
+**-400% de lucro/@ numa atividade com +24% de margem** (14/10/2026). Em
+Resultados > Operacional a Pecuária é um card só, `resumoPecuariaNoPeriodo()`:
+resultado da atividade toda; a categoria entra só com cabeças, @ e receita.
+Se um dia as despesas fixas passarem a ser marcadas por área (Cria vs
+Confinamento), aí sim dá pra repartir o custo — hoje não.
+
+- A unidade comum a toda venda é a **cabeça** (toda venda registra quantos
+  animais saíram). Venda por cabeça não tem peso: entra em cabeças, nunca "fica
+  de fora". A @ só existe nas vendas com peso.
+- Custo e receita por cabeça só aparecem quando ≥ 98% da receita do período tem
+  venda registrada (`abate_id`). Receita antiga de "Venda de gado…" sem nº de
+  animais e o excedente de milho não têm cabeças; sem essa regra o R$/cab sai
+  inflado.
+- A venda de milho **é receita da Pecuária de propósito**: ela compra o milho
+  da lavoura e revende a sobra. Não reclassificar.
+
 ## Armadilhas que já custaram caro
 
 - **Offline com login vencido.** O token do Supabase vale 1 h; vencido e

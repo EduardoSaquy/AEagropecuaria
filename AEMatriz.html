@@ -2147,6 +2147,92 @@ function arrobasVendidasNoPeriodo(periodo){
   const semPeso = doPeriodo.filter(a=>arrobasDoAbate(a)==null);
   return {total, vendasSemPeso: semPeso.length, animaisSemPeso: semPeso.reduce((a,v)=>a+Number(v.quantidade||0),0)};
 }
+// ===== Pecuária como um todo (Resultados > Operacional) =====
+// A Pecuária vende de dois jeitos que não se misturam em uma unidade só:
+// bezerro da produção própria (por cabeça ou por kg) e animal segurado pro
+// frigorífico (abate, em @ de carcaça). O custo — ração, pasto, mão de obra,
+// fixos — é da atividade INTEIRA e não está marcado por área (hoje todo
+// lançamento é "Geral"), então não existe jeito honesto de dividi-lo entre as
+// categorias. Dividir o custo total só pelas @ de uma categoria foi o bug que
+// mostrava prejuízo de -400% num ano de +24% de margem (relatado pelo Eduardo
+// em 14/10/2026). Por isso aqui o resultado é um só, da atividade toda; a
+// categoria entra apenas com o que ela realmente tem: cabeças, @ e receita.
+//
+// A unidade comum a TODAS as vendas é a cabeça: toda venda registra quantos
+// animais saíram, tenha peso ou não. A @ só existe nas vendas com peso, e por
+// isso fica como informação ao lado (venda por cabeça entra em cabeças, não
+// some por falta de peso).
+//
+// Cobertura: só a venda registrada no app (tabela abates) sabe quantos
+// animais foram. Lançamento de receita antigo ("Venda de gado — 50 bois") e
+// receita de excedente de milho (a Pecuária compra o milho da lavoura e
+// revende a sobra — é receita DELA, de propósito) não têm animais. Quando
+// isso é parte relevante da receita do período, custo/receita POR CABEÇA
+// ficariam inflados e não são mostrados; o total da atividade continua certo.
+const COBERTURA_MINIMA_PEC = 0.98;
+function resumoPecuariaNoPeriodo(periodo){
+  const r = resultadoOperacaoNoPeriodo('pecuaria', periodo);
+  const resPec = state.resultados.pecuaria;
+  if(!r || r.erro || r.loading || !resPec || resPec.erro) return null;
+  const meses = new Set(periodoMeses(periodo));
+  // mesma seleção de receita que resultadoOperacaoNoPeriodo usa, senão a
+  // cobertura (receita com venda registrada ÷ receita total) compara coisas
+  // de conjuntos diferentes -- na Safra, o campo Safra pode remarcar receita
+  const receitasPeriodo = periodo.tipo==='safra'
+    ? receitasNaSafra(resPec.receitasFinanceiro||[], periodo.safra)
+    : (resPec.receitasFinanceiro||[]).filter(l=>l.mes && meses.has(l.mes));
+  const vendas = state.vendasPec.filter(a=>a.data && meses.has(a.data.slice(0,7)));
+
+  // receita de cada venda registrada (o lançamento aponta pro abate_id)
+  const receitaDoAbate = new Map();
+  let receitaRegistrada = 0;
+  for(const l of receitasPeriodo){
+    if(l.abateId==null) continue;
+    const v = Number(l.valor||0);
+    receitaDoAbate.set(l.abateId, (receitaDoAbate.get(l.abateId)||0) + v);
+    receitaRegistrada += v;
+  }
+
+  const grupos = new Map(); // categoria -> acumulado
+  let cabecas = 0, arrobas = 0, cabecasComPeso = 0, vendasSemPeso = 0;
+  for(const v of vendas){
+    const cat = v.categoria || 'sem_categoria';
+    if(!grupos.has(cat)){
+      grupos.set(cat, {chave:cat, nome: CATEGORIA_VENDA_LABEL[cat] || 'Sem categoria (venda antiga)',
+        cabecas:0, arrobas:0, cabecasComPeso:0, receita:0, receitaComPeso:0});
+    }
+    const g = grupos.get(cat);
+    const qtd = Number(v.quantidade||0);
+    const arr = arrobasDoAbate(v);
+    const rec = receitaDoAbate.get(v.id)||0;
+    g.cabecas += qtd; g.receita += rec; cabecas += qtd;
+    if(arr!=null){
+      g.arrobas += arr; g.cabecasComPeso += qtd; g.receitaComPeso += rec;
+      arrobas += arr; cabecasComPeso += qtd;
+    } else {
+      vendasSemPeso++;
+    }
+  }
+  const categorias = [...grupos.values()]
+    .map(g=>({...g,
+      receitaPorCabeca: g.cabecas>0 ? g.receita/g.cabecas : null,
+      // R$/@ só das vendas COM peso: receita e @ do mesmo conjunto de vendas
+      receitaPorArroba: g.arrobas>0 ? g.receitaComPeso/g.arrobas : null}))
+    .sort((a,b)=>b.receita-a.receita);
+
+  const cobertura = r.receita>0 ? Math.min(1, receitaRegistrada/r.receita) : (cabecas>0 ? 1 : 0);
+  const porCabecaOk = cabecas>0 && cobertura>=COBERTURA_MINIMA_PEC;
+  return {
+    despesa: r.despesa, receita: r.receita, resultado: r.resultado,
+    margem: r.receita>0 ? r.resultado/r.receita*100 : null,
+    cabecas, arrobas, cabecasComPeso, cabecasSemPeso: cabecas - cabecasComPeso, vendasSemPeso,
+    receitaRegistrada, receitaSemRegistro: Math.max(0, r.receita - receitaRegistrada), cobertura,
+    porCabecaOk,
+    custoPorCabeca: porCabecaOk ? r.despesa/cabecas : null,
+    receitaPorCabeca: porCabecaOk ? r.receita/cabecas : null,
+    categorias,
+  };
+}
 // Área REALMENTE colhida no período — soma a área (cadastro do talhão)
 // de cada talhão DISTINTO que teve colheita nos meses do período. Não é
 // o mesmo que hectaresPorOperacao() (área total cadastrada em Fazendas
@@ -2213,10 +2299,10 @@ function categoriaDoAbate(abateId){
   return a ? (a.categoria || null) : null;
 }
 // ===== Resultado por unidade produzida (Resultados > Operacional) =====
-// Uma linha por cultura (Cereais) / categoria de venda (Pecuária) / a
-// própria operação (Cana, cultura única) -- pedido do Eduardo pra ver
-// custo, receita e sobra por tonelada/saca/@, separado por cultura em vez
-// de um número só pra "Cereais" inteiro.
+// Uma linha por cultura (Cereais) / a própria operação (Cana, cultura
+// única) -- pedido do Eduardo pra ver custo, receita e sobra por
+// tonelada/saca, separado por cultura em vez de um número só pra "Cereais"
+// inteiro. A Pecuária fica de fora: ver resumoPecuariaNoPeriodo().
 function linhasResultadoPorUnidade(periodo){
   const meses = new Set(periodoMeses(periodo));
   const linhas = [];
@@ -2259,25 +2345,12 @@ function linhasResultadoPorUnidade(periodo){
     }
   }
 
-  // Pecuária -- uma linha por categoria de venda (bezerro/abate/venda_viva).
-  // Despesa não separa por categoria (ração/pasto são da atividade toda,
-  // não de uma venda específica) -- usa a MESMA despesa total da Pecuária
-  // pra cada categoria, só a receita e a arroba produzida é que mudam.
-  const rPec = resultadoOperacaoNoPeriodo('pecuaria', periodo); // mesmo motivo do rCana acima
-  const resPec = state.resultados.pecuaria;
-  if(rPec && !rPec.erro && resPec && !resPec.erro){
-    const vendasPeriodo = state.vendasPec.filter(a=>a.data && meses.has(a.data.slice(0,7)) && a.categoria);
-    const recPeriodo = (resPec.receitasFinanceiro||[]).filter(l=>l.mes && meses.has(l.mes));
-    const categorias = new Set(vendasPeriodo.map(a=>a.categoria));
-    for(const cat of categorias){
-      const doGrupo = vendasPeriodo.filter(a=>a.categoria===cat);
-      const arrobas = doGrupo.reduce((acc,a)=>{ const arr=arrobasDoAbate(a); return arr!=null?acc+arr:acc; },0);
-      if(arrobas<=0) continue;
-      const rec = recPeriodo.filter(l=>l.abateId!=null && categoriaDoAbate(l.abateId)===cat).reduce((a,l)=>a+Number(l.valor||0),0);
-      linhas.push({nome:CATEGORIA_VENDA_LABEL[cat]||cat, cor:OPERACAO_COR.pecuaria, unidade:'@',
-        produzido:arrobas, custo:rPec.despesa/arrobas, receita:rec/arrobas});
-    }
-  }
+  // Pecuária NÃO entra aqui. Antes havia uma linha por categoria de venda
+  // (bezerro/abate/venda viva) dividindo a despesa TOTAL da atividade pelas @
+  // de cada categoria -- o que cobrava o custo do rebanho inteiro de uma
+  // categoria só (R$ 7.516/@ no "Venda de bezerro" com a atividade em +24% de
+  // margem) e ainda deixava de fora as vendas por cabeça. A Pecuária agora é
+  // um resultado só, da atividade toda: resumoPecuariaNoPeriodo().
 
   return linhas;
 }
@@ -2600,7 +2673,19 @@ function CardResultadoOperacional(slug){
   const ha = hectaresPorOperacao(slug);
   const prod = produtividadeOperacaoNoPeriodo(slug, state.periodo);
   const semDados = !r || r.erro;
-  const custoUnidade = !semDados ? custoPorUnidadeProduzida(r.despesa, prod) : null;
+  // Pecuária: o custo por unidade é POR CABEÇA vendida (toda venda registra
+  // quantos animais saíram; venda por cabeça não tem peso e ficava de fora da
+  // conta por @). E só quando quase toda a receita do período tem venda com
+  // animais registrada -- senão dividiria o custo de TUDO só pelos animais de
+  // uma parte da receita (era o "R$ 1.545 por @" de um ano de +24% de margem).
+  const pec = (slug==='pecuaria' && !semDados) ? resumoPecuariaNoPeriodo(state.periodo) : null;
+  const custoUnidade = semDados ? null
+    : (slug==='pecuaria' ? (pec ? pec.custoPorCabeca : null) : custoPorUnidadeProduzida(r.despesa, prod));
+  const rotuloCusto = slug==='pecuaria' ? 'cabeça vendida' : (prod ? prod.unidade : 'unidade');
+  const dicaCusto = slug!=='pecuaria' ? 'Despesa ÷ produzido no período'
+    : (pec && pec.porCabecaOk ? `Despesa ÷ ${fmtInt(pec.cabecas)} cabeças vendidas`
+      : (pec && pec.cabecas>0 ? `Só ${fmtInt(Math.round(pec.cobertura*100))}% da receita tem venda com animais registrados — sem custo por cabeça`
+        : 'Nenhuma venda de animais registrada no período'));
   return `
   <div class="card card-pad">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
@@ -2616,12 +2701,12 @@ function CardResultadoOperacional(slug){
         <div class="stat-label">Produtividade</div>
         <div class="stat-value" style="font-size:19px;">${prod && prod.porHa!=null ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
         <div class="hint" style="margin-top:4px;">${prod ? fmtInt(prod.total)+' '+prod.unidade+' no período' : 'Sem hectare cadastrado'}${prod && prod.areaColhida!=null ? ' · '+fmt(prod.areaColhida)+' ha colhidos' : ''}</div>
-        ${prod && prod.vendasSemPeso ? `<div class="hint" style="margin-top:2px; color:var(--ambar);">${prod.vendasSemPeso} venda(s) por cabeça (${fmtInt(prod.animaisSemPeso)} animais) não entraram — sem peso registrado</div>` : ''}
+        ${prod && prod.vendasSemPeso ? `<div class="hint" style="margin-top:2px;">+ ${prod.vendasSemPeso} venda(s) por cabeça (${fmtInt(prod.animaisSemPeso)} animais), sem peso: entram nas cabeças vendidas${pec ? ' ('+fmtInt(pec.cabecas)+' no total)' : ''}, não em @/ha</div>` : ''}
       </div>
       <div class="stat-card">
-        <div class="stat-label">Custo por ${prod ? prod.unidade : 'unidade'}</div>
+        <div class="stat-label">Custo por ${rotuloCusto}</div>
         <div class="stat-value" style="font-size:19px;">${custoUnidade!=null ? 'R$ '+fmt(custoUnidade) : '—'}</div>
-        <div class="hint" style="margin-top:4px;">Despesa ÷ produzido no período</div>
+        <div class="hint" style="margin-top:4px;">${dicaCusto}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Margem</div>
@@ -2799,16 +2884,103 @@ function CardCulturaResultadoUnidade(l, linhasPorSafra){
     </div>
   </div>`;
 }
+// Pecuária como atividade toda (pedido do Eduardo em 14/10/2026): o custo é
+// de todo o rebanho e não está marcado por área, então não é dividido entre
+// bezerro e frigorífico. O card mostra o resultado real da atividade (mesma
+// margem do card de cima) e, por categoria, só o que ela tem de verdade:
+// cabeças, @ e receita. Venda por cabeça entra em cabeças, não some por não
+// ter peso. Custo/receita POR CABEÇA só aparecem quando quase toda a receita
+// do período tem venda com animais registrada (senão ficariam inflados).
+function CardPecuariaAtividadeToda(pec, pecPorSafra){
+  const cor = OPERACAO_COR.pecuaria;
+  const cobertura = pec.cobertura;
+  const pesoHint = [
+    pec.arrobas>0 ? `${fmt(pec.arrobas,1)} @ em ${fmtInt(pec.cabecasComPeso)} cab com peso` : '',
+    pec.cabecasSemPeso>0 ? `${fmtInt(pec.cabecasSemPeso)} cab vendidas por cabeça (sem peso)` : '',
+  ].filter(Boolean).join(' · ');
+  const porCab = (v)=> pec.porCabecaOk && v!=null ? `<div class="hint" style="margin-top:4px;">R$ ${fmt(v)} por cabeça</div>` : '';
+  return `
+  <div class="card card-pad">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+      <span style="width:12px; height:12px; border-radius:4px; background:${cor}; display:inline-block; flex-shrink:0;"></span>
+      <div style="font-family:'Fraunces',serif; font-weight:700; font-size:16px; color:var(--grafite);">Pecuária — atividade toda</div>
+    </div>
+    <div class="stat-row" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card">
+        <div class="stat-label">Vendidos</div>
+        <div class="stat-value" style="font-size:19px;">${fmtInt(pec.cabecas)} cab</div>
+        ${pesoHint ? `<div class="hint" style="margin-top:4px;">${pesoHint}</div>` : ''}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Custo total</div>
+        <div class="stat-value" style="font-size:19px;">R$ ${fmt(pec.despesa)}</div>
+        ${porCab(pec.custoPorCabeca)}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Receita total</div>
+        <div class="stat-value" style="font-size:19px;">R$ ${fmt(pec.receita)}</div>
+        ${porCab(pec.receitaPorCabeca)}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Resultado</div>
+        <div class="stat-value ${pec.resultado>=0?'bom':'alerta'}" style="font-size:19px;">${textoLucroComPct(pec.resultado, pec.receita)}</div>
+      </div>
+    </div>
+    ${cobertura < COBERTURA_MINIMA_PEC ? `
+    <p class="hint" style="margin:12px 0 0; color:var(--ambar);">Só ${fmtInt(Math.round(cobertura*100))}% da receita do período (R$ ${fmt(pec.receitaRegistrada)} de R$ ${fmt(pec.receita)}) vem de vendas com animais registrados. Os outros R$ ${fmt(pec.receitaSemRegistro)} são lançamentos sem nº de animais (venda de gado de antes do cadastro de vendas, excedente de milho etc.). Por isso não há custo nem receita por cabeça neste período — o resultado acima é o da atividade toda.</p>`
+    : `<p class="hint" style="margin:12px 0 0;">Custo e receita por cabeça = total ÷ ${fmtInt(pec.cabecas)} cabeças vendidas.</p>`}
+    <p class="hint" style="margin:14px 0 6px;">Vendas registradas por categoria <span style="opacity:.8;">(o custo não é dividido: é da atividade toda)</span></p>
+    <div style="overflow-x:auto;">
+    <table class="tabela-compacta" style="margin:0;">
+      <thead><tr><th>Categoria</th><th>Cab.</th><th>@</th><th>Receita</th><th>R$/cab</th><th title="Só das vendas com peso registrado">R$/@</th></tr></thead>
+      <tbody>
+        ${pec.categorias.map(g=>`
+        <tr>
+          <td>${esc(g.nome)}</td>
+          <td class="mono">${fmtInt(g.cabecas)}</td>
+          <td class="mono">${g.arrobas>0 ? fmt(g.arrobas,1)+(g.cabecasComPeso<g.cabecas ? ` <span class="hint">(${fmtInt(g.cabecasComPeso)} cab)</span>` : '') : '—'}</td>
+          <td class="mono">R$ ${fmt(g.receita)}</td>
+          <td class="mono">${g.receitaPorCabeca!=null ? 'R$ '+fmt(g.receitaPorCabeca) : '—'}</td>
+          <td class="mono">${g.receitaPorArroba!=null ? 'R$ '+fmt(g.receitaPorArroba) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+    <p class="hint" style="margin:14px 0 8px;">Comparativo por safra (atividade toda)</p>
+    <div style="overflow-x:auto;">
+    <table class="tabela-compacta" style="margin:0;">
+      <thead><tr><th>Safra</th><th>Cab.</th><th>Custo</th><th>Receita</th><th>Resultado</th><th title="Receita com venda de animais registrada ÷ receita total">Cobertura</th></tr></thead>
+      <tbody>
+        ${pecPorSafra.map(({safra, res})=>{
+          const vazio = !res || (res.receita<=0 && res.despesa<=0);
+          return `
+        <tr>
+          <td class="mono">${safra}/${String(safra+1).slice(2)}</td>
+          <td class="mono">${vazio ? '—' : fmtInt(res.cabecas)}</td>
+          <td class="mono">${vazio ? '—' : 'R$ '+fmt(res.despesa)}</td>
+          <td class="mono">${vazio ? '—' : 'R$ '+fmt(res.receita)}</td>
+          <td class="mono" style="${vazio ? '' : `color:${res.resultado>=0?'var(--bom)':'var(--alerta)'};`}">${vazio ? '—' : (res.resultado>=0?'+':'')+'R$ '+fmt(res.resultado)}</td>
+          <td class="mono">${vazio || res.receita<=0 ? '—' : fmtInt(Math.round(res.cobertura*100))+'%'}</td>
+        </tr>`;}).join('')}
+      </tbody>
+    </table>
+    </div>
+  </div>`;
+}
 function TabelaResultadoPorUnidade(){
   const linhas = linhasResultadoPorUnidade(state.periodo);
   // Calcula o resultado por unidade das últimas 3 safras UMA VEZ (não por
   // card) -- os cards todos comparam a mesma janela de safras.
   const linhasPorSafra = safrasRecentes(3).map(safra=>({safra, linhas: linhasResultadoPorUnidade({tipo:'safra', safra})}));
+  const pec = resumoPecuariaNoPeriodo(state.periodo);
+  const pecTemVenda = !!pec && pec.cabecas>0;
+  const pecPorSafra = pecTemVenda ? safrasRecentes(3).map(safra=>({safra, res: resumoPecuariaNoPeriodo({tipo:'safra', safra})})) : [];
   return `
   <p class="eyebrow" style="margin-top:18px; margin-bottom:10px;">Resultado por unidade produzida</p>
-  ${linhas.length===0 ? `<div class="card card-pad">${Empty('Sem produção no período', 'Nenhuma colheita ou venda com quantidade produzida nesse período.')}</div>` : `
+  ${linhas.length===0 && !pecTemVenda ? `<div class="card card-pad">${Empty('Sem produção no período', 'Nenhuma colheita ou venda com quantidade produzida nesse período.')}</div>` : `
   <div class="donuts-row-larga">
     ${linhas.map(l=>CardCulturaResultadoUnidade(l, linhasPorSafra)).join('')}
+    ${pecTemVenda ? CardPecuariaAtividadeToda(pec, pecPorSafra) : ''}
   </div>`}
   `;
 }
@@ -2818,7 +2990,7 @@ function PageResultadosOperacional(){
   <div class="donuts-row">
     ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
   </div>
-  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado e fica de fora, avisado no card.</p>
+  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado: entra nas cabeças vendidas, não em @/ha, avisado no card. Em "Resultado por unidade produzida" a Pecuária aparece como atividade toda: o custo (ração, pasto, mão de obra, fixos) não é dividido entre bezerro e frigorífico porque as despesas não são marcadas por área; custo e receita por cabeça só aparecem quando quase toda a receita do período tem venda com animais registrados.</p>
   ${TabelaResultadoPorUnidade()}
   `;
 }

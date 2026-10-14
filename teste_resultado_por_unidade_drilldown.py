@@ -3,9 +3,13 @@ Duas features novas em Resultados (AEMatriz.html), pedidas pelo Eduardo em
 03/09/2026:
 
   1. Tabela "Resultado por unidade produzida" em Resultados > Operacional --
-     uma linha por cultura (Cereais: soja/milho separados) e por categoria
-     de venda (Pecuaria: bezerro/abate/venda_viva), nao um numero so pra
-     "Cereais"/"Pecuaria" inteira.
+     uma linha por cultura (Cereais: soja/milho separados), nao um numero so
+     pra "Cereais" inteiro. A Pecuaria aparece como ATIVIDADE TODA (card
+     proprio, resumoPecuariaNoPeriodo): o custo e do rebanho inteiro e nao
+     e dividido entre bezerro e frigorifico -- dividir a despesa total pelas
+     @ de uma categoria so mostrava -400% de lucro/@ num ano de +24% de
+     margem (bug relatado pelo Eduardo em 14/10/2026). Venda por cabeca (sem
+     peso) entra em cabecas.
   2. Clique numa fatia do donut de Receita (Resultados > Geral) mostra o
      detalhamento: Cana por fazenda, Cereais por cultura, Pecuaria por
      categoria de venda (bezerro/abate/venda viva -- novo campo na venda).
@@ -82,6 +86,28 @@ DB = {
         {"id": 13, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
          "descricao": "Venda de abate 25", "valor": 6600.00, "data": "2025-09-10", "mes": "2025-09", "areas": [],
          "abate_id": 502},
+        # ---- Pecuaria, agosto/2026: bezerros vendidos POR CABECA (sem peso).
+        # Toda a receita do mes tem venda registrada -> custo/receita por
+        # cabeca aparecem. A atividade lucra (270000 - 100000).
+        {"id": 14, "tipo": "despesa", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Racao ago", "valor": 100000.00, "data": "2026-08-02", "mes": "2026-08", "areas": []},
+        {"id": 15, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Venda de bezerros por cabeca", "valor": 270000.00, "data": "2026-08-12", "mes": "2026-08",
+         "areas": [], "abate_id": 503},
+        # ---- Pecuaria, julho/2026: so 10 de 68.000 de receita tem animais
+        # registrados (venda de gado antiga sem registro + excedente de milho
+        # revendido) -> cobertura baixa, nada de custo por cabeca.
+        {"id": 16, "tipo": "despesa", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 90,
+         "descricao": "Racao jul", "valor": 20000.00, "data": "2026-07-02", "mes": "2026-07", "areas": []},
+        {"id": 17, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Venda de bezerros por kg", "valor": 10000.00, "data": "2026-07-10", "mes": "2026-07",
+         "areas": [], "abate_id": 504},
+        {"id": 18, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Venda de gado - 50 bois (frigorifico)", "valor": 50000.00, "data": "2026-07-20",
+         "mes": "2026-07", "areas": []},
+        {"id": 19, "tipo": "receita", "atividade": "pecuaria", "fazenda_id": 1, "centro_custo_id": 92,
+         "descricao": "Venda de milho - excedente da pecuaria", "valor": 8000.00, "data": "2026-07-25",
+         "mes": "2026-07", "areas": []},
     ],
     "colheitas_cana": [
         {"id": 1, "talhao_id": 1, "safra_id": None, "data": f"{MES}-18", "corte": 1, "toneladas": 3600.00, "observacao": ""},
@@ -96,6 +122,12 @@ DB = {
          "peso_medio_kg": 270, "categoria": "abate", "sexo": "macho", "observacao": ""},
         {"id": 502, "data": "2025-09-10", "lote_id": None, "quantidade": 10, "tipo_venda": "arroba",
          "peso_medio_kg": 270, "categoria": "abate", "sexo": "macho", "observacao": ""},
+        # venda por cabeca: valor fechado por animal, SEM peso registrado
+        {"id": 503, "data": "2026-08-12", "lote_id": None, "quantidade": 90, "tipo_venda": "cabeca",
+         "peso_medio_kg": None, "categoria": "bezerro", "sexo": "macho", "observacao": ""},
+        # venda por kg de peso vivo: 10 animais x 200 kg / 30 = 66,67 @
+        {"id": 504, "data": "2026-07-10", "lote_id": None, "quantidade": 10, "tipo_venda": "kg",
+         "peso_medio_kg": 200, "categoria": "bezerro", "sexo": "macho", "observacao": ""},
     ],
     "lotes": [], "funcionarios": [], "funcionario_atividades": [],
     "entidades": [], "contas_bancarias": [], "titulos": [], "titulo_rateios": [], "titulo_baixas": [],
@@ -132,8 +164,11 @@ with sync_playwright() as pw:
     # ---- 1. tabela por unidade ----
     linhas = page.evaluate("() => linhasResultadoPorUnidade(state.periodo)")
     nomes = sorted(l["nome"] for l in linhas)
-    conf(nomes == sorted(["Cana", "Soja", "Milho", "Abate"]),
-         "uma linha por Cana + Soja + Milho + Abate (categoria), nao 'Cereais'/'Pecuaria' genericos",
+    conf(nomes == sorted(["Cana", "Soja", "Milho"]),
+         "uma linha por Cana + Soja + Milho; Pecuaria NAO gera linha por categoria (nao 'Cereais' generico)",
+         str(nomes))
+    conf("Abate" not in nomes and "Venda de bezerro" not in nomes,
+         "o custo da Pecuaria inteira nao e cobrado de cada categoria de venda (bug dos -400%)",
          str(nomes))
 
     cana = next((l for l in linhas if l["nome"]=="Cana"), None)
@@ -156,12 +191,23 @@ with sync_playwright() as pw:
         conf(milho["produzido"] == 900, "Milho produzido = 900sc", str(milho))
         conf(abs(milho["custo"] - 3000/900) < 0.01, "Milho custo/sc so conta a despesa dele (3000, nao 4000 da soja)", str(milho))
 
-    abate = next((l for l in linhas if l["nome"]=="Abate"), None)
-    conf(abate is not None, "achou a linha 'Abate' (categoria da venda, nao 'Pecuaria' generico)")
-    if abate:
+    # ---- 1b. Pecuaria como atividade toda (setembro/2026: um abate, 20 animais) ----
+    pec = page.evaluate("() => resumoPecuariaNoPeriodo(state.periodo)")
+    conf(pec is not None, "resumoPecuariaNoPeriodo devolve o resumo da atividade")
+    if pec:
         arrobas_esperadas = (270/15)*20  # peso carcaca / 15 * qtd
-        conf(abs(abate["produzido"] - arrobas_esperadas) < 0.01, f"Abate produzido = {arrobas_esperadas}@ (peso carcaca/15 x 20 animais)", str(abate))
-        conf(abs(abate["receita"] - 12000/arrobas_esperadas) < 0.01, "Abate receita/@ vem do lancamento ligado ao abate_id", str(abate))
+        conf(pec["cabecas"] == 20 and abs(pec["arrobas"] - arrobas_esperadas) < 0.01,
+             f"Pecuaria vendeu 20 cab = {arrobas_esperadas}@ (peso carcaca/15 x 20 animais)", str(pec))
+        conf(pec["despesa"] == 5000 and pec["receita"] == 12000 and pec["resultado"] == 7000,
+             "Pecuaria: custo 5000, receita 12000, resultado 7000 -- a atividade toda, sem dividir", str(pec))
+        conf(abs(pec["margem"] - 7000/12000*100) < 0.01,
+             "Pecuaria: margem = resultado / receita (a mesma do card de cima)", str(pec["margem"]))
+        conf(pec["porCabecaOk"] and abs(pec["custoPorCabeca"] - 250) < 0.01 and abs(pec["receitaPorCabeca"] - 600) < 0.01,
+             "Pecuaria: toda a receita tem venda registrada -> custo/cab 250 e receita/cab 600", str(pec))
+        cat = pec["categorias"][0] if pec["categorias"] else {}
+        conf(len(pec["categorias"]) == 1 and cat.get("nome") == "Abate" and cat.get("cabecas") == 20
+             and abs(cat.get("receitaPorArroba", 0) - 12000/arrobas_esperadas) < 0.01 and "custo" not in cat,
+             "categoria Abate traz cabecas, @ e receita (R$/@ do lancamento ligado ao abate_id) e NENHUM custo", str(cat))
 
     # ---- 2. drill-down da receita ----
     porFazenda = page.evaluate("() => receitaDetalheAgrupado('cana', state.periodo)")
@@ -234,13 +280,13 @@ with sync_playwright() as pw:
     # muda de ano.
     linhasSafra2025_a = page.evaluate("() => linhasResultadoPorUnidade({tipo:'safra', safra:2025})")
     cana2025_a = next((l for l in linhasSafra2025_a if l["nome"]=="Cana"), None)
-    abate2025_a = next((l for l in linhasSafra2025_a if l["nome"]=="Abate"), None)
+    pec2025_a = page.evaluate("() => resumoPecuariaNoPeriodo({tipo:'safra', safra:2025})")
     conf(cana2025_a is not None and abs(cana2025_a["custo"] - 3000/2000) < 0.01 and abs(cana2025_a["receita"] - 5000/2000) < 0.01,
          "safra 2025 da Cana usa a despesa/receita PROPRIA dela (3000/5000), nao a do periodo corrente (6000/12000)",
          str(cana2025_a))
-    conf(abate2025_a is not None and abs(abate2025_a["custo"] - 2000/180) < 0.01 and abs(abate2025_a["receita"] - 6600/180) < 0.01,
-         "safra 2025 do Abate usa a despesa/receita PROPRIA dela (2000/6600), nao a do periodo corrente",
-         str(abate2025_a))
+    conf(pec2025_a is not None and pec2025_a["despesa"] == 2000 and pec2025_a["receita"] == 6600 and pec2025_a["cabecas"] == 10,
+         "safra 2025 da Pecuaria usa a despesa/receita/cabecas PROPRIAS dela (2000/6600/10), nao as do periodo corrente",
+         str(pec2025_a))
 
     # muda o filtro global (o "ano" que o Eduardo troca na tela) e pede a
     # MESMA safra 2025 de novo -- tem que dar exatamente o mesmo resultado.
@@ -250,6 +296,68 @@ with sync_playwright() as pw:
     conf(cana2025_b is not None and abs(cana2025_b["custo"] - cana2025_a["custo"]) < 0.01 and abs(cana2025_b["receita"] - cana2025_a["receita"]) < 0.01,
          "safra 2025 da Cana NAO muda quando o filtro global (ano/mes/safra da tela) muda",
          f"antes={cana2025_a}  depois de mudar o filtro global={cana2025_b}")
+    page.evaluate("() => { state.periodo = {tipo:'mes', mes:'2026-09'}; }")  # devolve o filtro global
+
+    # ---- 2e. Pecuaria: venda POR CABECA (sem peso) entra por unidade ----
+    # Relato do Eduardo em 14/10/2026: 90 bezerros vendidos por cabeca nao
+    # entravam (sem peso) e a receita deles inflava o R$/@ das outras; o custo
+    # da atividade toda era dividido so pelas @ de uma categoria e dava
+    # prejuizo de -400% numa atividade com lucro.
+    ago = page.evaluate("() => resumoPecuariaNoPeriodo({tipo:'mes', mes:'2026-08'})")
+    conf(ago["cabecas"] == 90 and ago["cabecasSemPeso"] == 90 and ago["vendasSemPeso"] == 1 and ago["arrobas"] == 0,
+         "venda por cabeca (90 animais, sem peso) ENTRA nas cabecas vendidas; nao entra em @", str(ago))
+    conf(ago["resultado"] == 170000 and ago["receita"] == 270000 and ago["despesa"] == 100000,
+         "agosto: a atividade lucra (270000 - 100000) -- o resumo nunca mostra prejuizo onde ha lucro", str(ago))
+    conf(ago["porCabecaOk"] and abs(ago["receitaPorCabeca"] - 3000) < 0.01 and abs(ago["custoPorCabeca"] - 100000/90) < 0.01,
+         "agosto: receita/cab = 3000 e custo/cab = 100000/90 (todas as 90 cab contam)", str(ago))
+    bez = ago["categorias"][0]
+    conf(bez["nome"] == "Venda de bezerro" and bez["cabecas"] == 90 and bez["receitaPorArroba"] is None,
+         "categoria 'Venda de bezerro' mostra 90 cab e sem R$/@ (nao ha peso pra inventar)", str(bez))
+
+    jul = page.evaluate("() => resumoPecuariaNoPeriodo({tipo:'mes', mes:'2026-07'})")
+    conf(jul["receita"] == 68000 and jul["receitaRegistrada"] == 10000 and jul["receitaSemRegistro"] == 58000,
+         "julho: so 10000 de 68000 da receita tem venda registrada (o resto: gado antigo sem registro + milho)", str(jul))
+    conf(not jul["porCabecaOk"] and jul["custoPorCabeca"] is None and jul["receitaPorCabeca"] is None,
+         "julho: cobertura baixa -> sem custo/receita por cabeca (ficariam inflados); total da atividade segue certo", str(jul))
+    conf(jul["resultado"] == 68000 - 20000,
+         "julho: o resultado da atividade inclui o milho excedente (receita da Pecuaria, nao some)", str(jul))
+    bezJul = jul["categorias"][0]
+    conf(abs(bezJul["arrobas"] - 200/30*10) < 0.01 and abs(bezJul["receitaPorArroba"] - 10000/(200/30*10)) < 0.01,
+         "venda por kg: 10 animais x 200 kg / 30 = 66,67 @, R$/@ so do que tem peso (150)", str(bezJul))
+
+    # a mesma conta na tela: o card unico da atividade e os numeros por cabeca
+    page.evaluate("""() => {
+      state.periodo = {tipo:'mes', mes:'2026-08'};
+      state.page = 'resultados'; state.subAbaResultados = 'operacional';
+      render();
+    }""")
+    page.wait_for_timeout(300)
+    # innerText respeita o text-transform do CSS (rotulos saem em MAIUSCULAS),
+    # entao compara em minusculas -- senao os "nao aparece" passariam de graca.
+    texto_ago = page.evaluate("() => document.body.innerText.toLowerCase()")
+    conf("pecuária — atividade toda" in texto_ago and "90 cab" in texto_ago,
+         "tela (agosto): card 'Pecuária — atividade toda' com as 90 cab vendidas")
+    conf("custo por cabeça vendida" in texto_ago and "r$ 1.111,11" in texto_ago,
+         "tela (agosto): card do AE Pecuária mostra custo por cabeça vendida (R$ 1.111,11 = 100000/90)")
+    conf("r$ 3.000,00 por cabeça" in texto_ago and "r$ 1.111,11 por cabeça" in texto_ago,
+         "tela (agosto): card unico mostra receita e custo por cabeça (3000 e 1111,11)")
+    conf("custo por @" not in texto_ago,
+         "tela: acabou o 'Custo por @' da Pecuaria (dividia a despesa de tudo so pelas @ com peso)")
+    conf("lucro/@" not in texto_ago,
+         "tela: acabou o 'Lucro/@' por categoria de venda")
+    conf("venda(s) por cabeça (90 animais), sem peso: entram nas cabeças vendidas" in texto_ago,
+         "tela (agosto): aviso diz que as 90 vendidas por cabeça ENTRAM nas cabeças (nao 'nao entraram')")
+
+    page.evaluate("""() => {
+      state.periodo = {tipo:'mes', mes:'2026-07'};
+      render();
+    }""")
+    page.wait_for_timeout(300)
+    texto_jul = page.evaluate("() => document.body.innerText.toLowerCase()")
+    conf("só 15% da receita" in texto_jul,
+         "tela (julho): avisa que so 15% da receita tem venda com animais registrados")
+    conf("custo por cabeça vendida" in texto_jul and "sem custo por cabeça" in texto_jul,
+         "tela (julho): card do AE Pecuaria nao mostra custo por cabeça (cobertura baixa) e explica por que")
     page.evaluate("() => { state.periodo = {tipo:'mes', mes:'2026-09'}; }")  # devolve o filtro global
 
     # ---- 3. o modal de detalhe da receita mostra o agrupamento ----
