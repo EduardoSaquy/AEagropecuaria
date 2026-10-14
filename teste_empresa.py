@@ -237,6 +237,35 @@ with sync_playwright() as pw:
     conf("a menos de despesa que o financeiro" not in texto,
          "visao rateada igual ao Financeiro: nenhum aviso de diferenca")
 
+    # ---- 7b. sem rolar de lado (pedido do Eduardo, 14/10/2026) ----
+    # A tabela do historico tem 7 colunas e, com os titulos em linha unica,
+    # passava 21 px do card em tela de 1280. Nenhum card da aba pode precisar
+    # de barra de rolagem lateral, nem a pagina inteira; no celular cada linha
+    # do historico vira um bloco com o nome da coluna ao lado do valor.
+    medir = """() => {
+        const pagina = document.documentElement.scrollWidth - innerWidth;
+        const cards = [...document.querySelectorAll('.card')].map(c => c.scrollWidth - c.clientWidth);
+        const th = document.querySelector('.tabela-em-blocos thead th');
+        const blocos = document.querySelectorAll('.tabela-em-blocos tbody tr:not(.linha-secao)').length;
+        const rotulos = [...document.querySelectorAll('.tabela-em-blocos td[data-rotulo]')].slice(0, 6)
+            .map(td => getComputedStyle(td, '::before').content);
+        return {pagina, maiorCard: Math.max(0, ...cards), cabecalhoVisivel: !!th && th.offsetParent !== null, blocos, rotulos};
+    }"""
+    for largura, altura in [(1280, 800), (1000, 800), (800, 900), (390, 844)]:
+        page.set_viewport_size({"width": largura, "height": altura})
+        page.wait_for_timeout(300)
+        m = page.evaluate(medir)
+        conf(m["pagina"] <= 1 and m["maiorCard"] <= 1,
+             f"{largura} px: a pagina e os cards da aba Empresa nao rolam de lado (sobra pagina={m['pagina']}, maior card={m['maiorCard']})", str(m))
+        if largura > 900:
+            conf(m["cabecalhoVisivel"], f"{largura} px: o historico continua tabela, com cabecalho")
+        else:
+            conf(not m["cabecalhoVisivel"] and m["blocos"] == 8
+                 and all(r not in ('none', 'normal', '""') for r in m["rotulos"]),
+                 f"{largura} px: cada um dos 8 periodos do historico vira um bloco com o nome da coluna ao lado do valor", str(m))
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.wait_for_timeout(200)
+
     # simula o buraco: a visao rateada perde o lancamento de custeio de 400.000
     page.evaluate("() => { state.lancamentosRateados = state.lancamentosRateados.filter(l => l.id !== 2); render(); }")
     page.wait_for_timeout(300)

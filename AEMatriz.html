@@ -126,6 +126,22 @@
      meio; estas tabelas rolam de lado normalmente. */
   .tabela-sem-fixar td:last-child, .tabela-sem-fixar th:last-child{position:static; box-shadow:none;}
   .barra-mini{height:5px; border-radius:3px; background:var(--trigo); margin-top:4px; min-width:2px;}
+  /* Tabela larga de dados (Resultados > Empresa, histórico de juros): os
+     títulos quebram em duas linhas em vez de esticar a tabela, e em tela
+     estreita cada linha vira um bloco com o nome da coluna ao lado do valor
+     (data-rotulo), pra não precisar rolar de lado. */
+  .tabela-cabecalho-quebra th{white-space:normal; line-height:1.25; vertical-align:bottom;}
+  @media (max-width:900px){
+    .tabela-em-blocos thead{display:none;}
+    .tabela-em-blocos, .tabela-em-blocos tbody, .tabela-em-blocos tr{display:block; width:100%;}
+    .tabela-em-blocos tr{padding:8px 14px; border-bottom:1px solid var(--cinza-claro);}
+    .tabela-em-blocos td{display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:3px 0; border:0; white-space:normal; text-align:right;}
+    .tabela-em-blocos td:first-child{justify-content:flex-start; font-weight:700; padding-bottom:5px;}
+    .tabela-em-blocos td[data-rotulo]::before{content:attr(data-rotulo); font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:var(--cinza); text-align:left;}
+    .tabela-em-blocos tr.linha-secao{padding:0; border-bottom:0;}
+    .tabela-em-blocos tr.linha-secao td{padding:8px 14px;}
+    .tabela-em-blocos .barra-mini{display:none;}
+  }
   .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
   .donut-wrap{flex-shrink:0;}
   .donut-svg{display:block;}
@@ -3026,12 +3042,12 @@ function PageResultadosEmpresa(){
   const semTabela = state.movimentosFinanciamentoOk===false;
   const linhaHist = x => `<tr>
     <td class="mono">${x.rotulo}${x.parcial ? ' <span class="hint">(até hoje)</span>' : ''}</td>
-    <td class="mono">R$ ${fmt(x.juros)}<div class="barra-mini" style="width:${Math.round(x.juros/maxJuros*100)}%;"></div></td>
-    <td class="mono">${x.outras>0 ? 'R$ '+fmt(x.outras) : '—'}</td>
-    <td class="mono">${x.principal>0 ? 'R$ '+fmt(x.principal) : '—'}</td>
-    <td class="mono" style="${x.resultadoOperacional<0?'color:var(--alerta);':''}">R$ ${fmt(x.resultadoOperacional)}</td>
-    <td class="mono">${x.coberturaJuros!=null ? fmt(x.coberturaJuros,1)+' x' : '—'}</td>
-    <td class="mono">${x.coberturaServico!=null ? fmt(x.coberturaServico,1)+' x' : '—'}</td>
+    <td class="mono" data-rotulo="Juros pagos">R$ ${fmt(x.juros)}<div class="barra-mini" style="width:${Math.round(x.juros/maxJuros*100)}%;"></div></td>
+    <td class="mono" data-rotulo="Outras despesas financeiras">${x.outras>0 ? 'R$ '+fmt(x.outras) : '—'}</td>
+    <td class="mono" data-rotulo="Principal pago">${x.principal>0 ? 'R$ '+fmt(x.principal) : '—'}</td>
+    <td class="mono" data-rotulo="Resultado operacional" style="${x.resultadoOperacional<0?'color:var(--alerta);':''}">R$ ${fmt(x.resultadoOperacional)}</td>
+    <td class="mono" data-rotulo="Cobertura de juros">${x.coberturaJuros!=null ? fmt(x.coberturaJuros,1)+' x' : '—'}</td>
+    <td class="mono" data-rotulo="Cobertura do serviço da dívida">${x.coberturaServico!=null ? fmt(x.coberturaServico,1)+' x' : '—'}</td>
   </tr>`;
   return `
   <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — a empresa como uma atividade só</p>
@@ -3072,16 +3088,16 @@ function PageResultadosEmpresa(){
 
   <p class="eyebrow" style="margin:18px 0 10px;">Juros pagos e cobertura — por ano e por ano-safra</p>
   <div class="card" style="overflow-x:auto;">
-    <table class="tabela-compacta tabela-sem-fixar" style="margin:0;">
+    <table class="tabela-compacta tabela-sem-fixar tabela-cabecalho-quebra tabela-em-blocos" style="margin:0;">
       <thead><tr>
         <th>Período</th><th>Juros pagos</th><th>Outras desp. financeiras</th><th>Principal pago</th>
         <th>Resultado operacional</th><th title="Resultado operacional ÷ juros pagos">Cobertura de juros</th>
         <th title="Resultado operacional ÷ (juros + principal pago)">Cobertura do serviço da dívida</th>
       </tr></thead>
       <tbody>
-        <tr><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano (janeiro a dezembro)</td></tr>
+        <tr class="linha-secao"><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano (janeiro a dezembro)</td></tr>
         ${hist.anos.map(linhaHist).join('')}
-        <tr><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano-safra (maio a abril)</td></tr>
+        <tr class="linha-secao"><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano-safra (maio a abril)</td></tr>
         ${hist.safras.map(linhaHist).join('')}
       </tbody>
     </table>
