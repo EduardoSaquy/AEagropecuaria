@@ -291,10 +291,17 @@ Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
 e dívida (Fase 1 em 14/10/2026; faltam a Fase 2, dívida com cronograma e taxa
 média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
 
-- Base: `lancamentos_rateados` **sem** filtro de atividade/fazenda (a mesma do
-  Fluxo de Caixa de Relatórios) + `movimentos_financiamento` + o módulo
-  Financiamentos. Por isso os totais diferem de Geral/Operacional, que usam o
-  custo de cada app (com ração e pasto consumidos).
+- Base: `lancamentos_financeiros` **direto** (`state.lancamentos`, a empresa
+  inteira, sem ratear) + `movimentos_financiamento` + o módulo Financiamentos.
+  **Não lê `lancamentos_rateados`**: para a empresa toda não há o que repartir,
+  e em 14/10/2026 a visão rateada estava **R$ 645 mil abaixo** do Financeiro em
+  2026 (de 2023 a abril/2026 bate centavo por centavo; de maio/2026 em diante
+  os custos "geral" chegam às atividades só pela metade, de R$ 38 mil a R$ 170
+  mil por mês). Relatórios, Geral e Operacional leem a visão e herdam o buraco;
+  a aba Empresa avisa a diferença do período. Diagnóstico:
+  `rateio_confere_soma_das_partes.sql`. Os totais também diferem de
+  Geral/Operacional porque estas usam o custo de cada app (ração e pasto
+  consumidos).
 - O bloco de cada linha vem do **grupo** do plano de contas
   (`blocoDfcDoGrupo`). Juros e despesas financeiras estão no grupo
   FINANCIAMENTOS, então "Resultado operacional" já sai antes dos juros. "Juros
@@ -371,7 +378,7 @@ verdade em `window.__DB__`).
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
-| `teste_empresa.py` | 39 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida) |
+| `teste_empresa.py` | 43 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só

@@ -2849,13 +2849,19 @@ function PageResultadosRelatorios(){
  * dívida. Fase 1 -- só o que já existe no banco.
  *
  * DE ONDE VÊM OS NÚMEROS
- *   lancamentos_rateados      a empresa toda, SEM filtro de atividade/fazenda
- *                             (mesma base do Fluxo de Caixa de Relatórios)
+ *   lancamentos_financeiros   o Financeiro inteiro, direto da tabela (state.lancamentos)
  *   movimentos_financiamento  entrada de empréstimo e amortização do principal
  *   financiamentos/parcelas   contratos lançados no módulo Financiamentos
  *
- * Por isso os totais podem diferir de Geral/Operacional: aquelas telas usam o
- * custo de cada app (inclui ração e pasto consumidos); esta aqui é o Financeiro.
+ * NÃO lê lancamentos_rateados. A visão rateada existe para repartir custo
+ * "geral" entre atividades; para a empresa inteira não há o que repartir. E em
+ * 14/10/2026 ela estava R$ 645 mil abaixo do Financeiro em 2026 (rateio
+ * incompleto dos custos gerais de maio/2026 em diante; de 2023 a abril/2026
+ * bate certinho). Ler da tabela dá o total completo e não depende de o rateio
+ * estar certo. Quando o rateio for corrigido, as duas bases voltam a coincidir.
+ *
+ * Os totais também diferem de Geral/Operacional: aquelas telas usam o custo de
+ * cada app (inclui ração e pasto consumidos); esta aqui é o Financeiro.
  *
  * COMO OS BLOCOS DO FLUXO SÃO DECIDIDOS
  * Pelo GRUPO do plano de contas (grupoDoCentro), que já segue o DFC do Conag.
@@ -2886,14 +2892,28 @@ function rowToMovimentoFin(r){
 // (selecionado + 4 anos + 4 safras); guarda o resultado até algum dado mudar.
 let _cacheEmpresa = {refs:null, mapa:new Map()};
 function fluxoEmpresa(periodo){
-  const refs = [state.lancamentosRateados, state.centrosCusto, state.movimentosFinanciamento, state.financiamentos, state.parcelasFinanciamento];
+  return memoEmpresa('fluxo', periodo, ()=>calcularFluxoEmpresa(periodo));
+}
+function memoEmpresa(tipo, periodo, calcula){
+  const refs = [state.lancamentos, state.lancamentosRateados, state.centrosCusto, state.movimentosFinanciamento, state.financiamentos, state.parcelasFinanciamento];
   if(!_cacheEmpresa.refs || refs.some((r,i)=>r!==_cacheEmpresa.refs[i])) _cacheEmpresa = {refs, mapa:new Map()};
-  const chave = periodo.tipo + ':' + (periodo.tipo==='mes' ? periodo.mes : periodo.tipo==='ano' ? periodo.ano : periodo.safra);
-  if(!_cacheEmpresa.mapa.has(chave)) _cacheEmpresa.mapa.set(chave, calcularFluxoEmpresa(periodo));
+  const chave = tipo + ':' + periodo.tipo + ':' + (periodo.tipo==='mes' ? periodo.mes : periodo.tipo==='ano' ? periodo.ano : periodo.safra);
+  if(!_cacheEmpresa.mapa.has(chave)) _cacheEmpresa.mapa.set(chave, calcula());
   return _cacheEmpresa.mapa.get(chave);
 }
+// Despesa do período no Financeiro x na visão rateada. Devem ser iguais (o
+// rateio só reparte o valor); diferença = rateio incompleto. A aba avisa.
+function diferencaVisaoRateada(periodo){
+  if(state.lancamentosRateados.length===0) return null;
+  return memoEmpresa('rateio', periodo, ()=>{
+    const soma = lista => itensDespesaComCentroNoPeriodo(lista.filter(l=>l.tipo==='despesa'), periodo)
+      .reduce((a,l)=>a+Number(l.valor||0), 0);
+    const financeiro = soma(state.lancamentos), rateada = soma(state.lancamentosRateados);
+    return {financeiro, rateada, diferenca: financeiro - rateada};
+  });
+}
 function calcularFluxoEmpresa(periodo){
-  const base = state.lancamentosRateados;
+  const base = state.lancamentos;
   const centros = new Map(state.centrosCusto.map(c=>[String(c.id), c]));
   const despesas = itensDespesaComCentroNoPeriodo(base.filter(l=>l.tipo==='despesa'), periodo);
   const receitas = itensReceitaNoPeriodo(base.filter(l=>l.tipo==='receita'), periodo);
@@ -2989,13 +3009,14 @@ function CardEmpresa(rotulo, valor, dica, classe){
   </div>`;
 }
 function PageResultadosEmpresa(){
-  if(state.lancamentosRateados.length===0){
-    return `<div class="card card-pad"><p class="hint">Carregando os lançamentos da empresa… Se esta mensagem não sair, pode ser que você não tenha a permissão de Resultados.</p></div>`;
+  if(state.lancamentos.length===0){
+    return `<div class="card card-pad"><p class="hint">Carregando os lançamentos da empresa… Se esta mensagem não sair, pode ser que você não tenha a permissão de Financeiro, que esta aba usa.</p></div>`;
   }
   const f = fluxoEmpresa(state.periodo);
   const op = f.operacional, inv = f.investimento, fin = f.financiamento, nao = f.naoOperacional;
   const cobertura = fin.juros>0 ? op.liquido/fin.juros : null;
   const divida = dividaEmpresa();
+  const dif = diferencaVisaoRateada(state.periodo);
   const hist = historicoEmpresa();
   const maxJuros = Math.max(1, ...hist.anos.map(x=>x.juros), ...hist.safras.map(x=>x.juros));
   const temPrincipal = [...hist.anos, ...hist.safras].some(x=>x.principal>0);
@@ -3066,8 +3087,9 @@ function PageResultadosEmpresa(){
     </table>
   </div>
 
-  <p class="hint" style="margin-top:12px;">Esta aba usa o Financeiro (mesmo regime do Fluxo de Caixa em Relatórios), por isso os totais podem diferir de Geral e Operacional, que usam o custo de cada app (inclui ração e pasto consumidos). O histórico do Conag é por competência mensal. Resultado operacional = recebimentos − pagamentos operacionais; juros e encargos ficam no bloco Financiamento, como no plano de contas do Conag. Cobertura de juros abaixo de 1,5 x fica em alerta.</p>
+  <p class="hint" style="margin-top:12px;">Esta aba usa o Financeiro inteiro da empresa, sem ratear por atividade. Os totais podem diferir de Geral e Operacional, que usam o custo de cada app (inclui ração e pasto consumidos), e de Relatórios, que lê a visão rateada. O histórico do Conag é por competência mensal. Resultado operacional = recebimentos − pagamentos operacionais; juros e encargos ficam no bloco Financiamento, como no plano de contas do Conag. Cobertura de juros abaixo de 1,5 x fica em alerta.</p>
   <p class="hint" style="margin-top:8px;">O Conag não tem as entradas de empréstimo, só as amortizações: se parte do principal foi paga com dinheiro de um novo empréstimo, a cobertura do serviço da dívida aparece pior do que a realidade. Amortização e entrada de empréstimo não são despesa nem receita: ficam em Financiamentos e na tabela de movimentos.</p>
+  ${dif && Math.abs(dif.diferenca)>1 ? `<p class="hint" style="margin-top:8px; color:var(--ambar);"><strong>Atenção:</strong> neste período a visão rateada (Relatórios, Geral e Operacional) tem R$ ${fmt(Math.abs(dif.diferenca))} ${dif.diferenca>0 ? 'a menos' : 'a mais'} de despesa que o Financeiro (R$ ${fmt(dif.rateada)} contra R$ ${fmt(dif.financeiro)}). Esta aba usa o Financeiro, que está completo. A diferença costuma ser rateio incompleto de custos gerais: rode rateio_confere_soma_das_partes.sql no Supabase para achar os lançamentos.</p>` : ''}
   ${semTabela ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">As amortizações do Conag (R$ 17,8 milhões) ainda não foram importadas. Rode <strong>financiamentos_02_movimentos_conag.sql</strong> no Supabase para o fluxo de caixa e a dívida a vencer ficarem completos.</p>` : ''}
   ${!temPermissao('matriz_financiamentos','visualizar') ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">Você não tem a permissão de Financiamentos: contratos lançados no módulo não entram nestes números.</p>` : ''}
   `;

@@ -16,6 +16,8 @@ O que este teste prova, com contas conhecidas (cenario de 2025):
   - movimento com data no futuro e divida a vencer, nao fluxo realizado;
   - sem movimentos nem modulo, a variacao de caixa bate com o Fluxo de Caixa
     que ja existe em Relatorios (mesma base de lancamentos);
+  - a aba le o Financeiro direto, nao a visao rateada (que em 2026 estava R$ 645
+    mil abaixo), e avisa na tela quando a visao rateada tem menos despesa;
   - ano e ano-safra (maio a abril) pegam as janelas certas.
 """
 import json
@@ -174,6 +176,15 @@ with sync_playwright() as pw:
          "sem o principal de movimentos/modulo, a variacao de caixa bate com Relatorios > Fluxo de Caixa (714.500)",
          f"{f['variacaoCaixa'] - liquido_principal} x {rel['resultadoPeriodo']}")
 
+    # ---- 3b. le o Financeiro direto, nao a visao rateada ----
+    # Em 14/10/2026 a visao rateada estava R$ 645 mil abaixo do Financeiro em 2026
+    # (rateio incompleto de custos gerais de maio/2026 em diante). A aba da
+    # empresa inteira nao pode herdar esse buraco.
+    indep = page.evaluate("""() => { const salvo = state.lancamentosRateados; state.lancamentosRateados = [];
+        const r = calcularFluxoEmpresa({tipo:'ano', ano:2025}); state.lancamentosRateados = salvo; return r; }""")
+    conf(perto(indep["variacaoCaixa"], f["variacaoCaixa"]) and perto(indep["operacional"]["saidas"], 412000),
+         "o fluxo nao muda com a visao rateada vazia: a aba le lancamentos_financeiros direto", str(indep["operacional"]))
+
     # ---- 4. ano-safra (maio a abril) ----
     s = page.evaluate("() => fluxoEmpresa({tipo:'safra', safra:2025})")
     conf(perto(s["financiamento"]["juros"], 87000),
@@ -223,6 +234,18 @@ with sync_playwright() as pw:
         conf(trecho in texto, f"tela mostra: {trecho}")
     conf("r$ 799.500,00" in texto, "tela mostra a variacao de caixa de 2025 (R$ 799.500,00)")
     conf("rode financiamentos_02_movimentos_conag.sql" not in texto, "com a tabela de movimentos existindo, nao pede o script")
+    conf("a menos de despesa que o financeiro" not in texto,
+         "visao rateada igual ao Financeiro: nenhum aviso de diferenca")
+
+    # simula o buraco: a visao rateada perde o lancamento de custeio de 400.000
+    page.evaluate("() => { state.lancamentosRateados = state.lancamentosRateados.filter(l => l.id !== 2); render(); }")
+    page.wait_for_timeout(300)
+    texto_buraco = page.evaluate("() => document.body.innerText.toLowerCase()")
+    conf("tem r$ 400.000,00 a menos de despesa que o financeiro" in texto_buraco
+         and "rateio_confere_soma_das_partes.sql" in texto_buraco,
+         "visao rateada com R$ 400.000 a menos: a tela avisa quanto falta e qual script rodar")
+    conf("r$ 799.500,00" in texto_buraco,
+         "mesmo com o buraco na visao rateada, a variacao de caixa da empresa continua R$ 799.500,00")
 
     page.evaluate("() => { state.movimentosFinanciamentoOk = false; render(); }")
     page.wait_for_timeout(200)
