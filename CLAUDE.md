@@ -285,6 +285,37 @@ Confinamento), aí sim dá pra repartir o custo — hoje não.
 - A venda de milho **é receita da Pecuária de propósito**: ela compra o milho
   da lavoura e revende a sobra. Não reclassificar.
 
+### Resultados > Empresa: a empresa como uma atividade só
+
+Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
+e dívida (Fase 1 em 14/10/2026; faltam a Fase 2, dívida com cronograma e taxa
+média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
+
+- Base: `lancamentos_rateados` **sem** filtro de atividade/fazenda (a mesma do
+  Fluxo de Caixa de Relatórios) + `movimentos_financiamento` + o módulo
+  Financiamentos. Por isso os totais diferem de Geral/Operacional, que usam o
+  custo de cada app (com ração e pasto consumidos).
+- O bloco de cada linha vem do **grupo** do plano de contas
+  (`blocoDfcDoGrupo`). Juros e despesas financeiras estão no grupo
+  FINANCIAMENTOS, então "Resultado operacional" já sai antes dos juros. "Juros
+  pagos" são dois centros, achados **pelo nome** (`CENTROS_JUROS_EMPRESA`):
+  renomear um deles zera os juros da tela (o teste pega).
+- Amortização e entrada de empréstimo **nunca** viram `lancamentos_financeiros`
+  (não são despesa nem receita): moram em `movimentos_financiamento` (import
+  do Conag: 75 títulos, R$ 17,8 mi, `financiamentos_02_movimentos_conag.sql`) e
+  no módulo Financiamentos. O juros das parcelas pagas do módulo **já é**
+  lançamento: não somar de novo. Contrato nascido de renegociação não é
+  dinheiro novo. Movimento com data futura é dívida a vencer, não fluxo
+  realizado.
+- Não lance no módulo um contrato que já está nos movimentos do Conag: a
+  amortização aparece duas vezes. Apague antes as linhas `origem='conag'` dele.
+  Lançar parcela antiga como "paga" também duplicaria o juros (já está no Conag).
+- O Conag **não tem entrada de empréstimo**, só amortização: sem ela, a
+  cobertura do serviço da dívida sai pior que a realidade.
+- O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
+  `blocoDfcDoGrupo` normaliza acento. "BANCO DO BRASIL" e "BANCO BRASIL" eram o
+  mesmo credor: o script unifica.
+
 ## Armadilhas que já custaram caro
 
 - **Offline com login vencido.** O token do Supabase vale 1 h; vencido e
@@ -339,6 +370,8 @@ verdade em `window.__DB__`).
 | `teste_cereais_cultura.py` | 27 | AECereais.html |
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
+| `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
+| `teste_empresa.py` | 39 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só

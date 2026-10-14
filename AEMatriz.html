@@ -125,6 +125,7 @@
      Editar/Excluir). Em tabela de dados ela passaria por cima das colunas do
      meio; estas tabelas rolam de lado normalmente. */
   .tabela-sem-fixar td:last-child, .tabela-sem-fixar th:last-child{position:static; box-shadow:none;}
+  .barra-mini{height:5px; border-radius:3px; background:var(--trigo); margin-top:4px; min-width:2px;}
   .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
   .donut-wrap{flex-shrink:0;}
   .donut-svg{display:block;}
@@ -656,6 +657,26 @@ async function loadAll(){
   carregarResultadoCereais();
   carregarCombustivel();
   carregarLancamentosRateados();
+  carregarMovimentosFinanciamento();
+}
+
+// Entrada de empréstimo e amortização do principal (aba Resultados > Empresa).
+// Ficam fora de lancamentos_financeiros de propósito (ver CLAUDE.md: só o
+// juros é despesa). A tabela vem do script financiamentos_02_movimentos_conag.sql;
+// enquanto ele não rodou, a consulta falha e a aba avisa em vez de quebrar.
+async function carregarMovimentosFinanciamento(){
+  if(!temPermissao('matriz_resultados','visualizar') && !temPermissao('matriz_financiamentos','visualizar')) return;
+  try{
+    const { data, error } = await fetchAllRows(()=>
+      db.from('movimentos_financiamento').select('*').order('data').order('id'));
+    if(error) throw error;
+    state.movimentosFinanciamento = (data||[]).map(rowToMovimentoFin);
+    state.movimentosFinanciamentoOk = true;
+  } catch(e){
+    state.movimentosFinanciamento = [];
+    state.movimentosFinanciamentoOk = false;
+  }
+  render();
 }
 
 // Todas as atividades (inclusive 'geral' — administrativo, nunca rateado
@@ -1090,11 +1111,13 @@ const state = {
   lancamentos: [],    // modelo único: despesa, receita e investimento de todas as atividades
   centrosCusto: [],
   filtroAtividade: '',
-  subAbaResultados: 'geral', // 'geral' | 'operacional' | 'relatorios'
+  subAbaResultados: 'geral', // 'geral' | 'operacional' | 'relatorios' | 'empresa'
   colheitasCana: [],   // {data, toneladas} — pra toneladas/ha no período (aba Operacional)
   colheitasGraos: [],  // {data, sacas} — sacas/ha
   vendasPec: [],       // {data, quantidade, tipoVenda, pesoMedioKg} — arrobas vendidas/ha
   lancamentosRateados: [], // TODAS as atividades (inclusive 'geral'), pra Balancete/Fluxo de Caixa (aba Relatórios)
+  movimentosFinanciamento: [], // entrada de empréstimo / amortização (principal) — NÃO são despesa nem receita; aba Empresa
+  movimentosFinanciamentoOk: null, // null = ainda não tentou; false = tabela não existe (script financiamentos_02 não rodou)
   filtroAtividadesRelatorio: [], // vazio = todas
   filtroFazendaRelatorio: '',    // vazio = todas
   lotesPec: [],       // só id e nome, pra vincular receita a um lote
@@ -2593,7 +2616,7 @@ function PagePorHectare(){
 }
 
 function SubAbasResultados(){
-  const abas = [['geral','Geral'], ['operacional','Operacional'], ['relatorios','Relatórios']];
+  const abas = [['geral','Geral'], ['operacional','Operacional'], ['relatorios','Relatórios'], ['empresa','Empresa']];
   return `<div class="periodo-tabs" style="margin-bottom:18px;">
     ${abas.map(([k,l])=>`<button class="periodo-tab ${state.subAbaResultados===k?'active':''}" data-suba-resultados="${k}">${l}</button>`).join('')}
   </div>`;
@@ -2608,6 +2631,7 @@ function PageResultados(){
   ${SubAbasResultados()}
   ${state.subAbaResultados==='operacional' ? PageResultadosOperacional()
     : state.subAbaResultados==='relatorios' ? PageResultadosRelatorios()
+    : state.subAbaResultados==='empresa' ? PageResultadosEmpresa()
     : PageResultadosGeral()}
   `;
 }
@@ -2818,6 +2842,237 @@ function PageResultadosRelatorios(){
   <p class="hint" style="margin-top:12px;">Saldo anterior soma o que está carregado (últimos ~4 anos) antes do período — não é necessariamente o saldo desde a fundação da empresa, se houver lançamento mais antigo não carregado aqui. Grupos seguem o plano de contas do Conag (mesma classificação da tela de Centros de Custo).</p>
   `;
 }
+/* ===================== RESULTADOS > EMPRESA =====================
+ *
+ * A empresa inteira como UMA atividade só (pedido do Eduardo, 14/10/2026):
+ * fluxo de caixa, juros pagos por ano e por ano-safra, cobertura de juros e
+ * dívida. Fase 1 -- só o que já existe no banco.
+ *
+ * DE ONDE VÊM OS NÚMEROS
+ *   lancamentos_rateados      a empresa toda, SEM filtro de atividade/fazenda
+ *                             (mesma base do Fluxo de Caixa de Relatórios)
+ *   movimentos_financiamento  entrada de empréstimo e amortização do principal
+ *   financiamentos/parcelas   contratos lançados no módulo Financiamentos
+ *
+ * Por isso os totais podem diferir de Geral/Operacional: aquelas telas usam o
+ * custo de cada app (inclui ração e pasto consumidos); esta aqui é o Financeiro.
+ *
+ * COMO OS BLOCOS DO FLUXO SÃO DECIDIDOS
+ * Pelo GRUPO do plano de contas (grupoDoCentro), que já segue o DFC do Conag.
+ * Juros e despesas financeiras ficam no grupo FINANCIAMENTOS, então o bloco
+ * Operacional sai "antes dos juros" sem nenhuma conta extra.
+ *
+ * O QUE NÃO É DESPESA NEM RECEITA
+ * Amortização do principal e entrada de empréstimo ficam em
+ * movimentos_financiamento e no módulo Financiamentos, nunca em
+ * lancamentos_financeiros. O juros das parcelas pagas do módulo JÁ está em
+ * lancamentos_financeiros (centro "Juros e Encargos de Financiamento"):
+ * somar de novo aqui duplicaria. Movimento com data no futuro não é fluxo
+ * realizado: é dívida a vencer. */
+const CENTROS_JUROS_EMPRESA = ['JUROS PAGOS OU INCORRIDOS', 'JUROS E ENCARGOS DE FINANCIAMENTO'];
+function maiusculoSemAcento(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim(); }
+function blocoDfcDoGrupo(grupo){
+  const g = maiusculoSemAcento(grupo);
+  if(g==='INVESTIMENTOS' || g==='ATIVIDADES DE INVESTIMENTO') return 'investimento';
+  if(g==='FINANCIAMENTOS' || g==='ATIVIDADES DE FINANCIAMENTO' || g==='DIVIDENDOS') return 'financiamento';
+  if(g==='VARIACOES NAO OPERACIONAIS DE CAIXA') return 'naoOperacional';
+  return 'operacional';
+}
+function rowToMovimentoFin(r){
+  return {id:r.id, data:r.data, tipo:r.tipo, valor:Number(r.valor||0), credor:r.credor||'',
+          descricao:r.descricao||'', origem:r.origem||'manual', financiamentoId:r.financiamento_id||null};
+}
+// O cálculo varre ~10 mil lançamentos por período e a tela pede ~10 períodos
+// (selecionado + 4 anos + 4 safras); guarda o resultado até algum dado mudar.
+let _cacheEmpresa = {refs:null, mapa:new Map()};
+function fluxoEmpresa(periodo){
+  const refs = [state.lancamentosRateados, state.centrosCusto, state.movimentosFinanciamento, state.financiamentos, state.parcelasFinanciamento];
+  if(!_cacheEmpresa.refs || refs.some((r,i)=>r!==_cacheEmpresa.refs[i])) _cacheEmpresa = {refs, mapa:new Map()};
+  const chave = periodo.tipo + ':' + (periodo.tipo==='mes' ? periodo.mes : periodo.tipo==='ano' ? periodo.ano : periodo.safra);
+  if(!_cacheEmpresa.mapa.has(chave)) _cacheEmpresa.mapa.set(chave, calcularFluxoEmpresa(periodo));
+  return _cacheEmpresa.mapa.get(chave);
+}
+function calcularFluxoEmpresa(periodo){
+  const base = state.lancamentosRateados;
+  const centros = new Map(state.centrosCusto.map(c=>[String(c.id), c]));
+  const despesas = itensDespesaComCentroNoPeriodo(base.filter(l=>l.tipo==='despesa'), periodo);
+  const receitas = itensReceitaNoPeriodo(base.filter(l=>l.tipo==='receita'), periodo);
+  const investimentos = itensInvestimentoNoPeriodo(base.filter(l=>l.tipo==='investimento'), periodo);
+  const op = {entradas:0, saidas:0}, inv = {compras:0, vendas:0}, nao = {entradas:0, saidas:0};
+  const fin = {emprestimosRecebidos:0, receitasFinanceiras:0, amortizacao:0, juros:0, outrasDespesasFinanceiras:0, dividendos:0};
+  const dados = l => {
+    const c = centros.get(String(l.centroCustoId));
+    return {grupo: c ? grupoDoCentro(c) : 'Sem classificação', nome: maiusculoSemAcento(c && c.nome)};
+  };
+  receitas.forEach(l=>{
+    const v = Number(l.valor||0), {grupo, nome} = dados(l), bloco = blocoDfcDoGrupo(grupo);
+    if(bloco==='operacional') op.entradas += v;
+    else if(bloco==='investimento') inv.vendas += v;
+    else if(bloco==='naoOperacional') nao.entradas += v;
+    else if(/RECEITAS? FINANCEIRAS?|RENDIMENTOS?/.test(nome)) fin.receitasFinanceiras += v;
+    else fin.emprestimosRecebidos += v;
+  });
+  despesas.forEach(l=>{
+    const v = Number(l.valor||0), {grupo, nome} = dados(l), bloco = blocoDfcDoGrupo(grupo);
+    if(bloco==='operacional') op.saidas += v;
+    else if(bloco==='investimento') inv.compras += v;
+    else if(bloco==='naoOperacional') nao.saidas += v;
+    else if(CENTROS_JUROS_EMPRESA.includes(nome)) fin.juros += v;
+    else if(maiusculoSemAcento(grupo)==='DIVIDENDOS') fin.dividendos += v;
+    else if(/AMORTIZ/.test(nome)) fin.amortizacao += v;
+    else fin.outrasDespesasFinanceiras += v;
+  });
+  investimentos.forEach(l=>{ inv.compras += Number(l.valor||0); });
+
+  // principal que não passa por lancamentos_financeiros (só o realizado)
+  const meses = new Set(periodoMeses(periodo)), hoje = hojeStr();
+  const realizadoNoPeriodo = d => !!d && d<=hoje && meses.has(d.slice(0,7));
+  state.movimentosFinanciamento.forEach(m=>{
+    if(!realizadoNoPeriodo(m.data)) return;
+    if(m.tipo==='entrada') fin.emprestimosRecebidos += m.valor; else fin.amortizacao += m.valor;
+  });
+  // contrato que nasceu de renegociação não é dinheiro novo entrando
+  state.financiamentos.forEach(f=>{
+    if(f.status==='cancelado' || f.financiamentoOrigemId) return;
+    if(realizadoNoPeriodo(f.dataContratacao)) fin.emprestimosRecebidos += Number(f.valorPrincipal||0);
+  });
+  state.parcelasFinanciamento.forEach(p=>{
+    if(p.status==='paga' && realizadoNoPeriodo(p.dataPagamento)) fin.amortizacao += Number(p.valorAmortizacao||0);
+  });
+
+  op.liquido = op.entradas - op.saidas;               // resultado ANTES dos juros
+  inv.liquido = inv.vendas - inv.compras;
+  nao.liquido = nao.entradas - nao.saidas;
+  fin.liquido = fin.emprestimosRecebidos + fin.receitasFinanceiras - fin.amortizacao - fin.juros
+              - fin.outrasDespesasFinanceiras - fin.dividendos;
+  return {operacional:op, investimento:inv, financiamento:fin, naoOperacional:nao,
+          variacaoCaixa: op.liquido + inv.liquido + fin.liquido + nao.liquido};
+}
+// Juros e cobertura por ano (calendário) e por ano-safra (maio a abril),
+// sempre as mesmas janelas, independente do filtro de período da tela.
+function historicoEmpresa(){
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  const safraAtual = (hoje.getMonth()+1) >= 5 ? anoAtual : anoAtual-1;
+  const linha = (periodo, rotulo, parcial)=>{
+    const f = fluxoEmpresa(periodo), op = f.operacional.liquido, j = f.financiamento.juros, am = f.financiamento.amortizacao;
+    return {rotulo, parcial, juros:j, outras:f.financiamento.outrasDespesasFinanceiras, principal:am,
+            resultadoOperacional:op,
+            coberturaJuros: j>0 ? op/j : null,
+            coberturaServico: (j+am)>0 && am>0 ? op/(j+am) : null};
+  };
+  return {
+    anos: anosHistorico().map(a=>linha({tipo:'ano', ano:a}, String(a), a===anoAtual)),
+    safras: safrasRecentes(4).map(s=>linha({tipo:'safra', safra:s}, `${s}/${String(s+1).slice(2)}`, s===safraAtual)),
+  };
+}
+// Dívida (Fase 1): o que está no módulo Financiamentos; enquanto ele estiver
+// vazio, a estimativa do Conag (parcelas de amortização com vencimento futuro).
+function dividaEmpresa(){
+  const hoje = hojeStr();
+  const saldoModulo = resumoFinanciamentos().saldoDevedor;
+  const aVencerConag = state.movimentosFinanciamento
+    .filter(m=>m.tipo==='amortizacao' && m.data>hoje).reduce((s,m)=>s+m.valor, 0);
+  return {saldoModulo, aVencerConag,
+          valor: saldoModulo>0 ? saldoModulo : aVencerConag,
+          origem: saldoModulo>0 ? 'modulo' : (aVencerConag>0 ? 'conag' : 'nenhuma')};
+}
+function celulaFluxo(v){
+  if(!v) return '<span class="hint">—</span>';
+  return `<span style="${v<0?'color:var(--alerta);':''}">${v<0?'− ':''}R$ ${fmt(Math.abs(v))}</span>`;
+}
+function CardEmpresa(rotulo, valor, dica, classe){
+  return `<div class="stat-card">
+    <div class="stat-label">${rotulo}</div>
+    <div class="stat-value ${classe||''}" style="font-size:19px;">${valor}</div>
+    ${dica ? `<div class="hint" style="margin-top:4px;">${dica}</div>` : ''}
+  </div>`;
+}
+function PageResultadosEmpresa(){
+  if(state.lancamentosRateados.length===0){
+    return `<div class="card card-pad"><p class="hint">Carregando os lançamentos da empresa… Se esta mensagem não sair, pode ser que você não tenha a permissão de Resultados.</p></div>`;
+  }
+  const f = fluxoEmpresa(state.periodo);
+  const op = f.operacional, inv = f.investimento, fin = f.financiamento, nao = f.naoOperacional;
+  const cobertura = fin.juros>0 ? op.liquido/fin.juros : null;
+  const divida = dividaEmpresa();
+  const hist = historicoEmpresa();
+  const maxJuros = Math.max(1, ...hist.anos.map(x=>x.juros), ...hist.safras.map(x=>x.juros));
+  const temPrincipal = [...hist.anos, ...hist.safras].some(x=>x.principal>0);
+  const secao = t => `<tr><td colspan="2" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">${t}</td></tr>`;
+  const item = (t, v, dica) => `<tr><td style="padding-left:18px;">${t}${dica ? ` <span class="hint">${dica}</span>` : ''}</td><td class="mono" style="text-align:right;">${celulaFluxo(v)}</td></tr>`;
+  const total = (t, v) => `<tr><td style="font-weight:700; border-top:1px solid var(--cinza-claro);">${t}</td><td class="mono" style="text-align:right; font-weight:700; border-top:1px solid var(--cinza-claro);">${celulaFluxo(v)}</td></tr>`;
+  const semTabela = state.movimentosFinanciamentoOk===false;
+  const linhaHist = x => `<tr>
+    <td class="mono">${x.rotulo}${x.parcial ? ' <span class="hint">(até hoje)</span>' : ''}</td>
+    <td class="mono">R$ ${fmt(x.juros)}<div class="barra-mini" style="width:${Math.round(x.juros/maxJuros*100)}%;"></div></td>
+    <td class="mono">${x.outras>0 ? 'R$ '+fmt(x.outras) : '—'}</td>
+    <td class="mono">${x.principal>0 ? 'R$ '+fmt(x.principal) : '—'}</td>
+    <td class="mono" style="${x.resultadoOperacional<0?'color:var(--alerta);':''}">R$ ${fmt(x.resultadoOperacional)}</td>
+    <td class="mono">${x.coberturaJuros!=null ? fmt(x.coberturaJuros,1)+' x' : '—'}</td>
+    <td class="mono">${x.coberturaServico!=null ? fmt(x.coberturaServico,1)+' x' : '—'}</td>
+  </tr>`;
+  return `
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — a empresa como uma atividade só</p>
+  <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+    ${CardEmpresa('Resultado operacional', 'R$ '+fmt(op.liquido), 'antes dos juros e encargos', op.liquido>=0?'bom':'alerta')}
+    ${CardEmpresa('Juros pagos', 'R$ '+fmt(fin.juros), fin.outrasDespesasFinanceiras>0 ? '+ R$ '+fmt(fin.outrasDespesasFinanceiras)+' de outras despesas financeiras' : 'no período')}
+    ${CardEmpresa('Cobertura de juros', cobertura!=null ? fmt(cobertura,1)+' x' : '—', cobertura!=null ? 'resultado operacional ÷ juros pagos' : 'sem juros pagos no período', cobertura!=null && cobertura<1.5 ? 'alerta' : '')}
+    ${CardEmpresa(divida.origem==='modulo' ? 'Dívida (Financiamentos)' : 'Dívida a vencer', divida.origem==='nenhuma' ? '—' : 'R$ '+fmt(divida.valor),
+        divida.origem==='modulo' ? 'saldo devedor dos contratos lançados' : divida.origem==='conag' ? 'estimativa do Conag: só principal, sem juros futuros' : 'lance os contratos em Financiamentos')}
+  </div>
+
+  <p class="eyebrow" style="margin:18px 0 10px;">${labelPeriodo(state.periodo)} — fluxo de caixa</p>
+  <div class="card card-pad" style="overflow-x:auto;">
+    <table>
+      <tbody>
+        ${secao('Atividades operacionais')}
+        ${item('Recebimentos', op.entradas)}
+        ${item('Pagamentos', -op.saidas, 'sem juros e encargos financeiros')}
+        ${total('Resultado operacional (antes dos juros)', op.liquido)}
+        ${secao('Atividades de investimento')}
+        ${item('Compras (máquinas, terra, animais, benfeitorias)', -inv.compras)}
+        ${item('Vendas de ativos', inv.vendas)}
+        ${total('Investimento líquido', inv.liquido)}
+        ${secao('Atividades de financiamento')}
+        ${item('Empréstimos e aportes recebidos', fin.emprestimosRecebidos)}
+        ${item('Receitas financeiras', fin.receitasFinanceiras)}
+        ${item('Amortização do principal', -fin.amortizacao, semTabela ? '(ainda não importada do Conag)' : '')}
+        ${item('Juros pagos', -fin.juros)}
+        ${item('Outras despesas financeiras', -fin.outrasDespesasFinanceiras, 'IOF, cartório, custas, projetos')}
+        ${item('Dividendos e retiradas', -fin.dividendos)}
+        ${total('Financiamento líquido', fin.liquido)}
+        ${secao('Variações não operacionais de caixa')}
+        ${item('Aplicações, resgates e ajuste de saldo bancário', nao.liquido)}
+        ${total('Variação de caixa do período', f.variacaoCaixa)}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="eyebrow" style="margin:18px 0 10px;">Juros pagos e cobertura — por ano e por ano-safra</p>
+  <div class="card" style="overflow-x:auto;">
+    <table class="tabela-compacta tabela-sem-fixar" style="margin:0;">
+      <thead><tr>
+        <th>Período</th><th>Juros pagos</th><th>Outras desp. financeiras</th><th>Principal pago</th>
+        <th>Resultado operacional</th><th title="Resultado operacional ÷ juros pagos">Cobertura de juros</th>
+        <th title="Resultado operacional ÷ (juros + principal pago)">Cobertura do serviço da dívida</th>
+      </tr></thead>
+      <tbody>
+        <tr><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano (janeiro a dezembro)</td></tr>
+        ${hist.anos.map(linhaHist).join('')}
+        <tr><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano-safra (maio a abril)</td></tr>
+        ${hist.safras.map(linhaHist).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="hint" style="margin-top:12px;">Esta aba usa o Financeiro (mesmo regime do Fluxo de Caixa em Relatórios), por isso os totais podem diferir de Geral e Operacional, que usam o custo de cada app (inclui ração e pasto consumidos). O histórico do Conag é por competência mensal. Resultado operacional = recebimentos − pagamentos operacionais; juros e encargos ficam no bloco Financiamento, como no plano de contas do Conag. Cobertura de juros abaixo de 1,5 x fica em alerta.</p>
+  <p class="hint" style="margin-top:8px;">O Conag não tem as entradas de empréstimo, só as amortizações: se parte do principal foi paga com dinheiro de um novo empréstimo, a cobertura do serviço da dívida aparece pior do que a realidade. Amortização e entrada de empréstimo não são despesa nem receita: ficam em Financiamentos e na tabela de movimentos.</p>
+  ${semTabela ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">As amortizações do Conag (R$ 17,8 milhões) ainda não foram importadas. Rode <strong>financiamentos_02_movimentos_conag.sql</strong> no Supabase para o fluxo de caixa e a dívida a vencer ficarem completos.</p>` : ''}
+  ${!temPermissao('matriz_financiamentos','visualizar') ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">Você não tem a permissão de Financiamentos: contratos lançados no módulo não entram nestes números.</p>` : ''}
+  `;
+}
+
 // Os N anos-safra mais recentes, o atual por último -- mesma janela
 // maio-abril usada em todo o resto de Resultados (periodoMeses tipo
 // 'safra'). Ano-safra "atual": se estamos em jan-abr, a safra corrente
