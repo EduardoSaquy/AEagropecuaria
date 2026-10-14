@@ -289,6 +289,11 @@
     .stat-row{grid-template-columns:1fr; gap:10px;}
     .donuts-row{grid-template-columns:1fr;}
     .donuts-row-larga{grid-template-columns:1fr;}
+    /* As 4 abas de Resultados (Geral, Operacional, Relatórios, Empresa) tinham
+       361 px e passavam da tela de 360-380 px: a página inteira rolava de lado.
+       A barra ocupa a largura toda e os botões dividem o espaço. */
+    .periodo-tabs-ajusta{display:flex; width:100%;}
+    .periodo-tabs-ajusta .periodo-tab{flex:1 1 auto; min-width:0; padding:7px 4px;}
     .toolbar{flex-direction:column; align-items:stretch;}
     .card{overflow-x:auto; -webkit-overflow-scrolling:touch;}
     .field-row{grid-template-columns:1fr;}
@@ -2633,7 +2638,7 @@ function PagePorHectare(){
 
 function SubAbasResultados(){
   const abas = [['geral','Geral'], ['operacional','Operacional'], ['relatorios','Relatórios'], ['empresa','Empresa']];
-  return `<div class="periodo-tabs" style="margin-bottom:18px;">
+  return `<div class="periodo-tabs periodo-tabs-ajusta" style="margin-bottom:18px;">
     ${abas.map(([k,l])=>`<button class="periodo-tab ${state.subAbaResultados===k?'active':''}" data-suba-resultados="${k}">${l}</button>`).join('')}
   </div>`;
 }

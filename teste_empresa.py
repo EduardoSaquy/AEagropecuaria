@@ -242,21 +242,30 @@ with sync_playwright() as pw:
     # passava 21 px do card em tela de 1280. Nenhum card da aba pode precisar
     # de barra de rolagem lateral, nem a pagina inteira; no celular cada linha
     # do historico vira um bloco com o nome da coluna ao lado do valor.
+    # A pagina so rola de lado se algo passar da coluna central (.main), nao
+    # apenas da janela: com barra de rolagem vertical (Windows) a janela tem
+    # 15 px a menos que innerWidth, e as 4 abas de Resultados (361 px) passavam
+    # da tela de 376 px sem este teste perceber.
     medir = """() => {
-        const pagina = document.documentElement.scrollWidth - innerWidth;
+        const raiz = document.documentElement;
+        const pagina = raiz.scrollWidth - raiz.clientWidth;
         const cards = [...document.querySelectorAll('.card')].map(c => c.scrollWidth - c.clientWidth);
+        const main = document.querySelector('.main');
+        const limite = main.getBoundingClientRect().right - parseFloat(getComputedStyle(main).paddingRight) + 0.5;
+        const sobram = [...main.children].filter(e => e.getBoundingClientRect().right > limite)
+            .map(e => (String(e.className) || e.tagName) + '=' + Math.round(e.getBoundingClientRect().right) + '>' + Math.round(limite));
         const th = document.querySelector('.tabela-em-blocos thead th');
         const blocos = document.querySelectorAll('.tabela-em-blocos tbody tr:not(.linha-secao)').length;
         const rotulos = [...document.querySelectorAll('.tabela-em-blocos td[data-rotulo]')].slice(0, 6)
             .map(td => getComputedStyle(td, '::before').content);
-        return {pagina, maiorCard: Math.max(0, ...cards), cabecalhoVisivel: !!th && th.offsetParent !== null, blocos, rotulos};
+        return {pagina, maiorCard: Math.max(0, ...cards), sobram, cabecalhoVisivel: !!th && th.offsetParent !== null, blocos, rotulos};
     }"""
-    for largura, altura in [(1280, 800), (1000, 800), (800, 900), (390, 844)]:
+    for largura, altura in [(1280, 800), (1000, 800), (800, 900), (390, 844), (376, 800), (360, 800), (320, 640)]:
         page.set_viewport_size({"width": largura, "height": altura})
         page.wait_for_timeout(300)
         m = page.evaluate(medir)
-        conf(m["pagina"] <= 1 and m["maiorCard"] <= 1,
-             f"{largura} px: a pagina e os cards da aba Empresa nao rolam de lado (sobra pagina={m['pagina']}, maior card={m['maiorCard']})", str(m))
+        conf(m["pagina"] <= 0 and m["maiorCard"] <= 1 and not m["sobram"],
+             f"{largura} px: a pagina, os cards e as abas de Resultados cabem na tela, sem rolar de lado (pagina={m['pagina']}, maior card={m['maiorCard']}, passam da coluna={m['sobram']})", str(m))
         if largura > 900:
             conf(m["cabecalhoVisivel"], f"{largura} px: o historico continua tabela, com cabecalho")
         else:

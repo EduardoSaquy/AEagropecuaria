@@ -322,6 +322,18 @@ média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
 - O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
   `blocoDfcDoGrupo` normaliza acento. "BANCO DO BRASIL" e "BANCO BRASIL" eram o
   mesmo credor: o script unifica.
+- **Sem rolar de lado** (pedido do Eduardo). A tabela do histórico tem 7
+  colunas e, com título em linha única, passava do card. Classes:
+  `tabela-cabecalho-quebra` (título quebra em 2 linhas) e `tabela-em-blocos`
+  (até 900 px cada linha vira um bloco, com o nome da coluna vindo de
+  `data-rotulo` em cada `<td>`; a linha de seção leva `linha-secao`). Tabela
+  nova com mais de 5 colunas usa as duas. A barra de abas de Resultados (4
+  botões, 361 px) passava da tela de celular e a página inteira rolava de lado:
+  leva `periodo-tabs-ajusta` (ocupa a largura toda, botões dividem o espaço);
+  ao acrescentar outra aba, rode o teste. `teste_empresa.py` mede em 1280,
+  1000, 800, 390, 376, 360 e 320 px se algo passa da coluna central. Compare
+  com `documentElement.clientWidth`, não com `innerWidth` (que inclui a barra
+  de rolagem do Windows e escondeu 16 px de sobra).
 
 ## Armadilhas que já custaram caro
 
@@ -378,7 +390,7 @@ verdade em `window.__DB__`).
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
-| `teste_empresa.py` | 43 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida) |
+| `teste_empresa.py` | 57 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, sem rolar de lado de 1280 a 320 px) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
