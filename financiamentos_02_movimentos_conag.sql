@@ -110,7 +110,7 @@ create policy "exclui movimento financiamento" on movimentos_financiamento
 
 -- ------------------------------------------------------------
 -- 3) IMPORTACAO DO CONAG: 75 titulos de amortizacao
--- (75 titulos, total R$ 17,829,159.91; credor "BANCO BRASIL" unificado em "BANCO DO BRASIL")
+-- (75 titulos, total R$ 17.829.159,91; credor "BANCO BRASIL" unificado em "BANCO DO BRASIL")
 -- Vencimento = data do movimento. Rodar de novo atualiza so o numero do contrato:
 -- nao desfaz o vinculo (financiamento_id) de quem ja foi lancado no modulo.
 -- ------------------------------------------------------------
@@ -195,14 +195,14 @@ on conflict (conag_id) do update set contrato = excluded.contrato;
 
 -- ------------------------------------------------------------
 -- 4) CONFERENCIA (rode junto, o resultado aparece no fim)
--- Deve dar 75 titulos e R$ 17,829,159.91 no total, assim por ano de vencimento:
---   2023: R$ 8,723,987.79
---   2024: R$ 2,716,272.85
---   2025: R$ 1,083,729.31
---   2026: R$ 1,548,763.35
---   2027: R$ 1,643,034.50
---   2028: R$ 1,199,896.67
---   2029: R$ 913,475.44
+-- Deve dar 75 titulos e R$ 17.829.159,91 no total, assim por ano de vencimento:
+--   2023: R$ 8.723.987,79
+--   2024: R$ 2.716.272,85
+--   2025: R$ 1.083.729,31
+--   2026: R$ 1.548.763,35
+--   2027: R$ 1.643.034,50
+--   2028: R$ 1.199.896,67
+--   2029: R$ 913.475,44
 -- ------------------------------------------------------------
 select extract(year from data)::int as ano,
        count(*)                     as titulos,

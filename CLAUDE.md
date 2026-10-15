@@ -314,9 +314,37 @@ média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
   lançamento: não somar de novo. Contrato nascido de renegociação não é
   dinheiro novo. Movimento com data futura é dívida a vencer, não fluxo
   realizado.
-- Não lance no módulo um contrato que já está nos movimentos do Conag: a
-  amortização aparece duas vezes. Apague antes as linhas `origem='conag'` dele.
-  Lançar parcela antiga como "paga" também duplicaria o juros (já está no Conag).
+- **Contrato que já está no Conag: lance por "Lançar contrato", nunca à mão.**
+  Em Financiamentos, a lista "Dívida do Conag ainda sem contrato"
+  (`gruposConagParaLancar`) tem um botão por contrato (credor + nº do contrato;
+  linha sem número se separa pelo valor da parcela; contrato todo pago não
+  aparece, o histórico dele já está no Conag). O botão cria o financiamento
+  com **uma parcela por linha do Conag** (`parcelasDoGrupoConag`: datas e
+  valores reais, inclusive anuais e crescentes, que o gerador SAC/Price não
+  reproduz) e grava `financiamento_id` em cada linha. Linha com esse vínculo
+  **não conta mais** no Conag (`movimentoAssumidoPorContrato`; contrato
+  cancelado devolve a linha): a dívida da aba Empresa é saldo dos contratos +
+  o que só está no Conag, e a amortização paga entra uma vez só, pela parcela.
+  Ninguém apaga linha do Conag (rodar o script de novo seria desfazer o
+  apagamento; o vínculo sobrevive, `on conflict do update set contrato`).
+  Por que não casar contrato digitado à mão com as linhas: o Conag só traz o
+  número do contrato em 67 dos 75 títulos e os valores reais não batem com o
+  que o gerador calcula. Se alguém lançar à mão um contrato que está no Conag, a
+  dívida dobra (o modal avisa).
+  - Parcelas já pagas do contrato importado entram **pagas e sem juros**: o
+    juros delas já é lançamento do Conag (lançar de novo dobraria a despesa, e
+    `pagarParcela` lança com a data de hoje, não a do pagamento). As a vencer
+    ficam pendentes com juros **estimado** pela taxa informada (o Conag não tem
+    juros futuro).
+  - Contrato importado (`observacao` começa com "Importado do Conag",
+    `importadoDoConag`) **não tem "Editar"**: regerar apagaria o cronograma real.
+    Não conta como empréstimo recebido (data aproximada, valor = só o que o Conag
+    viu pagar). `sistema_amortizacao` fica 'sac' só porque o banco exige um dos 3.
+  - O contrato "sem número" do Banco do Brasil (4 parcelas de R$ 456.737,72) tem
+    duas parcelas em 15/08/2029 e nenhuma em 2028 no Conag: provável erro de
+    digitação de lá; o total fecha, só o vencimento do meio sai errado.
+  - Lançar parcela antiga como "paga" em contrato digitado à mão também
+    duplicaria o juros (já está no Conag).
 - O Conag **não tem entrada de empréstimo**, só amortização: sem ela, a
   cobertura do serviço da dívida sai pior que a realidade.
 - O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
@@ -390,7 +418,8 @@ verdade em `window.__DB__`).
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
-| `teste_empresa.py` | 57 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, sem rolar de lado de 1280 a 320 px) |
+| `teste_empresa.py` | 61 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do Conag assumida por contrato, sem rolar de lado de 1280 a 320 px) |
+| `teste_financiamentos_conag.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do Conag: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
