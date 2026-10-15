@@ -7,10 +7,10 @@ conta bancaria, pode apagar ou trocar o nome").
 Varre tudo que o git rastreia (git ls-files) e falha se achar:
   - CPF ou CNPJ de verdade (digitos verificadores conferem), formatado ou so
     com numeros;
-  - "(doc [numero]" na descricao (numero de documento do ERP);
-  - nome de banco seguido de numero de conta ("SICOOB [conta]");
+  - o texto "(doc" seguido de numero na descricao (numero de documento do ERP);
+  - nome de banco seguido de numero de conta (banco + 5 algarismos);
   - numero de contrato de credito rural no formato do Banco do Brasil
-    ([contrato], [contrato]);
+    (dois algarismos, barra, cinco algarismos, hifen e digito; ou 765. mais dois grupos de tres);
   - arquivo de dump de dados que deveria ficar so no computador.
 Teste, script e documentacao novos usam numero inventado (ou apelido), nunca o real.
 """
@@ -92,11 +92,11 @@ amostras = {
     "CNPJ so com numeros": f"x '{cnpj}' y",
     "CPF formatado": f"cliente {fmt_cpf}",
     "CNPJ formatado": f"cliente {fmt_cnpj}",
-    "numero de documento": "Adubo (doc [numero], pago em 20/04/2026)",
-    "conta bancaria": "-- SICOOB [conta] - conta",
-    "agencia": "agencia: 1234",
-    "contrato BB": "AMORTIZACAO (Contrato: [contrato])",
-    "contrato BB (rural)": "contrato [contrato]",
+    "numero de documento": "Adubo (do" + "c 8977, pago em 20/04/2026)",
+    "conta bancaria": "-- SICOOB " + "99999 - conta",
+    "agencia": "ag" + "encia: 1234",
+    "contrato BB": "AMORTIZACAO (Contrato: 40/" + "99999-9)",
+    "contrato BB (rural)": "contrato 765." + "999.999",
 }
 for nome, linha in amostras.items():
     conf(len(achados_no_texto(linha)) >= 1, f"o detector enxerga: {nome}", linha)
@@ -112,7 +112,6 @@ BINARIOS = (".png", ".jpg", ".jpeg", ".gif", ".ico", ".exe", ".zip", ".pdf", ".w
 violacoes = []
 for a in rastreados:
     if a.lower().endswith(BINARIOS): continue
-    if a == "teste_sem_dados_sensiveis.py": continue   # os exemplos do proprio detector sao inventados
     try: texto = (REPO / a).read_text(encoding="utf-8", errors="ignore")
     except OSError: continue
     for tipo, linha in achados_no_texto(texto):
