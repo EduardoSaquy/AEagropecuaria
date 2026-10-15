@@ -141,7 +141,7 @@
     .tabela-em-blocos td[data-rotulo]::before{content:attr(data-rotulo); font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:var(--cinza); text-align:left;}
     .tabela-em-blocos td.acoes{justify-content:flex-start; flex-wrap:wrap; gap:6px; padding-top:8px;}
     .tabela-em-blocos tr.linha-secao{padding:0; border-bottom:0;}
-    .tabela-em-blocos tr.linha-secao td{padding:8px 14px;}
+    .tabela-em-blocos tr.linha-secao td{padding:8px 14px; text-align:left; justify-content:flex-start;}
     .tabela-em-blocos .barra-mini{display:none;}
   }
   .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
@@ -3211,7 +3211,7 @@ function PageResultadosEmpresa(){
   </div>
   <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); margin-top:12px;">
     ${CardEmpresa('Vence em 12 meses', temDivida ? 'R$ '+fmt(servico12m) : '—',
-        temDivida ? `R$ ${fmt(venc.curto.principal)} de principal + R$ ${fmt(venc.curto.juros)} de juros estimado${venc.vencido.principal>0 ? ` · inclui R$ ${fmt(venc.vencido.principal)} já vencido` : ''}${refSafra && refSafra.resultadoOperacional>0 ? `<br>equivale a ${fmt(servico12m/refSafra.resultadoOperacional*100,0)}% do resultado operacional da safra ${refSafra.rotulo} (R$ ${fmt(refSafra.resultadoOperacional,0)})` : ''}` : 'sem dívida a vencer')}
+        temDivida ? `R$ ${fmt(venc.curto.principal)} de principal${venc.curto.juros>0 ? ` + R$ ${fmt(venc.curto.juros)} de juros estimado` : ' (só o principal: o juros estimado aparece quando os contratos forem lançados em Financiamentos)'}${venc.vencido.principal>0 ? ` · inclui R$ ${fmt(venc.vencido.principal)} já vencido` : ''}${refSafra && refSafra.resultadoOperacional>0 ? `<br>equivale a ${fmt(servico12m/refSafra.resultadoOperacional*100,0)}% do resultado operacional da safra ${refSafra.rotulo} (R$ ${fmt(refSafra.resultadoOperacional,0)})` : ''}` : 'sem dívida a vencer')}
     ${CardEmpresa('Vence depois de 12 meses', temDivida ? 'R$ '+fmt(venc.longo.principal + venc.longo.juros) : '—',
         temDivida ? `R$ ${fmt(venc.longo.principal)} de principal${venc.longo.juros>0 ? ` + R$ ${fmt(venc.longo.juros)} de juros estimado` : ''}` : 'sem dívida a vencer')}
     ${CardEmpresa('Taxa média dos contratos', taxaMedia ? fmt(taxaMedia.taxa,2)+' % a.a.' : '—',
