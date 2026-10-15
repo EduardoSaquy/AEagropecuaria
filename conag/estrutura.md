@@ -44,11 +44,8 @@ como campo separado. A traducao:
     Nosso safras e por fazenda+cultura: um ano do Conag vira varios nossos.
 
 ## Contas bancarias (9)  — filtro do balancete
-    1 CAIXA INTERNO CAIXA        6 SICOOB [conta]
-    2 SICOOB [conta]               7 SICOOB [conta]
-    3 BANCO DO BRASIL [conta]      8 BANCO DO BRASIL [conta]
-    4 BANCO DO BRASIL [conta]      9 BANCO DA AMAZONIA [conta]
-    5 BANCO DO BRASIL [conta]
+    1 caixa interno; 3 contas no SICOOB; 4 no BANCO DO BRASIL; 1 no BANCO DA AMAZONIA.
+    Os numeros das contas NAO ficam no repositorio: ele e publico.
 
 ## Plano de contas — QUATRO niveis
     1  Centro Gerencial     ENTRADAS / SAIDAS            (2 registros)

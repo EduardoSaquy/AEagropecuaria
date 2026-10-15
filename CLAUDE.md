@@ -326,7 +326,7 @@ custo já existe em Resultados > Relatórios.
   realizado.
 - **Contrato que já está no Conag: lance por "Lançar contrato", nunca à mão.**
   Em Financiamentos, a lista "Dívida do Conag ainda sem contrato"
-  (`gruposConagParaLancar`) tem um botão por contrato (credor + nº do contrato;
+  (`gruposConagParaLancar`) tem um botão por contrato (credor + apelido do contrato;
   linha sem número se separa pelo valor da parcela; contrato todo pago não
   aparece, o histórico dele já está no Conag). O botão cria o financiamento
   com **uma parcela por linha do Conag** (`parcelasDoGrupoConag`: datas e
@@ -338,7 +338,7 @@ custo já existe em Resultados > Relatórios.
   Ninguém apaga linha do Conag (rodar o script de novo seria desfazer o
   apagamento; o vínculo sobrevive, `on conflict do update set contrato`).
   Por que não casar contrato digitado à mão com as linhas: o Conag só traz o
-  número do contrato em 67 dos 75 títulos e os valores reais não batem com o
+  contrato em 67 dos 75 títulos e os valores reais não batem com o
   que o gerador calcula. Se alguém lançar à mão um contrato que está no Conag, a
   dívida dobra (o modal avisa).
   - Parcelas já pagas do contrato importado entram **pagas e sem juros**: o
@@ -402,6 +402,20 @@ custo já existe em Resultados > Relatórios.
   de rolagem do Windows e escondeu 16 px de sobra).
 
 ## Armadilhas que já custaram caro
+
+- **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
+  CPF/CNPJ, número de conta bancária, número de contrato/cédula, número de
+  documento/nota do ERP (o "doc" mais um número, que as cargas antigas punham na descrição) e o razão por fornecedor **nunca** entram no
+  git (o Eduardo mandou, em 15/10/2026: "qualquer referência a número de
+  documento ou conta bancária, apague ou troque o nome"). Os dumps do Conag e as
+  cargas antigas de dados ficam só no computador, em `AEagropecuaria_dados_privados`
+  (pasta irmã, fora do git; também no `.gitignore`). Script ou teste novo usa
+  número inventado e apelido, nunca o real. `teste_sem_dados_sensiveis.py`
+  varre tudo que o git rastreia e falha se achar CPF/CNPJ válido, número de documento na descrição,
+  "BANCO + número de conta" ou arquivo de dump versionado. No banco, o contrato
+  do Conag vira apelido C01, C02... (`financiamentos_02_movimentos_conag.sql`;
+  `financiamentos_03_apelidos_contratos.sql` troca os números reais que já
+  tivessem sido gravados).
 
 - **Offline com login vencido.** O token do Supabase vale 1 h; vencido e
   sem rede, `db.auth.getSession()` fica ~25 s tentando renovar e depois

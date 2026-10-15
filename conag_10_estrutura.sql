@@ -49,7 +49,7 @@ create table conag_staging (
   cultura          text,
   administrativo   text,
   -- Numero do contrato de financiamento. No Conag ele vinha COLADO no nome
-  -- da conta - 'AMORTIZACAO DE FINANCIAMENTO (Contrato: [contrato])' - e
+  -- da conta - 'AMORTIZACAO DE FINANCIAMENTO (Contrato: numero do contrato)' - e
   -- eram 22 contratos gerando 44 variantes de duas contas so. Importar
   -- assim encheria o plano de contas de 44 versoes da mesma conta.
   -- Separado, da para ver por contrato sem sujar o plano.

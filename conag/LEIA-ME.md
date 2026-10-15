@@ -28,3 +28,9 @@ Nosso app hoje: 10.447.812,29 em 2.760 lancamentos.
 Nosso centros_custo tem tres: tipo (entrada/saida), subcategoria
 ('GRUPO | Subcategoria') e nome. O nivel 3 se perdeu na migracao - e ele
 que separa INSUMOS AGRICOLAS de INSUMOS PECUARIOS dentro do mesmo grupo.
+
+## Onde estao os dados
+
+Os CSV/JSON/PDF-texto desta pasta (razao completo, CPF/CNPJ das notas, numeros de
+contrato) NAO ficam no GitHub, que e publico: estao so no computador, copiados
+tambem em `AEagropecuaria_dados_privados` (pasta irma do projeto, fora do git).

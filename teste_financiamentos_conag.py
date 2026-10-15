@@ -51,12 +51,12 @@ DB = {
     "lancamentos_financeiros": [],
     "financiamentos": [], "parcelas_financiamento": [],
     "movimentos_financiamento": [
-        # A) BB [contrato]: anuais e crescentes (o gerador SAC/Price nao reproduz); 2 pagas + 3 a vencer
-        mov(1, "2024-11-15", 100000.00, "BANCO DO BRASIL", "[contrato]"),
-        mov(2, "2025-11-15", 120000.00, "BANCO DO BRASIL", "[contrato]"),
-        mov(3, "2026-11-16", 150000.00, "BANCO DO BRASIL", "[contrato]"),
-        mov(4, "2027-11-15", 160000.00, "BANCO DO BRASIL", "[contrato]"),
-        mov(5, "2028-11-15", 170000.00, "BANCO DO BRASIL", "[contrato]"),
+        # A) BB C01: anuais e crescentes (o gerador SAC/Price nao reproduz); 2 pagas + 3 a vencer
+        mov(1, "2024-11-15", 100000.00, "BANCO DO BRASIL", "C01"),
+        mov(2, "2025-11-15", 120000.00, "BANCO DO BRASIL", "C01"),
+        mov(3, "2026-11-16", 150000.00, "BANCO DO BRASIL", "C01"),
+        mov(4, "2027-11-15", 160000.00, "BANCO DO BRASIL", "C01"),
+        mov(5, "2028-11-15", 170000.00, "BANCO DO BRASIL", "C01"),
         # B) BB sem numero, parcela de 456.737,72: 1 paga + 2 a vencer (o Conag nem sempre traz o numero)
         mov(6, "2026-08-19", 456737.72, "BANCO DO BRASIL", ""),
         mov(7, "2027-08-15", 456737.72, "BANCO DO BRASIL", ""),
@@ -66,7 +66,7 @@ DB = {
         # C) contrato quitado (so linhas passadas): nao precisa virar contrato
         mov(10, "2023-05-11", 3672989.65, "BANCO DA AMAZONIA BASA", ""),
         # D) so a vencer, sem nenhuma paga
-        mov(11, "2027-03-10", 80000.00, "SICOOB COCRED", "[contrato]"),
+        mov(11, "2027-03-10", 80000.00, "SICOOB COCRED", "C02"),
     ],
     "profiles": [{"id": "u1", "nome": "Eduardo", "usuario": "eduardo", "papel": "admin", "permissoes": {}, "ativo": True}],
 }
@@ -106,14 +106,14 @@ with sync_playwright() as pw:
         totalPago: g.totalPago, totalAVencer: g.totalAVencer, total: g.total}))""")
     por_contrato = {(g["contrato"] or "sem numero"): g for g in grupos}
     conf(len(grupos) == 3, "3 contratos com parcela a vencer na lista (o quitado e a parcela solta de 2023 nao aparecem)", str(grupos))
-    a = por_contrato.get("[contrato]", {})
+    a = por_contrato.get("C01", {})
     conf(a.get("linhas") == 5 and a.get("pagas") == 2 and a.get("aVencer") == 3
          and perto(a.get("totalPago"), 220000) and perto(a.get("totalAVencer"), 480000) and perto(a.get("total"), 700000),
-         "contrato [contrato]: 5 parcelas (2 pagas R$ 220.000, 3 a vencer R$ 480.000), total R$ 700.000", str(a))
+         "contrato C01: 5 parcelas (2 pagas R$ 220.000, 3 a vencer R$ 480.000), total R$ 700.000", str(a))
     b = por_contrato.get("sem numero", {})
     conf(b.get("linhas") == 3 and b.get("pagas") == 1 and b.get("aVencer") == 2 and perto(b.get("totalAVencer"), 913475.44),
          "sem numero: so as 3 linhas de R$ 456.737,72 formam o contrato (a parcela de R$ 2.030 de 2023 fica de fora)", str(b))
-    conf([g["contrato"] for g in grupos] == ["[contrato]", "[contrato]", ""],
+    conf([g["contrato"] for g in grupos] == ["C01", "C02", ""],
          "lista ordenada pela proxima parcela a vencer (16/11/2026, 10/03/2027, 15/08/2027)", str([(g["contrato"], g["credor"]) for g in grupos]))
     d0 = page.evaluate("() => dividaEmpresa()")
     conf(d0["origem"] == "conag" and perto(d0["valor"], 480000 + 913475.44 + 80000),
@@ -125,12 +125,12 @@ with sync_playwright() as pw:
     texto = page.evaluate("() => document.body.innerText.toLowerCase()")
     conf("dívida do conag ainda sem contrato" in texto and "lançar contrato" in texto,
          "Financiamentos mostra a lista 'Divida do Conag ainda sem contrato' com o botao 'Lancar contrato'")
-    conf("[contrato]" in texto and "banco do brasil" in texto and "sicoob cocred" in texto,
+    conf("contrato c01" in texto and "banco do brasil" in texto and "sicoob cocred" in texto,
          "a lista mostra credor e numero do contrato")
     conf("basa" not in texto.split("dívida do conag ainda sem contrato")[1], "o contrato quitado (BASA) nao aparece na lista")
 
     # ---- 3. abrir o contrato A ----
-    page.click('[data-lancar-conag="BANCO DO BRASIL|[contrato]"]')
+    page.click('[data-lancar-conag="BANCO DO BRASIL|C01"]')
     page.wait_for_timeout(300)
     modal = page.evaluate("""() => ({
         titulo: document.querySelector('.modal-head h3').innerText,
@@ -171,7 +171,7 @@ with sync_playwright() as pw:
     conf(len(fin) == 1 and fin[0]["banco"] == "Banco do Brasil" and perto(fin[0]["valor_principal"], 700000)
          and fin[0]["numero_parcelas"] == 5 and fin[0]["status"] == "ativo" and fin[0]["finalidade"] == "custeio" and fin[0]["atividade"] == "graos",
          "criou 1 financiamento ativo: Banco do Brasil, principal R$ 700.000, 5 parcelas, custeio de graos", str(fin))
-    conf(fin and fin[0]["observacao"].startswith("Importado do Conag (contrato [contrato])"),
+    conf(fin and fin[0]["observacao"].startswith("Importado do Conag (contrato C01)"),
          "a observacao marca o contrato como importado do Conag (o app usa isso para esconder 'Editar')", str(fin[:1]))
     conf([p["data_vencimento"] for p in parc] == ["2024-11-15", "2025-11-15", "2026-11-16", "2027-11-15", "2028-11-15"],
          "as 5 parcelas tem as datas REAIS do Conag (anuais), nao as mensais do gerador", str([p["data_vencimento"] for p in parc]))
@@ -211,13 +211,13 @@ with sync_playwright() as pw:
     conf(perto(f24["emprestimosRecebidos"], 0) and perto(f25["emprestimosRecebidos"], 0),
          "contrato importado do Conag nao conta como emprestimo recebido (o Conag nao traz o dinheiro que entrou)")
     gr = page.evaluate("() => gruposConagParaLancar().map(g => g.contrato || 'sem numero')")
-    conf("[contrato]" not in gr and len(gr) == 2, "o contrato lancado sai da lista; sobram os outros 2", str(gr))
+    conf("C01" not in gr and len(gr) == 2, "o contrato lancado sai da lista; sobram os outros 2", str(gr))
 
     # ---- 7. a tela depois ----
     page.click("[data-abrir-financiamento]")
     page.wait_for_timeout(300)
     detalhe = page.evaluate("() => document.body.innerText.toLowerCase()")
-    conf("importado do conag (contrato [contrato])" in detalhe and "juros já no financeiro (conag)" in detalhe,
+    conf("importado do conag (contrato c01)" in detalhe and "juros já no financeiro (conag)" in detalhe,
          "o detalhe diz que veio do Conag e que o juros das parcelas pagas ja esta no Financeiro")
     conf(page.evaluate("() => document.querySelectorAll('[data-pagar-parcela]').length") == 3,
          "as 3 parcelas a vencer tem 'Marcar como paga'; as 2 do passado nao")
@@ -226,7 +226,7 @@ with sync_playwright() as pw:
     # ---- 7b. contrato so com parcelas a vencer: nada pago, mas tambem sem 'Editar' ----
     # (sem nenhuma parcela paga o botao Editar apareceria; regerar o cronograma
     # apagaria as parcelas reais do Conag)
-    page.click('[data-lancar-conag="SICOOB COCRED|[contrato]"]')
+    page.click('[data-lancar-conag="SICOOB COCRED|C02"]')
     page.wait_for_timeout(300)
     page.select_option("#f-finalidadefin", "capital_giro")
     page.fill("#f-taxafin", "12")

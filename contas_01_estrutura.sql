@@ -103,7 +103,7 @@ create unique index if not exists uq_entidade_nome
 -- ------------------------------------------------------------
 create table if not exists contas_bancarias (
   id          bigint generated always as identity primary key,
-  nome        text not null,              -- "SICOOB - CONTA PRINCIPAL"
+  nome        text not null,              -- "SICOOB - CONTA PRINCIPAL" (sem o numero da conta)
   banco       text,
   agencia     text,
   conta       text,

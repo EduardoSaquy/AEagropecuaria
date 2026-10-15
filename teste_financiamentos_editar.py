@@ -45,10 +45,10 @@ def parc(i, fid, n, venc, amort, juros, saldo, status="pendente", pago=None, ids
             "lancamentos_financeiro_ids": ids or []}
 
 def mov(i, data, valor, fid=None):
-    return {"id": i, "data": data, "tipo": "amortizacao", "valor": valor, "credor": "BANCO DO BRASIL", "contrato": "[contrato]",
+    return {"id": i, "data": data, "tipo": "amortizacao", "valor": valor, "credor": "BANCO DO BRASIL", "contrato": "C09",
             "descricao": "", "origem": "conag", "conag_id": 1000 + i, "financiamento_id": fid}
 
-OBS_CONAG = ("Importado do Conag (contrato [contrato]): cronograma real, uma parcela por linha do Conag; "
+OBS_CONAG = ("Importado do Conag (contrato C09): cronograma real, uma parcela por linha do Conag; "
              "juros das parcelas a vencer estimado pela taxa informada.")
 
 DB = {
@@ -269,7 +269,7 @@ with sync_playwright() as pw:
     c3 = contrato(3)
     e3 = juros_est(200000, 12, "2026-05-15", "2026-11-16")
     e4 = juros_est(100000, 12, "2026-11-16", "2027-11-15")
-    conf(perto(c3["taxa_juros_aa"], 12) and c3["observacao"].startswith("Importado do Conag (contrato [contrato])") and c3["observacao"].endswith("cedula 2024"),
+    conf(perto(c3["taxa_juros_aa"], 12) and c3["observacao"].startswith("Importado do Conag (contrato C09)") and c3["observacao"].endswith("cedula 2024"),
          "taxa 12% salva; a observacao mantem a marca do Conag e acrescenta o texto do usuario", str(c3["observacao"]))
     conf(perto(parcela(8)["valor_juros"], e3, 0.02) and perto(parcela(9)["valor_juros"], e4, 0.02),
          f"mudar a taxa refaz o juros estimado das parcelas em aberto: R$ {e3:,.2f} e R$ {e4:,.2f}", str((parcela(8)["valor_juros"], parcela(9)["valor_juros"])))
@@ -323,7 +323,7 @@ with sync_playwright() as pw:
     conf(contrato(3)["status"] == "cancelado" and any("linhas do Conag voltam" in m for m in dialogos[n_dialogos:]),
          "cancelar o contrato importado avisa que as linhas do Conag voltam e muda o status para cancelado", str(dialogos[n_dialogos:]))
     grupos = page.evaluate("() => gruposConagParaLancar().map(g => [g.contrato, g.pagas.length, g.aVencer.length])")
-    conf(sem_cancelar == 0 and grupos == [["[contrato]", 2, 2]],
+    conf(sem_cancelar == 0 and grupos == [["C09", 2, 2]],
          "as 4 linhas voltam para 'Divida do Conag ainda sem contrato' (2 pagas, 2 a vencer) e o contrato pode ser lancado de novo", str(grupos))
     fl2 = page.evaluate("() => fluxoEmpresa({tipo:'mes', mes:'2026-10', ano:2026, safra:2026})")["financiamento"]
     conf(perto(fl2["amortizacao"], 60000),

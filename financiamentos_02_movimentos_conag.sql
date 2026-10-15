@@ -4,7 +4,8 @@
 -- RODAR NO PROJETO DO LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).
 -- Cole inteiro e rode de uma vez. Pode rodar mais de uma vez sem problema
 -- (tudo usa IF NOT EXISTS / ON CONFLICT / DROP ... IF EXISTS), inclusive por
--- cima da versao anterior deste script (acrescenta a coluna `contrato`).
+-- cima da versao anterior deste script (acrescenta a coluna `contrato`
+-- e troca o numero real do contrato pelo apelido).
 --
 -- ------------------------------------------------------------
 -- POR QUE UMA TABELA PROPRIA
@@ -34,8 +35,13 @@
 -- voltam a valer sozinhas.
 --
 -- O Conag NAO tem entrada de emprestimo (so a amortizacao), entao so o
--- pagamento do principal e importado. 67 dos 75 titulos trazem o numero do
--- contrato (coluna `contrato`); os outros se agrupam pelo valor da parcela.
+-- pagamento do principal e importado. 67 dos 75 titulos trazem o contrato (coluna
+-- `contrato`); os outros se agrupam pelo valor da parcela.
+--
+-- O numero real do contrato NAO entra aqui: este repositorio e publico. Cada
+-- contrato recebe um apelido C01, C02... pela ordem do 1o pagamento. Quem rodou
+-- a versao antiga (com o numero real) roda este script de novo, ou so o
+-- financiamentos_03_apelidos_contratos.sql: os dois trocam o numero pelo apelido.
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -63,7 +69,7 @@ create table if not exists movimentos_financiamento (
   tipo             text not null check (tipo in ('entrada','amortizacao')),
   valor            numeric(14,2) not null check (valor > 0),
   credor           text,
-  -- numero do contrato no banco, como o Conag traz (ex: [contrato]); pode ser nulo
+  -- apelido do contrato (C01, C02...), nunca o numero real; pode ser nulo
   contrato         text,
   descricao        text,
   origem           text not null default 'manual' check (origem in ('manual','conag')),
@@ -111,84 +117,84 @@ create policy "exclui movimento financiamento" on movimentos_financiamento
 -- ------------------------------------------------------------
 -- 3) IMPORTACAO DO CONAG: 75 titulos de amortizacao
 -- (75 titulos, total R$ 17.829.159,91; credor "BANCO BRASIL" unificado em "BANCO DO BRASIL")
--- Vencimento = data do movimento. Rodar de novo atualiza so o numero do contrato:
+-- Vencimento = data do movimento. Rodar de novo atualiza so o apelido do contrato:
 -- nao desfaz o vinculo (financiamento_id) de quem ja foi lancado no modulo.
 -- ------------------------------------------------------------
 insert into movimentos_financiamento (data, tipo, valor, credor, contrato, descricao, origem, conag_id)
 values
-  ('2023-03-15', 'amortizacao', 6287.14, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 434),
+  ('2023-03-15', 'amortizacao', 6287.14, 'BANCO DO BRASIL', 'C01', 'Amortizacao de financiamento (importado do Conag)', 'conag', 434),
   ('2023-05-11', 'amortizacao', 3672989.65, 'BANCO DA AMAZONIA BASA', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 797),
   ('2023-05-15', 'amortizacao', 104986.00, 'SICOOB COCRED', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 813),
-  ('2023-05-15', 'amortizacao', 74571.43, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1417),
-  ('2023-06-15', 'amortizacao', 3760.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 911),
+  ('2023-05-15', 'amortizacao', 74571.43, 'BANCO DO BRASIL', 'C02', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1417),
+  ('2023-06-15', 'amortizacao', 3760.00, 'BANCO DO BRASIL', 'C03', 'Amortizacao de financiamento (importado do Conag)', 'conag', 911),
   ('2023-06-15', 'amortizacao', 12200.00, 'BANCO DO BRASIL', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 1196),
   ('2023-06-15', 'amortizacao', 2030.00, 'BANCO DO BRASIL', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 1198),
-  ('2023-06-15', 'amortizacao', 2030.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1370),
-  ('2023-06-15', 'amortizacao', 9231.43, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1387),
-  ('2023-06-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1326),
-  ('2023-06-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1540),
-  ('2023-07-14', 'amortizacao', 735944.88, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 467),
-  ('2023-07-17', 'amortizacao', 12142.86, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1357),
-  ('2023-07-20', 'amortizacao', 299826.91, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 330),
-  ('2023-07-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1327),
-  ('2023-07-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1541),
-  ('2023-08-02', 'amortizacao', 1000000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1331),
-  ('2023-08-15', 'amortizacao', 41840.96, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 525),
-  ('2023-08-15', 'amortizacao', 187500.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1335),
-  ('2023-08-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1328),
-  ('2023-08-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1542),
-  ('2023-09-11', 'amortizacao', 600000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1332),
-  ('2023-09-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1329),
-  ('2023-09-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1543),
-  ('2023-10-16', 'amortizacao', 187500.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1290),
-  ('2023-10-16', 'amortizacao', 37939.47, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1299),
-  ('2023-11-16', 'amortizacao', 84306.47, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 552),
-  ('2023-12-15', 'amortizacao', 308900.59, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1396),
-  ('2024-03-15', 'amortizacao', 6287.14, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 498),
-  ('2024-05-15', 'amortizacao', 9231.43, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1388),
-  ('2024-05-15', 'amortizacao', 74571.43, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1425),
-  ('2024-06-17', 'amortizacao', 3930.15, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 912),
-  ('2024-06-17', 'amortizacao', 2121.86, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1381),
-  ('2024-06-27', 'amortizacao', 165000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1125),
-  ('2024-07-15', 'amortizacao', 12142.86, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1548),
-  ('2024-07-19', 'amortizacao', 165000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1126),
-  ('2024-07-19', 'amortizacao', 200000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1129),
-  ('2024-08-20', 'amortizacao', 300000.10, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1695),
-  ('2024-08-26', 'amortizacao', 600000.39, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1696),
-  ('2024-08-29', 'amortizacao', 41840.96, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 526),
-  ('2024-08-29', 'amortizacao', 165000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1127),
-  ('2024-08-29', 'amortizacao', 187500.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1336),
-  ('2024-10-04', 'amortizacao', 165000.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1128),
-  ('2024-10-15', 'amortizacao', 187500.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1291),
-  ('2024-11-18', 'amortizacao', 84306.47, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 553),
-  ('2024-11-21', 'amortizacao', 37939.47, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1300),
-  ('2024-12-16', 'amortizacao', 308900.59, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1397),
-  ('2025-05-15', 'amortizacao', 74571.43, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1426),
-  ('2025-07-15', 'amortizacao', 12142.86, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1549),
-  ('2025-08-15', 'amortizacao', 41840.96, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 527),
-  ('2025-08-15', 'amortizacao', 187500.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1337),
-  ('2025-10-15', 'amortizacao', 270632.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1292),
-  ('2025-10-15', 'amortizacao', 103835.00, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1301),
-  ('2025-11-17', 'amortizacao', 84306.47, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 554),
-  ('2025-12-15', 'amortizacao', 308900.59, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1398),
-  ('2026-03-17', 'amortizacao', 6287.14, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 500),
-  ('2026-08-03', 'amortizacao', 12142.86, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1550),
-  ('2026-08-19', 'amortizacao', 128571.43, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1338),
+  ('2023-06-15', 'amortizacao', 2030.00, 'BANCO DO BRASIL', 'C04', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1370),
+  ('2023-06-15', 'amortizacao', 9231.43, 'BANCO DO BRASIL', 'C05', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1387),
+  ('2023-06-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', 'C06', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1326),
+  ('2023-06-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', 'C07', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1540),
+  ('2023-07-14', 'amortizacao', 735944.88, 'BANCO DO BRASIL', 'C08', 'Amortizacao de financiamento (importado do Conag)', 'conag', 467),
+  ('2023-07-17', 'amortizacao', 12142.86, 'BANCO DO BRASIL', 'C09', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1357),
+  ('2023-07-20', 'amortizacao', 299826.91, 'BANCO DO BRASIL', 'C10', 'Amortizacao de financiamento (importado do Conag)', 'conag', 330),
+  ('2023-07-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', 'C06', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1327),
+  ('2023-07-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', 'C07', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1541),
+  ('2023-08-02', 'amortizacao', 1000000.00, 'BANCO DO BRASIL', 'C11', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1331),
+  ('2023-08-15', 'amortizacao', 41840.96, 'BANCO DO BRASIL', 'C12', 'Amortizacao de financiamento (importado do Conag)', 'conag', 525),
+  ('2023-08-15', 'amortizacao', 187500.00, 'BANCO DO BRASIL', 'C13', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1335),
+  ('2023-08-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', 'C06', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1328),
+  ('2023-08-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', 'C07', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1542),
+  ('2023-09-11', 'amortizacao', 600000.00, 'BANCO DO BRASIL', 'C14', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1332),
+  ('2023-09-28', 'amortizacao', 210000.00, 'BANCO DO BRASIL', 'C06', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1329),
+  ('2023-09-28', 'amortizacao', 125000.00, 'BANCO DO BRASIL', 'C07', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1543),
+  ('2023-10-16', 'amortizacao', 187500.00, 'BANCO DO BRASIL', 'C15', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1290),
+  ('2023-10-16', 'amortizacao', 37939.47, 'BANCO DO BRASIL', 'C16', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1299),
+  ('2023-11-16', 'amortizacao', 84306.47, 'BANCO DO BRASIL', 'C17', 'Amortizacao de financiamento (importado do Conag)', 'conag', 552),
+  ('2023-12-15', 'amortizacao', 308900.59, 'BANCO DO BRASIL', 'C18', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1396),
+  ('2024-03-15', 'amortizacao', 6287.14, 'BANCO DO BRASIL', 'C01', 'Amortizacao de financiamento (importado do Conag)', 'conag', 498),
+  ('2024-05-15', 'amortizacao', 9231.43, 'BANCO DO BRASIL', 'C05', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1388),
+  ('2024-05-15', 'amortizacao', 74571.43, 'BANCO DO BRASIL', 'C02', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1425),
+  ('2024-06-17', 'amortizacao', 3930.15, 'BANCO DO BRASIL', 'C03', 'Amortizacao de financiamento (importado do Conag)', 'conag', 912),
+  ('2024-06-17', 'amortizacao', 2121.86, 'BANCO DO BRASIL', 'C04', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1381),
+  ('2024-06-27', 'amortizacao', 165000.00, 'BANCO DO BRASIL', 'C19', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1125),
+  ('2024-07-15', 'amortizacao', 12142.86, 'BANCO DO BRASIL', 'C09', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1548),
+  ('2024-07-19', 'amortizacao', 165000.00, 'BANCO DO BRASIL', 'C19', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1126),
+  ('2024-07-19', 'amortizacao', 200000.00, 'BANCO DO BRASIL', 'C20', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1129),
+  ('2024-08-20', 'amortizacao', 300000.10, 'BANCO DO BRASIL', 'C21', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1695),
+  ('2024-08-26', 'amortizacao', 600000.39, 'BANCO DO BRASIL', 'C22', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1696),
+  ('2024-08-29', 'amortizacao', 41840.96, 'BANCO DO BRASIL', 'C12', 'Amortizacao de financiamento (importado do Conag)', 'conag', 526),
+  ('2024-08-29', 'amortizacao', 165000.00, 'BANCO DO BRASIL', 'C19', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1127),
+  ('2024-08-29', 'amortizacao', 187500.00, 'BANCO DO BRASIL', 'C13', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1336),
+  ('2024-10-04', 'amortizacao', 165000.00, 'BANCO DO BRASIL', 'C19', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1128),
+  ('2024-10-15', 'amortizacao', 187500.00, 'BANCO DO BRASIL', 'C15', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1291),
+  ('2024-11-18', 'amortizacao', 84306.47, 'BANCO DO BRASIL', 'C17', 'Amortizacao de financiamento (importado do Conag)', 'conag', 553),
+  ('2024-11-21', 'amortizacao', 37939.47, 'BANCO DO BRASIL', 'C16', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1300),
+  ('2024-12-16', 'amortizacao', 308900.59, 'BANCO DO BRASIL', 'C18', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1397),
+  ('2025-05-15', 'amortizacao', 74571.43, 'BANCO DO BRASIL', 'C02', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1426),
+  ('2025-07-15', 'amortizacao', 12142.86, 'BANCO DO BRASIL', 'C09', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1549),
+  ('2025-08-15', 'amortizacao', 41840.96, 'BANCO DO BRASIL', 'C12', 'Amortizacao de financiamento (importado do Conag)', 'conag', 527),
+  ('2025-08-15', 'amortizacao', 187500.00, 'BANCO DO BRASIL', 'C13', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1337),
+  ('2025-10-15', 'amortizacao', 270632.00, 'BANCO DO BRASIL', 'C15', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1292),
+  ('2025-10-15', 'amortizacao', 103835.00, 'BANCO DO BRASIL', 'C16', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1301),
+  ('2025-11-17', 'amortizacao', 84306.47, 'BANCO DO BRASIL', 'C17', 'Amortizacao de financiamento (importado do Conag)', 'conag', 554),
+  ('2025-12-15', 'amortizacao', 308900.59, 'BANCO DO BRASIL', 'C18', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1398),
+  ('2026-03-17', 'amortizacao', 6287.14, 'BANCO DO BRASIL', 'C01', 'Amortizacao de financiamento (importado do Conag)', 'conag', 500),
+  ('2026-08-03', 'amortizacao', 12142.86, 'BANCO DO BRASIL', 'C09', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1550),
+  ('2026-08-19', 'amortizacao', 128571.43, 'BANCO DO BRASIL', 'C13', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1338),
   ('2026-08-19', 'amortizacao', 456737.72, 'BANCO DO BRASIL', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 10001),
-  ('2026-10-15', 'amortizacao', 354064.10, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1293),
-  ('2026-10-15', 'amortizacao', 60334.75, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1302),
-  ('2026-11-16', 'amortizacao', 136004.85, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 555),
-  ('2026-12-15', 'amortizacao', 394620.50, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1399),
-  ('2027-07-15', 'amortizacao', 13261.37, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1551),
+  ('2026-10-15', 'amortizacao', 354064.10, 'BANCO DO BRASIL', 'C15', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1293),
+  ('2026-10-15', 'amortizacao', 60334.75, 'BANCO DO BRASIL', 'C16', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1302),
+  ('2026-11-16', 'amortizacao', 136004.85, 'BANCO DO BRASIL', 'C17', 'Amortizacao de financiamento (importado do Conag)', 'conag', 555),
+  ('2026-12-15', 'amortizacao', 394620.50, 'BANCO DO BRASIL', 'C18', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1399),
+  ('2027-07-15', 'amortizacao', 13261.37, 'BANCO DO BRASIL', 'C09', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1551),
   ('2027-08-15', 'amortizacao', 456737.72, 'BANCO DO BRASIL', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 10002),
-  ('2027-08-16', 'amortizacao', 281436.02, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1339),
-  ('2027-10-15', 'amortizacao', 375307.94, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1294),
-  ('2027-11-15', 'amortizacao', 150244.25, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 556),
-  ('2027-12-15', 'amortizacao', 366047.20, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1400),
-  ('2028-08-15', 'amortizacao', 298322.19, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1340),
-  ('2028-10-16', 'amortizacao', 397953.46, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1295),
-  ('2028-11-15', 'amortizacao', 166065.32, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 557),
-  ('2028-12-15', 'amortizacao', 337555.70, 'BANCO DO BRASIL', '[contrato]', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1401),
+  ('2027-08-16', 'amortizacao', 281436.02, 'BANCO DO BRASIL', 'C13', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1339),
+  ('2027-10-15', 'amortizacao', 375307.94, 'BANCO DO BRASIL', 'C15', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1294),
+  ('2027-11-15', 'amortizacao', 150244.25, 'BANCO DO BRASIL', 'C17', 'Amortizacao de financiamento (importado do Conag)', 'conag', 556),
+  ('2027-12-15', 'amortizacao', 366047.20, 'BANCO DO BRASIL', 'C18', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1400),
+  ('2028-08-15', 'amortizacao', 298322.19, 'BANCO DO BRASIL', 'C13', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1340),
+  ('2028-10-16', 'amortizacao', 397953.46, 'BANCO DO BRASIL', 'C15', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1295),
+  ('2028-11-15', 'amortizacao', 166065.32, 'BANCO DO BRASIL', 'C17', 'Amortizacao de financiamento (importado do Conag)', 'conag', 557),
+  ('2028-12-15', 'amortizacao', 337555.70, 'BANCO DO BRASIL', 'C18', 'Amortizacao de financiamento (importado do Conag)', 'conag', 1401),
   ('2029-08-15', 'amortizacao', 456737.72, 'BANCO DO BRASIL', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 10003),
   ('2029-08-15', 'amortizacao', 456737.72, 'BANCO DO BRASIL', null, 'Amortizacao de financiamento (importado do Conag)', 'conag', 10004)
 on conflict (conag_id) do update set contrato = excluded.contrato;
