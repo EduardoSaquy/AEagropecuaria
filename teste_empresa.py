@@ -275,19 +275,21 @@ with sync_playwright() as pw:
         const limite = main.getBoundingClientRect().right - parseFloat(getComputedStyle(main).paddingRight) + 0.5;
         const sobram = [...main.children].filter(e => e.getBoundingClientRect().right > limite)
             .map(e => (String(e.className) || e.tagName) + '=' + Math.round(e.getBoundingClientRect().right) + '>' + Math.round(limite));
-        const th = document.querySelector('.tabela-em-blocos thead th');
-        const blocos = document.querySelectorAll('.tabela-em-blocos tbody tr:not(.linha-secao)').length;
-        const rotulos = [...document.querySelectorAll('.tabela-em-blocos td[data-rotulo]')].slice(0, 6)
+        // a 1a tabela em blocos da aba e o historico de juros (a 2a e a dos vencimentos)
+        const hist = document.querySelector('table.tabela-em-blocos');
+        const th = hist.querySelector('thead th');
+        const blocos = hist.querySelectorAll('tbody tr:not(.linha-secao)').length;
+        const rotulos = [...hist.querySelectorAll('td[data-rotulo]')].slice(0, 6)
             .map(td => getComputedStyle(td, '::before').content);
         return {pagina, maiorCard: Math.max(0, ...cards), sobram, cabecalhoVisivel: !!th && th.offsetParent !== null, blocos, rotulos};
     }"""
-    for largura, altura in [(1280, 800), (1000, 800), (800, 900), (390, 844), (376, 800), (360, 800), (320, 640)]:
+    for largura, altura in [(1280, 800), (1100, 800), (1000, 800), (800, 900), (390, 844), (376, 800), (360, 800), (320, 640)]:
         page.set_viewport_size({"width": largura, "height": altura})
         page.wait_for_timeout(300)
         m = page.evaluate(medir)
         conf(m["pagina"] <= 0 and m["maiorCard"] <= 1 and not m["sobram"],
              f"{largura} px: a pagina, os cards e as abas de Resultados cabem na tela, sem rolar de lado (pagina={m['pagina']}, maior card={m['maiorCard']}, passam da coluna={m['sobram']})", str(m))
-        if largura > 900:
+        if largura > 1060:   # o historico tem 9 colunas: precisa de ~980 px so para a tabela
             conf(m["cabecalhoVisivel"], f"{largura} px: o historico continua tabela, com cabecalho")
         else:
             conf(not m["cabecalhoVisivel"] and m["blocos"] == 8

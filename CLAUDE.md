@@ -288,8 +288,10 @@ Confinamento), aí sim dá pra repartir o custo — hoje não.
 ### Resultados > Empresa: a empresa como uma atividade só
 
 Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
-e dívida (Fase 1 em 14/10/2026; faltam a Fase 2, dívida com cronograma e taxa
-média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
+e dívida (Fase 1 em 14/10/2026). Fase 2 em 15/10/2026: dívida no tempo
+(vencimentos em 12 meses x depois, por ano e por ano-safra; taxa média dos
+contratos; saldo médio e custo médio da dívida). Falta a Fase 3: caixa real
+por conta bancária, contas a pagar/receber e balanço simplificado.
 
 - Base: `lancamentos_financeiros` **direto** (`state.lancamentos`, a empresa
   inteira, sem ratear) + `movimentos_financiamento` + o módulo Financiamentos.
@@ -337,9 +339,23 @@ média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
     ficam pendentes com juros **estimado** pela taxa informada (o Conag não tem
     juros futuro).
   - Contrato importado (`observacao` começa com "Importado do Conag",
-    `importadoDoConag`) **não tem "Editar"**: regerar apagaria o cronograma real.
-    Não conta como empréstimo recebido (data aproximada, valor = só o que o Conag
-    viu pagar). `sistema_amortizacao` fica 'sac' só porque o banco exige um dos 3.
+    `importadoDoConag`) **nunca regera o cronograma**: o "Editar" dele
+    (`_travado`) mexe só em finalidade, atividade, data, taxa, fazenda, garantia
+    e observação; mudar taxa ou data refaz só o juros **estimado** das parcelas
+    em aberto (`reestimarJurosPendentes`). Não conta como empréstimo recebido
+    (data aproximada, valor = só o que o Conag viu pagar). A data do contrato é
+    **estimada** (`inicioEstimadoConag`: 1ª parcela menos o intervalo mediano entre
+    parcelas; 365 dias se só tem uma) e o mesmo cálculo alimenta a linha do tempo
+    da dívida antes e depois de lançar, então lançar não muda o saldo médio.
+    `sistema_amortizacao` fica 'sac' só porque o banco exige um dos 3.
+  - **Ajustar depois de lançar** (pedido do Eduardo: "se já foi amortizado eu apago
+    ou edito"), na tela do contrato: **Registrar pagamento** (data e juros reais;
+    o juros só vira despesa, na data do pagamento, se a caixa estiver marcada),
+    **Editar** parcela (vencimento e juros; a amortização só no importado, e aí o
+    saldo de cada parcela e o principal se refazem), **Quitar** (todas as parcelas
+    em aberto pagas numa data, sem juros), **Cancelar contrato** (só muda o
+    status; as linhas do Conag voltam; não cancela se alguma parcela já virou
+    lançamento no Financeiro). Nada apaga histórico.
   - O contrato "sem número" do Banco do Brasil (4 parcelas de R$ 456.737,72) tem
     duas parcelas em 15/08/2029 e nenhuma em 2028 no Conag: provável erro de
     digitação de lá; o total fecha, só o vencimento do meio sai errado.
@@ -347,19 +363,33 @@ média, e a Fase 3, caixa real por conta bancária e balanço simplificado).
     duplicaria o juros (já está no Conag).
 - O Conag **não tem entrada de empréstimo**, só amortização: sem ela, a
   cobertura do serviço da dívida sai pior que a realidade.
+- **Dívida no tempo** (`vencimentosDaDivida`, `taxaMediaContratos`,
+  `linhaDoTempoDivida`, `saldoMedioDivida`): vencimentos juntam as parcelas em
+  aberto dos contratos ativos (com o juros estimado) e as linhas do Conag que
+  nenhum contrato assumiu (só principal); "12 meses" = até hoje + 12 meses. A
+  taxa média dos contratos é a **contratada**, ponderada pelo saldo. O **custo
+  médio** (juros pagos ÷ saldo médio) é só um indicador: o saldo médio é
+  estimado (linha do Conag solta tem data de contrato estimada, dívida quitada
+  antes de 2023 não existe) e **período em andamento não tem custo médio**
+  (os juros dele ainda estão incompletos; em 15/10/2026 os de 2026 eram R$ 46 mil
+  porque os contratos ainda não estavam lançados). Com o Conag de 2023 a 2025
+  o custo médio estimado deu 9,6%, 13,8% e 9,8% a.a.
+  `teste_divida_empresa.py` confere cada conta à mão.
 - O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
   `blocoDfcDoGrupo` normaliza acento. "BANCO DO BRASIL" e "BANCO BRASIL" eram o
   mesmo credor: o script unifica.
-- **Sem rolar de lado** (pedido do Eduardo). A tabela do histórico tem 7
-  colunas e, com título em linha única, passava do card. Classes:
-  `tabela-cabecalho-quebra` (título quebra em 2 linhas) e `tabela-em-blocos`
-  (até 900 px cada linha vira um bloco, com o nome da coluna vindo de
-  `data-rotulo` em cada `<td>`; a linha de seção leva `linha-secao`). Tabela
-  nova com mais de 5 colunas usa as duas. A barra de abas de Resultados (4
+- **Sem rolar de lado** (pedido do Eduardo). A tabela do histórico tem 9
+  colunas (~980 px só da tabela) e, com título em linha única, passava do card.
+  Classes: `tabela-cabecalho-quebra` (título quebra em 2 linhas) e
+  `tabela-em-blocos` (até 1060 px cada linha vira um bloco, com o nome da coluna
+  vindo de `data-rotulo` em cada `<td>`; a linha de seção leva `linha-secao`;
+  células de botões levam `acoes`). Tabela nova com mais de 5 colunas usa as
+  duas: confira a largura mínima dela (min-content) antes de escolher o ponto de
+  corte. A barra de abas de Resultados (4
   botões, 361 px) passava da tela de celular e a página inteira rolava de lado:
   leva `periodo-tabs-ajusta` (ocupa a largura toda, botões dividem o espaço);
   ao acrescentar outra aba, rode o teste. `teste_empresa.py` mede em 1280,
-  1000, 800, 390, 376, 360 e 320 px se algo passa da coluna central. Compare
+  1100, 1000, 800, 390, 376, 360 e 320 px se algo passa da coluna central. Compare
   com `documentElement.clientWidth`, não com `innerWidth` (que inclui a barra
   de rolagem do Windows e escondeu 16 px de sobra).
 
@@ -418,8 +448,10 @@ verdade em `window.__DB__`).
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
-| `teste_empresa.py` | 61 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do Conag assumida por contrato, sem rolar de lado de 1280 a 320 px) |
+| `teste_empresa.py` | 63 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do Conag assumida por contrato, sem rolar de lado de 1280 a 320 px) |
+| `teste_divida_empresa.py` | 42 | AEMatriz.html (Empresa, Fase 2: vencimentos em 12 meses/por ano/por safra, taxa média ponderada, saldo e custo médio, lançar contrato não muda o saldo médio) |
 | `teste_financiamentos_conag.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do Conag: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
+| `teste_financiamentos_editar.py` | 40 | AEMatriz.html (Financiamentos: registrar pagamento com data/juros reais, editar parcela e contrato, quitar, cancelar; tela do contrato sem rolar de lado) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só

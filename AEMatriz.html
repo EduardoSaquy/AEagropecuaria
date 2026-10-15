@@ -131,13 +131,15 @@
      estreita cada linha vira um bloco com o nome da coluna ao lado do valor
      (data-rotulo), pra não precisar rolar de lado. */
   .tabela-cabecalho-quebra th{white-space:normal; line-height:1.25; vertical-align:bottom;}
-  @media (max-width:900px){
+  td.acoes .btn-sm{margin:2px 6px 2px 0;}
+  @media (max-width:1060px){
     .tabela-em-blocos thead{display:none;}
     .tabela-em-blocos, .tabela-em-blocos tbody, .tabela-em-blocos tr{display:block; width:100%;}
     .tabela-em-blocos tr{padding:8px 14px; border-bottom:1px solid var(--cinza-claro);}
     .tabela-em-blocos td{display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:3px 0; border:0; white-space:normal; text-align:right;}
     .tabela-em-blocos td:first-child{justify-content:flex-start; font-weight:700; padding-bottom:5px;}
     .tabela-em-blocos td[data-rotulo]::before{content:attr(data-rotulo); font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:var(--cinza); text-align:left;}
+    .tabela-em-blocos td.acoes{justify-content:flex-start; flex-wrap:wrap; gap:6px; padding-top:8px;}
     .tabela-em-blocos tr.linha-secao{padding:0; border-bottom:0;}
     .tabela-em-blocos tr.linha-secao td{padding:8px 14px;}
     .tabela-em-blocos .barra-mini{display:none;}
@@ -3018,12 +3020,17 @@ function historicoEmpresa(){
   const hoje = new Date();
   const anoAtual = hoje.getFullYear();
   const safraAtual = (hoje.getMonth()+1) >= 5 ? anoAtual : anoAtual-1;
+  const tl = linhaDoTempoDivida(), amanha = somaDias(hojeStr(), 1);
   const linha = (periodo, rotulo, parcial)=>{
     const f = fluxoEmpresa(periodo), op = f.operacional.liquido, j = f.financiamento.juros, am = f.financiamento.amortizacao;
+    const {ini, fim} = janelaDoPeriodo(periodo);
+    const saldoMedio = saldoMedioDivida(tl, ini, fim<amanha ? fim : amanha);
     return {rotulo, parcial, juros:j, outras:f.financiamento.outrasDespesasFinanceiras, principal:am,
             resultadoOperacional:op,
             coberturaJuros: j>0 ? op/j : null,
-            coberturaServico: (j+am)>0 && am>0 ? op/(j+am) : null};
+            coberturaServico: (j+am)>0 && am>0 ? op/(j+am) : null,
+            // período em andamento fica sem custo médio: os juros dele ainda estão incompletos
+            saldoMedio, custoMedio: (!parcial && saldoMedio>0 && j>0) ? j/saldoMedio : null};
   };
   return {
     anos: anosHistorico().map(a=>linha({tipo:'ano', ano:a}, String(a), a===anoAtual)),
@@ -3042,6 +3049,100 @@ function dividaEmpresa(){
   return {saldoModulo, aVencerConag,
           valor: saldoModulo + aVencerConag,
           origem: saldoModulo>0 ? (aVencerConag>0 ? 'ambos' : 'modulo') : (aVencerConag>0 ? 'conag' : 'nenhuma')};
+}
+/* ---- A dívida no tempo (Fase 2) ----
+ * Três leituras sobre os contratos lançados + o que ainda está só no Conag:
+ *   vencimentosDaDivida   o que vence em 12 meses x depois, por ano e por ano-safra
+ *   taxaMediaContratos    taxa dos contratos lançados, ponderada pelo saldo
+ *   saldoMedioDivida      saldo médio no período; juros pagos ÷ isso = custo médio
+ *
+ * O saldo médio é ESTIMADO: contrato do módulo tem data, principal e parcelas;
+ * linha do Conag que nenhum contrato assumiu só tem vencimentos (a data do
+ * contrato vem de inicioEstimadoConag e o principal é a soma das parcelas).
+ * Dívida quitada antes de 2023 não aparece. Por isso o custo médio é um
+ * indicador, não a taxa contratada. */
+function safraDaData(d){ const [y,m] = d.split('-').map(Number); return m>=5 ? y : y-1; }
+function primeiroDiaMesSeguinte(ym){
+  const [y,m] = ym.split('-').map(Number);
+  return m===12 ? `${y+1}-01-01` : `${y}-${String(m+1).padStart(2,'0')}-01`;
+}
+// [ini, fim): primeiro dia do período e primeiro dia depois dele
+function janelaDoPeriodo(periodo){
+  const meses = periodoMeses(periodo);
+  return {ini: meses[0]+'-01', fim: primeiroDiaMesSeguinte(meses[meses.length-1])};
+}
+// Cada contrato vira {inicio, principal, pagamentos}: o saldo vale `principal`
+// desde `inicio` e cai a cada pagamento (o pago na data real; o em aberto, no vencimento).
+function linhaDoTempoDivida(){
+  const tl = [];
+  state.financiamentos.forEach(f=>{
+    if(f.status==='cancelado' || !f.dataContratacao) return;
+    const parcelas = parcelasDoFinanciamento(f.id).filter(p=>p.status!=='cancelada');
+    const pagamentos = parcelas.map(p=>({data:(p.status==='paga' && p.dataPagamento) ? p.dataPagamento : p.dataVencimento,
+                                          valor:Number(p.valorAmortizacao)||0}));
+    const principal = Number(f.valorPrincipal)||0;
+    if(f.status==='renegociado'){
+      // o que sobrou virou o principal do contrato novo, que começa em outra data
+      const filho = state.financiamentos.find(x=>x.financiamentoOrigemId===f.id && x.status!=='cancelado');
+      const pago = parcelas.filter(p=>p.status==='paga').reduce((s,p)=>s+(Number(p.valorAmortizacao)||0), 0);
+      if(filho && filho.dataContratacao && principal-pago>0) pagamentos.push({data:filho.dataContratacao, valor:principal-pago});
+    }
+    tl.push({inicio:f.dataContratacao, principal, pagamentos});
+  });
+  agruparLinhasConag(movimentosLivres()).forEach(g=>{
+    tl.push({inicio:inicioEstimadoConag(g.linhas), principal:g.total, pagamentos:g.linhas.map(m=>({data:m.data, valor:m.valor}))});
+  });
+  return tl;
+}
+// Saldo médio da dívida em [ini, fim), datas 'AAAA-MM-DD'. O saldo é uma escada
+// (sobe no início do contrato, desce a cada pagamento): soma saldo x dias de
+// cada degrau e divide pelos dias do período.
+function saldoMedioDivida(tl, ini, fim){
+  const dias = diasEntre(ini, fim);
+  if(dias<=0) return 0;
+  let area = 0;
+  tl.forEach(c=>{
+    const eventos = [{d:c.inicio, v:c.principal}, ...c.pagamentos.map(p=>({d:p.data, v:-p.valor}))]
+      .sort((a,b)=>a.d.localeCompare(b.d));
+    let saldo = 0, ant = ini;
+    eventos.forEach(e=>{
+      const d = e.d < ini ? ini : (e.d > fim ? fim : e.d);
+      if(d > ant){ area += Math.max(0, saldo) * diasEntre(ant, d); ant = d; }
+      saldo += e.v;
+    });
+    if(fim > ant) area += Math.max(0, saldo) * diasEntre(ant, fim);
+  });
+  return area / dias;
+}
+// O que ainda vai ser pago: parcelas em aberto dos contratos ativos (com o juros
+// estimado) + linhas do Conag a vencer que nenhum contrato assumiu (só principal).
+function vencimentosDaDivida(){
+  const hoje = hojeStr(), limite12 = addMeses(hoje, 12), itens = [];
+  state.financiamentos.filter(f=>f.status==='ativo').forEach(f=>{
+    parcelasDoFinanciamento(f.id).filter(parcelaAberta).forEach(p=>itens.push(
+      {data:p.dataVencimento, principal:Number(p.valorAmortizacao)||0, juros:Number(p.valorJuros)||0, doContrato:true}));
+  });
+  movimentosLivres().filter(m=>m.tipo==='amortizacao' && m.data>hoje).forEach(m=>itens.push(
+    {data:m.data, principal:m.valor, juros:0, doContrato:false}));
+  const soma = (lista, k)=>lista.reduce((s,i)=>s+i[k], 0);
+  const total = lista=>({principal:soma(lista,'principal'), juros:soma(lista,'juros')});
+  const agrupar = chaveDe=>{
+    const m = {};
+    itens.forEach(i=>{ const k = chaveDe(i.data); (m[k] = m[k] || []).push(i); });
+    return Object.keys(m).sort().map(k=>({chave:k, ...total(m[k]),
+      doContrato:soma(m[k].filter(i=>i.doContrato),'principal'), doConag:soma(m[k].filter(i=>!i.doContrato),'principal')}));
+  };
+  return {itens, total:total(itens), vencido:total(itens.filter(i=>i.data<hoje)),
+          curto:total(itens.filter(i=>i.data<=limite12)), longo:total(itens.filter(i=>i.data>limite12)),
+          porAno:agrupar(d=>d.slice(0,4)), porSafra:agrupar(d=>String(safraDaData(d)))};
+}
+// Taxa dos contratos lançados (a contratada), ponderada pelo saldo devedor de cada um.
+function taxaMediaContratos(){
+  const ativos = state.financiamentos.filter(f=>f.status==='ativo')
+    .map(f=>({saldo:saldoDevedorFinanciamento(f), taxa:Number(f.taxaJurosAa)||0})).filter(x=>x.saldo>0);
+  const saldo = ativos.reduce((s,x)=>s+x.saldo, 0);
+  if(saldo<=0) return null;
+  return {taxa:ativos.reduce((s,x)=>s+x.saldo*x.taxa, 0)/saldo, saldo, contratos:ativos.length};
 }
 function celulaFluxo(v){
   if(!v) return '<span class="hint">—</span>';
@@ -3070,11 +3171,28 @@ function PageResultadosEmpresa(){
   const item = (t, v, dica) => `<tr><td style="padding-left:18px;">${t}${dica ? ` <span class="hint">${dica}</span>` : ''}</td><td class="mono" style="text-align:right;">${celulaFluxo(v)}</td></tr>`;
   const total = (t, v) => `<tr><td style="font-weight:700; border-top:1px solid var(--cinza-claro);">${t}</td><td class="mono" style="text-align:right; font-weight:700; border-top:1px solid var(--cinza-claro);">${celulaFluxo(v)}</td></tr>`;
   const semTabela = state.movimentosFinanciamentoOk===false;
+  const venc = vencimentosDaDivida(), taxaMedia = taxaMediaContratos();
+  const refSafra = [...hist.safras].reverse().find(x=>!x.parcial);       // última safra fechada
+  const refAno = [...hist.anos].reverse().find(x=>!x.parcial && x.custoMedio!=null);
+  const servico12m = venc.curto.principal + venc.curto.juros;
+  const temDivida = venc.total.principal>0;
+  const rotuloSafra = s => `${s}/${String(Number(s)+1).slice(2)}`;
+  const linhaVenc = (rotulo, x) => `<tr>
+    <td class="mono">${rotulo}</td>
+    <td class="mono" data-rotulo="Principal">R$ ${fmt(x.principal)}</td>
+    <td class="mono" data-rotulo="Juros estimado">${x.juros>0 ? 'R$ '+fmt(x.juros) : '—'}</td>
+    <td class="mono" data-rotulo="Total" style="font-weight:600;">R$ ${fmt(x.principal + x.juros)}</td>
+    <td class="mono" data-rotulo="Contratos lançados">${x.doContrato>0 ? 'R$ '+fmt(x.doContrato) : '—'}</td>
+    <td class="mono" data-rotulo="Só no Conag">${x.doConag>0 ? 'R$ '+fmt(x.doConag) : '—'}</td>
+  </tr>`;
+  const secaoVenc = t => `<tr class="linha-secao"><td colspan="6" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">${t}</td></tr>`;
   const linhaHist = x => `<tr>
     <td class="mono">${x.rotulo}${x.parcial ? ' <span class="hint">(até hoje)</span>' : ''}</td>
     <td class="mono" data-rotulo="Juros pagos">R$ ${fmt(x.juros)}<div class="barra-mini" style="width:${Math.round(x.juros/maxJuros*100)}%;"></div></td>
     <td class="mono" data-rotulo="Outras despesas financeiras">${x.outras>0 ? 'R$ '+fmt(x.outras) : '—'}</td>
     <td class="mono" data-rotulo="Principal pago">${x.principal>0 ? 'R$ '+fmt(x.principal) : '—'}</td>
+    <td class="mono" data-rotulo="Saldo médio da dívida (estimado)">${x.saldoMedio>0 ? 'R$ '+fmt(x.saldoMedio,0) : '—'}</td>
+    <td class="mono" data-rotulo="Custo médio da dívida">${x.custoMedio!=null ? fmt(x.custoMedio*100,1)+' % a.a.' : '—'}</td>
     <td class="mono" data-rotulo="Resultado operacional" style="${x.resultadoOperacional<0?'color:var(--alerta);':''}">R$ ${fmt(x.resultadoOperacional)}</td>
     <td class="mono" data-rotulo="Cobertura de juros">${x.coberturaJuros!=null ? fmt(x.coberturaJuros,1)+' x' : '—'}</td>
     <td class="mono" data-rotulo="Cobertura do serviço da dívida">${x.coberturaServico!=null ? fmt(x.coberturaServico,1)+' x' : '—'}</td>
@@ -3090,6 +3208,16 @@ function PageResultadosEmpresa(){
         : divida.origem==='ambos' ? `R$ ${fmt(divida.saldoModulo)} em contratos lançados + R$ ${fmt(divida.aVencerConag)} ainda só no Conag (lance em Financiamentos)`
         : divida.origem==='conag' ? 'estimativa do Conag: só principal, sem juros futuros'
         : 'lance os contratos em Financiamentos')}
+  </div>
+  <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); margin-top:12px;">
+    ${CardEmpresa('Vence em 12 meses', temDivida ? 'R$ '+fmt(servico12m) : '—',
+        temDivida ? `R$ ${fmt(venc.curto.principal)} de principal + R$ ${fmt(venc.curto.juros)} de juros estimado${venc.vencido.principal>0 ? ` · inclui R$ ${fmt(venc.vencido.principal)} já vencido` : ''}${refSafra && refSafra.resultadoOperacional>0 ? `<br>equivale a ${fmt(servico12m/refSafra.resultadoOperacional*100,0)}% do resultado operacional da safra ${refSafra.rotulo} (R$ ${fmt(refSafra.resultadoOperacional,0)})` : ''}` : 'sem dívida a vencer')}
+    ${CardEmpresa('Vence depois de 12 meses', temDivida ? 'R$ '+fmt(venc.longo.principal + venc.longo.juros) : '—',
+        temDivida ? `R$ ${fmt(venc.longo.principal)} de principal${venc.longo.juros>0 ? ` + R$ ${fmt(venc.longo.juros)} de juros estimado` : ''}` : 'sem dívida a vencer')}
+    ${CardEmpresa('Taxa média dos contratos', taxaMedia ? fmt(taxaMedia.taxa,2)+' % a.a.' : '—',
+        taxaMedia ? `ponderada pelo saldo de ${taxaMedia.contratos} contrato(s) lançado(s)` : 'lance os contratos em Financiamentos para ver a taxa')}
+    ${CardEmpresa('Custo médio da dívida', refAno ? fmt(refAno.custoMedio*100,1)+' % a.a.' : '—',
+        refAno ? `juros pagos ÷ saldo médio estimado de ${refAno.rotulo}` : 'sem ano fechado com juros e dívida')}
   </div>
 
   <p class="eyebrow" style="margin:18px 0 10px;">${labelPeriodo(state.periodo)} — fluxo de caixa</p>
@@ -3124,20 +3252,42 @@ function PageResultadosEmpresa(){
     <table class="tabela-compacta tabela-sem-fixar tabela-cabecalho-quebra tabela-em-blocos" style="margin:0;">
       <thead><tr>
         <th>Período</th><th>Juros pagos</th><th>Outras desp. financeiras</th><th>Principal pago</th>
+        <th title="Média diária do saldo devedor no período, estimada com os contratos lançados e as linhas do Conag">Saldo médio da dívida (estimado)</th>
+        <th title="Juros pagos ÷ saldo médio da dívida. Só para período fechado.">Custo médio a.a.</th>
         <th>Resultado operacional</th><th title="Resultado operacional ÷ juros pagos">Cobertura de juros</th>
         <th title="Resultado operacional ÷ (juros + principal pago)">Cobertura do serviço da dívida</th>
       </tr></thead>
       <tbody>
-        <tr class="linha-secao"><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano (janeiro a dezembro)</td></tr>
+        <tr class="linha-secao"><td colspan="9" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano (janeiro a dezembro)</td></tr>
         ${hist.anos.map(linhaHist).join('')}
-        <tr class="linha-secao"><td colspan="7" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano-safra (maio a abril)</td></tr>
+        <tr class="linha-secao"><td colspan="9" style="background:var(--cinza-bg); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);">Ano-safra (maio a abril)</td></tr>
         ${hist.safras.map(linhaHist).join('')}
       </tbody>
     </table>
   </div>
 
+  <p class="eyebrow" style="margin:18px 0 10px;">Vencimentos da dívida — por ano e por ano-safra</p>
+  <div class="card" style="overflow-x:auto;">
+    ${!temDivida ? `<div class="card-pad"><p class="hint">Sem dívida a vencer: nenhum contrato em aberto lançado e nada a vencer no Conag.</p></div>` : `
+    <table class="tabela-compacta tabela-sem-fixar tabela-cabecalho-quebra tabela-em-blocos" style="margin:0;">
+      <thead><tr>
+        <th>Período</th><th>Principal</th><th title="Só dos contratos lançados (taxa informada); o Conag não tem juros futuro">Juros estimado</th>
+        <th>Total</th><th>Contratos lançados</th><th>Só no Conag</th>
+      </tr></thead>
+      <tbody>
+        ${venc.vencido.principal>0 ? linhaVenc('Vencido, em aberto', {...venc.vencido, doContrato:venc.vencido.principal, doConag:0}) : ''}
+        ${secaoVenc('Ano (janeiro a dezembro), a partir de hoje')}
+        ${venc.porAno.map(x=>linhaVenc(x.chave, x)).join('')}
+        ${secaoVenc('Ano-safra (maio a abril), a partir de hoje')}
+        ${venc.porSafra.map(x=>linhaVenc(rotuloSafra(x.chave), x)).join('')}
+        ${linhaVenc('<strong>Total</strong>', {...venc.total, doContrato:venc.itens.filter(i=>i.doContrato).reduce((s,i)=>s+i.principal,0), doConag:venc.itens.filter(i=>!i.doContrato).reduce((s,i)=>s+i.principal,0)})}
+      </tbody>
+    </table>`}
+  </div>
+
   <p class="hint" style="margin-top:12px;">Esta aba usa o Financeiro inteiro da empresa, sem ratear por atividade. Os totais podem diferir de Geral e Operacional, que usam o custo de cada app (inclui ração e pasto consumidos), e de Relatórios, que lê a visão rateada. O histórico do Conag é por competência mensal. Resultado operacional = recebimentos − pagamentos operacionais; juros e encargos ficam no bloco Financiamento, como no plano de contas do Conag. Cobertura de juros abaixo de 1,5 x fica em alerta.</p>
   <p class="hint" style="margin-top:8px;">O Conag não tem as entradas de empréstimo, só as amortizações: se parte do principal foi paga com dinheiro de um novo empréstimo, a cobertura do serviço da dívida aparece pior do que a realidade. Amortização e entrada de empréstimo não são despesa nem receita: ficam em Financiamentos e na tabela de movimentos.</p>
+  <p class="hint" style="margin-top:8px;">Custo médio da dívida = juros pagos no período ÷ saldo médio da dívida no período. O saldo médio é <strong>estimado</strong>: contrato lançado tem data e parcelas; o que ainda está só no Conag tem apenas vencimentos, então a data do contrato é estimada pelo ritmo das parcelas, e dívida quitada antes de 2023 não aparece. Use como indicador, não como a taxa contratada (essa é a "Taxa média dos contratos", ponderada pelo saldo). Período em andamento não tem custo médio, porque os juros dele ainda estão incompletos. O juros estimado dos vencimentos só existe para contratos lançados em Financiamentos.</p>
   ${dif && Math.abs(dif.diferenca)>1 ? `<p class="hint" style="margin-top:8px; color:var(--ambar);"><strong>Atenção:</strong> neste período a visão rateada (Relatórios, Geral e Operacional) tem R$ ${fmt(Math.abs(dif.diferenca))} ${dif.diferenca>0 ? 'a menos' : 'a mais'} de despesa que o Financeiro (R$ ${fmt(dif.rateada)} contra R$ ${fmt(dif.financeiro)}). Esta aba usa o Financeiro, que está completo. A diferença costuma ser rateio incompleto de custos gerais: rode rateio_confere_soma_das_partes.sql no Supabase para achar os lançamentos.</p>` : ''}
   ${semTabela ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">As amortizações do Conag (R$ 17,8 milhões) ainda não foram importadas. Rode <strong>financiamentos_02_movimentos_conag.sql</strong> no Supabase para o fluxo de caixa e a dívida a vencer ficarem completos.</p>` : ''}
   ${!temPermissao('matriz_financiamentos','visualizar') ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">Você não tem a permissão de Financiamentos: contratos lançados no módulo não entram nestes números.</p>` : ''}
@@ -3708,12 +3858,30 @@ function nomeBancoDoConag(credor){
     .map((p,i)=> (i>0 && miudas.includes(p)) ? p : p.charAt(0).toUpperCase()+p.slice(1)).join(' ');
 }
 function somaValores(linhas){ return Math.round(linhas.reduce((s,m)=>s+m.valor, 0) * 100) / 100; }
+function somaDias(d, n){
+  const [y,m,dd] = d.split('-').map(Number);
+  return new Date(Date.UTC(y, m-1, dd + n)).toISOString().slice(0,10);
+}
+// O Conag só tem vencimentos, não a data do contrato. Estima o começo recuando
+// da 1ª parcela o intervalo típico entre as parcelas (a mediana; 365 dias se só
+// houver uma). Vale para a linha do tempo da dívida e para o juros da 1ª
+// parcela; o Eduardo ajusta quando souber a data da cédula.
+function inicioEstimadoConag(linhas){
+  const datas = linhas.map(m=>m.data).sort();
+  let intervalo = 365;
+  if(datas.length>=2){
+    const g = datas.slice(1).map((d,i)=>diasEntre(datas[i], d)).sort((a,b)=>a-b);
+    const meio = g.length%2 ? g[(g.length-1)/2] : (g[g.length/2-1] + g[g.length/2]) / 2;
+    intervalo = Math.max(30, Math.round(meio));
+  }
+  return somaDias(datas[0], -intervalo);
+}
 // Um grupo por credor + nº do contrato. O Conag nem sempre traz o número: essas
 // linhas se separam pelo valor da parcela, que costuma ser igual dentro de um
-// mesmo contrato. Contrato todo pago não aparece: o histórico dele já está no Conag.
-function gruposConagParaLancar(){
+// mesmo contrato.
+function agruparLinhasConag(movs){
   const hoje = hojeStr(), grupos = new Map();
-  movimentosLivres().filter(m=>m.tipo==='amortizacao' && m.origem==='conag').forEach(m=>{
+  movs.filter(m=>m.tipo==='amortizacao' && m.origem==='conag').forEach(m=>{
     const chave = maiusculoSemAcento(m.credor) + '|' + (m.contrato ? m.contrato.toUpperCase() : 'SEM NUMERO ' + m.valor.toFixed(2));
     if(!grupos.has(chave)) grupos.set(chave, {chave, credor:m.credor, contrato:m.contrato, linhas:[]});
     grupos.get(chave).linhas.push(m);
@@ -3722,22 +3890,27 @@ function gruposConagParaLancar(){
     const linhas = [...g.linhas].sort((a,b)=>a.data.localeCompare(b.data) || a.id-b.id);
     const pagas = linhas.filter(m=>m.data<=hoje), aVencer = linhas.filter(m=>m.data>hoje);
     return {...g, linhas, pagas, aVencer, totalPago:somaValores(pagas), totalAVencer:somaValores(aVencer), total:somaValores(linhas)};
-  }).filter(g=>g.aVencer.length>0)
+  });
+}
+// Os que ainda têm parcela a vencer e nenhum contrato assumiu. Contrato todo
+// pago não aparece: o histórico dele já está no Conag.
+function gruposConagParaLancar(){
+  return agruparLinhasConag(movimentosLivres()).filter(g=>g.aVencer.length>0)
     .sort((a,b)=>a.aVencer[0].data.localeCompare(b.aVencer[0].data) || a.credor.localeCompare(b.credor) || a.contrato.localeCompare(b.contrato));
 }
 // Uma parcela por linha do Conag. Principal = soma de todas as linhas, então o
 // saldo devedor fecha em zero na última. As já pagas entram como pagas e sem
 // juros (o juros delas já está no Financeiro, vindo do Conag; lançar de novo
 // duplicaria). As a vencer ficam pendentes, com o juros ESTIMADO pela taxa
-// informada sobre o saldo, no período desde a parcela anterior (1 ano antes, na
-// primeira).
-function parcelasDoGrupoConag(grupo, taxaAa){
+// informada sobre o saldo, no período desde a parcela anterior (ou desde a data
+// do contrato, na primeira).
+function parcelasDoGrupoConag(grupo, taxaAa, dataContrato){
   const hoje = hojeStr(), taxa = Number(taxaAa)||0;
-  let saldo = grupo.total, anterior = null;
+  let saldo = grupo.total, anterior = dataContrato || inicioEstimadoConag(grupo.linhas);
   return grupo.linhas.map((m,i)=>{
     const paga = m.data<=hoje, saldoAntes = saldo;
     saldo = Math.max(0, Math.round((saldo - m.valor) * 100) / 100);
-    const dias = Math.max(1, diasEntre(anterior || addMeses(m.data, -12), m.data));
+    const dias = Math.max(1, diasEntre(anterior, m.data));
     const juros = paga ? 0 : saldoAntes * (Math.pow(1 + taxa/100, dias/365) - 1);
     anterior = m.data;
     return {numero:i+1, dataVencimento:m.data, valorParcela:m.valor+juros, valorAmortizacao:m.valor,
@@ -3774,7 +3947,7 @@ async function salvarFinanciamentoDoConag(){
   const res = await db.from('financiamentos').insert(financiamentoToRow(campos)).select().single();
   if(res.error){ alert('Não foi possível salvar: ' + res.error.message); return; }
   const financiamentoId = res.data.id;
-  const parcelas = parcelasDoGrupoConag(grupo, campos.taxaJurosAa).map(p=>{
+  const parcelas = parcelasDoGrupoConag(grupo, campos.taxaJurosAa, campos.dataContratacao).map(p=>{
     const row = parcelaToRow(p, financiamentoId);
     if(p.paga){ row.status = 'paga'; row.data_pagamento = p.dataVencimento; row.valor_pago = row.valor_parcela; }
     return row;
@@ -3893,7 +4066,10 @@ function PageFinanciamentoDetalhe(){
   <div class="toolbar">
     <button class="btn-ghost btn-sm" data-voltar-financiamentos="1">&larr; Voltar</button>
     <span class="hint" style="flex:1;"></span>
+    ${podeEditar && f.status==='ativo' ? `<button class="btn btn-ghost btn-sm" data-editar-financiamento="${f.id}">Editar</button>` : ''}
+    ${podeEditar && f.status==='ativo' && parcelas.some(parcelaAberta) ? `<button class="btn btn-ghost btn-sm" data-quitar-financiamento="${f.id}">Quitar</button>` : ''}
     ${podeEditar && f.status==='ativo' ? `<button class="btn btn-ghost btn-sm" data-renegociar-financiamento="${f.id}">Renegociar</button>` : ''}
+    ${podeEditar && (f.status==='ativo' || f.status==='quitado') ? `<button class="btn-danger-ghost" data-cancelar-financiamento="${f.id}">Cancelar contrato</button>` : ''}
   </div>
   <div class="card card-pad" style="margin-bottom:14px;">
     <h3 style="margin-bottom:8px;">${esc(f.banco)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
@@ -3905,23 +4081,26 @@ function PageFinanciamentoDetalhe(){
   </div>
   <div class="card" style="overflow-x:auto;">
     ${parcelas.length===0 ? Empty('Sem parcelas', 'Este financiamento não tem cronograma gerado.') : `
-    <table>
+    <table class="tabela-sem-fixar tabela-cabecalho-quebra tabela-em-blocos">
       <thead><tr><th>#</th><th>Vencimento</th><th>Valor</th><th>Amortização</th><th>Juros</th><th>Saldo após</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${parcelas.map(p=>{
           const st = statusEfetivoParcela(p);
           return `
           <tr>
-            <td>${p.numero}</td>
-            <td class="mono">${p.dataVencimento}</td>
-            <td class="mono">R$ ${fmt(p.valorParcela)}</td>
-            <td class="mono">R$ ${fmt(p.valorAmortizacao)}</td>
-            <td class="mono">R$ ${fmt(p.valorJuros)}</td>
-            <td class="mono">R$ ${fmt(p.saldoDevedorApos)}</td>
-            <td><span class="pill ${st==='paga'?'pill-ok':st==='atrasada'?'pill-warn':st==='cancelada'?'pill-cat':''}">${STATUS_PARC_LABEL[st]||st}</span>
+            <td data-rotulo="Parcela">${p.numero}</td>
+            <td class="mono" data-rotulo="Vencimento">${p.dataVencimento}</td>
+            <td class="mono" data-rotulo="Valor">R$ ${fmt(p.valorParcela)}</td>
+            <td class="mono" data-rotulo="Amortização">R$ ${fmt(p.valorAmortizacao)}</td>
+            <td class="mono" data-rotulo="Juros">R$ ${fmt(p.valorJuros)}</td>
+            <td class="mono" data-rotulo="Saldo após">R$ ${fmt(p.saldoDevedorApos)}</td>
+            <td data-rotulo="Status"><div><span class="pill ${st==='paga'?'pill-ok':st==='atrasada'?'pill-warn':st==='cancelada'?'pill-cat':''}">${STATUS_PARC_LABEL[st]||st}</span>
               ${p.status==='paga' && p.dataPagamento ? `<div class="hint">em ${p.dataPagamento}</div>` : ''}
-              ${p.status==='paga' && p.lancamentosFinanceiroIds.length===0 && importadoDoConag(f) ? `<div class="hint">juros já no Financeiro (Conag)</div>` : ''}</td>
-            <td>${podeEditar && (p.status==='pendente'||p.status==='atrasada') ? `<button class="btn-ghost btn-sm" data-pagar-parcela="${p.id}">Marcar como paga</button>` : ''}</td>
+              ${p.status==='paga' && p.lancamentosFinanceiroIds.length===0 ? `<div class="hint">${importadoDoConag(f) ? 'juros já no Financeiro (Conag)' : 'sem juros lançado pelo app'}</div>` : ''}</div></td>
+            <td class="acoes">${podeEditar && parcelaAberta(p) ? `
+              <button class="btn-ghost btn-sm" data-pagar-parcela="${p.id}">Marcar como paga</button>
+              <button class="btn-ghost btn-sm" data-pagamento-parcela="${p.id}">Registrar pagamento</button>
+              <button class="btn-ghost btn-sm" data-editar-parcela="${p.id}">Editar</button>` : ''}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -3933,6 +4112,9 @@ function ModalFinanciamento(){
   const d = editDraft;
   const precisaAtividade = d.finalidade==='investimento' || d.finalidade==='custeio';
   const importar = !!d._conagChave, rc = d._conagResumo || {};
+  // cronograma travado (importado do Conag, ou já com parcela paga): aqui só os
+  // dados do contrato; as parcelas se ajustam na tela do contrato
+  const travado = !!d._travado, impEdit = travado && !!d._importado, semCronograma = importar || travado;
   // contrato digitado à mão enquanto o Conag ainda tem dívida sem contrato: avisa
   // pra não contar a mesma dívida duas vezes
   const pendentesConag = (!importar && !d._editId && !d._origemId && state.movimentosFinanciamentoOk) ? gruposConagParaLancar() : [];
@@ -3944,7 +4126,8 @@ function ModalFinanciamento(){
         ${d._origemId ? `<p class="hint" style="margin-bottom:10px;">O saldo devedor do financiamento anterior vira o principal deste contrato novo. O antigo fica marcado como renegociado, sem apagar o histórico.</p>` : ''}
         ${importar ? `<p class="hint" style="margin-bottom:12px;">O Conag tem <strong>${rc.pagas+rc.aVencer} parcelas</strong> deste contrato${rc.contrato ? ` (${esc(rc.contrato)})` : ''}: ${rc.pagas} já paga(s), R$ ${fmt(rc.totalPago)}, e ${rc.aVencer} a vencer, R$ ${fmt(rc.totalAVencer)}, de ${rc.primeira} a ${rc.ultima}. Ao salvar, o app cria o contrato com essas parcelas reais e tira as linhas do Conag das contas: a dívida e o fluxo de caixa passam a vir do contrato, sem contar duas vezes. O juros das parcelas já pagas continua no Financeiro, como veio do Conag.</p>` : ''}
         ${pendentesConag.length ? `<p class="hint" style="margin-bottom:12px; color:var(--ambar);">O Conag ainda tem <strong>${pendentesConag.length} contrato(s) com R$ ${fmt(pendentesConag.reduce((s,g)=>s+g.totalAVencer,0))} a vencer</strong> sem contrato lançado. Se este é um deles, feche e use <strong>Lançar contrato</strong> na lista "Dívida do Conag ainda sem contrato": o app usa as parcelas reais e não conta a dívida duas vezes.</p>` : ''}
-        <div class="field"><label>Banco</label><input id="f-bancofin" value="${esc(d.banco||'')}" placeholder="Ex: Banco do Brasil" autocomplete="off" ${importar?'readonly':''}/></div>
+        ${travado ? `<p class="hint" style="margin-bottom:12px;">${impEdit ? 'Contrato importado do Conag' : 'Contrato com parcelas já pagas'}: o cronograma não muda aqui. Para ajustar uma parcela use <strong>Editar</strong> na lista de parcelas; se o contrato já foi pago, use <strong>Quitar</strong>.${impEdit ? ' Mudar a taxa ou a data refaz o juros estimado das parcelas em aberto.' : ''}</p>` : ''}
+        <div class="field"><label>Banco</label><input id="f-bancofin" value="${esc(d.banco||'')}" placeholder="Ex: Banco do Brasil" autocomplete="off" ${semCronograma?'readonly':''}/></div>
         <div class="field"><label>Finalidade</label>
           <select id="f-finalidadefin">
             ${FINALIDADE_FIN.map(([k,l])=>`<option value="${k}" ${d.finalidade===k?'selected':''}>${l}</option>`).join('')}
@@ -3958,17 +4141,17 @@ function ModalFinanciamento(){
           <span class="hint">Define em qual atividade o juros pago entra como despesa.</span>
         </div>
         ${!precisaAtividade ? `<p class="hint" style="margin:-6px 0 14px;">Capital de giro: o juros de cada parcela paga é dividido em 3 partes iguais entre Pecuária, Cana e Grãos.</p>` : ''}
-        <div class="field"><label>Valor principal (R$)</label><input id="f-principalfin" type="number" step="0.01" min="0" value="${d.valorPrincipal ?? ''}" ${(d._origemId||importar)?'readonly':''} autocomplete="off"/>
+        <div class="field"><label>Valor principal (R$)</label><input id="f-principalfin" type="number" step="0.01" min="0" value="${d.valorPrincipal ?? ''}" ${(d._origemId||semCronograma)?'readonly':''} autocomplete="off"/>
           ${d._origemId ? `<span class="hint">Saldo devedor do financiamento anterior — não editável.</span>` : ''}
-          ${importar ? `<span class="hint">Soma das parcelas do Conag (pagas + a vencer). Se o contrato começou antes de 2023, o Conag não tem as parcelas antigas: o saldo devedor fica certo mesmo assim.</span>` : ''}
+          ${importar || impEdit ? `<span class="hint">Soma das parcelas do Conag (pagas + a vencer). Se o contrato começou antes de 2023, o Conag não tem as parcelas antigas: o saldo devedor fica certo mesmo assim.</span>` : ''}
         </div>
-        <div class="field"><label>${importar?'Data da 1ª parcela no Conag':'Data de contratação'}</label><input id="f-datafin" type="date" value="${d.dataContratacao||hojeStr()}"/>
-          ${importar ? `<span class="hint">Ajuste se souber a data da cédula. Contrato importado do Conag não entra como empréstimo recebido no fluxo de caixa.</span>` : ''}
+        <div class="field"><label>${importar || impEdit ? 'Data do contrato (estimada)' : 'Data de contratação'}</label><input id="f-datafin" type="date" value="${d.dataContratacao||hojeStr()}" ${travado && !impEdit ? 'readonly' : ''}/>
+          ${importar || impEdit ? `<span class="hint">Estimada pelo ritmo das parcelas do Conag: ajuste se souber a data da cédula. Contrato importado do Conag não entra como empréstimo recebido no fluxo de caixa.</span>` : ''}
         </div>
-        <div class="field"><label>Taxa de juros (% ao ano)</label><input id="f-taxafin" type="number" step="0.01" min="0" value="${d.taxaJurosAa ?? ''}" autocomplete="off"/>
-          ${importar ? `<span class="hint">Usada só para estimar o juros das parcelas a vencer; o das já pagas não muda.</span>` : ''}
+        <div class="field"><label>Taxa de juros (% ao ano)</label><input id="f-taxafin" type="number" step="0.01" min="0" value="${d.taxaJurosAa ?? ''}" ${travado && !impEdit ? 'readonly' : ''} autocomplete="off"/>
+          ${importar || impEdit ? `<span class="hint">Usada só para estimar o juros das parcelas a vencer; o das já pagas não muda.</span>` : ''}
         </div>
-        ${importar ? '' : `
+        ${semCronograma ? '' : `
         <div class="field"><label>Sistema de amortização</label>
           <select id="f-sistemafin">
             ${SISTEMA_AMORT.map(([k,l])=>`<option value="${k}" ${d.sistemaAmortizacao===k?'selected':''}>${l}</option>`).join('')}
@@ -4000,6 +4183,43 @@ function ModalFinanciamento(){
   </div>`;
 }
 
+function centroDeJurosFinanciamento(){
+  return state.centrosCusto.find(c=>c.nome.trim().toLowerCase()===NOME_CENTRO_JUROS_FIN.toLowerCase());
+}
+// Lança o juros de uma parcela como despesa no Financeiro: 1 lançamento
+// (investimento/custeio) ou 3 iguais (capital de giro, 1 por atividade).
+// `data` é o dia do pagamento. Devolve {ids}, ou {ids, error} se algum falhar.
+async function lancarJurosDaParcela(f, p, totalJuros, data, centro){
+  const atividades = f.finalidade==='capital_giro' ? ATIVIDADES_PRODUTIVAS : [f.atividade];
+  // valor é numeric(12,2) no banco: dividir R$100 por 3 dá R$33,333... e
+  // cada insert arredonda pra R$33,33 sozinho, sem saber dos outros dois -
+  // a soma das partes fecha R$99,99, um centavo a menos que o juros real.
+  // Mesmo problema que o rateio do "geral" já resolve em outro lugar deste
+  // arquivo: arredonda cada parte e devolve a sobra do arredondamento na
+  // primeira, pra soma das partes bater exato com o total.
+  const brutoPorAtividade = Math.round(totalJuros / atividades.length * 100) / 100;
+  const sobra = Math.round((totalJuros - brutoPorAtividade * atividades.length) * 100) / 100;
+  const ids = [];
+  for(let i=0; i<atividades.length; i++){
+    const atividade = atividades[i];
+    const valor = i===0 ? Math.round((brutoPorAtividade + sobra) * 100) / 100 : brutoPorAtividade;
+    const row = lancamentoToRow({
+      tipo:'despesa', atividade, fazendaId: f.fazendaId||'', centroCustoId: centro.id,
+      descricao: `Juros — ${f.banco} (parcela ${p.numero}/${f.numeroParcelas})`,
+      valor, data, fornecedor: f.banco, observacao: '', areas: [],
+    });
+    const {data: lancado, error} = await db.from('lancamentos_financeiros').insert(row).select().single();
+    if(error) return {ids, error};
+    ids.push(lancado.id);
+  }
+  return {ids};
+}
+// Última parcela paga quita o financiamento sozinho — sem precisar de
+// uma tela separada só pra marcar "quitado" manualmente.
+async function quitarSeNaoRestam(f, idsPagos){
+  const restam = parcelasDoFinanciamento(f.id).filter(x=>!idsPagos.includes(x.id) && x.status!=='paga' && x.status!=='cancelada');
+  if(restam.length===0) await db.from('financiamentos').update({status:'quitado'}).eq('id', f.id);
+}
 // Marca uma parcela como paga: só o juros vira lançamento (1, ou 3 iguais
 // se for capital de giro). Amortização nunca vira lançamento — só reduz o
 // saldo devedor, que já está pré-calculado na própria parcela.
@@ -4008,48 +4228,312 @@ async function pagarParcela(parcelaId){
   if(!p) return;
   const f = state.financiamentos.find(x=>x.id===p.financiamentoId);
   if(!f) return;
-  const centro = state.centrosCusto.find(c=>c.nome.trim().toLowerCase()===NOME_CENTRO_JUROS_FIN.toLowerCase());
+  const centro = centroDeJurosFinanciamento();
   if(!centro){
     alert(`Centro de custo "${NOME_CENTRO_JUROS_FIN}" não encontrado. Rode a migração do módulo de financiamentos antes de pagar uma parcela.`);
     return;
   }
   if(!confirm(`Marcar a parcela ${p.numero} (R$ ${fmt(p.valorParcela)}) como paga?\n\nSó o juros (R$ ${fmt(p.valorJuros)}) vira despesa lançada no Resultado — a amortização (R$ ${fmt(p.valorAmortizacao)}) não afeta o resultado, só reduz o saldo devedor.`)) return;
 
-  const atividades = f.finalidade==='capital_giro' ? ATIVIDADES_PRODUTIVAS : [f.atividade];
-  // valor é numeric(12,2) no banco: dividir R$100 por 3 dá R$33,333... e
-  // cada insert arredonda pra R$33,33 sozinho, sem saber dos outros dois -
-  // a soma das partes fecha R$99,99, um centavo a menos que o juros real.
-  // Mesmo problema que o rateio do "geral" já resolve em outro lugar deste
-  // arquivo: arredonda cada parte e devolve a sobra do arredondamento na
-  // primeira, pra soma das partes bater exato com o total.
-  const totalJuros = Number(p.valorJuros);
-  const brutoPorAtividade = Math.round(totalJuros / atividades.length * 100) / 100;
-  const sobra = Math.round((totalJuros - brutoPorAtividade * atividades.length) * 100) / 100;
-  const idsGerados = [];
-  for(let i=0; i<atividades.length; i++){
-    const atividade = atividades[i];
-    const valor = i===0 ? Math.round((brutoPorAtividade + sobra) * 100) / 100 : brutoPorAtividade;
-    const row = lancamentoToRow({
-      tipo:'despesa', atividade, fazendaId: f.fazendaId||'', centroCustoId: centro.id,
-      descricao: `Juros — ${f.banco} (parcela ${p.numero}/${f.numeroParcelas})`,
-      valor, data: hojeStr(), fornecedor: f.banco, observacao: '', areas: [],
-    });
-    const {data, error} = await db.from('lancamentos_financeiros').insert(row).select().single();
-    if(error){ alert('Não foi possível lançar o juros: ' + error.message); return; }
-    idsGerados.push(data.id);
-  }
+  const {ids: idsGerados, error} = await lancarJurosDaParcela(f, p, Number(p.valorJuros), hojeStr(), centro);
+  if(error){ alert('Não foi possível lançar o juros: ' + error.message); return; }
   const {error: erroParcela} = await db.from('parcelas_financiamento').update({
     status:'paga', data_pagamento: hojeStr(), valor_pago: p.valorParcela,
     lancamentos_financeiro_ids: idsGerados,
   }).eq('id', p.id);
   if(erroParcela){ alert('O juros já foi lançado, mas não consegui atualizar a parcela: ' + erroParcela.message); return; }
+  await quitarSeNaoRestam(f, [p.id]);
+  await loadAll();
+}
 
-  // Última parcela paga quita o financiamento sozinho — sem precisar de
-  // uma tela separada só pra marcar "quitado" manualmente.
-  const restam = parcelasDoFinanciamento(f.id).filter(x=>x.id!==p.id && x.status!=='paga' && x.status!=='cancelada');
-  if(restam.length===0){
-    await db.from('financiamentos').update({status:'quitado'}).eq('id', f.id);
+/* ---- Ajustes depois de lançar um contrato ----
+ * Registrar o pagamento com a data e o juros reais, quitar o que já foi
+ * amortizado, editar parcela ou contrato e cancelar. Nada disso apaga
+ * histórico: cancelar só muda o status, e as linhas do Conag que o contrato
+ * tinha assumido voltam a valer (movimentoAssumidoPorContrato). */
+const ISO_DATA = /^\d{4}-\d{2}-\d{2}$/;
+const arred2 = x => Math.round(x*100)/100;
+function parcelaAberta(p){ return p.status==='pendente' || p.status==='atrasada'; }
+function textoObsConag(contrato){
+  return `${PREFIXO_OBS_CONAG} (contrato ${contrato || 'sem número'}): cronograma real, uma parcela por linha do Conag; juros das parcelas a vencer estimado pela taxa informada.`;
+}
+function contratoDaObsConag(obs){
+  const m = String(obs||'').match(/^Importado do Conag \(contrato ([^)]*)\)/);
+  return m && m[1]!=='sem número' ? m[1] : '';
+}
+function parteDoUsuarioNaObsConag(obs){
+  const fim = 'estimado pela taxa informada.';
+  const i = String(obs||'').indexOf(fim);
+  return i<0 ? '' : String(obs).slice(i+fim.length).trim();
+}
+
+// Pagamento com a data e o juros reais. O juros só vira despesa se marcar:
+// quem já tem o juros no Financeiro (veio do Conag ou foi lançado à mão)
+// desmarca, senão a despesa dobra.
+function abrirPagamentoParcela(parcelaId){
+  const p = state.parcelasFinanciamento.find(x=>x.id===parcelaId);
+  if(!p) return;
+  editDraft = {_parcelaId:p.id, data:hojeStr(), juros:arred2(Number(p.valorJuros)||0), lancar:true};
+  state.erroFinanciamento = '';
+  state.modal = {type:'pagamentoParcela'}; render();
+}
+function ModalPagamentoParcela(){
+  const d = editDraft, p = state.parcelasFinanciamento.find(x=>x.id===d._parcelaId);
+  const f = p && state.financiamentos.find(x=>x.id===p.financiamentoId);
+  if(!p || !f) return '';
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Registrar pagamento da parcela ${p.numero}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:12px;">${esc(f.banco)} · vencimento ${p.dataVencimento} · amortização R$ ${fmt(p.valorAmortizacao)}. A amortização não é despesa: só reduz o saldo devedor.</p>
+        <div class="field"><label>Data do pagamento</label><input id="f-pagdata" type="date" value="${d.data}"/></div>
+        <div class="field"><label>Juros pago (R$)</label><input id="f-pagjuros" type="number" step="0.01" min="0" value="${d.juros}" autocomplete="off"/>
+          <span class="hint">Se veio estimado pela taxa, troque pelo valor que o banco cobrou.</span></div>
+        <div class="field"><label style="display:flex; align-items:center; gap:8px; font-weight:400;"><input type="checkbox" id="f-paglancar" ${d.lancar?'checked':''} style="width:auto;"/> Lançar o juros como despesa no Financeiro</label>
+          <span class="hint">Desmarque se o juros desta parcela já está no Financeiro (veio do Conag ou foi lançado à mão): lançar de novo dobraria a despesa.</span></div>
+        ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="pagamentoParcela">Registrar pagamento</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function salvarPagamentoParcela(){
+  const d = editDraft, p = state.parcelasFinanciamento.find(x=>x.id===d._parcelaId);
+  const f = p && state.financiamentos.find(x=>x.id===p.financiamentoId);
+  if(!p || !f || !parcelaAberta(p)){
+    state.erroFinanciamento = 'Esta parcela não está mais pendente. Feche e confira.'; render(); return;
   }
+  const v = id => document.getElementById(id)?.value ?? '';
+  const data = v('f-pagdata'), juros = Number(v('f-pagjuros')), lancar = !!document.getElementById('f-paglancar')?.checked;
+  const faltando = [];
+  if(!ISO_DATA.test(data)) faltando.push('data do pagamento');
+  if(v('f-pagjuros')==='' || !(juros >= 0)) faltando.push('juros (pode ser zero)');
+  if(faltando.length){
+    state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
+    editDraft = {...d, data, juros: v('f-pagjuros'), lancar}; render(); return;
+  }
+  state.erroFinanciamento = '';
+  let ids = [];
+  if(lancar && juros>0){
+    const centro = centroDeJurosFinanciamento();
+    if(!centro){
+      alert(`Centro de custo "${NOME_CENTRO_JUROS_FIN}" não encontrado. Rode a migração do módulo de financiamentos antes de lançar o juros.`);
+      return;
+    }
+    const r = await lancarJurosDaParcela(f, p, arred2(juros), data, centro);
+    if(r.error){ alert('Não foi possível lançar o juros: ' + r.error.message); return; }
+    ids = r.ids;
+  }
+  const total = arred2((Number(p.valorAmortizacao)||0) + juros);
+  const {error} = await db.from('parcelas_financiamento').update({
+    status:'paga', data_pagamento:data, valor_pago:total, valor_juros:arred2(juros), valor_parcela:total,
+    lancamentos_financeiro_ids: ids,
+  }).eq('id', p.id);
+  if(error){ alert((ids.length ? 'O juros já foi lançado, mas não consegui atualizar a parcela: ' : 'Não foi possível registrar o pagamento: ') + error.message); return; }
+  await quitarSeNaoRestam(f, [p.id]);
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+// "Já foi amortizado": todas as parcelas em aberto viram pagas na data
+// informada, sem lançar juros (ele já está no Financeiro ou não existe mais).
+function abrirQuitarFinanciamento(id){
+  editDraft = {_finId:id, data:hojeStr()};
+  state.erroFinanciamento = '';
+  state.modal = {type:'quitarFin'}; render();
+}
+function ModalQuitarFinanciamento(){
+  const d = editDraft, f = state.financiamentos.find(x=>x.id===d._finId);
+  if(!f) return '';
+  const abertas = parcelasDoFinanciamento(f.id).filter(parcelaAberta);
+  const principal = abertas.reduce((s,p)=>s+Number(p.valorAmortizacao||0), 0);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Quitar ${esc(f.banco)}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:12px;">Use quando este contrato já foi pago ou amortizado. As <strong>${abertas.length} parcela(s) em aberto</strong> (R$ ${fmt(principal)} de principal) viram pagas na data abaixo e o saldo devedor zera. <strong>Nenhum juros é lançado</strong> no Financeiro; a amortização entra no fluxo de caixa dessa data.</p>
+        <div class="field"><label>Data em que foi pago</label><input id="f-quitdata" type="date" value="${d.data}"/></div>
+        ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="quitarFin">Quitar contrato</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function salvarQuitacao(){
+  const f = state.financiamentos.find(x=>x.id===editDraft._finId);
+  const data = document.getElementById('f-quitdata')?.value || '';
+  if(!f){ state.modal = null; editDraft = null; render(); return; }
+  if(!ISO_DATA.test(data)){ state.erroFinanciamento = 'Preencha: data em que foi pago.'; render(); return; }
+  const abertas = parcelasDoFinanciamento(f.id).filter(parcelaAberta);
+  for(const p of abertas){
+    const {error} = await db.from('parcelas_financiamento').update({status:'paga', data_pagamento:data, valor_pago:p.valorParcela}).eq('id', p.id);
+    if(error){ alert('Não foi possível quitar: ' + error.message); await loadAll(); return; }
+  }
+  const {error} = await db.from('financiamentos').update({status:'quitado'}).eq('id', f.id);
+  if(error){ alert('As parcelas foram pagas, mas não consegui marcar o contrato como quitado: ' + error.message); await loadAll(); return; }
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+// Editar uma parcela em aberto: vencimento e juros sempre; a amortização só no
+// contrato importado do Conag (ali o cronograma espelha o do banco, e o
+// principal é a soma das parcelas). Depois refaz o saldo devedor de cada parcela.
+function abrirEditarParcela(parcelaId){
+  const p = state.parcelasFinanciamento.find(x=>x.id===parcelaId);
+  if(!p) return;
+  editDraft = {_parcelaId:p.id, data:p.dataVencimento, amort:p.valorAmortizacao, juros:arred2(Number(p.valorJuros)||0)};
+  state.erroFinanciamento = '';
+  state.modal = {type:'parcelaFin'}; render();
+}
+function ModalParcelaFin(){
+  const d = editDraft, p = state.parcelasFinanciamento.find(x=>x.id===d._parcelaId);
+  const f = p && state.financiamentos.find(x=>x.id===p.financiamentoId);
+  if(!p || !f) return '';
+  const imp = importadoDoConag(f);
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Editar parcela ${p.numero}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-bottom:12px;">${esc(f.banco)}${imp ? ' · cronograma importado do Conag' : ''}</p>
+        <div class="field"><label>Vencimento</label><input id="f-parcdata" type="date" value="${d.data}"/></div>
+        <div class="field"><label>Amortização (R$)</label><input id="f-parcamort" type="number" step="0.01" min="0" value="${d.amort}" ${imp?'':'readonly'} autocomplete="off"/>
+          <span class="hint">${imp ? 'Mudar o valor refaz o saldo devedor de cada parcela e o principal do contrato (principal = soma das parcelas).' : 'Contrato lançado à mão: a amortização vem do cronograma e não muda aqui.'}</span></div>
+        <div class="field"><label>Juros (R$)</label><input id="f-parcjuros" type="number" step="0.01" min="0" value="${d.juros}" autocomplete="off"/>
+          <span class="hint">É este valor que vira despesa quando a parcela for paga. Troque a estimativa pelo que o banco vai cobrar.</span></div>
+        ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="parcelaFin">Salvar parcela</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function salvarParcelaFin(){
+  const d = editDraft, p = state.parcelasFinanciamento.find(x=>x.id===d._parcelaId);
+  const f = p && state.financiamentos.find(x=>x.id===p.financiamentoId);
+  if(!p || !f || !parcelaAberta(p)){
+    state.erroFinanciamento = 'Esta parcela não está mais em aberto. Feche e confira.'; render(); return;
+  }
+  const v = id => document.getElementById(id)?.value ?? '';
+  const data = v('f-parcdata'), amort = Number(v('f-parcamort')), juros = Number(v('f-parcjuros'));
+  const faltando = [];
+  if(!ISO_DATA.test(data)) faltando.push('vencimento');
+  if(v('f-parcamort')==='' || !(amort > 0)) faltando.push('amortização (maior que zero)');
+  if(v('f-parcjuros')==='' || !(juros >= 0)) faltando.push('juros (pode ser zero)');
+  if(faltando.length){
+    state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
+    editDraft = {...d, data, amort: v('f-parcamort'), juros: v('f-parcjuros')}; render(); return;
+  }
+  state.erroFinanciamento = '';
+  const imp = importadoDoConag(f);
+  const lista = parcelasDoFinanciamento(f.id).filter(x=>x.status!=='cancelada')
+    .map(x=>x.id===p.id ? {...x, valorAmortizacao:arred2(amort)} : x);
+  // contrato importado: principal = soma das parcelas, então o saldo fecha em zero
+  const principal = imp ? arred2(lista.reduce((s,x)=>s+Number(x.valorAmortizacao||0), 0)) : Number(f.valorPrincipal);
+  let saldo = principal;
+  const saldos = new Map(lista.map(x=>[x.id, (saldo = Math.max(0, arred2(saldo - x.valorAmortizacao)))]));
+  let {error} = await db.from('parcelas_financiamento').update({
+    data_vencimento:data, valor_amortizacao:arred2(amort), valor_juros:arred2(juros),
+    valor_parcela:arred2(amort + juros), saldo_devedor_apos:saldos.get(p.id),
+  }).eq('id', p.id);
+  for(const x of lista){
+    if(error) break;
+    if(x.id!==p.id && arred2(x.saldoDevedorApos)!==saldos.get(x.id)){
+      ({error} = await db.from('parcelas_financiamento').update({saldo_devedor_apos:saldos.get(x.id)}).eq('id', x.id));
+    }
+  }
+  if(!error && imp && arred2(Number(f.valorPrincipal))!==principal){
+    ({error} = await db.from('financiamentos').update({valor_principal:principal}).eq('id', f.id));
+  }
+  if(error){ alert('Não foi possível salvar a parcela: ' + error.message); await loadAll(); return; }
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+// Refaz o juros ESTIMADO das parcelas em aberto de um contrato importado do
+// Conag (mesma conta do lançamento: saldo antes da parcela, no período desde a
+// parcela anterior ou desde a data do contrato). Parcela paga não muda.
+async function reestimarJurosPendentes(f, taxaAa, dataContratacao){
+  const taxa = Number(taxaAa)||0;
+  let saldo = Number(f.valorPrincipal)||0, anterior = dataContratacao;
+  for(const p of parcelasDoFinanciamento(f.id).filter(x=>x.status!=='cancelada')){
+    const saldoAntes = saldo;
+    saldo = Math.max(0, arred2(saldo - p.valorAmortizacao));
+    if(parcelaAberta(p)){
+      const dias = Math.max(1, diasEntre(anterior, p.dataVencimento));
+      const juros = arred2(saldoAntes * (Math.pow(1 + taxa/100, dias/365) - 1));
+      const {error} = await db.from('parcelas_financiamento').update({valor_juros:juros, valor_parcela:arred2(p.valorAmortizacao + juros)}).eq('id', p.id);
+      if(error) return error;
+    }
+    anterior = (p.status==='paga' && p.dataPagamento) ? p.dataPagamento : p.dataVencimento;
+  }
+  return null;
+}
+// Contrato com cronograma travado (importado do Conag, ou já com parcela paga):
+// edita os dados do contrato sem regerar as parcelas.
+async function salvarEdicaoFinanciamentoTravado(){
+  const d = editDraft, f = state.financiamentos.find(x=>x.id===d._editId);
+  if(!f){ state.modal = null; editDraft = null; render(); return; }
+  const imp = importadoDoConag(f), v = id => document.getElementById(id)?.value ?? '';
+  const finalidade = v('f-finalidadefin') || f.finalidade, atividade = v('f-atividadefin');
+  const dataContratacao = imp ? v('f-datafin') : f.dataContratacao;
+  const taxaTxt = imp ? v('f-taxafin') : String(f.taxaJurosAa);
+  const faltando = [];
+  if(finalidade!=='capital_giro' && !atividade) faltando.push('atividade');
+  if(!dataContratacao) faltando.push('data');
+  if(taxaTxt==='' || !(Number(taxaTxt) >= 0)) faltando.push('taxa de juros');
+  if(faltando.length){
+    state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
+    editDraft = lerFinanciamentoDoFormulario(editDraft); render(); return;
+  }
+  state.erroFinanciamento = '';
+  const obsUsuario = v('f-obsfin').trim();
+  const row = {
+    finalidade, atividade: finalidade==='capital_giro' ? null : atividade,
+    fazenda_id: v('f-fazendafin') ? Number(v('f-fazendafin')) : null,
+    garantia: v('f-garantiafin').trim() || null,
+    observacao: imp ? textoObsConag(contratoDaObsConag(f.observacao)) + (obsUsuario ? ' ' + obsUsuario : '') : (obsUsuario || null),
+  };
+  if(imp){ row.data_contratacao = dataContratacao; row.taxa_juros_aa = Number(taxaTxt); }
+  let {error} = await db.from('financiamentos').update(row).eq('id', f.id);
+  if(!error && imp && (Number(taxaTxt)!==Number(f.taxaJurosAa) || dataContratacao!==f.dataContratacao)){
+    error = await reestimarJurosPendentes(f, Number(taxaTxt), dataContratacao);
+  }
+  if(error){ alert('Não foi possível salvar: ' + error.message); await loadAll(); return; }
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
+// "Apagar": o contrato fica cancelado (sai da dívida e do fluxo de caixa, mas
+// o histórico não se perde) e as linhas do Conag que ele tinha assumido voltam
+// para "Dívida do Conag ainda sem contrato". Se alguma parcela já virou
+// lançamento no Financeiro, o app não cancela: o juros ficaria lá sem contrato.
+async function cancelarFinanciamento(id){
+  const f = state.financiamentos.find(x=>x.id===id);
+  if(!f) return;
+  const parcelas = parcelasDoFinanciamento(id);
+  if(parcelas.some(p=>p.lancamentosFinanceiroIds.length>0)){
+    alert('Este contrato já tem juros lançado no Financeiro (parcelas pagas pelo app). Cancelar não desfaz esses lançamentos.\n\nExclua antes esses lançamentos em Financeiro, ou use Renegociar.');
+    return;
+  }
+  const volta = state.movimentosFinanciamento.filter(m=>m.financiamentoId===id).length;
+  const msg = importadoDoConag(f)
+    ? `Cancelar o contrato ${f.banco} (${parcelas.length} parcelas)?\n\nAs ${volta} linhas do Conag voltam para "Dívida do Conag ainda sem contrato" e a dívida e o fluxo de caixa voltam a contar por elas. Nada é apagado.`
+    : `Cancelar o financiamento ${f.banco} (R$ ${fmt(f.valorPrincipal)})?\n\nO contrato e as parcelas deixam de contar na dívida e no fluxo de caixa. Ele fica no histórico como cancelado.`;
+  if(!confirm(msg)) return;
+  const {error} = await db.from('financiamentos').update({status:'cancelado'}).eq('id', id);
+  if(error){ alert('Não foi possível cancelar: ' + error.message); return; }
+  state.financiamentoDetalheId = null;
   await loadAll();
 }
 
@@ -6207,6 +6691,9 @@ function Modal(){
   if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
   if(state.modal.type==='financiamento') return ModalFinanciamento();
+  if(state.modal.type==='pagamentoParcela') return ModalPagamentoParcela();
+  if(state.modal.type==='quitarFin') return ModalQuitarFinanciamento();
+  if(state.modal.type==='parcelaFin') return ModalParcelaFin();
   if(state.modal.type==='importarFuncionarios') return ModalImportarFuncionarios();
   if(state.modal.type==='usuario') return ModalUsuario();
   if(state.modal.type==='papelUsuario') return ModalPapelUsuario();
@@ -6611,7 +7098,7 @@ function attachEvents(){
       const g = gruposConagParaLancar().find(x=>x.chave===el.dataset.lancarConag);
       if(!g) return;
       editDraft = {banco:nomeBancoDoConag(g.credor), finalidade:'investimento', atividade:'', valorPrincipal:g.total,
-                   dataContratacao:g.linhas[0].data, taxaJurosAa:'', sistemaAmortizacao:'sac', numeroParcelas:g.linhas.length,
+                   dataContratacao:inicioEstimadoConag(g.linhas), taxaJurosAa:'', sistemaAmortizacao:'sac', numeroParcelas:g.linhas.length,
                    carenciaMeses:0, valorIof:0, valorSeguro:0, fazendaId:'', garantia:'', observacao:'',
                    _conagChave:g.chave,
                    _conagResumo:{contrato:g.contrato, pagas:g.pagas.length, totalPago:g.totalPago, aVencer:g.aVencer.length,
@@ -6623,10 +7110,26 @@ function attachEvents(){
   document.querySelectorAll('[data-editar-financiamento]').forEach(el=>{
     el.onclick = ()=>{
       const f = state.financiamentos.find(x=>x.id===Number(el.dataset.editarFinanciamento));
-      editDraft = {...f, _editId: f.id};
+      // cronograma travado (importado do Conag, ou já com parcela paga): edita só
+      // os dados do contrato, sem regerar as parcelas
+      const travado = importadoDoConag(f) || parcelasDoFinanciamento(f.id).some(p=>p.status==='paga');
+      editDraft = {...f, _editId: f.id, _travado: travado, _importado: importadoDoConag(f),
+                   observacao: importadoDoConag(f) ? parteDoUsuarioNaObsConag(f.observacao) : f.observacao};
       state.erroFinanciamento = '';
       state.modal = {type:'financiamento'}; render();
     };
+  });
+  document.querySelectorAll('[data-pagamento-parcela]').forEach(el=>{
+    el.onclick = ()=> abrirPagamentoParcela(Number(el.dataset.pagamentoParcela));
+  });
+  document.querySelectorAll('[data-editar-parcela]').forEach(el=>{
+    el.onclick = ()=> abrirEditarParcela(Number(el.dataset.editarParcela));
+  });
+  document.querySelectorAll('[data-quitar-financiamento]').forEach(el=>{
+    el.onclick = ()=> abrirQuitarFinanciamento(Number(el.dataset.quitarFinanciamento));
+  });
+  document.querySelectorAll('[data-cancelar-financiamento]').forEach(el=>{
+    el.onclick = ()=> cancelarFinanciamento(Number(el.dataset.cancelarFinanciamento));
   });
   document.querySelectorAll('[data-renegociar-financiamento]').forEach(el=>{
     el.onclick = ()=>{
@@ -7084,8 +7587,16 @@ function attachEvents(){
         await salvarTitulo(); return;
       } else if(type==='baixa'){
         await salvarBaixa(); return;
+      } else if(type==='pagamentoParcela'){
+        await salvarPagamentoParcela(); return;
+      } else if(type==='quitarFin'){
+        await salvarQuitacao(); return;
+      } else if(type==='parcelaFin'){
+        await salvarParcelaFin(); return;
       } else if(type==='financiamento' && editDraft._conagChave){
         await salvarFinanciamentoDoConag(); return;
+      } else if(type==='financiamento' && editDraft._travado){
+        await salvarEdicaoFinanciamentoTravado(); return;
       } else if(type==='financiamento'){
         const precisaAtividade = document.getElementById('f-finalidadefin').value !== 'capital_giro';
         const campos = {

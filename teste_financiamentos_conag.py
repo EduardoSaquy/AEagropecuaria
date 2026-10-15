@@ -142,8 +142,10 @@ with sync_playwright() as pw:
         texto: document.querySelector('.modal-body').innerText.toLowerCase()})""")
     conf(modal["titulo"] == "Lançar contrato do Conag" and modal["banco"] == "Banco do Brasil" and modal["bancoSoLeitura"],
          "o modal abre como 'Lancar contrato do Conag' com o banco preenchido (so leitura)", str(modal))
-    conf(float(modal["principal"]) == 700000 and modal["principalSoLeitura"] and modal["data"] == "2024-11-15",
-         "principal = soma das parcelas do Conag (R$ 700.000, so leitura); data = a da 1a parcela do Conag", str(modal))
+    # O Conag so tem vencimentos: a data do contrato e estimada recuando da 1a
+    # parcela o intervalo tipico (mediana dos intervalos: 365,5 -> 366 dias)
+    conf(float(modal["principal"]) == 700000 and modal["principalSoLeitura"] and modal["data"] == "2023-11-15",
+         "principal = soma das parcelas do Conag (R$ 700.000, so leitura); data estimada = 1a parcela menos o intervalo tipico (15/11/2023)", str(modal))
     conf(not (modal["temSistema"] or modal["temParcelas"] or modal["temCarencia"] or modal["temIof"]),
          "o cronograma vem do Conag: sem sistema de amortizacao, numero de parcelas, carencia, IOF nem seguro")
     conf("5 parcelas" in modal["texto"] and "2 já paga(s), r$ 220.000,00" in modal["texto"] and "3 a vencer, r$ 480.000,00" in modal["texto"],
