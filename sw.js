@@ -42,6 +42,11 @@
 // cai pro cache se a rede nao responder em TEMPO_REDE_MS. Online, a
 // pagina e sempre revalidada com o servidor (cache: 'no-cache') - entra
 // a versao nova assim que ela e publicada.
+//
+// (15/10/2026, sem trocar a versao do cache: trocar apagaria a copia
+// guardada na hora em que o site estivesse fora do ar.) A pagina tambem cai
+// pro cache quando o site RESPONDE erro (404, 5xx): foi o que aconteceu
+// ao trocar o repositorio do GitHub - ver teste_site_fora_do_ar.py.
 // ============================================================
 const CACHE = 'ae-v5';
 
@@ -107,10 +112,14 @@ function redePrimeiro(req) {
   const doCache = () => caches.match(req, { ignoreSearch: true });
   const limite = new Promise((resolve) => setTimeout(resolve, TEMPO_REDE_MS));
   return Promise.race([daRede.catch(() => null), limite]).then((resp) => {
-    if (resp) return resp;
-    // Rede falhou ou demorou: usa o cache; se nem o cache tiver, espera a
-    // rede mesmo (melhor demorar do que dar erro na primeira abertura).
-    return doCache().then((guardada) => guardada || daRede);
+    if (resp && resp.ok) return resp;
+    // Rede falhou, demorou OU o site respondeu erro (404 quando o GitHub
+    // Pages esta fora do ar, 5xx quando o GitHub cai): usa a copia guardada.
+    // So a rede nao bastava: resposta de erro e rapida e antes era entregue
+    // como se fosse a pagina - todo mundo via "404", ate com o app instalado.
+    // Sem copia guardada, entrega o que a rede respondeu (o erro de verdade)
+    // ou espera a rede (melhor demorar do que dar erro na primeira abertura).
+    return doCache().then((guardada) => guardada || resp || daRede);
   });
 }
 

@@ -15,7 +15,7 @@ aberto direto no navegador ou instalado como PWA.
 | `AECombustivel.html` | controle de diesel/Arla/gasolina das três frentes. Rateio por talhão/área — sem centro de custo, sem entrar em `lancamentos_financeiros` (controle próprio, por ora) |
 | `Adubacao.html` | calculadora de calagem/gessagem/adubação, sem Supabase e sem login (sessão única) |
 | `AELavoura.html` | página de redirecionamento para Cana/Cereais (o app antigo foi dividido) |
-| `sw.js` | service worker único de todos os apps (cache `ae-v5`). Página do site: rede primeiro (revalida sempre, cai pro cache após 4 s sem resposta) e atualiza o cache a cada abertura online; CDN do Supabase e fontes: cache primeiro. Sem a biblioteca do Supabase no cache o app não abre offline — foi o bug até a v4 |
+| `sw.js` | service worker único de todos os apps (cache `ae-v5`). Página do site: rede primeiro (revalida sempre, cai pro cache após 4 s sem resposta **ou se o site responder erro, 404/5xx**: com o GitHub Pages fora do ar quem já usa o app continua abrindo) e atualiza o cache a cada abertura online; CDN do Supabase e fontes: cache primeiro. Sem a biblioteca do Supabase no cache o app não abre offline — foi o bug até a v4 |
 | `gerar_apps_lavoura.py` | gera AECana e AECereais a partir de `AELavoura_app_completo.html.bak` |
 
 Cana e Cereais são propositalmente separados: ficam em estados diferentes do
@@ -474,6 +474,8 @@ verdade em `window.__DB__`).
 | `teste_divida_empresa.py` | 42 | AEMatriz.html (Empresa, Fase 2: vencimentos em 12 meses/por ano/por safra, taxa média ponderada, saldo e custo médio, lançar contrato não muda o saldo médio) |
 | `teste_financiamentos_conag.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do Conag: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
 | `teste_financiamentos_editar.py` | 40 | AEMatriz.html (Financiamentos: registrar pagamento com data/juros reais, editar parcela e contrato, quitar, cancelar; tela do contrato sem rolar de lado) |
+| `teste_sem_dados_sensiveis.py` | 14 | todo arquivo versionado (repositório público: sem CPF/CNPJ, número de conta, de contrato ou de documento; sem dumps de dados) |
+| `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
