@@ -214,11 +214,31 @@ with sync_playwright() as pw:
 
     # ---- 6. divida ----
     d = page.evaluate("() => dividaEmpresa()")
-    conf(d["origem"] == "modulo" and perto(d["valor"], 120000) and perto(d["aVencerConag"], 200000),
-         "divida: com contrato ativo no modulo, mostra o saldo dele (120.000); o a vencer do Conag (200.000, data futura) fica guardado", str(d))
+    conf(d["origem"] == "ambos" and perto(d["saldoModulo"], 120000) and perto(d["aVencerConag"], 200000) and perto(d["valor"], 320000),
+         "divida = saldo do contrato ativo (120.000) + o que o Conag ainda tem a vencer e nenhum contrato assumiu (200.000, data futura) = 320.000", str(d))
     d2 = page.evaluate("() => { const salvo = state.financiamentos; state.financiamentos = []; const r = dividaEmpresa(); state.financiamentos = salvo; return r; }")
     conf(d2["origem"] == "conag" and perto(d2["valor"], 200000),
          "divida: sem contrato no modulo, mostra a estimativa do Conag (so movimentos com data futura)", str(d2))
+
+    # ---- 6b. contrato que assumiu linhas do Conag: elas deixam de contar ----
+    # (Lancar contrato do Conag grava financiamento_id; ver teste_financiamentos_conag.py)
+    page.evaluate("() => { state.movimentosFinanciamento = state.movimentosFinanciamento.map(m => m.id === 3 ? {...m, financiamentoId: 2} : m); }")
+    d3 = page.evaluate("() => dividaEmpresa()")
+    conf(d3["origem"] == "modulo" and perto(d3["valor"], 120000) and perto(d3["aVencerConag"], 0),
+         "linha futura do Conag assumida pelo contrato 2: a divida volta a ser so o saldo dele (120.000), sem contar a mesma divida duas vezes", str(d3))
+    page.evaluate("() => { state.movimentosFinanciamento = state.movimentosFinanciamento.map(m => m.id === 1 ? {...m, financiamentoId: 2} : m); }")
+    f_assumida = page.evaluate("() => fluxoEmpresa({tipo:'ano', ano:2025})")
+    conf(perto(f_assumida["financiamento"]["amortizacao"], 25000),
+         "linha paga do Conag (80.000) assumida pelo contrato: sai do fluxo de 2025 (fica so os 25.000 da parcela paga do modulo)", str(f_assumida["financiamento"]))
+    page.evaluate("() => { state.financiamentos = state.financiamentos.map(f => f.id === 2 ? {...f, status: 'cancelado'} : f); }")
+    f_cancelado = page.evaluate("() => fluxoEmpresa({tipo:'ano', ano:2025})")
+    d4 = page.evaluate("() => dividaEmpresa()")
+    conf(perto(f_cancelado["financiamento"]["amortizacao"], 25000 + 80000) and perto(d4["aVencerConag"], 200000),
+         "contrato cancelado devolve as linhas ao Conag: amortizacao de 2025 volta a 105.000 e a divida a vencer a 200.000", f"{f_cancelado['financiamento']} {d4}")
+    # volta ao cenario original para as checagens da tela
+    page.evaluate("""() => {
+      state.movimentosFinanciamento = state.movimentosFinanciamento.map(m => ({...m, financiamentoId: null}));
+      state.financiamentos = state.financiamentos.map(f => f.id === 2 ? {...f, status: 'ativo'} : f); }""")
 
     # ---- 7. a tela ----
     page.evaluate("() => { state.periodo = {tipo:'ano', ano:2025, mes:'2025-06', safra:2025}; state.page = 'resultados'; render(); }")
@@ -230,7 +250,8 @@ with sync_playwright() as pw:
     texto = page.evaluate("() => document.body.innerText.toLowerCase()")
     for trecho in ["a empresa como uma atividade só", "fluxo de caixa", "resultado operacional (antes dos juros)",
                    "amortização do principal", "variação de caixa do período", "cobertura de juros",
-                   "ano (janeiro a dezembro)", "ano-safra (maio a abril)", "dívida (financiamentos)", "r$ 120.000,00"]:
+                   "ano (janeiro a dezembro)", "ano-safra (maio a abril)", "dívida (contratos + conag)", "r$ 320.000,00",
+                   "r$ 120.000,00 em contratos lançados + r$ 200.000,00 ainda só no conag"]:
         conf(trecho in texto, f"tela mostra: {trecho}")
     conf("r$ 799.500,00" in texto, "tela mostra a variacao de caixa de 2025 (R$ 799.500,00)")
     conf("rode financiamentos_02_movimentos_conag.sql" not in texto, "com a tabela de movimentos existindo, nao pede o script")

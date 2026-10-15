@@ -31,6 +31,7 @@ window.supabase = {
         _pendingDelete: false,
         select() { this._rows = linhas(); return this; },
         eq(col, val) { this._filtros.push(r => String(r[col]) === String(val)); return this; },
+        in(col, vals) { const s = new Set((vals || []).map(String)); this._filtros.push(r => s.has(String(r[col]))); return this; },
         order() { return this; },
         limit(n) { this._limit = n; return this; },
         range(de, ate) {
