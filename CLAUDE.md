@@ -290,8 +290,16 @@ Confinamento), aí sim dá pra repartir o custo — hoje não.
 Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
 e dívida (Fase 1 em 14/10/2026). Fase 2 em 15/10/2026: dívida no tempo
 (vencimentos em 12 meses x depois, por ano e por ano-safra; taxa média dos
-contratos; saldo médio e custo médio da dívida). Falta a Fase 3: caixa real
-por conta bancária, contas a pagar/receber e balanço simplificado.
+contratos; saldo médio e custo médio da dívida).
+
+**Conta bancária e saldo em conta: o Eduardo NÃO coloca no app** ("não é
+seguro", 15/10/2026). Não proponha caixa real por conta, saldo inicial por
+conta nem peça agência/conta/saldo. O fluxo de caixa da aba é a variação do
+período calculada pelos lançamentos, sem saldo bancário; no Pagar/Receber o
+campo "Conta bancária" é opcional ("— Não informada —") e assim deve ficar. O
+que ainda poderia vir sem nenhum dado bancário (só se ele pedir): liquidez com
+contas a pagar/receber e um balanço simplificado. O balancete por centro de
+custo já existe em Resultados > Relatórios.
 
 - Base: `lancamentos_financeiros` **direto** (`state.lancamentos`, a empresa
   inteira, sem ratear) + `movimentos_financiamento` + o módulo Financiamentos.
