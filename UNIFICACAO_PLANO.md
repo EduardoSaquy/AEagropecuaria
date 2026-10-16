@@ -192,4 +192,4 @@ Não é "roda tudo em 10 minutos".
 | **Total** | **~2h**, com folga pra imprevisto |
 
 Faça num período em que ninguém precise lançar nada. Não emende com a
-importação do Conag no mesmo dia — uma coisa de cada vez.
+importação do ERP no mesmo dia — uma coisa de cada vez.

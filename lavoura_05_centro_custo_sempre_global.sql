@@ -19,7 +19,7 @@
 --
 -- A coluna fazenda_id vem do desenho antigo, de quando cada app tinha seu
 -- proprio banco e centros_custo exigia fazenda. Os 56 centros do plano de
--- contas do Conag ja sao globais; os que tem fazenda sao resquicio.
+-- contas do ERP ja sao globais; os que tem fazenda sao resquicio.
 --
 -- ------------------------------------------------------------
 -- O QUE ESTE SCRIPT FAZ

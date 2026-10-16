@@ -1,11 +1,11 @@
 -- ============================================================
--- ETAPA 3 DE 3: IMPORTA OS 9.400 LANCAMENTOS DO CONAG
+-- ETAPA 3 DE 3: IMPORTA OS 9.400 LANCAMENTOS DO ERP
 --
 -- RODAR NO PROJETO UNIFICADO (kmkystqgpvmzrccxvyaz).
--- ANTES: conag_10 (mesa de pouso), centros_05 (classe), centros_07 (de-para),
---        e o CSV ja carregado em conag_staging pelo Table Editor.
+-- ANTES: erp_10 (mesa de pouso), centros_05 (classe), centros_07 (de-para),
+--        e o CSV ja carregado em erp_staging pelo Table Editor.
 --
--- Roda quantas vezes quiser: o indice unico em conag_id impede repetir.
+-- Roda quantas vezes quiser: o indice unico em erp_id impede repetir.
 --
 -- ------------------------------------------------------------
 -- O QUE ENTRA
@@ -44,10 +44,10 @@
 -- ------------------------------------------------------------
 -- POR QUE UMA TABELA DE RATEIO, E NAO QUEBRAR O LANCAMENTO EM VARIOS
 --
--- Um titulo do Conag continua sendo UMA linha em lancamentos_financeiros.
+-- Um titulo do ERP continua sendo UMA linha em lancamentos_financeiros.
 -- O rateio mora em lancamento_rateios, uma linha por destino.
 --
---   - a conferencia contra o Conag bate na unha: 9.400 la, 9.400 aqui
+--   - a conferencia contra o ERP bate na unha: 9.400 la, 9.400 aqui
 --   - se amanha a proporcao mudar, apaga o rateio e recalcula, sem tocar
 --     no lancamento
 --   - e a mesma forma do titulo_rateios que o Pagar/Receber ja usa
@@ -70,11 +70,11 @@ begin
                  where table_name='centros_custo' and column_name='classe') then
     raise exception 'RODE O centros_05 PRIMEIRO';
   end if;
-  if not exists (select 1 from conag_plano_contas) then
-    raise exception 'conag_plano_contas vazia - rode o centros_05';
+  if not exists (select 1 from erp_plano_contas) then
+    raise exception 'erp_plano_contas vazia - rode o centros_05';
   end if;
-  if (select count(*) from conag_staging) = 0 then
-    raise exception 'conag_staging vazia - carregue o CSV no Table Editor antes';
+  if (select count(*) from erp_staging) = 0 then
+    raise exception 'erp_staging vazia - carregue o CSV no Table Editor antes';
   end if;
 end $$;
 
@@ -82,7 +82,7 @@ end $$;
 -- ------------------------------------------------------------
 -- A SAFRA DE UM MES
 --
--- Maio a abril, como no Conag e como no resto do app. Julho/2025 e
+-- Maio a abril, como no ERP e como no resto do app. Julho/2025 e
 -- 2025/2026; marco/2026 tambem.
 -- ------------------------------------------------------------
 create or replace function safra_do_mes(mes text)
@@ -112,11 +112,11 @@ select s.nome,
             else p.grupo || ' | ' || p.subcategoria end,
        p.classe,
        true
-  from (select distinct btrim(centro_custo) as nome from conag_staging
+  from (select distinct btrim(centro_custo) as nome from erp_staging
          where coalesce(btrim(centro_custo),'') <> '') s
   join lateral (
         select grupo, subcategoria, classe, tipo
-          from conag_plano_contas
+          from erp_plano_contas
          where plano_norm(conta) = plano_norm(s.nome)
          -- TRIBUTOS existe em duas classes: a de custo vem antes da que
          -- desconta receita.
@@ -135,7 +135,7 @@ alter table lancamentos_financeiros add column if not exists vencimento date;
 
 comment on column lancamentos_financeiros.vencimento is
   'Quando o titulo vence - fato de caixa. Diferente de data, que e quando o '
-  'custo aconteceu. Nos lancamentos vindos do Conag, data e nula (so se '
+  'custo aconteceu. Nos lancamentos vindos do ERP, data e nula (so se '
   'conhece o mes de competencia) e o vencimento fica aqui.';
 
 create table if not exists lancamento_rateios (
@@ -163,7 +163,7 @@ create or replace view lancamentos_rateados as
 select l.id as lancamento_id, r.id as rateio_id, l.tipo,
        r.atividade, r.fazenda_id, r.cultura_id, r.valor,
        l.centro_custo_id, l.descricao, l.fornecedor, l.data, l.mes,
-       l.conag_id, l.contrato, true as rateado,
+       l.erp_id, l.contrato, true as rateado,
        l.observacao, l.talhao_id, l.lote_id, l.areas, l.arrobas, l.abate_id,
        l.criado_por, l.quantidade, l.unidade, l.safra_id, l.cnpj_nota, l.vencimento
   from lancamentos_financeiros l
@@ -172,7 +172,7 @@ union all
 select l.id, null, l.tipo,
        l.atividade, l.fazenda_id, l.cultura_id, l.valor,
        l.centro_custo_id, l.descricao, l.fornecedor, l.data, l.mes,
-       l.conag_id, l.contrato, false,
+       l.erp_id, l.contrato, false,
        l.observacao, l.talhao_id, l.lote_id, l.areas, l.arrobas, l.abate_id,
        l.criado_por, l.quantidade, l.unidade, l.safra_id, l.cnpj_nota, l.vencimento
   from lancamentos_financeiros l
@@ -195,7 +195,7 @@ comment on view lancamentos_rateados is
 -- com data, o mes tem que ser o dela; SEM data, o mes e livre e significa
 -- competencia mensal - lancamento historico, sem dia especifico.
 --
--- E exatamente o que estes 9.400 sao. No Conag, competencia e vencimento
+-- E exatamente o que estes 9.400 sao. No ERP, competencia e vencimento
 -- sao fatos diferentes: o combustivel foi consumido em dezembro e o boleto
 -- vence em 1o de janeiro. Em 4.836 dos 9.400 titulos (51,4%, R$ 23,6
 -- milhoes) os dois meses nao batem, e 4.169 deles sao de exatamente um mes.
@@ -203,7 +203,7 @@ comment on view lancamentos_rateados is
 --
 -- Entao: mes recebe a competencia, que e o mes que o Resultado usa e de
 -- onde sairam todos os totais por safra ja conferidos. E data fica nula,
--- porque o dia em que o custo aconteceu o Conag nao informa - so o mes.
+-- porque o dia em que o custo aconteceu o ERP nao informa - so o mes.
 --
 -- O vencimento nao se perde: vai para coluna propria. Nao cabia em data,
 -- que quer dizer "quando aconteceu", e nao "quando vence".
@@ -211,11 +211,11 @@ comment on view lancamentos_rateados is
 -- Relaxar a trava seria o caminho errado: ela nasceu de um bug real, que
 -- derivava um campo do outro e inflou R$ 43.928,73 para R$ 1.230.390,69.
 --
--- on conflict do nothing no conag_id: rodar de novo nao duplica.
+-- on conflict do nothing no erp_id: rodar de novo nao duplica.
 -- ------------------------------------------------------------
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
-   vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
+   vencimento, fornecedor, cultura_id, erp_id, cnpj_nota, contrato, criado_por, observacao)
 select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' end,
        s.atividade,
        f.id,
@@ -227,23 +227,23 @@ select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' en
        s.vencimento::date,
        btrim(s.entidade),
        cu.id,
-       s.conag_id,
+       s.erp_id,
        nullif(btrim(s.cnpj_nota), ''),
        nullif(btrim(s.contrato), ''),
-       'Conag',
-       'Conag ' || s.conag_cod || ' - ' || coalesce(nullif(btrim(s.forma_pagamento),''), 'sem forma')
-  from conag_staging s
+       'ERP',
+       'ERP ' || s.erp_cod || ' - ' || coalesce(nullif(btrim(s.forma_pagamento),''), 'sem forma')
+  from erp_staging s
   join centros_custo c  on plano_norm(c.nome) = plano_norm(s.centro_custo)
   left join lateral (
-        select grupo from conag_plano_contas
+        select grupo from erp_plano_contas
          where plano_norm(conta) = plano_norm(s.centro_custo)
          order by case when classe = 'DEDUCOES DA RECEITA BRUTA DE VENDAS' then 1 else 0 end
          limit 1) p on true
   left join lateral (
         select id from fazendas
-         where coalesce(btrim(s.fazenda_conag),'') <> ''
+         where coalesce(btrim(s.fazenda_erp),'') <> ''
            and plano_norm(nome) like '%' || plano_norm(
-                 regexp_replace(btrim(s.fazenda_conag), '^FAZENDA (DAS |DA |DO )?', '')) || '%'
+                 regexp_replace(btrim(s.fazenda_erp), '^FAZENDA (DAS |DA |DO )?', '')) || '%'
          order by length(nome)
          limit 1) f on true
   left join lateral (
@@ -263,12 +263,12 @@ select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' en
  -- entrando normalmente. Sao 75 titulos, R$ 17.829.159,91 - conferidos na
  -- linha 11.6.
  --
- -- Conta que cai no grupo INVESTIMENTOS do plano do Conag (maquina, terra,
+ -- Conta que cai no grupo INVESTIMENTOS do plano do ERP (maquina, terra,
  -- matriz, infraestrutura) vira tipo='investimento', nao despesa - senao
  -- infla o total de despesas com dinheiro que virou patrimonio, nao custo.
  where s.valor::numeric > 0
    and plano_norm(s.centro_custo) <> plano_norm('AMORTIZACAO DE FINANCIAMENTO')
-on conflict (conag_id) where conag_id is not null do nothing;
+on conflict (erp_id) where erp_id is not null do nothing;
 
 
 -- ------------------------------------------------------------
@@ -278,7 +278,7 @@ on conflict (conag_id) where conag_id is not null do nothing;
 -- atividades DAQUELA fazenda, na proporcao do que ja foi gasto la na mesma
 -- safra. Se a safra nao tiver base, usa a fazenda inteira.
 --
--- A base sao os lancamentos que TEM atividade - os nossos e os do Conag
+-- A base sao os lancamentos que TEM atividade - os nossos e os do ERP
 -- juntos. E a melhor leitura do que de fato aconteceu na fazenda.
 --
 -- Parte que arredonda para menos de um centavo e descartada, e a sobra vai
@@ -299,7 +299,7 @@ base_f as (
 alvo as (
   select l.id, l.fazenda_id, l.valor as total, safra_do_mes(l.mes) as safra
     from lancamentos_financeiros l
-   where l.conag_id is not null and l.atividade = 'geral' and l.fazenda_id is not null
+   where l.erp_id is not null and l.atividade = 'geral' and l.fazenda_id is not null
      and not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id)
 ),
 partes as (
@@ -364,7 +364,7 @@ base_t as (
 alvo as (
   select l.id, l.valor as total, safra_do_mes(l.mes) as safra
     from lancamentos_financeiros l
-   where l.conag_id is not null and l.atividade = 'geral' and l.fazenda_id is null
+   where l.erp_id is not null and l.atividade = 'geral' and l.fazenda_id is null
      and not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id)
 ),
 partes as (
@@ -403,21 +403,21 @@ on conflict do nothing;
 -- tem que devolver o mesmo dinheiro que entrou. Se ela nao bater, nada mais
 -- importa.
 -- ------------------------------------------------------------
-select 1::numeric as ordem, 'Titulos do Conag importados' as item,
+select 1::numeric as ordem, 'Titulos do ERP importados' as item,
        count(*)::text as valor, 'esperado: 9.253 (9.400 - 72 de valor zero - 75 de amortizacao, ver linhas 11.4 e 11.6)' as situacao
-from lancamentos_financeiros where conag_id is not null
+from lancamentos_financeiros where erp_id is not null
 union all
 select 2, 'Valor importado', round(sum(valor),2)::text, 'esperado: 44.780.409,59 (62.609.569,50 - 17.829.159,91 de amortizacao excluida)'
-from lancamentos_financeiros where conag_id is not null
+from lancamentos_financeiros where erp_id is not null
 union all
 select 3, 'A view devolve o mesmo dinheiro?',
        round(sum(valor),2)::text,
        case when round(sum(valor),2) = (select round(sum(valor),2)
                                           from lancamentos_financeiros
-                                         where conag_id is not null)
+                                         where erp_id is not null)
             then 'SIM - bate com a linha 2'
             else 'NAO - PARE E ME AVISE' end
-from lancamentos_rateados where conag_id is not null
+from lancamentos_rateados where erp_id is not null
 union all
 select 4, 'Titulo cujo rateio nao fecha',
        count(*)::text,
@@ -432,7 +432,7 @@ union all
 select 5, 'Titulos com atividade propria (sem rateio)', count(*)::text,
        'esperado: 5.927 (era 5.952, 25 de amortizacao tinham atividade propria e saem)'
 from lancamentos_financeiros
-where conag_id is not null and atividade <> 'geral'
+where erp_id is not null and atividade <> 'geral'
 union all
 select 6, 'Rateados: geral de fazenda', count(distinct lancamento_id)::text, 'esperado: 791'
 from lancamento_rateios where origem = 'geral da fazenda'
@@ -444,51 +444,51 @@ union all
 select 8, 'Nao rateados por serem centavo ou zero', count(*)::text,
        'esperado: 9, somando R$ 0,09'
 from lancamentos_financeiros l
-where l.conag_id is not null and l.atividade = 'geral'
+where l.erp_id is not null and l.atividade = 'geral'
   and not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id)
 union all
-select 9, 'Contas do Conag que existem como centro', count(*)::text,
+select 9, 'Contas do ERP que existem como centro', count(*)::text,
        'esperado: 85 - as do CSV'
-from (select distinct plano_norm(centro_custo) n from conag_staging) s
+from (select distinct plano_norm(centro_custo) n from erp_staging) s
 where exists (select 1 from centros_custo c where plano_norm(c.nome) = s.n)
 union all
 select 10, 'Titulos com cultura', count(*)::text,
        'esperado: 1.855 (era 1.872, 17 de amortizacao tinham cultura)'
-from lancamentos_financeiros where conag_id is not null and cultura_id is not null
+from lancamentos_financeiros where erp_id is not null and cultura_id is not null
 union all
 select 11, 'Titulos sem centro de custo', count(*)::text,
        case when count(*) = 0 then 'nenhum ficou de fora' else 'PARE E ME AVISE' end
-from conag_staging s
-where not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
+from erp_staging s
+where not exists (select 1 from lancamentos_financeiros l where l.erp_id = s.erp_id)
   and s.valor::numeric > 0
   and plano_norm(s.centro_custo) <> plano_norm('AMORTIZACAO DE FINANCIAMENTO')
 union all
 select 11.4, 'Titulos com valor R$ 0,00 (nao importados)', count(*)::text,
        'esperado: 72 - lancamentos_financeiros exige valor > 0'
-from conag_staging s
+from erp_staging s
 where s.valor::numeric = 0
-  and not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
+  and not exists (select 1 from lancamentos_financeiros l where l.erp_id = s.erp_id)
 union all
 select 11.5, 'Titulos com vencimento em outro mes', count(*)::text,
        'esperado: 4.805 (era 4.813, 8 de amortizacao tinham vencimento em outro mes) - nota a prazo, data fica nula'
 from lancamentos_financeiros
-where conag_id is not null and vencimento is not null
+where erp_id is not null and vencimento is not null
   and to_char(vencimento,'YYYY-MM') <> mes
 union all
 select 11.6, 'Titulos de amortizacao de financiamento (nao importados)', count(*)::text,
        'esperado: 75, R$ 17.829.159,91 - pagar o principal nao e despesa, e divida saindo (regra do CLAUDE.md)'
-from conag_staging s
+from erp_staging s
 where plano_norm(s.centro_custo) = plano_norm('AMORTIZACAO DE FINANCIAMENTO')
-  and not exists (select 1 from lancamentos_financeiros l where l.conag_id = s.conag_id)
+  and not exists (select 1 from lancamentos_financeiros l where l.erp_id = s.erp_id)
 union all
 select 11.7, 'Titulos classificados como investimento (tipo investimento, nao despesa)', count(*)::text,
        'esperado: 337, R$ 7.212.288,44 - maquina/terra/matriz/infraestrutura, nao entra como despesa'
 from lancamentos_financeiros
-where conag_id is not null and tipo = 'investimento'
+where erp_id is not null and tipo = 'investimento'
 union all
 select 12, 'Lancamentos NOSSOS, anteriores', count(*)::text, 'NAO pode ter mudado'
-from lancamentos_financeiros where conag_id is null
+from lancamentos_financeiros where erp_id is null
 union all
 select 13, 'Valor NOSSO, anterior', round(sum(valor),2)::text, 'NAO pode ter mudado'
-from lancamentos_financeiros where conag_id is null
+from lancamentos_financeiros where erp_id is null
 order by ordem;

@@ -7,14 +7,14 @@
 -- ANTES DE MAIS NADA: UM DEFEITO NO centros_06
 --
 -- O centros_06 comparava o nome do nosso centro so contra as CONTAS do
--- Conag (nivel 4). Nao comparava contra as CLASSES (nivel 3) - que e
+-- ERP (nivel 4). Nao comparava contra as CLASSES (nivel 3) - que e
 -- justamente onde os nossos nomes moram.
 --
 -- Por isso ele deu vereditos errados nos casos que mais importavam:
 --
 --   "Mao de Obra Operacional" (985 lancamentos, R$ 317.857,68) saiu como
---   "nossa mesmo, o Conag nao tem" com parecenca 0,19 contra EXAME MEDICO
---   OCUPACIONAL. E o maior centro em uso que temos, e o Conag tem sim: a
+--   "nossa mesmo, o ERP nao tem" com parecenca 0,19 contra EXAME MEDICO
+--   OCUPACIONAL. E o maior centro em uso que temos, e o ERP tem sim: a
 --   classe MAO-DE-OBRA DE OPERACIONAL. Nao casou no centros_05 por causa
 --   dos hifens, e o centros_06 nao pegou porque olhou para o andar errado.
 --
@@ -24,16 +24,16 @@
 -- ------------------------------------------------------------
 -- O QUE ESTE SCRIPT FAZ
 --
--- 1. Sete centros NOSSOS ganham a classe certa do Conag. O nome deles nao
+-- 1. Sete centros NOSSOS ganham a classe certa do ERP. O nome deles nao
 --    muda, os lancamentos nao se mexem. So passam a somar junto com as
---    contas do Conag num relatorio agrupado por classe.
+--    contas do ERP num relatorio agrupado por classe.
 --
--- 2. Dois centros VAZIOS que sao a mesma coisa que uma conta do Conag
+-- 2. Dois centros VAZIOS que sao a mesma coisa que uma conta do ERP
 --    saem de circulacao (ativo = false). Nao sao apagados: ativo volta a
 --    true numa linha de SQL se voce quiser.
 --
 -- 3. Os outros 14 ficam como estao. Sao contas do plano que montamos e o
---    Conag nao movimentou no periodo - ENTRADA DE FINANCIAMENTOS,
+--    ERP nao movimentou no periodo - ENTRADA DE FINANCIAMENTOS,
 --    DIVIDENDOS, CERTIFICACOES E RASTREABILIDADE e por ai. Sao 13 agora. Conta sem
 --    movimento nao sai no balancete; nao aparecer la nao quer dizer que
 --    nao exista.
@@ -65,14 +65,14 @@ end $$;
 -- 1. OS SEIS EM USO: SO A CLASSE
 --
 -- Cada linha foi conferida contra hierarquia_nivel3.txt, lida do balancete.
--- A quarta coluna e o volume que o Conag tem na mesma classe, para dar
+-- A quarta coluna e o volume que o ERP tem na mesma classe, para dar
 -- ideia do que vai passar a somar junto.
 -- ------------------------------------------------------------
 with de_para(nome_norm, classe_certa, sub_certa, obs) as (values
   ('MAO DE OBRA OPERACIONAL',
    'MAO-DE-OBRA DE OPERACIONAL',
    'OPERACIONAL | MAO DE OBRA OPERACIONAL',
-   'nossos 985 encontram SALARIOS, FGTS, FERIAS, 13o, DIARISTA do Conag'),
+   'nossos 985 encontram SALARIOS, FGTS, FERIAS, 13o, DIARISTA do ERP'),
 
   ('MANUTENCAO DE MAQUINAS E FROTA',
    'MANUTENCAO DE TRATORES, CAMINHOES, MAQUINAS, EQUIPAMENTOS E IMPLEMENTOS',
@@ -99,15 +99,15 @@ with de_para(nome_norm, classe_certa, sub_certa, obs) as (values
   -- PELO NOME quando alguem marca uma parcela como paga (constante
   -- NOME_CENTRO_JUROS_FIN no AEMatriz.html). Desativar ele sumiria do
   -- seletor de lancamento e o juros de cada parcela iria parar num centro
-  -- fora de circulacao. Fica ativo, e ganha a classe do Conag para o juros
+  -- fora de circulacao. Fica ativo, e ganha a classe do ERP para o juros
   -- do app somar junto com os 85 lancamentos de JUROS PAGOS OU INCORRIDOS.
   ('JUROS E ENCARGOS DE FINANCIAMENTO',
    'DESPESAS FINANCEIRAS',
    'FINANCIAMENTOS | DESPESAS FINANCEIRAS',
-   'o juros das parcelas encontra os 85 do Conag, R$ 1,4 mi'),
+   'o juros das parcelas encontra os 85 do ERP, R$ 1,4 mi'),
 
   -- Vendas guarda R$ 4,76 milhoes de receita nossa. A classe PRODUCAO
-  -- AGROPECUARIA e onde o Conag poe a venda fisica da producao. Sem isso a
+  -- AGROPECUARIA e onde o ERP poe a venda fisica da producao. Sem isso a
   -- nossa receita fica num balde e a deles noutro.
   ('VENDAS',
    'PRODUCAO AGROPECUARIA',
@@ -124,7 +124,7 @@ update centros_custo c
 
 
 -- ------------------------------------------------------------
--- 2. OS DOIS VAZIOS QUE DUPLICAM CONTA DO CONAG
+-- 2. OS DOIS VAZIOS QUE DUPLICAM CONTA DO ERP
 --
 -- So sai de circulacao quem tem ZERO lancamento. O "not exists" e a trava:
 -- se algum tiver ganhado lancamento entre a consulta do 06 e agora, ele
@@ -133,9 +133,9 @@ update centros_custo c
 update centros_custo c
    set ativo = false, updated_at = now()
  where plano_norm(c.nome) in (
-         -- vira COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE (45 no Conag)
+         -- vira COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE (45 no ERP)
          'COMPRA DE ANIMAIS PARA ENGORDA',
-         -- vira MANUTENCAO DOS VEICULOS DA ADMINISTRACAO (364 no Conag)
+         -- vira MANUTENCAO DOS VEICULOS DA ADMINISTRACAO (364 no ERP)
          'MANUTENCAO DE VEICULOS LEVES'
        )
    and c.ativo
@@ -145,7 +145,7 @@ update centros_custo c
 -- ------------------------------------------------------------
 -- CONFERE - uma consulta so
 -- ------------------------------------------------------------
-select 1 as ordem, 'Centros em uso que ganharam classe do Conag' as item,
+select 1 as ordem, 'Centros em uso que ganharam classe do ERP' as item,
        count(*)::text as valor,
        'esperado: 7' as situacao
 from centros_custo
@@ -155,7 +155,7 @@ where plano_norm(nome) in ('MAO DE OBRA OPERACIONAL','MANUTENCAO DE MAQUINAS E F
                            'JUROS E ENCARGOS DE FINANCIAMENTO')
   and plano_norm(classe) <> plano_norm(nome)
 union all
-select 2, 'Lancamentos que passam a cair em classe do Conag',
+select 2, 'Lancamentos que passam a cair em classe do ERP',
        count(*)::text, 'esperado: 1.375'
 from lancamentos_financeiros l
 join centros_custo c on c.id = l.centro_custo_id
@@ -180,10 +180,10 @@ where not ativo
                            'MANUTENCAO DE VEICULOS LEVES')
 union all
 select 5, 'Centros fora da arvore que sobraram', count(*)::text,
-       'esperado: 13 - contas nossas sem movimento no Conag'
+       'esperado: 13 - contas nossas sem movimento no ERP'
 from centros_custo c
 where c.ativo
-  and not exists (select 1 from conag_plano_contas p
+  and not exists (select 1 from erp_plano_contas p
                    where plano_norm(p.classe) = plano_norm(c.classe))
 union all
 select 6, 'Centros ativos', count(*)::text, 'eram 64'

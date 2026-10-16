@@ -1,4 +1,4 @@
-# Importar o Conag — instruções para o Code
+# Importar o ERP — instruções para o Code
 
 O Eduardo está no tablet e não consegue operar o dashboard do Supabase até o
 fim. Faça você, pelo `psql`.
@@ -6,7 +6,7 @@ fim. Faça você, pelo `psql`.
 ## Ordem
 
 **1. Aplique o bundle primeiro.** O CSV que a importação usa
-(`conag/lancamentos_para_importar.csv`) **não está no GitHub** — ele só existe
+(`erp/lancamentos_para_importar.csv`) **não está no GitHub** — ele só existe
 nos commits que não subiram. Sem o bundle, o passo 2 quebra no `\copy`.
 
 ```
@@ -20,7 +20,7 @@ nos mesmos arquivos e o merge é decisão dele, não limpeza automática.
 **2. Rode a importação**, da raiz do repositório:
 
 ```
-psql "<STRING DE CONEXAO>" -v ON_ERROR_STOP=1 -f conag_tudo.sql
+psql "<STRING DE CONEXAO>" -v ON_ERROR_STOP=1 -f erp_tudo.sql
 ```
 
 A string está em **Supabase → Project Settings → Database → Connection string
@@ -34,26 +34,26 @@ Se faltar o cliente: `sudo apt install postgresql-client`.
 O Eduardo já rodou pelo dashboard, e deram certo:
 
 - `centros_05_dois_niveis.sql` → 7 / 1.375 / 2
-- `conag_10_estrutura.sql` → mesa criada
-- carga do CSV em `conag_staging` → 9.400 linhas
-- a primeira parte do `conag_12` → contas de nível 4, `lancamento_rateios`, view
+- `erp_10_estrutura.sql` → mesa criada
+- carga do CSV em `erp_staging` → 9.400 linhas
+- a primeira parte do `erp_12` → contas de nível 4, `lancamento_rateios`, view
 
 A importação em si **não rodou** — bateu na trava `mes_bate_com_data` e o
 Postgres desfez tudo. Já está corrigido no arquivo (veja abaixo).
 
-`conag_tudo.sql` é seguro rodar por cima disso: ele recria `conag_staging`,
-recarrega o CSV e usa `on conflict do nothing` no `conag_id`. Rodar duas vezes
+`erp_tudo.sql` é seguro rodar por cima disso: ele recria `erp_staging`,
+recarrega o CSV e usa `on conflict do nothing` no `erp_id`. Rodar duas vezes
 dá o mesmo resultado.
 
 ## O que mudou desde a versão anterior
 
-`data` agora fica **nula** nos lançamentos do Conag e o vencimento vai para uma
+`data` agora fica **nula** nos lançamentos do ERP e o vencimento vai para uma
 coluna própria (`lancamentos_financeiros.vencimento`, criada pelo script).
 
 Motivo: a trava `mes_bate_com_data` exige `data is null or mes =
 to_char(data,'YYYY-MM')`, e em 4.836 dos 9.400 títulos (51,4%, R$ 23,6 milhões)
 o vencimento cai em mês diferente da competência — compra em dezembro, boleto
-em janeiro. `data` significa *quando o custo aconteceu*, e o Conag só informa o
+em janeiro. `data` significa *quando o custo aconteceu*, e o ERP só informa o
 mês. **Não relaxe essa trava**: ela nasceu de um bug real que inflou
 R$ 43.928,73 para R$ 1.230.390,69.
 
@@ -80,6 +80,6 @@ tentar consertar.
 
 ## Testar antes, sem tocar no Supabase
 
-`./ensaio_conag.sh` sobe um Postgres local, monta o banco a partir de
+`./ensaio_erp.sh` sobe um Postgres local, monta o banco a partir de
 `schema_real.txt` — já com a trava `mes_bate_com_data` — e roda tudo com o CSV
 de verdade. É o ensaio que validou este arquivo.

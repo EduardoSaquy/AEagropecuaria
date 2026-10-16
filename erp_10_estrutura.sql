@@ -1,5 +1,5 @@
 -- ============================================================
--- ETAPA 1 DE 3: PREPARA O TERRENO PARA A IMPORTACAO DO CONAG
+-- ETAPA 1 DE 3: PREPARA O TERRENO PARA A IMPORTACAO DO ERP
 --
 -- RODAR NO PROJETO UNIFICADO (kmkystqgpvmzrccxvyaz).
 --
@@ -7,8 +7,8 @@
 -- pousar e as colunas que faltam. Nenhum dos 2.760 lancamentos atuais e
 -- tocado.
 --
--- DEPOIS DELE voce carrega o CSV na tabela conag_staging pela tela do
--- Supabase (Table Editor > conag_staging > Insert > Import data from CSV),
+-- DEPOIS DELE voce carrega o CSV na tabela erp_staging pela tela do
+-- Supabase (Table Editor > erp_staging > Insert > Import data from CSV),
 -- e so entao roda a etapa 2, que e a CONFERENCIA - ela mostra o que seria
 -- duplicado antes de qualquer coisa entrar.
 -- ============================================================
@@ -30,10 +30,10 @@ end $$;
 -- falhar por causa de uma linha ruim. Aqui entra tudo, e a conversao
 -- acontece na etapa 3, onde da para ver o que nao converteu.
 -- ------------------------------------------------------------
-drop table if exists conag_staging;
-create table conag_staging (
-  conag_id         text,
-  conag_cod        text,
+drop table if exists erp_staging;
+create table erp_staging (
+  erp_id         text,
+  erp_cod        text,
   entidade         text,
   centro_custo     text,
   cnpj_nota        text,
@@ -43,38 +43,38 @@ create table conag_staging (
   valor            text,
   previsao         text,
   usuario          text,
-  atividade_conag  text,
-  fazenda_conag    text,
+  atividade_erp  text,
+  fazenda_erp    text,
   atividade        text,
   cultura          text,
   administrativo   text,
-  -- Numero do contrato de financiamento. No Conag ele vinha COLADO no nome
+  -- Numero do contrato de financiamento. No ERP ele vinha COLADO no nome
   -- da conta - 'AMORTIZACAO DE FINANCIAMENTO (Contrato: numero do contrato)' - e
   -- eram 22 contratos gerando 44 variantes de duas contas so. Importar
   -- assim encheria o plano de contas de 44 versoes da mesma conta.
   -- Separado, da para ver por contrato sem sujar o plano.
   contrato         text
 );
-comment on table conag_staging is
-  'Mesa de pouso do CSV do Conag. Some depois da importacao conferida.';
+comment on table erp_staging is
+  'Mesa de pouso do CSV do ERP. Some depois da importacao conferida.';
 
 
 -- ------------------------------------------------------------
 -- DE ONDE VEIO CADA LANCAMENTO
 --
 -- Sem esta coluna nao ha como saber, daqui a seis meses, o que veio do
--- Conag e o que foi lancado no app - nem como rodar a importacao de novo
+-- ERP e o que foi lancado no app - nem como rodar a importacao de novo
 -- sem duplicar. O indice unico e o que impede a segunda rodada de repetir
 -- a primeira.
 -- ------------------------------------------------------------
 alter table lancamentos_financeiros
-  add column if not exists conag_id text;
+  add column if not exists erp_id text;
 
-create unique index if not exists uq_lancamento_conag
-  on lancamentos_financeiros (conag_id) where conag_id is not null;
+create unique index if not exists uq_lancamento_erp
+  on lancamentos_financeiros (erp_id) where erp_id is not null;
 
-comment on column lancamentos_financeiros.conag_id is
-  'Id do titulo no Conag (a segunda parte do Cod-Id). Nulo em lancamento '
+comment on column lancamentos_financeiros.erp_id is
+  'Id do titulo no ERP (a segunda parte do Cod-Id). Nulo em lancamento '
   'feito no proprio app. Unico: a importacao pode rodar duas vezes sem '
   'duplicar.';
 
@@ -82,7 +82,7 @@ comment on column lancamentos_financeiros.conag_id is
 -- ------------------------------------------------------------
 -- POR QUAL EMPRESA O TITULO FOI PAGO
 --
--- O Conag guarda o CPF/CNPJ da nota, e ha titulos com DOIS documentos na
+-- O ERP guarda o CPF/CNPJ da nota, e ha titulos com DOIS documentos na
 -- mesma linha - rateio entre as pessoas juridicas. Fica como texto: e
 -- informacao fiscal, nao dimensao de custo, e inventar uma tabela de
 -- pessoas juridicas agora seria construir para um uso que ainda nao existe.
@@ -100,19 +100,19 @@ alter table lancamentos_financeiros
 -- ------------------------------------------------------------
 -- CONFERE - uma consulta so
 -- ------------------------------------------------------------
-select 1 as ordem, 'conag_staging criada' as item,
+select 1 as ordem, 'erp_staging criada' as item,
        (select count(*) from information_schema.tables
-         where table_schema='public' and table_name='conag_staging')::text as valor,
+         where table_schema='public' and table_name='erp_staging')::text as valor,
        'vazia, esperando o CSV' as situacao
 union all
-select 2, 'coluna conag_id',
+select 2, 'coluna erp_id',
        (select count(*) from information_schema.columns
-         where table_name='lancamentos_financeiros' and column_name='conag_id')::text,
+         where table_name='lancamentos_financeiros' and column_name='erp_id')::text,
        'criada'
 union all
-select 3, 'indice unico do conag_id',
+select 3, 'indice unico do erp_id',
        (select count(*) from pg_indexes
-         where tablename='lancamentos_financeiros' and indexname='uq_lancamento_conag')::text,
+         where tablename='lancamentos_financeiros' and indexname='uq_lancamento_erp')::text,
        'impede importar duas vezes'
 union all
 select 4, 'Lancamentos hoje', count(*)::text, 'nao pode ter mudado'

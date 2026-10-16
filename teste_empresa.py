@@ -83,9 +83,9 @@ DB = {
          "descricao": "Aluguel", "valor": 1000, "data": None, "mes": None, "areas": []},
     ],
     "movimentos_financiamento": [
-        {"id": 1, "data": "2025-04-10", "tipo": "amortizacao", "valor": 80000, "credor": "BANCO X", "descricao": "", "origem": "conag"},
-        {"id": 2, "data": "2024-12-15", "tipo": "amortizacao", "valor": 50000, "credor": "BANCO X", "descricao": "", "origem": "conag"},
-        {"id": 3, "data": "2099-01-01", "tipo": "amortizacao", "valor": 200000, "credor": "BANCO X", "descricao": "", "origem": "conag"},
+        {"id": 1, "data": "2025-04-10", "tipo": "amortizacao", "valor": 80000, "credor": "BANCO X", "descricao": "", "origem": "erp"},
+        {"id": 2, "data": "2024-12-15", "tipo": "amortizacao", "valor": 50000, "credor": "BANCO X", "descricao": "", "origem": "erp"},
+        {"id": 3, "data": "2099-01-01", "tipo": "amortizacao", "valor": 200000, "credor": "BANCO X", "descricao": "", "origem": "erp"},
         {"id": 4, "data": "2025-02-01", "tipo": "entrada", "valor": 40000, "credor": "BANCO X", "descricao": "", "origem": "manual"},
     ],
     "financiamentos": [
@@ -214,27 +214,27 @@ with sync_playwright() as pw:
 
     # ---- 6. divida ----
     d = page.evaluate("() => dividaEmpresa()")
-    conf(d["origem"] == "ambos" and perto(d["saldoModulo"], 120000) and perto(d["aVencerConag"], 200000) and perto(d["valor"], 320000),
-         "divida = saldo do contrato ativo (120.000) + o que o Conag ainda tem a vencer e nenhum contrato assumiu (200.000, data futura) = 320.000", str(d))
+    conf(d["origem"] == "ambos" and perto(d["saldoModulo"], 120000) and perto(d["aVencerErp"], 200000) and perto(d["valor"], 320000),
+         "divida = saldo do contrato ativo (120.000) + o que o ERP ainda tem a vencer e nenhum contrato assumiu (200.000, data futura) = 320.000", str(d))
     d2 = page.evaluate("() => { const salvo = state.financiamentos; state.financiamentos = []; const r = dividaEmpresa(); state.financiamentos = salvo; return r; }")
-    conf(d2["origem"] == "conag" and perto(d2["valor"], 200000),
-         "divida: sem contrato no modulo, mostra a estimativa do Conag (so movimentos com data futura)", str(d2))
+    conf(d2["origem"] == "erp" and perto(d2["valor"], 200000),
+         "divida: sem contrato no modulo, mostra a estimativa do ERP (so movimentos com data futura)", str(d2))
 
-    # ---- 6b. contrato que assumiu linhas do Conag: elas deixam de contar ----
-    # (Lancar contrato do Conag grava financiamento_id; ver teste_financiamentos_conag.py)
+    # ---- 6b. contrato que assumiu linhas do ERP: elas deixam de contar ----
+    # (Lancar contrato do ERP grava financiamento_id; ver teste_financiamentos_erp.py)
     page.evaluate("() => { state.movimentosFinanciamento = state.movimentosFinanciamento.map(m => m.id === 3 ? {...m, financiamentoId: 2} : m); }")
     d3 = page.evaluate("() => dividaEmpresa()")
-    conf(d3["origem"] == "modulo" and perto(d3["valor"], 120000) and perto(d3["aVencerConag"], 0),
-         "linha futura do Conag assumida pelo contrato 2: a divida volta a ser so o saldo dele (120.000), sem contar a mesma divida duas vezes", str(d3))
+    conf(d3["origem"] == "modulo" and perto(d3["valor"], 120000) and perto(d3["aVencerErp"], 0),
+         "linha futura do ERP assumida pelo contrato 2: a divida volta a ser so o saldo dele (120.000), sem contar a mesma divida duas vezes", str(d3))
     page.evaluate("() => { state.movimentosFinanciamento = state.movimentosFinanciamento.map(m => m.id === 1 ? {...m, financiamentoId: 2} : m); }")
     f_assumida = page.evaluate("() => fluxoEmpresa({tipo:'ano', ano:2025})")
     conf(perto(f_assumida["financiamento"]["amortizacao"], 25000),
-         "linha paga do Conag (80.000) assumida pelo contrato: sai do fluxo de 2025 (fica so os 25.000 da parcela paga do modulo)", str(f_assumida["financiamento"]))
+         "linha paga do ERP (80.000) assumida pelo contrato: sai do fluxo de 2025 (fica so os 25.000 da parcela paga do modulo)", str(f_assumida["financiamento"]))
     page.evaluate("() => { state.financiamentos = state.financiamentos.map(f => f.id === 2 ? {...f, status: 'cancelado'} : f); }")
     f_cancelado = page.evaluate("() => fluxoEmpresa({tipo:'ano', ano:2025})")
     d4 = page.evaluate("() => dividaEmpresa()")
-    conf(perto(f_cancelado["financiamento"]["amortizacao"], 25000 + 80000) and perto(d4["aVencerConag"], 200000),
-         "contrato cancelado devolve as linhas ao Conag: amortizacao de 2025 volta a 105.000 e a divida a vencer a 200.000", f"{f_cancelado['financiamento']} {d4}")
+    conf(perto(f_cancelado["financiamento"]["amortizacao"], 25000 + 80000) and perto(d4["aVencerErp"], 200000),
+         "contrato cancelado devolve as linhas ao ERP: amortizacao de 2025 volta a 105.000 e a divida a vencer a 200.000", f"{f_cancelado['financiamento']} {d4}")
     # volta ao cenario original para as checagens da tela
     page.evaluate("""() => {
       state.movimentosFinanciamento = state.movimentosFinanciamento.map(m => ({...m, financiamentoId: null}));
@@ -250,11 +250,11 @@ with sync_playwright() as pw:
     texto = page.evaluate("() => document.body.innerText.toLowerCase()")
     for trecho in ["a empresa como uma atividade só", "fluxo de caixa", "resultado operacional (antes dos juros)",
                    "amortização do principal", "variação de caixa do período", "cobertura de juros",
-                   "ano (janeiro a dezembro)", "ano-safra (maio a abril)", "dívida (contratos + conag)", "r$ 320.000,00",
-                   "r$ 120.000,00 em contratos lançados + r$ 200.000,00 ainda só no conag"]:
+                   "ano (janeiro a dezembro)", "ano-safra (maio a abril)", "dívida (contratos + erp)", "r$ 320.000,00",
+                   "r$ 120.000,00 em contratos lançados + r$ 200.000,00 ainda só no erp"]:
         conf(trecho in texto, f"tela mostra: {trecho}")
     conf("r$ 799.500,00" in texto, "tela mostra a variacao de caixa de 2025 (R$ 799.500,00)")
-    conf("rode financiamentos_02_movimentos_conag.sql" not in texto, "com a tabela de movimentos existindo, nao pede o script")
+    conf("rode financiamentos_02_movimentos_erp.sql" not in texto, "com a tabela de movimentos existindo, nao pede o script")
     conf("a menos de despesa que o financeiro" not in texto,
          "visao rateada igual ao Financeiro: nenhum aviso de diferenca")
 
@@ -311,7 +311,7 @@ with sync_playwright() as pw:
     page.evaluate("() => { state.movimentosFinanciamentoOk = false; render(); }")
     page.wait_for_timeout(200)
     texto2 = page.evaluate("() => document.body.innerText.toLowerCase()")
-    conf("financiamentos_02_movimentos_conag.sql" in texto2 and "ainda não importada do conag" in texto2,
+    conf("financiamentos_02_movimentos_erp.sql" in texto2 and "ainda não importada do erp" in texto2,
          "tabela de movimentos ausente: a tela avisa qual script rodar, em vez de quebrar")
 
     # mes sem nenhum juros: cobertura em branco, tela nao quebra

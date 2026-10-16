@@ -8,12 +8,12 @@
 -- O QUE ESTA SENDO CORRIGIDO
 --
 -- Dois planos de contas conviveram no mesmo banco: o do AE Cana (nomes
--- curtos) e o do Conag (MAIUSCULAS). A fusao anterior so juntou nomes
+-- curtos) e o do ERP (MAIUSCULAS). A fusao anterior so juntou nomes
 -- IDENTICOS ignorando maiusculas, entao pares como "Combustiveis" e
 -- "COMBUSTIVEIS DA OPERACAO AGROPECUARIA" continuaram separados - o mesmo
 -- gasto dividido em duas linhas do relatorio.
 --
--- SETE pares foram confirmados como a mesma conta. Fica o nome do Conag,
+-- SETE pares foram confirmados como a mesma conta. Fica o nome do ERP,
 -- que e o que o contador ve.
 --
 -- IMPORTANTE: o total POR GRUPO nao muda. As duas metades de cada par ja

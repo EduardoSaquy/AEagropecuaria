@@ -9,7 +9,7 @@
 -- ------------------------------------------------------------
 -- O PROBLEMA
 --
--- O plano do Conag tem QUATRO niveis. O nosso tem TRES:
+-- O plano do ERP tem QUATRO niveis. O nosso tem TRES:
 --
 --   nivel 1  ENTRADAS / SAIDAS                    centros_custo.tipo
 --   nivel 2  OPERACIONAL | INSUMOS AGROPECUARIOS  centros_custo.subcategoria
@@ -21,7 +21,7 @@
 -- NIVEL 3. COMBUSTIVEIS DA OPERACAO AGROPECUARIA, ALUGUEL DE AREA
 -- PRODUTIVA, ALIENACAO DE ATIVOS - todos classe, nenhum conta.
 --
--- Os 9.400 lancamentos do Conag apontam para o NIVEL 4: ADUBOS E
+-- Os 9.400 lancamentos do ERP apontam para o NIVEL 4: ADUBOS E
 -- FERTILIZANTES, NUTRICAO ANIMAL, SALARIOS, DEFENSIVOS AGRICOLAS.
 --
 -- Por isso 84 dos 85 centros do CSV nao acharam par: nao ha cruzamento
@@ -30,7 +30,7 @@
 -- ------------------------------------------------------------
 -- POR QUE NAO ACHATAR OS DOIS NUM NIVEL SO
 --
--- Achatar para o nivel 3 jogaria fora a granularidade que o Conag tem:
+-- Achatar para o nivel 3 jogaria fora a granularidade que o ERP tem:
 --
 --   INSUMOS AGRICOLAS  =  adubo R$ 2,6 mi
 --                       + defensivo R$ 1,0 mi
@@ -46,14 +46,14 @@
 -- Faz os dois niveis conviverem, com a CLASSE como denominador comum:
 --
 --   1. cria a coluna classe em centros_custo
---   2. cria conag_plano_contas - a arvore do Conag, 96 contas, 41 classes,
+--   2. cria erp_plano_contas - a arvore do ERP, 96 contas, 41 classes,
 --      20 subcategorias, lida do balancete de 27/08/2026
 --   3. preenche a classe dos 64 centros atuais. Como eles SAO nivel 3, a
 --      classe recebe o proprio nome deles
 --   4. de quebra, preenche tipo e subcategoria onde estavam nulos
 --
 -- NAO cria conta nova e NAO toca em lancamento nenhum. As 85 contas de
--- nivel 4 nascem no conag_12, a partir do CSV ja carregado - assim os
+-- nivel 4 nascem no erp_12, a partir do CSV ja carregado - assim os
 -- nomes vem com acento do proprio dado, sem literal acentuado aqui.
 --
 -- Depois disso, um relatorio que agrupe por CLASSE soma os 2.760 antigos
@@ -82,7 +82,7 @@ alter table centros_custo add column if not exists classe text;
 -- COMPARADOR DE NOMES
 --
 -- Os nossos nomes vieram de importacao e nem sempre batem caractere a
--- caractere com a tela do Conag: acento, caixa, espaco duplo, o "o" de
+-- caractere com a tela do ERP: acento, caixa, espaco duplo, o "o" de
 -- 13o SALARIO. Esta funcao tira tudo isso da frente.
 --
 -- unaccent em vez de translate escrito a mao: o arquivo fica sem um unico
@@ -108,13 +108,13 @@ $$;
 
 comment on function plano_norm(text) is
   'Normaliza nome de conta para comparacao: sem acento, maiusculo, sem '
-  'espaco repetido. Usada para casar o nosso plano com o do Conag.';
+  'espaco repetido. Usada para casar o nosso plano com o do ERP.';
 
 
 -- ------------------------------------------------------------
--- A ARVORE DO CONAG
+-- A ARVORE DO ERP
 --
--- Fica no banco de proposito, e nao so neste arquivo: o conag_12 le dela
+-- Fica no banco de proposito, e nao so neste arquivo: o erp_12 le dela
 -- para saber em que classe pendurar cada conta nova, e daqui a seis meses
 -- ela responde "de onde veio essa hierarquia" sem depender de eu estar por
 -- perto.
@@ -129,9 +129,9 @@ comment on function plano_norm(text) is
 -- de saldo, estorno e outras movimentacoes andam nos dois sentidos. Centro
 -- com tipo nulo aparece nas duas listas do app, que e o certo para elas.
 -- ------------------------------------------------------------
-drop table if exists conag_plano_contas;
-create table conag_plano_contas (
-  grupo         text not null,   -- nivel 1 do Conag
+drop table if exists erp_plano_contas;
+create table erp_plano_contas (
+  grupo         text not null,   -- nivel 1 do ERP
   subcategoria  text not null,   -- nivel 2
   classe        text not null,   -- nivel 3  <-- o que faltava
   conta         text not null,   -- nivel 4
@@ -139,12 +139,12 @@ create table conag_plano_contas (
   primary key (subcategoria, conta)
 );
 
-comment on table conag_plano_contas is
-  'Plano de contas do Conag lido do balancete de 27/08/2026 (2014-2030, '
-  'todas as fazendas e atividades). Referencia da hierarquia: o conag_12 '
+comment on table erp_plano_contas is
+  'Plano de contas do ERP lido do balancete de 27/08/2026 (2014-2030, '
+  'todas as fazendas e atividades). Referencia da hierarquia: o erp_12 '
   'usa para classificar as contas que vierem do CSV.';
 
-insert into conag_plano_contas (grupo, subcategoria, classe, conta, tipo) values
+insert into erp_plano_contas (grupo, subcategoria, classe, conta, tipo) values
   ('OPERACIONAL', 'INSUMOS AGROPECUARIOS', 'INSUMOS AGRICOLAS', 'ADUBOS E FERTILIZANTES', 'saida'),
   ('OPERACIONAL', 'INSUMOS AGROPECUARIOS', 'INSUMOS AGRICOLAS', 'DEFENSIVOS AGRICOLAS', 'saida'),
   ('OPERACIONAL', 'INSUMOS AGROPECUARIOS', 'INSUMOS AGRICOLAS', 'SEMENTES E MUDAS DE PLANTIO', 'saida'),
@@ -249,9 +249,9 @@ insert into conag_plano_contas (grupo, subcategoria, classe, conta, tipo) values
 --
 -- Tres caminhos, nesta ordem:
 --
---   1. o nome do centro E uma classe do Conag  -> classe recebe o proprio
+--   1. o nome do centro E uma classe do ERP  -> classe recebe o proprio
 --      nome. E o caso da maioria: eles estao no nivel 3.
---   2. o nome do centro e uma CONTA do Conag   -> classe vem da arvore.
+--   2. o nome do centro e uma CONTA do ERP   -> classe vem da arvore.
 --      Sobra pouco, mas existe.
 --   3. nao esta na arvore                      -> classe recebe o proprio
 --      nome mesmo assim, para nenhum centro ficar sem classe e sumir de um
@@ -272,7 +272,7 @@ update centros_custo c
        updated_at   = now()
   from (select distinct on (plano_norm(classe))
                plano_norm(classe) as classe_norm, grupo, subcategoria, tipo
-          from conag_plano_contas
+          from erp_plano_contas
          order by plano_norm(classe), conta) p
  where c.classe is null
    and plano_norm(c.nome) = p.classe_norm;
@@ -287,7 +287,7 @@ update centros_custo c
        updated_at   = now()
   from (select distinct on (plano_norm(conta))
                plano_norm(conta) as conta_norm, grupo, subcategoria, classe, tipo
-          from conag_plano_contas
+          from erp_plano_contas
          -- TRIBUTOS existe em duas classes. Entre TRIBUTOS E CONTRIBUICOES
          -- e DEDUCOES DA RECEITA BRUTA DE VENDAS, a primeira e a de custo -
          -- a segunda desconta receita. Aqui vale a de custo.
@@ -306,7 +306,7 @@ comment on column centros_custo.classe is
   'Nivel 3 do plano de contas, entre a subcategoria e o nome da conta. '
   'Ex: subcategoria OPERACIONAL | INSUMOS AGROPECUARIOS, classe INSUMOS '
   'AGRICOLAS, nome ADUBOS E FERTILIZANTES. Os centros antigos estao NO '
-  'nivel 3 e por isso tem classe igual ao nome; os que vieram do Conag '
+  'nivel 3 e por isso tem classe igual ao nome; os que vieram do ERP '
   'estao no nivel 4 e tem classe diferente do nome. Relatorio que agrupa '
   'por classe soma os dois sem de-para.';
 
@@ -319,14 +319,14 @@ create index if not exists ix_centros_classe on centros_custo (classe);
 -- O editor do Supabase mostra o resultado de UMA consulta por arquivo.
 -- Por isso tudo vem grudado num union all.
 -- ------------------------------------------------------------
-select 1 as ordem, 'Arvore do Conag carregada' as item,
+select 1 as ordem, 'Arvore do ERP carregada' as item,
        count(*)::text as valor,
        'contas de nivel 4 com movimento' as situacao
-from conag_plano_contas
+from erp_plano_contas
 union all
 select 2, 'Classes distintas na arvore', count(distinct classe)::text,
        'o nivel que faltava'
-from conag_plano_contas
+from erp_plano_contas
 union all
 select 3, 'Centros nossos hoje', count(*)::text,
        'nenhum foi criado nem apagado'
@@ -345,16 +345,16 @@ select 6, 'Deles, classe diferente do nome (nivel 4)',
        count(*)::text, 'esperado: poucos'
 from centros_custo where plano_norm(classe) <> plano_norm(nome)
 union all
-select 7, 'Centros nossos que NAO estao na arvore do Conag',
+select 7, 'Centros nossos que NAO estao na arvore do ERP',
        count(*)::text, 'ficaram com classe = o proprio nome'
 from centros_custo c
-where not exists (select 1 from conag_plano_contas p
+where not exists (select 1 from erp_plano_contas p
                    where plano_norm(p.classe) = plano_norm(c.nome)
                       or plano_norm(p.conta)  = plano_norm(c.nome))
 union all
-select 8, 'Contas de nivel 4 do Conag que ainda nao existem aqui',
-       count(*)::text, 'nascem no conag_12, a partir do CSV'
-from conag_plano_contas p
+select 8, 'Contas de nivel 4 do ERP que ainda nao existem aqui',
+       count(*)::text, 'nascem no erp_12, a partir do CSV'
+from erp_plano_contas p
 where not exists (select 1 from centros_custo c
                    where plano_norm(c.nome) = plano_norm(p.conta))
 union all

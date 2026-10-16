@@ -1,8 +1,8 @@
 -- ============================================================
--- IMPORTACAO DO CONAG - PARTE 4 de 4, CORRIGE O QUE JA FOI IMPORTADO
+-- IMPORTACAO DO ERP - PARTE 4 de 4, CORRIGE O QUE JA FOI IMPORTADO
 --
 -- So cole isto se voce ja rodou as partes 1, 2 e 3 antes desta correcao
--- existir. A importacao rodou, mas com um erro: TODO titulo do Conag
+-- existir. A importacao rodou, mas com um erro: TODO titulo do ERP
 -- virou tipo='despesa', inclusive amortizacao de financiamento e compra
 -- de maquina/terra/matriz/gado para investimento - que nao sao despesa.
 -- Isso inflou o total de despesas em cerca de R$ 25 milhoes.
@@ -12,9 +12,9 @@
 -- misturar).
 --
 -- O QUE ESTE ARQUIVO FAZ, NESTA ORDEM:
---   1. apaga so os lancamentos do Conag (os que tem conag_id preenchido)
+--   1. apaga so os lancamentos do ERP (os que tem erp_id preenchido)
 --      e o rateio deles. NAO toca em nada lancado no proprio app.
---   2. reimporta direto de conag_staging - que ainda esta com o CSV
+--   2. reimporta direto de erp_staging - que ainda esta com o CSV
 --      carregado, nao precisa importar de novo - agora com:
 --        - AMORTIZACAO DE FINANCIAMENTO de fora (75 titulos,
 --          R$ 17.829.159,91): pagar o principal do emprestimo nao e
@@ -24,7 +24,7 @@
 --   3. rateia de novo - os pesos mudam porque 75 titulos saem da conta
 --   4. confere - a mesma tabela de sempre, com as linhas novas 11.6 e 11.7
 --
--- PRE-REQUISITO: conag_staging ainda com os 9.400 registros. Se essa
+-- PRE-REQUISITO: erp_staging ainda com os 9.400 registros. Se essa
 -- tabela foi apagada, recarregue o CSV pelo Table Editor (passo 2 do
 -- arquivo _1_) antes de colar isto.
 -- ============================================================
@@ -36,24 +36,24 @@ begin
     raise exception 'PROJETO ERRADO - este e o banco unificado kmkystqgpvmzrccxvyaz?';
   end if;
   if not exists (select 1 from information_schema.tables
-                 where table_schema='public' and table_name='conag_staging') then
-    raise exception 'conag_staging nao existe - rode o arquivo _1_ e recarregue o CSV antes';
+                 where table_schema='public' and table_name='erp_staging') then
+    raise exception 'erp_staging nao existe - rode o arquivo _1_ e recarregue o CSV antes';
   end if;
-  if (select count(*) from conag_staging) < 9000 then
-    raise exception 'conag_staging nao tem os 9.400 registros - recarregue o CSV antes (passo 2 do arquivo _1_)';
+  if (select count(*) from erp_staging) < 9000 then
+    raise exception 'erp_staging nao tem os 9.400 registros - recarregue o CSV antes (passo 2 do arquivo _1_)';
   end if;
 end $$;
 
--- 1/4: apaga so o que veio do Conag, para reimportar certo
+-- 1/4: apaga so o que veio do ERP, para reimportar certo
 delete from lancamento_rateios
- where lancamento_id in (select id from lancamentos_financeiros where conag_id is not null);
+ where lancamento_id in (select id from lancamentos_financeiros where erp_id is not null);
 
-delete from lancamentos_financeiros where conag_id is not null;
+delete from lancamentos_financeiros where erp_id is not null;
 
 -- 2/4: reimporta, agora com tipo certo e sem amortizacao
 insert into lancamentos_financeiros
   (tipo, atividade, fazenda_id, centro_custo_id, descricao, valor, data, mes,
-   vencimento, fornecedor, cultura_id, conag_id, cnpj_nota, contrato, criado_por, observacao)
+   vencimento, fornecedor, cultura_id, erp_id, cnpj_nota, contrato, criado_por, observacao)
 select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' end,
        s.atividade,
        f.id,
@@ -65,23 +65,23 @@ select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' en
        s.vencimento::date,
        btrim(s.entidade),
        cu.id,
-       s.conag_id,
+       s.erp_id,
        nullif(btrim(s.cnpj_nota), ''),
        nullif(btrim(s.contrato), ''),
-       'Conag',
-       'Conag ' || s.conag_cod || ' - ' || coalesce(nullif(btrim(s.forma_pagamento),''), 'sem forma')
-  from conag_staging s
+       'ERP',
+       'ERP ' || s.erp_cod || ' - ' || coalesce(nullif(btrim(s.forma_pagamento),''), 'sem forma')
+  from erp_staging s
   join centros_custo c  on plano_norm(c.nome) = plano_norm(s.centro_custo)
   left join lateral (
-        select grupo from conag_plano_contas
+        select grupo from erp_plano_contas
          where plano_norm(conta) = plano_norm(s.centro_custo)
          order by case when classe = 'DEDUCOES DA RECEITA BRUTA DE VENDAS' then 1 else 0 end
          limit 1) p on true
   left join lateral (
         select id from fazendas
-         where coalesce(btrim(s.fazenda_conag),'') <> ''
+         where coalesce(btrim(s.fazenda_erp),'') <> ''
            and plano_norm(nome) like '%' || plano_norm(
-                 regexp_replace(btrim(s.fazenda_conag), '^FAZENDA (DAS |DA |DO )?', '')) || '%'
+                 regexp_replace(btrim(s.fazenda_erp), '^FAZENDA (DAS |DA |DO )?', '')) || '%'
          order by length(nome)
          limit 1) f on true
   left join lateral (
@@ -91,7 +91,7 @@ select case when p.grupo = 'INVESTIMENTOS' then 'investimento' else 'despesa' en
          limit 1) cu on true
  where s.valor::numeric > 0
    and plano_norm(s.centro_custo) <> plano_norm('AMORTIZACAO DE FINANCIAMENTO')
-on conflict (conag_id) where conag_id is not null do nothing;
+on conflict (erp_id) where erp_id is not null do nothing;
 
 -- 3/4: rateio - identico ao da parte 2, so refeito em cima dos dados certos
 with base_fs as (
@@ -109,7 +109,7 @@ base_f as (
 alvo as (
   select l.id, l.fazenda_id, l.valor as total, safra_do_mes(l.mes) as safra
     from lancamentos_financeiros l
-   where l.conag_id is not null and l.atividade = 'geral' and l.fazenda_id is not null
+   where l.erp_id is not null and l.atividade = 'geral' and l.fazenda_id is not null
      and not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id)
 ),
 partes as (
@@ -160,7 +160,7 @@ base_t as (
 alvo as (
   select l.id, l.valor as total, safra_do_mes(l.mes) as safra
     from lancamentos_financeiros l
-   where l.conag_id is not null and l.atividade = 'geral' and l.fazenda_id is null
+   where l.erp_id is not null and l.atividade = 'geral' and l.fazenda_id is null
      and not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id)
 ),
 partes as (
@@ -191,6 +191,6 @@ select id, atividade, fazenda_id, round(fr, 6),
   from fechado
 on conflict do nothing;
 
--- 4/4: confere - cole o conag_dashboard_3_conferencia.sql em seguida, ou
+-- 4/4: confere - cole o erp_dashboard_3_conferencia.sql em seguida, ou
 -- rode a consulta abaixo, que e a mesma coisa.
-select 'Parte 4 ok. Agora rode o conag_dashboard_3_conferencia.sql (ele mudou: agora sao 17 linhas).' as proximo_passo;
+select 'Parte 4 ok. Agora rode o erp_dashboard_3_conferencia.sql (ele mudou: agora sao 17 linhas).' as proximo_passo;

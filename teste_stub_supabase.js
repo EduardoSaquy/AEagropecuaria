@@ -16,8 +16,8 @@ window.supabase = {
   createClient() {
     function tabela(nome) {
       // lancamentos_rateados e a view que reparte um lancamento "geral" do
-      // Conag entre atividade/fazenda. Nenhum teste monta lancamento
-      // rateado a mao (isso so acontece na importacao do Conag), entao a
+      // ERP entre atividade/fazenda. Nenhum teste monta lancamento
+      // rateado a mao (isso so acontece na importacao do ERP), entao a
       // view sempre cai no ramo "nao rateado": os mesmos lancamentos, so
       // com lancamento_id no lugar de id (a view nao tem coluna "id") e
       // rateio_id/rateado marcando que nao foi rateado.

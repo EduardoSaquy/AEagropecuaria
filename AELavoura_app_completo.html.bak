@@ -382,9 +382,9 @@ const CADASTROS = {
   },
   centrosCusto: {
     table:'centros_custo', label:'Centros de Custo', singular:'Centro de Custo', modulo:'cadastros',
-    desc:'Mesmo Plano de Contas gerencial do Conag (Centro de Custo/Receita) — não é por fazenda: é o TIPO de gasto ou receita (Manutenção de Frota, Mão de obra, Produção Agropecuária...). Fazenda e Talhão de cada lançamento são campos à parte.',
+    desc:'Mesmo Plano de Contas gerencial do ERP (Centro de Custo/Receita) — não é por fazenda: é o TIPO de gasto ou receita (Manutenção de Frota, Mão de obra, Produção Agropecuária...). Fazenda e Talhão de cada lançamento são campos à parte.',
     fields:[
-      {key:'nome', label:'Nome (igual ao Conag)', type:'text', required:true, placeholder:'Ex: MANUTENÇÃO DE TRATORES, CAMINHÕES, MÁQUINAS E IMPLEMENTOS'},
+      {key:'nome', label:'Nome (igual ao ERP)', type:'text', required:true, placeholder:'Ex: MANUTENÇÃO DE TRATORES, CAMINHÕES, MÁQUINAS E IMPLEMENTOS'},
       {key:'tipo', label:'Tipo', type:'select', options:[{value:'saida',label:'Saída (despesa)'},{value:'entrada',label:'Entrada (receita)'}], required:true},
       {key:'subcategoria', label:'Subcategoria (opcional)', type:'text', placeholder:'Ex: OPERACIONAL | MANUTENÇÃO GERAL DA FAZENDA'},
       {key:'ativo', label:'Ativo', type:'checkbox', default:true, list:false},
@@ -1364,7 +1364,7 @@ function PageCustoProducao(){
  * o motor genérico de CADASTROS (despesasCana ou despesasGraos, de
  * acordo com o seletor).
  * Agrupamento é por CENTRO DE CUSTO (centroCustoId) — o mesmo Plano de
- * Contas gerencial do Conag (Centro Gerencial > SubCategoria > Centro
+ * Contas gerencial do ERP (Centro Gerencial > SubCategoria > Centro
  * de Custo/Receita), com os mesmos nomes já usados lá. NÃO é por
  * fazenda: fazenda/talhão de cada lançamento são campos à parte (o
  * "onde"); centro de custo é o "o quê" foi gasto/recebido. O campo

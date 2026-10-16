@@ -13,7 +13,7 @@
 -- Os arquivos de schema do repositorio declaram centros_custo.frente como
 -- NOT NULL, e o app grava nulo - porque frente deixou de fazer sentido
 -- depois da unificacao: quem diz a que atividade o gasto pertence e o
--- campo atividade do LANCAMENTO. Os 56 centros do plano de contas do Conag
+-- campo atividade do LANCAMENTO. Os 56 centros do plano de contas do ERP
 -- ja estao com frente nula.
 --
 -- Se a restricao ainda existir no banco, criar centro de custo novo estoura

@@ -6,12 +6,12 @@ ano safra").
 O que este teste prova, com contas conhecidas (hoje = 14/10/2026):
   - vencimentos da divida: o que vence em 12 meses x depois, por ano e por
     ano-safra (maio a abril), juntando parcelas em aberto dos contratos lancados
-    (com o juros estimado) e linhas do Conag que nenhum contrato assumiu (so
+    (com o juros estimado) e linhas do ERP que nenhum contrato assumiu (so
     principal); o total bate com o card "Divida";
   - taxa media dos contratos = ponderada pelo saldo devedor;
   - saldo medio da divida (escada: sobe no inicio do contrato, cai a cada
     pagamento) e custo medio = juros pagos / saldo medio, so em periodo fechado;
-  - lancar o contrato do Conag nao muda o saldo medio estimado (a data do
+  - lancar o contrato do ERP nao muda o saldo medio estimado (a data do
     contrato lancado e a mesma que o app estimava para as linhas soltas);
   - a tela mostra os cards, a tabela de vencimentos e as colunas novas do
     historico, sem rolar de lado de 1280 a 320 px.
@@ -53,9 +53,9 @@ def parc(i, fid, n, venc, amort, juros, saldo, status="pendente", pago=None):
 
 def mov(i, data, valor, contrato, fid=None):
     return {"id": i, "data": data, "tipo": "amortizacao", "valor": valor, "credor": "BANCO X", "contrato": contrato,
-            "descricao": "", "origem": "conag", "conag_id": 1000 + i, "financiamento_id": fid}
+            "descricao": "", "origem": "erp", "erp_id": 1000 + i, "financiamento_id": fid}
 
-OBS_CONAG = ("Importado do Conag (contrato I-1): cronograma real, uma parcela por linha do Conag; "
+OBS_ERP = ("Importado do ERP (contrato I-1): cronograma real, uma parcela por linha do ERP; "
              "juros das parcelas a vencer estimado pela taxa informada.")
 
 DB = {
@@ -76,7 +76,7 @@ DB = {
     ],
     "financiamentos": [
         fin(1, "Banco A", 120000, "2026-04-14", 12, 4),                       # a mao, em aberto
-        fin(2, "Banco I", 200000, "2025-01-01", 10, 2, obs=OBS_CONAG),       # importado do Conag
+        fin(2, "Banco I", 200000, "2025-01-01", 10, 2, obs=OBS_ERP),       # importado do ERP
     ],
     "parcelas_financiamento": [
         parc(1, 1, 1, "2026-11-10", 30000, 1200, 90000),
@@ -87,9 +87,9 @@ DB = {
         parc(6, 2, 2, "2026-11-16", 100000, 5000, 0),
     ],
     "movimentos_financiamento": [
-        # linhas do contrato importado (ja assumidas: nao contam no Conag)
+        # linhas do contrato importado (ja assumidas: nao contam no ERP)
         mov(1, "2025-11-15", 100000, "I-1", 2), mov(2, "2026-11-16", 100000, "I-1", 2),
-        # contrato que ainda so existe no Conag: 1 paga + 2 a vencer
+        # contrato que ainda so existe no ERP: 1 paga + 2 a vencer
         mov(3, "2026-05-15", 50000, "X-1"), mov(4, "2028-05-15", 50000, "X-1"), mov(5, "2029-05-15", 50000, "X-1"),
     ],
     "profiles": [{"id": "u1", "nome": "Eduardo", "usuario": "eduardo", "papel": "admin", "permissoes": {}, "ativo": True}],
@@ -126,11 +126,11 @@ with sync_playwright() as pw:
 
     # ---- 1. vencimentos ----
     v = page.evaluate("() => vencimentosDaDivida()")
-    conf(len(v["itens"]) == 7, "7 vencimentos: 4 parcelas do contrato A + 1 do importado + 2 linhas soltas do Conag", str(len(v["itens"])))
+    conf(len(v["itens"]) == 7, "7 vencimentos: 4 parcelas do contrato A + 1 do importado + 2 linhas soltas do ERP", str(len(v["itens"])))
     conf(perto(v["curto"]["principal"], 190000) and perto(v["curto"]["juros"], 7700),
          "vence em 12 meses (ate 14/10/2027): principal 90.000 (A) + 100.000 (importado) = R$ 190.000; juros estimado 2.700 + 5.000 = R$ 7.700", str(v["curto"]))
     conf(perto(v["longo"]["principal"], 130000) and perto(v["longo"]["juros"], 300),
-         "depois de 12 meses: 30.000 (A) + 100.000 (Conag solto) = R$ 130.000; juros estimado 300", str(v["longo"]))
+         "depois de 12 meses: 30.000 (A) + 100.000 (ERP solto) = R$ 130.000; juros estimado 300", str(v["longo"]))
     conf(perto(v["vencido"]["principal"], 0), "nada vencido em aberto")
     por_ano = {x["chave"]: x for x in v["porAno"]}
     conf(sorted(por_ano) == ["2026", "2027", "2028", "2029"]
@@ -144,12 +144,12 @@ with sync_playwright() as pw:
          and perto(por_safra["2027"]["principal"], 60000) and perto(por_safra["2027"]["juros"], 900)
          and perto(por_safra["2028"]["principal"], 50000) and perto(por_safra["2029"]["principal"], 50000),
          "por ano-safra (maio a abril): 2026/27 R$ 160.000 (nov/26, nov/26 e fev/27), 2027/28 R$ 60.000, 2028/29 e 2029/30 R$ 50.000 cada", str(v["porSafra"]))
-    por_origem = {x["chave"]: (x["doContrato"], x["doConag"]) for x in v["porAno"]}
+    por_origem = {x["chave"]: (x["doContrato"], x["doErp"]) for x in v["porAno"]}
     conf(perto(por_origem["2028"][1], 50000) and perto(por_origem["2028"][0], 0) and perto(por_origem["2026"][0], 130000),
-         "cada periodo separa o que e de contrato lancado do que ainda so esta no Conag", str(por_origem))
+         "cada periodo separa o que e de contrato lancado do que ainda so esta no ERP", str(por_origem))
     d = page.evaluate("() => dividaEmpresa()")
     conf(perto(v["total"]["principal"], d["valor"]) and perto(d["valor"], 320000) and d["origem"] == "ambos",
-         "o total dos vencimentos (principal R$ 320.000) bate com o card 'Divida': 220.000 em contratos + 100.000 no Conag", f"{v['total']} {d}")
+         "o total dos vencimentos (principal R$ 320.000) bate com o card 'Divida': 220.000 em contratos + 100.000 no ERP", f"{v['total']} {d}")
 
     # ---- 2. taxa media dos contratos ----
     t = page.evaluate("() => taxaMediaContratos()")
@@ -187,22 +187,22 @@ with sync_playwright() as pw:
     conf(perto(s2425["saldoMedio"], esperado_s, 0.5),
          f"saldo medio da safra 2024/25 (mai/24 a abr/25) = 1.200.000 x 120/365 = R$ {esperado_s:,.2f}", str(s2425["saldoMedio"]))
 
-    # ---- 4. lancar o contrato do Conag nao muda o saldo medio estimado ----
+    # ---- 4. lancar o contrato do ERP nao muda o saldo medio estimado ----
     page.evaluate("""() => {
         state.financiamentos = []; state.parcelasFinanciamento = [];
         state.movimentosFinanciamento = [
-          {id:1, data:'2025-06-15', tipo:'amortizacao', valor:100000, credor:'BANCO X', contrato:'Z-9', descricao:'', origem:'conag', financiamentoId:null},
-          {id:2, data:'2026-06-15', tipo:'amortizacao', valor:100000, credor:'BANCO X', contrato:'Z-9', descricao:'', origem:'conag', financiamentoId:null},
-          {id:3, data:'2027-06-15', tipo:'amortizacao', valor:100000, credor:'BANCO X', contrato:'Z-9', descricao:'', origem:'conag', financiamentoId:null}];
+          {id:1, data:'2025-06-15', tipo:'amortizacao', valor:100000, credor:'BANCO X', contrato:'Z-9', descricao:'', origem:'erp', financiamentoId:null},
+          {id:2, data:'2026-06-15', tipo:'amortizacao', valor:100000, credor:'BANCO X', contrato:'Z-9', descricao:'', origem:'erp', financiamentoId:null},
+          {id:3, data:'2027-06-15', tipo:'amortizacao', valor:100000, credor:'BANCO X', contrato:'Z-9', descricao:'', origem:'erp', financiamentoId:null}];
         state.page = 'resultados'; }""")
     antes = page.evaluate("() => { const j = janelaDoPeriodo({tipo:'ano', ano:2025}); return saldoMedioDivida(linhaDoTempoDivida(), j.ini, j.fim); }")
-    inicio = page.evaluate("() => inicioEstimadoConag(state.movimentosFinanciamento.map(m => m))")
+    inicio = page.evaluate("() => inicioEstimadoErp(state.movimentosFinanciamento.map(m => m))")
     conf(inicio == "2024-06-15",
          "data estimada do contrato = 1a parcela (15/06/2025) menos o intervalo tipico entre parcelas (365 dias): 15/06/2024", str(inicio))
     page.evaluate("""(ini) => {
         state.financiamentos = [{id:7, banco:'Banco X', finalidade:'custeio', valorPrincipal:300000, dataContratacao:ini, taxaJurosAa:10,
           sistemaAmortizacao:'sac', numeroParcelas:3, carenciaMeses:0, atividade:'graos', fazendaId:null, garantia:'', status:'ativo', financiamentoOrigemId:null,
-          observacao:'Importado do Conag (contrato Z-9): cronograma real, uma parcela por linha do Conag; juros das parcelas a vencer estimado pela taxa informada.'}];
+          observacao:'Importado do ERP (contrato Z-9): cronograma real, uma parcela por linha do ERP; juros das parcelas a vencer estimado pela taxa informada.'}];
         state.parcelasFinanciamento = [
           {id:1, financiamentoId:7, numero:1, dataVencimento:'2025-06-15', valorParcela:100000, valorAmortizacao:100000, valorJuros:0, saldoDevedorApos:200000, status:'paga', dataPagamento:'2025-06-15', valorPago:100000, lancamentosFinanceiroIds:[]},
           {id:2, financiamentoId:7, numero:2, dataVencimento:'2026-06-15', valorParcela:100000, valorAmortizacao:100000, valorJuros:0, saldoDevedorApos:100000, status:'paga', dataPagamento:'2026-06-15', valorPago:100000, lancamentosFinanceiroIds:[]},
@@ -211,7 +211,7 @@ with sync_playwright() as pw:
     depois = page.evaluate("() => { const j = janelaDoPeriodo({tipo:'ano', ano:2025}); return saldoMedioDivida(linhaDoTempoDivida(), j.ini, j.fim); }")
     esperado_z = (300000 * 165 + 200000 * 200) / 365    # 300.000 de 15/06/2024 a 15/06/2025; depois 200.000
     conf(perto(antes, esperado_z, 0.01),
-         f"saldo medio de 2025 do contrato ainda so no Conag = (300.000 x 165 + 200.000 x 200) / 365 = R$ {esperado_z:,.2f}", str(antes))
+         f"saldo medio de 2025 do contrato ainda so no ERP = (300.000 x 165 + 200.000 x 200) / 365 = R$ {esperado_z:,.2f}", str(antes))
     conf(perto(antes, depois, 0.01) and antes > 0,
          f"lancar o contrato nao muda o saldo medio de 2025 (R$ {antes:,.2f} antes, R$ {depois:,.2f} depois)", f"{antes} x {depois}")
 
@@ -225,7 +225,7 @@ with sync_playwright() as pw:
                    "vence depois de 12 meses", "r$ 130.300,00", "taxa média dos contratos", "11,09 % a.a.",
                    "ponderada pelo saldo de 2 contrato(s) lançado(s)", "custo médio da dívida",
                    "vencimentos da dívida — por ano e por ano-safra", "ano (janeiro a dezembro), a partir de hoje",
-                   "ano-safra (maio a abril), a partir de hoje", "2026/27", "só no conag", "contratos lançados",
+                   "ano-safra (maio a abril), a partir de hoje", "2026/27", "só no erp", "contratos lançados",
                    "saldo médio da dívida (estimado)"]:
         conf(trecho in texto, f"tela mostra: {trecho}")
     cab = page.evaluate("() => [...document.querySelectorAll('table.tabela-em-blocos')].map(t => [...t.querySelectorAll('thead th')].map(th => th.innerText.toLowerCase()))")

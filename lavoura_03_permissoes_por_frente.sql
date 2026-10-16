@@ -146,7 +146,7 @@ begin
     using      (is_admin() or tem_permissao('matriz_fazendas','editar'));
 
   -- CENTROS DE CUSTO: cadastro financeiro. Vai junto com o Financeiro para
-  -- o Matriz. Os 56 centros globais do plano de contas do Conag continuam
+  -- o Matriz. Os 56 centros globais do plano de contas do ERP continuam
   -- sem frente, e isso esta certo: a atividade e campo do lancamento, nao
   -- do centro de custo.
   drop policy if exists "inserir centros_custo"   on centros_custo;

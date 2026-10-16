@@ -4,7 +4,7 @@
 -- RODAR NO PROJETO DO LAVOURA/MATRIZ (kmkystqgpvmzrccxvyaz).
 -- So leitura.
 --
--- O plano de contas do Conag e hierarquico e essa hierarquia esta gravada
+-- O plano de contas do ERP e hierarquico e essa hierarquia esta gravada
 -- em centros_custo.tipo (entrada/saida) e .subcategoria ('GRUPO |
 -- Subcategoria'). 52 dos 71 centros ja estao classificados; 19 nao.
 --

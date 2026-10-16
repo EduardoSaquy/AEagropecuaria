@@ -12,7 +12,7 @@
 --        abates, profiles, centros_custo).
 --
 --   3-6. Receita de Cana/Pecuaria 2026: o Eduardo disse que resolveu a
---        duplicidade manualmente (Conag x lancamento a mao) antes de eu
+--        duplicidade manualmente (ERP x lancamento a mao) antes de eu
 --        rodar os scripts preparados pra isso. Isso confere o estado
 --        atual - se a linha 3 e a 4 vierem 0 (ou baixo), a limpeza
 --        pegou; se vier alto, ainda tem duplicidade.
@@ -44,15 +44,15 @@ select 2, 'gatilho em ' || event_object_table, trigger_name,
  where trigger_schema='public'
    and event_object_table in ('lancamentos_financeiros','abates','profiles','centros_custo')
 union all
-select 3, 'CANA: receita do Conag ainda em 2026 (duplicidade que voce apagou manualmente)',
+select 3, 'CANA: receita do ERP ainda em 2026 (duplicidade que voce apagou manualmente)',
        count(*)::text, round(sum(valor),2)::text
   from lancamentos_financeiros
- where atividade='cana' and tipo='receita' and conag_id is not null and mes like '2026%'
+ where atividade='cana' and tipo='receita' and erp_id is not null and mes like '2026%'
 union all
-select 4, 'PECUARIA: receita do Conag ainda em mar/mai/jun/ago 2026 (idem)',
+select 4, 'PECUARIA: receita do ERP ainda em mar/mai/jun/ago 2026 (idem)',
        count(*)::text, round(sum(valor),2)::text
   from lancamentos_financeiros
- where atividade='pecuaria' and tipo='receita' and conag_id is not null
+ where atividade='pecuaria' and tipo='receita' and erp_id is not null
    and mes in ('2026-03','2026-05','2026-06','2026-08')
 union all
 select 5, 'CANA: receita 2026 total hoje (referencia)',
@@ -63,13 +63,13 @@ select 6, 'PECUARIA: receita 2026 total hoje (referencia)',
        count(*)::text, round(sum(valor),2)::text
   from lancamentos_financeiros where atividade='pecuaria' and tipo='receita' and mes like '2026%'
 union all
-select 7, 'PECUARIA: investimento do Conag em 2026 (candidato a sobreposicao)',
+select 7, 'PECUARIA: investimento do ERP em 2026 (candidato a sobreposicao)',
        count(*)::text, round(sum(valor),2)::text
   from lancamentos_financeiros
- where atividade='pecuaria' and tipo='investimento' and conag_id is not null and mes >= '2026-01'
+ where atividade='pecuaria' and tipo='investimento' and erp_id is not null and mes >= '2026-01'
 union all
 select 8, 'PECUARIA: investimento lancado a mao em 2026 (referencia, nao mexe)',
        count(*)::text, round(sum(valor),2)::text
   from lancamentos_financeiros
- where atividade='pecuaria' and tipo='investimento' and conag_id is null and mes >= '2026-01'
+ where atividade='pecuaria' and tipo='investimento' and erp_id is null and mes >= '2026-01'
 order by ordem;

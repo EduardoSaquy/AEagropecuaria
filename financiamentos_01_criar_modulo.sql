@@ -132,7 +132,7 @@ create policy "exclui parcela" on parcelas_financiamento
 -- 3) CENTRO DE CUSTO DEDICADO
 --
 -- Um centro so pra isso, no mesmo grupo "FINANCIAMENTOS" que ja existe no
--- plano de contas do Conag (onde mora "Custas Contratuais", classificado
+-- plano de contas do ERP (onde mora "Custas Contratuais", classificado
 -- em centros_02_classifica_os_seis.sql) — assim o relatorio "despesa por
 -- grupo" que ja existe no Resultados soma os dois juntos, sem codigo novo.
 -- ------------------------------------------------------------

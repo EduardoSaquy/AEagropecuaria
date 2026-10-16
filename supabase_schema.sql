@@ -1210,7 +1210,7 @@ update dietas set consumo_direto = true where tipo = 'confinamento';
 -- ===================================================================
 -- MIGRAÇÃO: Fornecedor em Despesas e Investimentos
 -- Comparando com o relatório de despesas do ERP que a fazenda usa
--- (Conag), faltava um campo pra guardar quem recebeu o pagamento --
+-- (ERP), faltava um campo pra guardar quem recebeu o pagamento --
 -- só dava pra anotar isso no meio da observação. Agora Despesas
 -- (custos_fixos) e Investimentos ganham um campo "Fornecedor" próprio,
 -- opcional, com sugestões (autocomplete) na tela puxadas dos nomes já

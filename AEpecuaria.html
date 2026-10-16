@@ -521,7 +521,7 @@ function rowToPrecoArroba(r){ return {id:r.id, data:r.data, valor:r.valor, sexo:
 function precoArrobaToRow(p){ return {data:p.data, valor:p.valor, sexo:p.sexo||'macho'}; }
 // Sugestões de centro de custo e fornecedor pra preencher os datalists dos
 // campos de Despesa/Investimento -- lista inicial vem de um comparativo com
-// o plano de contas real da fazenda (ERP Conag), pra já nascer com opções
+// o plano de contas real da fazenda (ERP), pra já nascer com opções
 // consistentes; qualquer nome novo digitado pelo usuário some pra lista viva
 // via fornecedoresConhecidos()/centrosCustoConhecidos() abaixo.
 const CENTROS_CUSTO_SUGERIDOS = [
@@ -612,7 +612,7 @@ async function loadAll(){
     // 'venda' em salvarRegistro).
     //
     // Le da view lancamentos_rateados, nao da tabela direto: um lancamento
-    // "geral" (titulo do Conag sem atividade propria) pode ter parte do
+    // "geral" (titulo do ERP sem atividade propria) pode ter parte do
     // valor rateada pra pecuaria, e filtrar direto na tabela por
     // atividade='pecuaria' perdia essa fatia inteira.
     buscarTudo(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
@@ -4274,7 +4274,7 @@ function fixosDoMes(mesStr){
 }
 // O mês de uma receita vem do campo mes; a data é só reserva para
 // lançamento antigo que não tenha o mes preenchido. Receita de competência
-// mensal (histórico do Conag) tem mes e NÃO tem data — ler r.data direto
+// mensal (histórico do ERP) tem mes e NÃO tem data — ler r.data direto
 // derrubava a tela inteira com "Cannot read properties of null".
 function mesDaReceita(r){ return r.mes || (r.data || '').slice(0,7); }
 function receitaDoMes(mesStr){

@@ -1,4 +1,4 @@
-# Estrutura do Conag — lida em 27/08/2026
+# Estrutura do ERP — lida em 27/08/2026
 
 Fonte: as telas do proprio ERP, nao documentacao. Cada bloco foi lido da
 tela indicada.
@@ -32,7 +32,7 @@ Agrupa fazendas. NAO EXISTE no nosso app.
     9  FEIJAOMUNGO VERDE PLANTACAO / POR AREA
 Todas com safra de maio (05) a abril (04) - igual a janela do nosso app.
 
-NO CONAG, ATIVIDADE E A CULTURA. Nosso app tem 4 atividades e a cultura
+NO ERP, ATIVIDADE E A CULTURA. Nosso app tem 4 atividades e a cultura
 como campo separado. A traducao:
     PECUARIA -> atividade='pecuaria'
     CANA     -> atividade='cana'
@@ -41,7 +41,7 @@ como campo separado. A traducao:
 
 ## Ano Agricola (9 abertos)  — tela controle-de-safras
     2021/2022 ate 2029/2030. Global, nao por fazenda.
-    Nosso safras e por fazenda+cultura: um ano do Conag vira varios nossos.
+    Nosso safras e por fazenda+cultura: um ano do ERP vira varios nossos.
 
 ## Contas bancarias (9)  — filtro do balancete
     1 caixa interno; 3 contas no SICOOB; 4 no BANCO DO BRASIL; 1 no BANCO DA AMAZONIA.
@@ -57,7 +57,7 @@ Nosso centros_custo: tipo + subcategoria + nome = tres niveis. O nivel 3
 separa INSUMOS AGRICOLAS de INSUMOS PECUARIOS dentro do mesmo grupo, e se
 perdeu na migracao.
 
-## Campos que o Conag tem e nos nao
+## Campos que o ERP tem e nos nao
     Unidade de Negocio        agrupa fazendas
     CPF/CNPJ da nota          por qual PJ o titulo foi pago (3 diferentes)
     Situacao IR               dedutivel com nota / sem nota / nao dedutivel

@@ -6,7 +6,7 @@
 -- ------------------------------------------------------------
 -- O QUE ESTAVA FALTANDO
 --
--- O plano de contas do Conag tem QUATRO niveis; o nosso tem tres.
+-- O plano de contas do ERP tem QUATRO niveis; o nosso tem tres.
 --
 --   1  ENTRADAS / SAIDAS                    centros_custo.tipo
 --   2  OPERACIONAL | INSUMOS AGROPECUARIOS  centros_custo.subcategoria
@@ -18,12 +18,12 @@
 -- MAQUINAS de MANUTENCAO DE INFRAESTRUTURA. Sem ele, "quanto gastei de
 -- insumo na lavoura" so sai somando conta por conta na mao.
 --
--- Ele se perdeu na migracao do Conag. Este script devolve.
+-- Ele se perdeu na migracao do ERP. Este script devolve.
 --
 -- ------------------------------------------------------------
 -- DE ONDE VEM
 --
--- Do balancete do proprio Conag, rodado em 27/08/2026 de 2014 a 2030 com
+-- Do balancete do proprio ERP, rodado em 27/08/2026 de 2014 a 2030 com
 -- todas as fazendas e atividades - ele imprime a arvore inteira. Sao 95
 -- pares (subcategoria, conta) em 40 classes.
 --
@@ -31,7 +31,7 @@
 -- TRIBUTOS em duas subcategorias diferentes, cada uma numa classe. Casar
 -- so pelo nome poria as duas na mesma.
 --
--- Conta que nao aparecer aqui e conta sem movimento no Conag, ou nossa e
+-- Conta que nao aparecer aqui e conta sem movimento no ERP, ou nossa e
 -- nao deles. Fica com classe nula e a consulta do fim lista quais sao.
 -- ============================================================
 
@@ -48,7 +48,7 @@ alter table centros_custo add column if not exists classe text;
 comment on column centros_custo.classe is
   'Nivel 3 do plano de contas, entre a subcategoria e o nome da conta. '
   'Ex: subcategoria OPERACIONAL | INSUMOS AGROPECUARIOS, classe INSUMOS '
-  'AGRICOLAS, nome ADUBOS E FERTILIZANTES. Veio do balancete do Conag.';
+  'AGRICOLAS, nome ADUBOS E FERTILIZANTES. Veio do balancete do ERP.';
 
 
 -- A comparacao ignora acento, caixa e espaco repetido: nossos nomes vieram
@@ -178,7 +178,7 @@ select 1 as ordem, 'Centros com classe' as item,
        (count(*) filter (where classe is not null) || ' de ' || count(*)) as situacao
 from centros_custo
 union all
-select 2, 'Classes distintas', count(distinct classe)::text, 'no Conag sao 40'
+select 2, 'Classes distintas', count(distinct classe)::text, 'no ERP sao 40'
 from centros_custo where classe is not null
 union all
 select 3, 'Total dos lancamentos', round(sum(valor),2)::text,

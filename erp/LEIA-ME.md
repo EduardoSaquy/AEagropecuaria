@@ -1,4 +1,4 @@
-# Dados do Conag lidos em 27/08/2026
+# Dados do ERP lidos em 27/08/2026
 
 Origem: relatorio-balancete, filtro 01/01/2014 a 31/12/2030, todas as
 unidades, fazendas e atividades, "Expandir Todos".
@@ -6,7 +6,7 @@ unidades, fazendas e atividades, "Expandir Todos".
 O balancete e AGREGADO: da o total por conta, nao a lista de lancamentos.
 Serve para CONFERIR a importacao, nao para faze-la.
 
-## Totais realizados no Conag
+## Totais realizados no ERP
 
 | Bloco | Realizado |
 |---|---|
@@ -18,7 +18,7 @@ Serve para CONFERIR a importacao, nao para faze-la.
 
 Nosso app hoje: 10.447.812,29 em 2.760 lancamentos.
 
-## O plano de contas do Conag tem QUATRO niveis
+## O plano de contas do ERP tem QUATRO niveis
 
   1 RECEITAS / DESPESAS / INVESTIMENTOS / FINANCIAMENTOS / MOV. BANCARIAS
   2 99 - OPERACIONAL | INSUMOS AGROPECUARIOS

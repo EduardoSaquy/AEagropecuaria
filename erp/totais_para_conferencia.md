@@ -1,4 +1,4 @@
-# Totais do Conag — a referencia da conferencia
+# Totais do ERP — a referencia da conferencia
 
 Fonte: painel-resultado, Realizado + A Vencer, Acumulado Anual,
 Fazenda + Atividade, todos os anos. Lido em 27/08/2026.
@@ -64,6 +64,6 @@ Antes de 2023 so ha financiamento (2015 em diante, valores pequenos).
 
     2.760 lancamentos, R$ 10.447.812,29
 
-Somando receita + despesa + investimento do Conag da ~93,7 milhoes.
+Somando receita + despesa + investimento do ERP da ~93,7 milhoes.
 Nosso app tem cerca de 11% do movimento - a migracao trouxe so o recente
 (pecuaria de 2024, cana de 2026).

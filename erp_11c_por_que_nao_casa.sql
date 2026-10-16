@@ -4,7 +4,7 @@
 -- So leitura.
 --
 -- A conferencia acusou 127 dos 129 centros do CSV sem par - mas nosso
--- plano de contas VEIO do Conag, entao quase tudo deveria casar. E as
+-- plano de contas VEIO do ERP, entao quase tudo deveria casar. E as
 -- entidades casaram (126 das nossas 129), o que mostra que a comparacao
 -- por nome funciona.
 --
@@ -13,8 +13,8 @@
 
 do $$
 begin
-  if not exists (select 1 from conag_staging) then
-    raise exception 'conag_staging vazia';
+  if not exists (select 1 from erp_staging) then
+    raise exception 'erp_staging vazia';
   end if;
 end $$;
 
@@ -29,18 +29,18 @@ select 1 as ordem, 'Centros no nosso banco' as item, count(*)::text as valor, ''
 from centros_custo
 union all
 select 2, 'Centros distintos no CSV', count(distinct centro_custo)::text, ''
-from conag_staging
+from erp_staging
 union all
 select 3, 'Centros distintos SEM o sufixo de contrato',
        count(distinct conta_base(centro_custo))::text, 'os 44 com (Contrato: ) colapsam'
-from conag_staging
+from erp_staging
 union all
 select 4, 'Casam ignorando o sufixo', count(*)::text, ''
-from (select distinct conta_base(centro_custo) as n from conag_staging) s
+from (select distinct conta_base(centro_custo) as n from erp_staging) s
 where exists (select 1 from centros_custo c where norm_txt(c.nome) = norm_txt(s.n))
 union all
 select 5, 'NAO casam', count(*)::text, ''
-from (select distinct conta_base(centro_custo) as n from conag_staging) s
+from (select distinct conta_base(centro_custo) as n from erp_staging) s
 where not exists (select 1 from centros_custo c where norm_txt(c.nome) = norm_txt(s.n))
 union all
 -- os 12 nossos, para eu ver como estao escritos
@@ -52,7 +52,7 @@ select 7, 'CSV SEM PAR: ' || n, quantos::text, 'R$ ' || round(total,2)::text
 from (
   select conta_base(centro_custo) as n, count(*) as quantos,
          sum(nullif(valor,'')::numeric) as total
-  from conag_staging s
+  from erp_staging s
   where not exists (select 1 from centros_custo c
                     where norm_txt(c.nome) = norm_txt(conta_base(s.centro_custo)))
   group by 1 order by 3 desc limit 12

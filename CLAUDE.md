@@ -72,7 +72,7 @@ Colunas que importam: `tipo` (despesa/receita/investimento), `atividade`
 |---|---|---|
 | preenchida | preenchido | lançamento normal |
 | nula | nulo | despesa recorrente, vale todo mês |
-| nula | preenchido | competência mensal histórica (importação Conag) |
+| nula | preenchido | competência mensal histórica (importação ERP) |
 
 Derivar `mes` de `data` (ou vice-versa) corrompe os dados. Já aconteceu: um mês
 de R$ 43.928,73 virou R$ 1.230.390,69.
@@ -84,7 +84,7 @@ de R$ 43.928,73 virou R$ 1.230.390,69.
 
 Um `lancamento_financeiro` sem atividade própria (`atividade='geral'`) pode
 ter o valor repartido entre atividades/fazendas em `lancamento_rateios`
-(criado pela importação do Conag: 791 títulos "geral de uma fazenda" e 2.526
+(criado pela importação do ERP: 791 títulos "geral de uma fazenda" e 2.526
 "administrativo", ratados pela proporção real de gasto de cada
 atividade/fazenda na mesma safra). A tabela `lancamentos_financeiros`
 continua com o lançamento inteiro, atividade `'geral'` — quem filtra
@@ -110,14 +110,14 @@ com Postgres real, isso desviou a soma em ~0,006% (R$ 1.234 num total de
 R$ 20,7 milhões) — real, mas não do tamanho da despesa da Cana ter
 aparentemente dobrado em produção no mesmo dia. **Essa segunda causa, maior,
 foi identificada no mesmo dia**: duplicação entre o lançamento manual e a
-importação do Conag pra Cana/Pecuária a partir de jan/2026 — ver "O import
-do Conag duplicou Cana e Pecuária de jan/2026 em diante", mais abaixo.
+importação do ERP pra Cana/Pecuária a partir de jan/2026 — ver "O import
+do ERP duplicou Cana e Pecuária de jan/2026 em diante", mais abaixo.
 
 Esse ponto ficou destampado até 28/08/2026: `carregarResultadoCana/Cereais/
 Pecuaria` (AEMatriz.html) e o Financeiro só-leitura do AEpecuaria.html liam
 direto de `lancamentos_financeiros`, então a fatia rateada de um custo
 "geral" nunca aparecia no Resultado de nenhuma atividade — a despesa da
-Cana, por exemplo, saía menor do que o Conag mostrava pra mesma atividade.
+Cana, por exemplo, saía menor do que o ERP mostrava pra mesma atividade.
 Corrigido nos quatro pontos. Se abrir uma tela nova que soma financeiro por
 atividade, comece por `lancamentos_rateados`.
 
@@ -178,7 +178,7 @@ Resultados, que leem de `lancamentos_rateados`).
 ### Plano de contas
 
 `centros_custo.tipo` ('entrada'/'saida') e `.subcategoria` ('GRUPO | Subcategoria'),
-seguindo o DFC do Conag. 63 centros, 7 grupos, sem duplicados — há índice único
+seguindo o DFC do ERP. 63 centros, 7 grupos, sem duplicados — há índice único
 em `lower(nome)` impedindo recriação. Centro de custo é **sempre global**: nunca
 amarrar centro a fazenda específica.
 
@@ -204,29 +204,29 @@ parcela como paga, o juros vira **3 lançamentos iguais** (Pecuária/Cana/Grãos
 1/3 cada — decisão do Eduardo, mais simples que ratear por hectare).
 Investimento/custeio têm atividade única, escolhida no cadastro.
 
-A importação do Conag (`conag_dashboard_2_depois_do_csv.sql`) pisou nessa
+A importação do ERP (`erp_dashboard_2_depois_do_csv.sql`) pisou nessa
 regra em 28/08/2026: o insert original marcava `tipo='despesa'` para os
 9.400 títulos sem olhar pra que conta cada um caía, inclusive os 75 de
 "AMORTIZAÇÃO DE FINANCIAMENTO" (R$ 17,8 milhões — desembolso de principal,
 não é despesa) e os 337 de compra de máquina/terra/matriz/infraestrutura
 (R$ 7,2 milhões — deveriam ser `tipo='investimento'`). Corrigido: amortização
 de financiamento fica de fora do import (não vira lançamento nenhum), e conta
-que cai no grupo `INVESTIMENTOS` do plano do Conag vira `tipo='investimento'`.
-O `conag_dashboard_4_corrigir_producao.sql` refaz o import já feito sem
+que cai no grupo `INVESTIMENTOS` do plano do ERP vira `tipo='investimento'`.
+O `erp_dashboard_4_corrigir_producao.sql` refaz o import já feito sem
 precisar recarregar o CSV. Cana e Grãos **não** tiveram esse problema — o
 CSV já traz `atividade` separado certo (1.762 cana, 1.689 graos).
 
-### O import do Conag duplicou Cana e Pecuária de jan/2026 em diante
+### O import do ERP duplicou Cana e Pecuária de jan/2026 em diante
 
 A Cana só passou a ser lançada à mão no app a partir de janeiro/2026 (a
 Pecuária, em volume, também — antes disso só existia um lançamento
-recorrente isolado por mês). A importação do Conag cobre até agosto/2026,
+recorrente isolado por mês). A importação do ERP cobre até agosto/2026,
 sem excluir esse período: de jan/2026 a ago/2026, a mesma despesa real
-ficava lançada duas vezes — uma vez à mão, outra vez pelo Conag, cada
+ficava lançada duas vezes — uma vez à mão, outra vez pelo ERP, cada
 uma com o campo `fornecedor` escrito diferente (por isso um `join` exato
 por fornecedor não encontrava o par; só bateu comparando total por mês).
 Confirmado dia 28/08/2026 e corrigido com
-`conag_dashboard_6_remover_duplicidade.sql`: apagou a despesa **do Conag**
+`erp_dashboard_6_remover_duplicidade.sql`: apagou a despesa **do ERP**
 de Cana/Pecuária a partir de jan/2026 (~R$ 2,51 milhões / 467 títulos de
 Cana, ~R$ 1,02 milhão / 436 títulos de Pecuária), mantendo a lançada à mão
 — decisão do Eduardo, porque é o registro nativo do time. Grãos nunca teve
@@ -239,12 +239,12 @@ fechado em 29/08/2026:
   parcialmente (mar/mai/jun/ago, 10 títulos / R$ 1.021.117,93 — jan/fev eram
   venda nova, sem duplicidade; jul ficou de fora, a soma não batia exato).
   O Eduardo resolveu a Cana manualmente antes — mas ao contrário da
-  despesa, manteve a versão **do Conag** e apagou a lançada à mão (sem
+  despesa, manteve a versão **do ERP** e apagou a lançada à mão (sem
   problema, o total bate igual). A Pecuária só foi fechada depois, com
   `pecuaria_receita_remove_duplicidade_2026.sql` (mantendo a lançada à mão,
-  apagando a do Conag, mesmo critério da despesa) — receita 2026 da
+  apagando a do ERP, mesmo critério da despesa) — receita 2026 da
   Pecuária caiu de R$ 4.399.776,43 pra R$ 3.378.658,50.
-- **Investimento**: dos 7 títulos do Conag em 2026 (Pecuária, ~R$ 463 mil),
+- **Investimento**: dos 7 títulos do ERP em 2026 (Pecuária, ~R$ 463 mil),
   4 batiam exato (valor e mês) com lançamento manual — duplicidade de
   verdade, fechada com `pecuaria_investimento_remove_duplicidade_2026.sql`
   (R$ 252.724,71). Os outros 3 (dois de Renato Mendes Camargo em jan, que
@@ -252,13 +252,13 @@ fechado em 29/08/2026:
   tinham par exato — confirmados como investimento novo, ficaram intocados.
 
 **Cuidado ao reusar os scripts de dedup de Cana/receita 2026**: como a Cana
-manteve a versão do Conag (ao contrário de despesa/Pecuária, que mantiveram
-a versão manual), um script que apague `conag_id is not null` pra Cana em
+manteve a versão do ERP (ao contrário de despesa/Pecuária, que mantiveram
+a versão manual), um script que apague `erp_id is not null` pra Cana em
 2026 hoje apagaria a receita inteira da Cana por engano — os arquivos
-antigos que faziam isso (`conag_receita_02/03_...`) foram removidos do
+antigos que faziam isso (`erp_receita_02/03_...`) foram removidos do
 repositório por causa disso.
 
-**Se algum dia reimportar ou expandir o CSV do Conag**: nunca deixar
+**Se algum dia reimportar ou expandir o CSV do ERP**: nunca deixar
 título de Cana ou Pecuária com competência (`mes`) a partir de 2026-01
 entrar de novo sem checar contra o que já foi lançado à mão primeiro.
 
@@ -319,40 +319,40 @@ custo já existe em Resultados > Relatórios.
   renomear um deles zera os juros da tela (o teste pega).
 - Amortização e entrada de empréstimo **nunca** viram `lancamentos_financeiros`
   (não são despesa nem receita): moram em `movimentos_financiamento` (import
-  do Conag: 75 títulos, R$ 17,8 mi, `financiamentos_02_movimentos_conag.sql`) e
+  do ERP: 75 títulos, R$ 17,8 mi, `financiamentos_02_movimentos_erp.sql`) e
   no módulo Financiamentos. O juros das parcelas pagas do módulo **já é**
   lançamento: não somar de novo. Contrato nascido de renegociação não é
   dinheiro novo. Movimento com data futura é dívida a vencer, não fluxo
   realizado.
-- **Contrato que já está no Conag: lance por "Lançar contrato", nunca à mão.**
-  Em Financiamentos, a lista "Dívida do Conag ainda sem contrato"
-  (`gruposConagParaLancar`) tem um botão por contrato (credor + apelido do contrato;
+- **Contrato que já está no ERP: lance por "Lançar contrato", nunca à mão.**
+  Em Financiamentos, a lista "Dívida do ERP ainda sem contrato"
+  (`gruposErpParaLancar`) tem um botão por contrato (credor + apelido do contrato;
   linha sem número se separa pelo valor da parcela; contrato todo pago não
-  aparece, o histórico dele já está no Conag). O botão cria o financiamento
-  com **uma parcela por linha do Conag** (`parcelasDoGrupoConag`: datas e
+  aparece, o histórico dele já está no ERP). O botão cria o financiamento
+  com **uma parcela por linha do ERP** (`parcelasDoGrupoErp`: datas e
   valores reais, inclusive anuais e crescentes, que o gerador SAC/Price não
   reproduz) e grava `financiamento_id` em cada linha. Linha com esse vínculo
-  **não conta mais** no Conag (`movimentoAssumidoPorContrato`; contrato
+  **não conta mais** no ERP (`movimentoAssumidoPorContrato`; contrato
   cancelado devolve a linha): a dívida da aba Empresa é saldo dos contratos +
-  o que só está no Conag, e a amortização paga entra uma vez só, pela parcela.
-  Ninguém apaga linha do Conag (rodar o script de novo seria desfazer o
+  o que só está no ERP, e a amortização paga entra uma vez só, pela parcela.
+  Ninguém apaga linha do ERP (rodar o script de novo seria desfazer o
   apagamento; o vínculo sobrevive, `on conflict do update set contrato`).
-  Por que não casar contrato digitado à mão com as linhas: o Conag só traz o
+  Por que não casar contrato digitado à mão com as linhas: o ERP só traz o
   contrato em 67 dos 75 títulos e os valores reais não batem com o
-  que o gerador calcula. Se alguém lançar à mão um contrato que está no Conag, a
+  que o gerador calcula. Se alguém lançar à mão um contrato que está no ERP, a
   dívida dobra (o modal avisa).
   - Parcelas já pagas do contrato importado entram **pagas e sem juros**: o
-    juros delas já é lançamento do Conag (lançar de novo dobraria a despesa, e
+    juros delas já é lançamento do ERP (lançar de novo dobraria a despesa, e
     `pagarParcela` lança com a data de hoje, não a do pagamento). As a vencer
-    ficam pendentes com juros **estimado** pela taxa informada (o Conag não tem
+    ficam pendentes com juros **estimado** pela taxa informada (o ERP não tem
     juros futuro).
-  - Contrato importado (`observacao` começa com "Importado do Conag",
-    `importadoDoConag`) **nunca regera o cronograma**: o "Editar" dele
+  - Contrato importado (`observacao` começa com "Importado do ERP",
+    `importadoDoErp`) **nunca regera o cronograma**: o "Editar" dele
     (`_travado`) mexe só em finalidade, atividade, data, taxa, fazenda, garantia
     e observação; mudar taxa ou data refaz só o juros **estimado** das parcelas
     em aberto (`reestimarJurosPendentes`). Não conta como empréstimo recebido
-    (data aproximada, valor = só o que o Conag viu pagar). A data do contrato é
-    **estimada** (`inicioEstimadoConag`: 1ª parcela menos o intervalo mediano entre
+    (data aproximada, valor = só o que o ERP viu pagar). A data do contrato é
+    **estimada** (`inicioEstimadoErp`: 1ª parcela menos o intervalo mediano entre
     parcelas; 365 dias se só tem uma) e o mesmo cálculo alimenta a linha do tempo
     da dívida antes e depois de lançar, então lançar não muda o saldo médio.
     `sistema_amortizacao` fica 'sac' só porque o banco exige um dos 3.
@@ -362,25 +362,25 @@ custo já existe em Resultados > Relatórios.
     **Editar** parcela (vencimento e juros; a amortização só no importado, e aí o
     saldo de cada parcela e o principal se refazem), **Quitar** (todas as parcelas
     em aberto pagas numa data, sem juros), **Cancelar contrato** (só muda o
-    status; as linhas do Conag voltam; não cancela se alguma parcela já virou
+    status; as linhas do ERP voltam; não cancela se alguma parcela já virou
     lançamento no Financeiro). Nada apaga histórico.
   - O contrato "sem número" do Banco do Brasil (4 parcelas de R$ 456.737,72) tem
-    duas parcelas em 15/08/2029 e nenhuma em 2028 no Conag: provável erro de
+    duas parcelas em 15/08/2029 e nenhuma em 2028 no ERP: provável erro de
     digitação de lá; o total fecha, só o vencimento do meio sai errado.
   - Lançar parcela antiga como "paga" em contrato digitado à mão também
-    duplicaria o juros (já está no Conag).
-- O Conag **não tem entrada de empréstimo**, só amortização: sem ela, a
+    duplicaria o juros (já está no ERP).
+- O ERP **não tem entrada de empréstimo**, só amortização: sem ela, a
   cobertura do serviço da dívida sai pior que a realidade.
 - **Dívida no tempo** (`vencimentosDaDivida`, `taxaMediaContratos`,
   `linhaDoTempoDivida`, `saldoMedioDivida`): vencimentos juntam as parcelas em
-  aberto dos contratos ativos (com o juros estimado) e as linhas do Conag que
+  aberto dos contratos ativos (com o juros estimado) e as linhas do ERP que
   nenhum contrato assumiu (só principal); "12 meses" = até hoje + 12 meses. A
   taxa média dos contratos é a **contratada**, ponderada pelo saldo. O **custo
   médio** (juros pagos ÷ saldo médio) é só um indicador: o saldo médio é
-  estimado (linha do Conag solta tem data de contrato estimada, dívida quitada
+  estimado (linha do ERP solta tem data de contrato estimada, dívida quitada
   antes de 2023 não existe) e **período em andamento não tem custo médio**
   (os juros dele ainda estão incompletos; em 15/10/2026 os de 2026 eram R$ 46 mil
-  porque os contratos ainda não estavam lançados). Com o Conag de 2023 a 2025
+  porque os contratos ainda não estavam lançados). Com o ERP de 2023 a 2025
   o custo médio estimado deu 9,6%, 13,8% e 9,8% a.a.
   `teste_divida_empresa.py` confere cada conta à mão.
 - O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
@@ -407,13 +407,13 @@ custo já existe em Resultados > Relatórios.
   CPF/CNPJ, número de conta bancária, número de contrato/cédula, número de
   documento/nota do ERP (o "doc" mais um número, que as cargas antigas punham na descrição) e o razão por fornecedor **nunca** entram no
   git (o Eduardo mandou, em 15/10/2026: "qualquer referência a número de
-  documento ou conta bancária, apague ou troque o nome"). Os dumps do Conag e as
+  documento ou conta bancária, apague ou troque o nome"). Os dumps do ERP e as
   cargas antigas de dados ficam só no computador, em `AEagropecuaria_dados_privados`
   (pasta irmã, fora do git; também no `.gitignore`). Script ou teste novo usa
   número inventado e apelido, nunca o real. `teste_sem_dados_sensiveis.py`
   varre tudo que o git rastreia e falha se achar CPF/CNPJ válido, número de documento na descrição,
   "BANCO + número de conta" ou arquivo de dump versionado. No banco, o contrato
-  do Conag vira apelido C01, C02... (`financiamentos_02_movimentos_conag.sql`;
+  do ERP vira apelido C01, C02... (`financiamentos_02_movimentos_erp.sql`;
   `financiamentos_03_apelidos_contratos.sql` troca os números reais que já
   tivessem sido gravados).
   O repositório foi **recriado em 16/10/2026** com o histórico filtrado (os
@@ -422,6 +422,33 @@ custo já existe em Resultados > Relatórios.
   `AEagropecuaria-antigo` (só o Eduardo acessa), o novo tem só a `main` e os
   mesmos endereços do site. Sessão na nuvem (claude.ai/code) pode precisar que
   o Eduardo dê acesso ao repositório novo ao app do Claude no GitHub.
+
+- **O nome do ERP de origem não aparece em lugar nenhum.** O Eduardo, em
+  16/10/2026: "o nome ... aparece em tudo, não é para aparecer". Nem na tela,
+  nem no banco, nem em arquivo, nem em nome de arquivo: no texto, no código e
+  nas colunas ele é só "ERP" (`erp_id`, `erp_plano_contas`, "Dívida do ERP ainda
+  sem contrato"). `teste_sem_nome_do_erp.py` varre todo arquivo versionado e o
+  nome de cada um; script que precisa citar o nome antigo (para renomear algo no
+  banco) o monta por pedaços (`'con' || 'ag'`), como `erp_20_...sql`.
+  - **Fornecedor que tem esse nome no cadastro é fornecedor de verdade** (há
+    centenas de pagamentos, escritos em MAIÚSCULAS no banco): não renomear. A
+    troca mexe só no que o sistema escreveu sozinho: `criado_por`, a observação
+    "ERP 12345 - Boleto" e a descrição das cargas.
+  - Contrato importado é reconhecido por `OBS_IMPORTADO`
+    (`/^Importado do \S+ \(contrato /`): contrato lançado antes da troca guarda
+    o nome antigo no texto e continua valendo. `movimentos_financiamento.origem`
+    só é comparada com `'manual'`, então o app funciona antes e depois de o SQL
+    do banco rodar.
+  - Banco: `erp_20_tira_o_nome_antigo_do_banco.sql` renomeia colunas, índices,
+    tabelas, textos e comentários (o script para sem mudar nada se achar função
+    do banco citando o nome antigo; desliga o registro de alterações só durante
+    a troca em massa, senão ele gravaria uma linha por lançamento) e
+    `erp_21_confere_o_que_sobrou.sql` lista o que ainda tem o nome (esperado:
+    só os fornecedores reais e o histórico de `log_alteracoes`). Os dois foram
+    executados de verdade num Postgres descartável (banco montado como o de
+    produção antes da troca) antes de irem para o Eduardo.
+  - O histórico do git (commits antigos) ainda guarda o nome em arquivos e
+    mensagens; só some recriando o repositório de novo.
 
 - **Offline com login vencido.** O token do Supabase vale 1 h; vencido e
   sem rede, `db.auth.getSession()` fica ~25 s tentando renovar e depois
@@ -458,9 +485,12 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-10 arquivos, 317 testes. Rodam com Playwright + Python contra um stub do
-Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete` gravam de
-verdade em `window.__DB__`).
+26 arquivos `teste_*.py`, 671 checagens (16/10/2026; a tabela abaixo lista os
+principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
+contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
+gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
+`teste_offline.py` ("offline com login vencido: abre em menos de 3 s") falham, e
+falhavam igual no código publicado antes: é a máquina, não regressão.
 
 | Arquivo | Testes | Cobre |
 |---|---|---|
@@ -476,12 +506,13 @@ verdade em `window.__DB__`).
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
-| `teste_empresa.py` | 63 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do Conag assumida por contrato, sem rolar de lado de 1280 a 320 px) |
+| `teste_empresa.py` | 63 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do ERP assumida por contrato, sem rolar de lado de 1280 a 320 px) |
 | `teste_divida_empresa.py` | 42 | AEMatriz.html (Empresa, Fase 2: vencimentos em 12 meses/por ano/por safra, taxa média ponderada, saldo e custo médio, lançar contrato não muda o saldo médio) |
-| `teste_financiamentos_conag.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do Conag: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
+| `teste_financiamentos_erp.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do ERP: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
 | `teste_financiamentos_editar.py` | 40 | AEMatriz.html (Financiamentos: registrar pagamento com data/juros reais, editar parcela e contrato, quitar, cancelar; tela do contrato sem rolar de lado) |
 | `teste_sem_dados_sensiveis.py` | 14 | todo arquivo versionado (repositório público: sem CPF/CNPJ, número de conta, de contrato ou de documento; sem dumps de dados) |
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
+| `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só

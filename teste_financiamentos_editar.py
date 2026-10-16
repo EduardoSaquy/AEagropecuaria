@@ -6,12 +6,12 @@ O que este teste prova, com contas conhecidas (hoje = 14/10/2026):
   - Registrar pagamento: data e juros reais; o juros so vira despesa (na data do
     pagamento, nao hoje) se marcar; desmarcado, a parcela fica paga sem lancamento;
   - Editar parcela: vencimento e juros sempre; amortizacao so no contrato importado
-    do Conag, e ai o saldo devedor de cada parcela e o principal se refazem;
+    do ERP, e ai o saldo devedor de cada parcela e o principal se refazem;
   - Quitar: todas as parcelas em aberto viram pagas na data informada, sem juros,
     o contrato fica quitado e a amortizacao entra no fluxo de caixa dessa data;
   - Editar contrato com cronograma travado (importado ou com parcela paga) nao regera
     as parcelas; no importado, mudar a taxa refaz o juros estimado das em aberto;
-  - Cancelar ("apagar") nao apaga historico: so muda o status; as linhas do Conag
+  - Cancelar ("apagar") nao apaga historico: so muda o status; as linhas do ERP
     que o contrato tinha assumido voltam; contrato com juros ja lancado nao cancela;
   - a tela do contrato nao rola de lado no celular.
 """
@@ -46,9 +46,9 @@ def parc(i, fid, n, venc, amort, juros, saldo, status="pendente", pago=None, ids
 
 def mov(i, data, valor, fid=None):
     return {"id": i, "data": data, "tipo": "amortizacao", "valor": valor, "credor": "BANCO DO BRASIL", "contrato": "C09",
-            "descricao": "", "origem": "conag", "conag_id": 1000 + i, "financiamento_id": fid}
+            "descricao": "", "origem": "erp", "erp_id": 1000 + i, "financiamento_id": fid}
 
-OBS_CONAG = ("Importado do Conag (contrato C09): cronograma real, uma parcela por linha do Conag; "
+OBS_ERP = ("Importado do ERP (contrato C09): cronograma real, uma parcela por linha do ERP; "
              "juros das parcelas a vencer estimado pela taxa informada.")
 
 DB = {
@@ -63,7 +63,7 @@ DB = {
     "financiamentos": [
         fin(1, "Banco A", 90000, "2026-08-10", 10, 3),                                   # a mao, nada pago
         fin(2, "Banco B", 60000, "2026-03-10", 10, 2),                                   # a mao, juros ja lancado
-        fin(3, "Banco do Brasil", 400000, "2024-11-15", 10, 4, obs=OBS_CONAG, atividade="graos", finalidade="custeio"),  # importado
+        fin(3, "Banco do Brasil", 400000, "2024-11-15", 10, 4, obs=OBS_ERP, atividade="graos", finalidade="custeio"),  # importado
         fin(4, "Banco D", 90000, "2026-09-01", 10, 3),                                   # a mao, para quitar
         fin(5, "Banco E", 50000, "2026-09-01", 10, 1, sistema="parcela_unica"),          # a mao, para cancelar
     ],
@@ -252,7 +252,7 @@ with sync_playwright() as pw:
     conf(c2["garantia"] == "Safra 26/27" and len(db("parcelas_financiamento")) == 13 and parcela(5)["data_vencimento"] == "2026-12-10",
          "salvar muda a garantia e deixa as parcelas como estavam", str((c2["garantia"], parcela(5)["data_vencimento"])))
 
-    # ---- 8. contrato importado do Conag: editar, ajustar parcela, pagar, quitar ----
+    # ---- 8. contrato importado do ERP: editar, ajustar parcela, pagar, quitar ----
     abrir(3)
     page.click('.toolbar [data-editar-financiamento="3"]')
     page.wait_for_timeout(300)
@@ -260,7 +260,7 @@ with sync_playwright() as pw:
         principalSoLeitura: document.getElementById('f-principalfin').readOnly, taxaSoLeitura: document.getElementById('f-taxafin').readOnly,
         obs: document.getElementById('f-obsfin').value, texto: document.querySelector('.modal-body').innerText.toLowerCase()})""")
     conf(not modal3["temSistema"] and float(modal3["principal"]) == 400000 and modal3["principalSoLeitura"] and not modal3["taxaSoLeitura"]
-         and "importado do conag" in modal3["texto"] and modal3["obs"] == "",
+         and "importado do erp" in modal3["texto"] and modal3["obs"] == "",
          "contrato importado: edita taxa e dados, principal so leitura, sem cronograma; a observacao mostra so o texto do usuario", str(modal3))
     page.fill("#f-taxafin", "12")
     page.fill("#f-obsfin", "cedula 2024")
@@ -269,8 +269,8 @@ with sync_playwright() as pw:
     c3 = contrato(3)
     e3 = juros_est(200000, 12, "2026-05-15", "2026-11-16")
     e4 = juros_est(100000, 12, "2026-11-16", "2027-11-15")
-    conf(perto(c3["taxa_juros_aa"], 12) and c3["observacao"].startswith("Importado do Conag (contrato C09)") and c3["observacao"].endswith("cedula 2024"),
-         "taxa 12% salva; a observacao mantem a marca do Conag e acrescenta o texto do usuario", str(c3["observacao"]))
+    conf(perto(c3["taxa_juros_aa"], 12) and c3["observacao"].startswith("Importado do ERP (contrato C09)") and c3["observacao"].endswith("cedula 2024"),
+         "taxa 12% salva; a observacao mantem a marca do ERP e acrescenta o texto do usuario", str(c3["observacao"]))
     conf(perto(parcela(8)["valor_juros"], e3, 0.02) and perto(parcela(9)["valor_juros"], e4, 0.02),
          f"mudar a taxa refaz o juros estimado das parcelas em aberto: R$ {e3:,.2f} e R$ {e4:,.2f}", str((parcela(8)["valor_juros"], parcela(9)["valor_juros"])))
     conf(parcela(6)["valor_juros"] == 0 and parcela(7)["valor_juros"] == 0 and parcela(6)["status"] == "paga",
@@ -310,24 +310,24 @@ with sync_playwright() as pw:
     d3 = page.evaluate("() => dividaEmpresa()")
     fl = page.evaluate("() => fluxoEmpresa({tipo:'mes', mes:'2026-10', ano:2026, safra:2026})")["financiamento"]
     conf(perto(fl["amortizacao"], 30000 + 30000 + 110000 + 100000),
-         "outubro/2026: amortizacao = 30.000 + 30.000 (contrato A) + 110.000 (dia 13) + 100.000 (dia 14) = R$ 270.000, uma vez so (as linhas do Conag nao somam de novo)", str(fl))
-    conf(perto(d3["saldoModulo"], 30000 + 30000) and perto(d3["aVencerConag"], 0),
-         "depois de quitar, a divida e so a dos contratos A e B (R$ 60.000): o importado zerou e nada sobrou no Conag", str(d3))
+         "outubro/2026: amortizacao = 30.000 + 30.000 (contrato A) + 110.000 (dia 13) + 100.000 (dia 14) = R$ 270.000, uma vez so (as linhas do ERP nao somam de novo)", str(fl))
+    conf(perto(d3["saldoModulo"], 30000 + 30000) and perto(d3["aVencerErp"], 0),
+         "depois de quitar, a divida e so a dos contratos A e B (R$ 60.000): o importado zerou e nada sobrou no ERP", str(d3))
 
-    # ---- 9. cancelar o importado devolve as linhas do Conag ----
-    sem_cancelar = page.evaluate("() => gruposConagParaLancar().length")
+    # ---- 9. cancelar o importado devolve as linhas do ERP ----
+    sem_cancelar = page.evaluate("() => gruposErpParaLancar().length")
     abrir(3)
     n_dialogos = len(dialogos)
     page.click('[data-cancelar-financiamento="3"]')
     page.wait_for_timeout(600)
-    conf(contrato(3)["status"] == "cancelado" and any("linhas do Conag voltam" in m for m in dialogos[n_dialogos:]),
-         "cancelar o contrato importado avisa que as linhas do Conag voltam e muda o status para cancelado", str(dialogos[n_dialogos:]))
-    grupos = page.evaluate("() => gruposConagParaLancar().map(g => [g.contrato, g.pagas.length, g.aVencer.length])")
+    conf(contrato(3)["status"] == "cancelado" and any("linhas do ERP voltam" in m for m in dialogos[n_dialogos:]),
+         "cancelar o contrato importado avisa que as linhas do ERP voltam e muda o status para cancelado", str(dialogos[n_dialogos:]))
+    grupos = page.evaluate("() => gruposErpParaLancar().map(g => [g.contrato, g.pagas.length, g.aVencer.length])")
     conf(sem_cancelar == 0 and grupos == [["C09", 2, 2]],
-         "as 4 linhas voltam para 'Divida do Conag ainda sem contrato' (2 pagas, 2 a vencer) e o contrato pode ser lancado de novo", str(grupos))
+         "as 4 linhas voltam para 'Divida do ERP ainda sem contrato' (2 pagas, 2 a vencer) e o contrato pode ser lancado de novo", str(grupos))
     fl2 = page.evaluate("() => fluxoEmpresa({tipo:'mes', mes:'2026-10', ano:2026, safra:2026})")["financiamento"]
     conf(perto(fl2["amortizacao"], 60000),
-         "contrato cancelado: as parcelas dele (110.000 + 100.000) saem do fluxo e ficam so os 60.000 do contrato A (nao ha linha do Conag em outubro)", str(fl2))
+         "contrato cancelado: as parcelas dele (110.000 + 100.000) saem do fluxo e ficam so os 60.000 do contrato A (nao ha linha do ERP em outubro)", str(fl2))
 
     # ---- 10. a tela do contrato nao rola de lado no celular ----
     medir = """() => {

@@ -8,7 +8,7 @@
 -- Cuidado: cada baixa gera lancamento em lancamentos_financeiros pelo
 -- gatilho trg_baixa_gera_lancamento (contas_01_estrutura.sql). Se a
 -- mesma despesa/receita ja foi lancada direto no Financeiro, a baixa
--- DUPLICA o valor - mesma classe do erro do Conag. Este diagnostico
+-- DUPLICA o valor - mesma classe do erro do ERP. Este diagnostico
 -- mede isso antes de qualquer baixa.
 --
 -- Vencido = vencimento antes de hoje (horario de Brasilia), situacao

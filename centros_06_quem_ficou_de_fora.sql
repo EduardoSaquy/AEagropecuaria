@@ -1,5 +1,5 @@
 -- ============================================================
--- OS 23 QUE NAO ESTAO NA ARVORE DO CONAG
+-- OS 23 QUE NAO ESTAO NA ARVORE DO ERP
 --
 -- RODAR NO PROJETO UNIFICADO (kmkystqgpvmzrccxvyaz). SO LE, nao grava nada.
 --
@@ -7,14 +7,14 @@
 -- POR QUE ISSO IMPORTA AGORA
 --
 -- O centros_05 confirmou a hipotese: 63 dos 64 centros estao no nivel 3,
--- e 93 das 96 contas do Conag ainda nao existem aqui. Ate ai, esperado.
+-- e 93 das 96 contas do ERP ainda nao existem aqui. Ate ai, esperado.
 --
 -- O que precisa de olho sao os 23 que nao acharam par nenhum na arvore.
 -- Cada um deles e uma de duas coisas:
 --
---   a) conta nossa mesmo, que o Conag nao tem. Fica como esta.
+--   a) conta nossa mesmo, que o ERP nao tem. Fica como esta.
 --   b) a MESMA conta deles, escrita diferente. Se for esse o caso e eu nao
---      pegar agora, o conag_12 vai criar a versao do Conag ao lado da
+--      pegar agora, o erp_12 vai criar a versao do ERP ao lado da
 --      nossa - dois centros para a mesma coisa, os 2.760 lancamentos
 --      antigos num e os 9.400 novos no outro. Exatamente o problema que
 --      este trabalho todo existe para evitar.
@@ -40,7 +40,7 @@ create extension if not exists pg_trgm;
 with fora as (
   select c.id, c.nome, c.tipo, c.subcategoria
     from centros_custo c
-   where not exists (select 1 from conag_plano_contas p
+   where not exists (select 1 from erp_plano_contas p
                       where plano_norm(p.classe) = plano_norm(c.nome)
                          or plano_norm(p.conta)  = plano_norm(c.nome))
 ),
@@ -57,18 +57,18 @@ parecido as (
                             order by similarity(plano_norm(f.nome), plano_norm(p.conta)) desc,
                                      p.conta) as rn
     from fora f
-    cross join conag_plano_contas p
+    cross join erp_plano_contas p
 )
 select f.nome                                as centro_nosso,
        coalesce(u.qtd, 0)::text              as lancamentos,
        to_char(coalesce(u.total, 0), 'FM999G999G990D00') as ja_lancado,
        coalesce(f.tipo, '(sem tipo)')        as tipo,
-       coalesce(pa.candidato, '(nenhum)')    as parecido_no_conag,
+       coalesce(pa.candidato, '(nenhum)')    as parecido_no_erp,
        coalesce(pa.parecenca, 0)::text       as parecenca,
        case
          when pa.parecenca >= 0.60 then 'OLHAR - provavel a mesma conta'
          when pa.parecenca >= 0.35 then 'talvez'
-         else 'nossa mesmo, o Conag nao tem'
+         else 'nossa mesmo, o ERP nao tem'
        end                                   as veredito
   from fora f
   left join uso u        on u.centro_custo_id = f.id

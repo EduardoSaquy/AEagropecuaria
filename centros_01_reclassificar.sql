@@ -10,13 +10,13 @@
 -- O QUE ACONTECEU
 --
 -- Existiam dois planos de contas no mesmo banco: o do AE Cana (nomes em
--- caixa mista, sem grupo) e o do Conag (nomes em MAIUSCULAS, com tipo e
+-- caixa mista, sem grupo) e o do ERP (nomes em MAIUSCULAS, com tipo e
 -- subcategoria). Varias contas eram a mesma coisa nos dois - "Insumos
 -- Agricolas" e "INSUMOS AGRICOLAS", por exemplo.
 --
 -- O lavoura_06 fundiu esses pares mantendo o de MENOR id. Os centros do
 -- AE Cana sao mais antigos, entao ganharam a disputa: sobreviveu o nome sem
--- classificacao, e o do Conag, que trazia o grupo, foi apagado.
+-- classificacao, e o do ERP, que trazia o grupo, foi apagado.
 --
 -- Nenhum lancamento se perdeu - todos foram repontados antes de qualquer
 -- exclusao, e a conferencia geral confirma os R$ 10.226.028,01 intactos. O
@@ -28,7 +28,7 @@
 -- ------------------------------------------------------------
 -- O QUE ESTE SCRIPT FAZ, E O QUE NAO FAZ
 --
--- FAZ: classifica os 12 centros cujo nome corresponde a um grupo do Conag
+-- FAZ: classifica os 12 centros cujo nome corresponde a um grupo do ERP
 -- sem margem para duvida.
 --
 -- NAO FAZ: os 6 em que a escolha e sua de verdade, porque muda o

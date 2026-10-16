@@ -1,4 +1,4 @@
-# Nivel 3 do plano de contas do Conag, lido do balancete de 27/08/2026.
+# Nivel 3 do plano de contas do ERP, lido do balancete de 27/08/2026.
 # Formato:  GRUPO | SUBCATEGORIA >> CLASSE >> CONTA
 # So aparecem contas COM movimento; as sem movimento nao saem no balancete.
 

@@ -227,7 +227,7 @@ with sync_playwright() as pw:
     conf("OFICINA DO PALHADAO" in corpo and "INSUMOS AGRICOLAS" not in corpo,
          "busca filtra a lista")
 
-    # ---- o seletor de lancamento enxerga o plano de contas do Conag ----
+    # ---- o seletor de lancamento enxerga o plano de contas do ERP ----
     page.evaluate("() => { state.page='financeiro'; editDraft={tipo:'despesa', atividade:'cana',"
                   " fazendaId:'', centroCustoId:'', descricao:'', valor:'', data:'', areas:[]};"
                   " state.modal={type:'lancamento'}; render(); }")

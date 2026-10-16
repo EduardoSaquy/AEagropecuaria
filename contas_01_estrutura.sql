@@ -17,7 +17,7 @@
 -- ------------------------------------------------------------
 -- POR QUE TITULO E RATEIO SAO SEPARADOS
 --
--- Copiado do Conag, que separa "Financeiro" de "Gerencial". Um boleto
+-- Copiado do ERP, que separa "Financeiro" de "Gerencial". Um boleto
 -- unico pode pertencer a mais de uma fazenda ou atividade. Hoje o app
 -- nao consegue representar isso: o lancamento tem UMA fazenda e UMA
 -- atividade, entao um boleto dividido vira dois lancamentos que ninguem
@@ -173,7 +173,7 @@ create index if not exists ix_titulos_grupo      on titulos (grupo);
 --
 -- competencia e 'AAAA-MM', o mesmo formato de lancamentos_financeiros.mes.
 -- Ela e INDEPENDENTE do vencimento: um boleto que vence em 27/08 pode ser
--- competencia 07/2026. O Conag faz exatamente assim.
+-- competencia 07/2026. O ERP faz exatamente assim.
 -- ------------------------------------------------------------
 create table if not exists titulo_rateios (
   id              bigint generated always as identity primary key,

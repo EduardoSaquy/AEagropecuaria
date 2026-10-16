@@ -457,7 +457,7 @@ OBSERVAÇÕES DE QUEM LEU ESTE DUMP EM 22/08/2026
    auditoria_04 pegou o estado certo. As telas gravam nulo de propósito.
 
 2. centros_custo.tipo e centros_custo.subcategoria EXISTEM e nenhum app lê.
-   Vêm do plano de contas do Conag, que é hierárquico
+   Vêm do plano de contas do ERP, que é hierárquico
    (Centro Gerencial > SubCategoria > Centro de Custo). Hoje o relatório
    financeiro mostra 71 centros numa lista plana. Agrupar pela hierarquia
    que já está no banco é a melhoria de relatório mais barata disponível —
@@ -483,8 +483,8 @@ A observação 2 acima ficou desatualizada: centros_custo.tipo e
 .subcategoria já são lidos. AEMatriz.html usa as duas (rowToCentroCusto,
 grupoDoCentro/subgrupoDoCentro, PageCentrosCusto e o card de despesas de
 PageFinanceiro) para agrupar o relatório pela hierarquia GRUPO|Subcategoria
-do Conag — é a correção descrita em laudo_auditoria.html ("O plano de
-contas do Conag estava invisível"). Esta nota provavelmente só não foi
+do ERP — é a correção descrita em laudo_auditoria.html ("O plano de
+contas do ERP estava invisível"). Esta nota provavelmente só não foi
 revisada depois daquela correção ser aplicada ao app.
 
 Ainda não neste dump (que é de 22/08/2026): a tabela log_alteracoes,

@@ -40,5 +40,5 @@ ligados ao mesmo tempo.
 `centros_06_quem_ficou_de_fora.sql` e `centros_07_de_para.sql`.
 O `centros_04_nivel_classe.sql` fica obsoleto — partia de premissa errada.
 
-**Conag.** Os 9.400 lançamentos consolidados, a atividade e a fazenda de cada
+**ERP.** Os 9.400 lançamentos consolidados, a atividade e a fazenda de cada
 um, e as etapas 1 e 2 da importação.

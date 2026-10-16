@@ -119,13 +119,13 @@ for a in rastreados:
 conf(not violacoes, "nenhum arquivo versionado tem CPF/CNPJ, '(doc N', conta bancaria ou numero de contrato", "\n            ".join(violacoes[:12]))
 
 # ---- 2. dumps de dados nao podem voltar ao git ----
-PROIBIDOS = (re.compile(r"^conag/.*\.(csv|json)$"), re.compile(r"^conag/pdf_faz/"),
+PROIBIDOS = (re.compile(r"^erp/.*\.(csv|json)$"), re.compile(r"^erp/pdf_faz/"),
              re.compile(r"^cana_despesas_2026_(carga|recategoriza)\.sql$"), re.compile(r"^cana_receita_2026_carga\.sql$"),
-             re.compile(r"^conag_receita_01_importar\.sql$"))
+             re.compile(r"^erp_receita_01_importar\.sql$"))
 dumps = [a for a in rastreados if any(p.search(a) for p in PROIBIDOS)]
-conf(not dumps, "nenhum dump de dados do Conag nem carga com CPF/CNPJ/(doc N) esta versionado", str(dumps[:8]))
+conf(not dumps, "nenhum dump de dados do ERP nem carga com CPF/CNPJ/(doc N) esta versionado", str(dumps[:8]))
 ignorado = (REPO / ".gitignore").read_text(encoding="utf-8")
-conf(all(s in ignorado for s in ("conag/*.csv", "conag/pdf_faz/", "conag_receita_01_importar.sql")),
+conf(all(s in ignorado for s in ("erp/*.csv", "erp/pdf_faz/", "erp_receita_01_importar.sql")),
      ".gitignore bloqueia esses arquivos (continuam so no computador)")
 
 print(f"\n  {passes} passaram, {falhas} falharam")

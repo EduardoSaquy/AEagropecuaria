@@ -248,7 +248,7 @@
   </div>
 
   <div class="achado m">
-    <div class="topo"><h3>Contas a Pagar do Conag</h3><span class="chip m">pendência antiga</span></div>
+    <div class="topo"><h3>Contas a Pagar do ERP</h3><span class="chip m">pendência antiga</span></div>
     <p>Importar o Contas a Pagar, e reclassificar por atividade o custo de mão de obra que veio na importação — hoje ele entra como <code>geral</code> e é rateado, quando parte dele é de uma atividade específica.</p>
   </div>
 </section>
@@ -295,8 +295,8 @@
   </div>
 
   <div class="achado ok">
-    <div class="topo"><h3>O plano de contas do Conag estava invisível</h3><span class="chip ok">corrigido</span></div>
-    <p>O seletor de centro de custo exigia <code>frente</code> preenchida, e os 56 centros do Conag têm frente nula — porque servem as três atividades. Nenhum deles aparecia na hora de lançar.</p>
+    <div class="topo"><h3>O plano de contas do ERP estava invisível</h3><span class="chip ok">corrigido</span></div>
+    <p>O seletor de centro de custo exigia <code>frente</code> preenchida, e os 56 centros do ERP têm frente nula — porque servem as três atividades. Nenhum deles aparecia na hora de lançar.</p>
     <p>E a hierarquia inteira (entrada/saída, e <code>GRUPO | Subcategoria</code>) estava gravada no banco desde a importação, sem nenhum app ler. O relatório mostrava 71 centros numa lista plana.</p>
   </div>
 </section>
@@ -323,7 +323,7 @@
 
   <div class="achado ok">
     <div class="topo"><h3>Um erro meu no caminho, e como apareceu</h3><span class="chip meu">meu erro</span></div>
-    <p>A fusão dos centros duplicados mantinha o de <b>menor id</b>. Os do AE Cana são mais antigos e ganhavam a disputa: sobrevivia o nome sem classificação, e o do Conag — que trazia o grupo — era apagado. Nenhum lançamento se perdeu, mas o grupo sim.</p>
+    <p>A fusão dos centros duplicados mantinha o de <b>menor id</b>. Os do AE Cana são mais antigos e ganhavam a disputa: sobrevivia o nome sem classificação, e o do ERP — que trazia o grupo — era apagado. Nenhum lançamento se perdeu, mas o grupo sim.</p>
     <p>Deu para reconstruir porque os grupos continuavam nos outros centros. O critério certo teria sido preferir o classificado, não o mais antigo.</p>
     <p class="cenario"><b>O que passou a existir por causa disso:</b> a fusão seguinte só age quando os dois lados estão no mesmo grupo — se divergirem, ela <b>para sem gravar nada</b>. Fundir grupos diferentes mudaria o relatório, e isso é decisão sua, não consequência escondida de uma limpeza de nomes.</p>
   </div>

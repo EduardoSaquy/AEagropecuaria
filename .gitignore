@@ -2,18 +2,18 @@
 .pytest_cache/
 __pycache__/
 
-# planilhas cruas do Conag: pesadas e recriaveis a partir do ERP.
+# planilhas cruas do ERP: pesadas e recriaveis a partir do ERP.
 # O consolidado em CSV fica versionado.
-conag/planilhas/
-conag/pdf/
+erp/planilhas/
+erp/pdf/
 
 # DADOS SENSIVEIS: o repositorio e PUBLICO. CPF/CNPJ, numero de conta, de contrato,
 # de documento/nota e o razao por fornecedor ficam so no computador, na pasta irma
 # AEagropecuaria_dados_privados (fora do git). Nao versionar.
-conag/*.csv
-conag/*.json
-conag/pdf_faz/
+erp/*.csv
+erp/*.json
+erp/pdf_faz/
 cana_despesas_2026_carga.sql
 cana_despesas_2026_recategoriza.sql
 cana_receita_2026_carga.sql
-conag_receita_01_importar.sql
+erp_receita_01_importar.sql

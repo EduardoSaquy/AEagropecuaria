@@ -8,7 +8,7 @@
 -- O ERRO
 --
 -- Em custos_fixos, mes e data sao colunas INDEPENDENTES. Os lancamentos
--- historicos (vindos do Conag) tem mes preenchido e data vazia: sao
+-- historicos (vindos do ERP) tem mes preenchido e data vazia: sao
 -- competencias mensais, sem dia especifico.
 --
 -- Na migracao eu derivei o mes a partir da data. Como esses historicos nao
