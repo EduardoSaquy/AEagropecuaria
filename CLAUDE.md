@@ -416,6 +416,12 @@ custo já existe em Resultados > Relatórios.
   do Conag vira apelido C01, C02... (`financiamentos_02_movimentos_conag.sql`;
   `financiamentos_03_apelidos_contratos.sql` troca os números reais que já
   tivessem sido gravados).
+  O repositório foi **recriado em 16/10/2026** com o histórico filtrado (os
+  números reais já tinham ido parar nos commits antigos e em mais de 100 pull
+  requests, que o GitHub não deixa apagar): o antigo ficou **privado** como
+  `AEagropecuaria-antigo` (só o Eduardo acessa), o novo tem só a `main` e os
+  mesmos endereços do site. Sessão na nuvem (claude.ai/code) pode precisar que
+  o Eduardo dê acesso ao repositório novo ao app do Claude no GitHub.
 
 - **Offline com login vencido.** O token do Supabase vale 1 h; vencido e
   sem rede, `db.auth.getSession()` fica ~25 s tentando renovar e depois
