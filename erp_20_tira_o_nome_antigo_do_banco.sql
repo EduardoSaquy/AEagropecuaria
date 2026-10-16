@@ -94,9 +94,12 @@ begin
   ----------------------------------------------------------------
   -- 3) TABELAS
   ----------------------------------------------------------------
+  -- A importacao trouxe ~9,4 mil titulos, mas a duplicidade de Cana e Pecuaria
+  -- de 2026 foi apagada depois (~900), entao "a importacao esta no banco" nao
+  -- pode exigir 9 mil: 16/10/2026 a trava de 9 mil deixou a tabela para tras.
   if to_regclass('public.' || velho || '_staging') is not null then
     select count(*) into n from public.lancamentos_financeiros where erp_id is not null;
-    if n >= 9000 then
+    if n >= 5000 then
       execute format('drop table public.%I', velho || '_staging');
       raise notice 'Tabela de pouso do CSV apagada (a importacao esta nos lancamentos: % linhas).', n;
     else

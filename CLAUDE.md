@@ -430,10 +430,12 @@ custo já existe em Resultados > Relatórios.
   sem contrato"). `teste_sem_nome_do_erp.py` varre todo arquivo versionado e o
   nome de cada um; script que precisa citar o nome antigo (para renomear algo no
   banco) o monta por pedaços (`'con' || 'ag'`), como `erp_20_...sql`.
-  - **Fornecedor que tem esse nome no cadastro é fornecedor de verdade** (há
-    centenas de pagamentos, escritos em MAIÚSCULAS no banco): não renomear. A
-    troca mexe só no que o sistema escreveu sozinho: `criado_por`, a observação
-    "ERP 12345 - Boleto" e a descrição das cargas.
+  - **Fornecedor que tem esse nome no cadastro é fornecedor de verdade** (52
+    lançamentos e 1 entidade em 16/10/2026, escritos em MAIÚSCULAS no banco):
+    não renomear. A troca mexe só no que o sistema escreveu sozinho:
+    `criado_por`, a observação "ERP 12345 - Boleto" e a descrição das cargas.
+    (Cuidado ao contar: a view `lancamentos_rateados` repete o lançamento
+    rateado em várias linhas; a conta certa é na tabela.)
   - Contrato importado é reconhecido por `OBS_IMPORTADO`
     (`/^Importado do \S+ \(contrato /`): contrato lançado antes da troca guarda
     o nome antigo no texto e continua valendo. `movimentos_financiamento.origem`
@@ -444,9 +446,20 @@ custo já existe em Resultados > Relatórios.
     do banco citando o nome antigo; desliga o registro de alterações só durante
     a troca em massa, senão ele gravaria uma linha por lançamento) e
     `erp_21_confere_o_que_sobrou.sql` lista o que ainda tem o nome (esperado:
-    só os fornecedores reais e o histórico de `log_alteracoes`). Os dois foram
-    executados de verdade num Postgres descartável (banco montado como o de
-    produção antes da troca) antes de irem para o Eduardo.
+    só os fornecedores reais e o histórico de `log_alteracoes`). Rodaram de
+    verdade num Postgres descartável (banco montado como o de produção antes da
+    troca) antes de irem para o Eduardo.
+  - A conferência na produção achou o que o `erp_20` deixou: observações com o
+    nome no MEIO do texto ("Importado da <nome> (soma dos funcionarios...)", 44
+    lançamentos; o `erp_20` só trocava as que começavam com o nome), a tabela
+    antiga `custos_fixos` (nome e observação; é da Pecuária antiga, já migrada
+    para `lancamentos_financeiros`, sem uso no app) e a tabela de pouso do CSV, que
+    ficou porque a trava de "9 mil lançamentos importados" era alta demais
+    (a duplicidade de 2026 apagou ~900; a trava agora é 5 mil). Quem arremata é
+    `erp_22_arremata_o_que_sobrou.sql` (termina com a mesma conferência do
+    `erp_21`). `custos_fixos.nome` precisa ficar igual à descrição dos
+    lançamentos migrados, por isso troca junto. O histórico de alterações
+    (`log_alteracoes`) guarda o nome nas cópias antigas e não se reescreve.
   - O histórico do git (commits antigos) ainda guarda o nome em arquivos e
     mensagens; só some recriando o repositório de novo.
 
