@@ -59,6 +59,20 @@ select l.id, null, l.tipo,
   from lancamentos_financeiros l
  where not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id);
 
+-- A view passa por cima do RLS: sem isto, qualquer pessoa com a chave publica do
+-- site le o Financeiro inteiro por ela (ver seguranca_01_fecha_view_para_anonimo.sql).
+do $trava_view$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on lancamentos_rateados from anon;
+  end if;
+  revoke all on lancamentos_rateados from public;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    grant select on lancamentos_rateados to authenticated;
+  end if;
+end
+$trava_view$;
+
 comment on view lancamentos_rateados is
   'O financeiro ja rateado. Onde ha rateio, entrega as partes; onde nao ha, '
   'entrega o lancamento inteiro. E daqui que os Resultados devem ler.';

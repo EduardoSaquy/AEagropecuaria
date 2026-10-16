@@ -448,7 +448,7 @@ custo já existe em Resultados > Relatórios.
     `erp_21_confere_o_que_sobrou.sql` lista o que ainda tem o nome (esperado:
     só os fornecedores reais e o histórico de `log_alteracoes`). Rodaram de
     verdade num Postgres descartável (banco montado como o de produção antes da
-    troca) antes de irem para o Eduardo.
+    troca; `ensaio_sql_banco.py`) antes de irem para o Eduardo.
   - A conferência na produção achou o que o `erp_20` deixou: observações com o
     nome no MEIO do texto ("Importado da <nome> (soma dos funcionarios...)", 44
     lançamentos; o `erp_20` só trocava as que começavam com o nome), a tabela
@@ -532,6 +532,13 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
 | `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
 
+Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
+(pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
+e view um estranho consegue ler; precisa de internet) e `ensaio_sql_banco.py`
+(roda os SQL de segurança e de troca de nome num Postgres descartável, 68
+checagens; precisa de um venv com `pgserver` e `psycopg2-binary`, instruções no
+topo do arquivo).
+
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
 4 arquivos e 101 testes — ficou pra trás conforme os outros 6 foram
@@ -546,6 +553,29 @@ filtra outros códigos de erro de rede, mas não esse).
 ## Restrições de segurança permanentes
 
 - **Nunca** guardar CPF, salário ou Pix em tabela com leitura pela chave anônima.
+- **View passa por cima do RLS.** Ela roda com os direitos de quem a criou, não
+  de quem consulta: tabela com RLS devolve vazio para a chave pública, mas a view
+  que lê dela devolve tudo. `lancamentos_rateados` ficou aberta ao "anon" desde
+  que foi criada (fim de agosto/2026) até 16/10/2026: 30.043 linhas com valor,
+  fornecedor, contrato e CNPJ/CPF de fornecedor, legíveis só com a chave que
+  está no código do site (não há como saber se alguém leu). Achada ao conferir o
+  banco com a chave pública e fechada pelo Eduardo no mesmo dia com
+  `seguranca_01_fecha_view_para_anonimo.sql` (`revoke all ... from anon,
+  public`; quem está logado continua lendo), conferida de fora.
+  **Toda view nova** leva `revoke all on public.<view> from anon, public;` logo
+  depois do `create` (os scripts que criam `lancamentos_rateados` já levam), e
+  depois de criar tabela ou view rode `python conferir_chave_publica.py`: ele
+  conta as linhas que a chave pública enxerga em cada tabela/view que o código
+  usa e em tudo que algum `.sql` do repositório cria (inclusive cópias de
+  segurança, que o editor do Supabase cria abertas), sem baixar nada, e sai com
+  1 se algo estiver aberto. Em 16/10/2026: 89 objetos, nenhum aberto.
+  - Em aberto: quem está logado lê a view inteira pela API mesmo sem permissão
+    naquela atividade (a tela filtra, o banco não; por construção da view, não
+    testado com um usuário de verdade). A solução certa é `security_invoker` na
+    view, mas antes é preciso conferir as políticas de `lancamento_rateios`.
+  - `lancamentos_financeiros` consultada pela chave pública responde 500
+    (estourou os 3 s): a política avalia linha por linha. Não vaza, mas é uma
+    consulta cara que qualquer um pode disparar.
 - `entidades.documento` (AEMatriz.html, pode ter CNPJ/CPF de fornecedor) —
   achado na varredura de 29/08/2026, checado e **resolvido**: RLS ligado,
   as 4 policies (select/insert/update/delete) exigem `is_dono()` ou
