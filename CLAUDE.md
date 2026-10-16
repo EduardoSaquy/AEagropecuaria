@@ -460,6 +460,11 @@ custo já existe em Resultados > Relatórios.
     `erp_21`). `custos_fixos.nome` precisa ficar igual à descrição dos
     lançamentos migrados, por isso troca junto. O histórico de alterações
     (`log_alteracoes`) guarda o nome nas cópias antigas e não se reescreve.
+  - **Feito na produção em 16/10/2026** (`erp_20` e depois `erp_22`, rodados
+    pelo Eduardo). Conferência final: só sobraram `entidades.nome` (1),
+    `lancamentos_financeiros.fornecedor` (52) e `.descricao` (51), que são
+    fornecedores de verdade, e `log_alteracoes.antes/depois`. Nenhuma tabela,
+    coluna, índice, trava, função ou comentário com o nome.
   - O histórico do git (commits antigos) ainda guarda o nome em arquivos e
     mensagens; só some recriando o repositório de novo.
 
