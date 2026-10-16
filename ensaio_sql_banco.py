@@ -7,6 +7,7 @@ Executa de verdade, num Postgres descartavel, os 4 scripts:
   erp_20_tira_o_nome_antigo_do_banco.sql
   erp_21_confere_o_que_sobrou.sql
   erp_22_arremata_o_que_sobrou.sql
+  seguranca_02_view_so_para_quem_tem_permissao.sql
 sobre um banco montado como o de producao ANTES da troca de nome (view com a
 coluna antiga, indice parcial unico, trava de origem, gatilho de auditoria,
 tabela de pouso, comentarios) e confere o resultado.
@@ -17,12 +18,14 @@ Precisa de um venv a parte com o Postgres embutido (nada vai para o sistema):
     pgvenv/Scripts/python -m pip install pgserver psycopg2-binary
     pgvenv/Scripts/python ensaio_sql_banco.py
 
-Ultima rodada: 16/10/2026, 68 checagens, todas ok. O banco do ensaio imita o de
+Ultima rodada: 16/10/2026, todas ok (o numero impresso no fim). O banco do ensaio imita o de
 producao ANTES da troca (view com a coluna antiga, indice parcial unico, trava
 de origem, gatilho de auditoria, tabela de pouso, comentarios).
 """
+import json
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pgserver
@@ -350,6 +353,225 @@ conf(estado()["log"] == log0, "e tambem nao mexe no registro de alteracoes")
 monta_banco(n_importados=8500)
 res, err = roda_arquivo("erp_20_tira_o_nome_antigo_do_banco.sql")
 conf(err is None and estado()["tabelas"][0] is False, "erp_20 com 8,5 mil importados tambem apaga a tabela de pouso", str(err))
+
+# ---------------------------------------------------------------- E
+print("\n  6. seguranca_02_view_so_para_quem_tem_permissao.sql")
+
+def uid(nome):
+    import hashlib
+    h = hashlib.md5(nome.encode()).hexdigest()
+    return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+USUARIOS = {   # nome: (papel, ativo, permissoes, o que deve ver na view)
+    "admin":      ("admin", True, {}, "tudo"),
+    "dono":       ("proprietario", True, {}, "tudo"),
+    "res_ver":    ("gestor", True, {"matriz_resultados": "visualizar"}, "tudo"),
+    "res_editar": ("gestor", True, {"matriz_resultados": "editar"}, "tudo"),
+    "fin_ver":    ("gestor", True, {"matriz_financeiro": "visualizar"}, "tudo"),
+    "pec_fin":    ("gestor", True, {"pec_financeiro": "visualizar"}, "pecuaria"),
+    "pec_res":    ("gestor", True, {"pec_resultados": "editar"}, "pecuaria"),
+    "vendas":     ("gestor", True, {"vendas": "visualizar"}, "pecuaria"),
+    "confina":    ("operador", True, {"confinamento": "visualizar"}, "pecuaria"),
+    "pasto":      ("operador", True, {"pasto": "editar"}, "pecuaria"),
+    "cria":       ("operador", True, {"cria": "visualizar"}, "pecuaria"),
+    "lotes":      ("operador", True, {"lotesGeral": "visualizar"}, "pecuaria"),
+    "manejo":     ("operador", True, {"manejo": "editar", "cadastro": "editar"}, "nada"),
+    "cana":       ("operador", True, {"cana_cadastros": "editar", "operacoes": "editar"}, "nada"),
+    "comb":       ("operador", True, {"combustivel_abastecimento": "editar"}, "nada"),
+    "painel":     ("gestor", True, {"matriz_painel_cana": "visualizar", "matriz_financiamentos": "editar"}, "nada"),
+    "sem_nada":   ("operador", True, {}, "nada"),
+    "pec_so_edita_outro": ("operador", True, {"pec_financeiro": "nenhum"}, "nada"),
+    "admin_inativo": ("admin", False, {}, "nada"),
+}
+
+def monta_banco_permissoes(n=3000, rateados=100):
+    con = nova_conexao(); cur = con.cursor()
+    cur.execute("drop schema if exists public cascade; drop schema if exists auth cascade; create schema public; create schema auth;")
+    cur.execute("""
+      do $$ begin
+        if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
+        if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
+        if not exists (select 1 from pg_roles where rolname='service_role') then create role service_role nologin bypassrls; end if;
+      end $$;
+      grant usage on schema public, auth to anon, authenticated, service_role;
+      alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+      create function auth.uid() returns uuid language sql stable as $$
+        select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+                        (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $$;
+      grant execute on function auth.uid() to anon, authenticated, service_role;
+    """)
+    cur.execute("""
+      create table talhoes_areas (id int primary key);
+      create table profiles (id uuid primary key, nome text, papel text not null default 'operador',
+                             permissoes jsonb not null default '{}'::jsonb, ativo boolean not null default true);
+      create function is_admin() returns boolean language sql security definer set search_path = public stable as $$
+        select exists(select 1 from profiles where id = auth.uid() and papel = 'admin' and ativo = true) $$;
+      create function acesso_total() returns boolean language sql security definer set search_path = public stable as $$
+        select exists(select 1 from profiles where id = auth.uid() and papel in ('admin', 'proprietario') and ativo = true) $$;
+      create function tem_permissao(modulo text, nivel text) returns boolean language sql security definer set search_path = public stable as $$
+        select case
+          when acesso_total() then true
+          when nivel = 'visualizar' then (select permissoes->>modulo in ('visualizar','editar') from profiles where id = auth.uid() and ativo = true)
+          else (select permissoes->>modulo = 'editar' from profiles where id = auth.uid() and ativo = true)
+        end $$;
+      create table lancamentos_financeiros (
+        id bigint generated always as identity primary key,
+        tipo text, atividade text, fazenda_id int, cultura_id int, valor numeric(14,2),
+        centro_custo_id int, descricao text, fornecedor text, data date, mes text,
+        erp_id text, contrato text, observacao text, talhao_id int, lote_id int,
+        areas text[], arrobas numeric, abate_id int, criado_por text, quantidade numeric,
+        unidade text, safra_id int, cnpj_nota text, vencimento date, ano_safra int);
+      create table lancamento_rateios (
+        id bigint generated always as identity primary key,
+        lancamento_id bigint references lancamentos_financeiros(id),
+        atividade text, fazenda_id int, cultura_id int, valor numeric(14,2));
+      alter table lancamentos_financeiros enable row level security;
+      create policy "ve lancamentos" on lancamentos_financeiros for select using (
+        is_admin() or tem_permissao('matriz_financeiro','visualizar')
+        or (atividade = 'pecuaria' and (tem_permissao('pec_financeiro','visualizar') or tem_permissao('pec_resultados','visualizar') or tem_permissao('vendas','visualizar'))));
+    """)
+    for nome, (papel, ativo, perm, _) in USUARIOS.items():
+        cur.execute("insert into profiles (id, nome, papel, permissoes, ativo) values (%s, %s, %s, %s, %s)",
+                    (uid(nome), nome, papel, json.dumps(perm), ativo))
+    cur.execute(f"""
+      insert into lancamentos_financeiros (tipo, atividade, valor, descricao, fornecedor, mes, observacao, erp_id, cnpj_nota, ano_safra)
+      select 'despesa', (array['cana','graos','pecuaria','geral'])[1 + g % 4], 10 + g, 'Lancamento ' || g,
+             'FORNECEDOR ' || (g % 30), '2026-0' || (1 + g % 9), 'obs ' || g, g::text, '1234567800' || (g % 100), 2025
+        from generate_series(1, {n}) g;
+      insert into lancamento_rateios (lancamento_id, atividade, valor)
+        select l.id, a, (l.valor / 3)::numeric(14,2)
+          from (select id, valor from lancamentos_financeiros where atividade = 'geral' order by id limit {rateados}) l
+          cross join unnest(array['cana','graos','pecuaria']) a;
+    """)
+    con.close()
+    # o que o seguranca_01 ja fechou em producao; a view nasce do script de verdade
+    res, err = roda_arquivo("lancamentos_rateados_03_ano_safra.sql")
+    assert err is None, err
+    res, err = roda_arquivo("seguranca_01_fecha_view_para_anonimo.sql")
+    assert err is None, err
+
+def como(nome_ou_uid, role="authenticated"):
+    """conexao que se comporta como o PostgREST: papel do banco + dados do JWT, numa transacao"""
+    con = psycopg2.connect(uri); con.autocommit = False
+    cur = con.cursor()
+    cur.execute(f"set local role {role}")
+    u = uid(nome_ou_uid) if nome_ou_uid in USUARIOS else nome_ou_uid
+    cur.execute("select set_config('request.jwt.claims', %s, true), set_config('request.jwt.claim.sub', %s, true)",
+                (json.dumps({"sub": u, "role": role}), u))
+    return con, cur
+
+def conta(nome, role="authenticated", where=""):
+    con, cur = como(nome, role)
+    try:
+        cur.execute(f"select count(*), count(*) filter (where atividade = 'pecuaria'), count(distinct atividade) from lancamentos_rateados {where}")
+        return cur.fetchone()
+    except psycopg2.errors.InsufficientPrivilege:
+        return "negado"
+    finally:
+        con.rollback(); con.close()
+
+monta_banco_permissoes()
+con = nova_conexao(); cur = con.cursor()
+total = escalar(cur, "select count(*) from lancamentos_rateados")
+pecuaria = escalar(cur, "select count(*) from lancamentos_rateados where atividade = 'pecuaria'")
+cur.execute("select column_name, ordinal_position, data_type from information_schema.columns where table_name='lancamentos_rateados' order by ordinal_position")
+colunas_antes = cur.fetchall()
+con.close()
+conf(total == 3000 - 100 + 300 and pecuaria == 750 + 100, f"base do ensaio: {total} linhas na view, {pecuaria} de pecuaria", f"{total} {pecuaria}")
+
+# o problema, reproduzido: antes da regra, quem nao tem permissao nenhuma le tudo
+conf(conta("sem_nada")[0] == total, "antes: um usuario sem permissao nenhuma le a view inteira (reproduz o furo)", str(conta("sem_nada")))
+
+res, err = roda_arquivo("seguranca_02_view_so_para_quem_tem_permissao.sql")
+conf(err is None, "o script roda inteiro sem erro", str(err))
+conf(res is not None and len(res) == len(USUARIOS), f"termina com a lista de quem ve o que ({len(USUARIOS)} pessoas)", str(len(res or [])))
+lista = {n: v for n, _, v in (res or [])}
+esperado_lista = {n: ({"tudo": "tudo", "pecuaria": "so pecuaria", "nada": "nada"}[o] if USUARIOS[n][1] else "(inativo)") for n, (_, _, _, o) in USUARIOS.items()}
+conf(lista == esperado_lista, "a lista final bate com a regra para cada perfil", str({k: (lista.get(k), v) for k, v in esperado_lista.items() if lista.get(k) != v}))
+
+con = nova_conexao(); cur = con.cursor()
+cur.execute("select column_name, ordinal_position, data_type from information_schema.columns where table_name='lancamentos_rateados' order by ordinal_position")
+conf(cur.fetchall() == colunas_antes, "a view manteve as mesmas colunas, na mesma ordem e com os mesmos tipos")
+con.close()
+
+# cada perfil enxerga exatamente o que a regra manda, pela mesma porta da API (papel authenticated + JWT)
+for nome, (papel, ativo, perm, ve) in USUARIOS.items():
+    r = conta(nome)
+    if not ativo or ve == "nada":
+        ok = r[0] == 0
+    elif ve == "pecuaria":
+        ok = r[0] == pecuaria and r[2] == 1
+    else:
+        ok = r[0] == total and r[2] == 4
+    conf(ok, f"{nome:20s} -> {ve:8s} (viu {r[0]} linhas, {r[2]} atividades)", str(r))
+
+conf(conta("00000000-0000-0000-0000-00000000dead")[0] == 0, "JWT valido de quem nao tem perfil nenhum: nao ve nada")
+conf(conta("sem_nada", where="where atividade = 'pecuaria'")[0] == 0, "e filtrar por atividade no pedido nao muda nada para quem nao tem permissao")
+pec = conta("pec_fin", where="where atividade <> 'pecuaria'")
+conf(pec[0] == 0, "quem so tem Pecuaria pedindo cana/graos/geral na API: nada", str(pec))
+conf(conta("anon", role="anon") == "negado", "o anon continua recebendo 'permission denied'")
+conf(conta("sem_nada", role="service_role")[0] == total, "service_role (automacao do banco) ve tudo")
+con = nova_conexao(); cur = con.cursor()
+conf(escalar(cur, "select count(*) from lancamentos_rateados") == total, "o editor do Supabase (postgres) ve tudo: os scripts de conferencia continuam valendo")
+con.close()
+
+# a pecuaria enxerga a fatia rateada de um lancamento 'geral' (a tabela sozinha esconderia), sem ver a base 'geral'
+con, cur = como("pec_fin")
+cur.execute("select count(*) from lancamentos_rateados where atividade = 'pecuaria' and rateado")
+fatias = cur.fetchone()[0]
+cur.execute("select count(*) from lancamentos_financeiros where atividade = 'pecuaria'")
+na_tabela = cur.fetchone()[0]
+cur.execute("select count(*) from lancamentos_financeiros where atividade = 'geral'")
+geral_na_tabela = cur.fetchone()[0]
+con.rollback(); con.close()
+conf(fatias == 100, "a Pecuaria continua vendo a fatia rateada dela (100 lancamentos 'geral' repartidos)", str(fatias))
+conf(na_tabela == 750 and geral_na_tabela == 0, "e a tabela segue com a regra de antes (so atividade pecuaria, nenhum 'geral')", f"{na_tabela} {geral_na_tabela}")
+
+# nao mexeu na tabela nem nas funcoes de permissao
+con = nova_conexao(); cur = con.cursor()
+conf(escalar(cur, "select count(*) from pg_policies where tablename = 'lancamentos_financeiros'") == 1, "a politica da tabela lancamentos_financeiros nao foi tocada")
+conf(escalar(cur, "select count(*) from lancamentos_financeiros") == 3000, "e nenhuma linha foi alterada")
+# desempenho: a leitura de uma pagina como a do app (1000 linhas, ordenada) para quem ve tudo e para a pecuaria
+con.close()
+for quem in ("res_ver", "pec_fin"):
+    con, cur = como(quem)
+    t0 = time.time()
+    for _ in range(5):
+        cur.execute("select * from lancamentos_rateados where atividade = 'pecuaria' order by lancamento_id, rateio_id limit 1000 offset 0")
+        cur.fetchall()
+    dt = (time.time() - t0) / 5
+    con.rollback(); con.close()
+    conf(dt < 0.5, f"{quem}: pagina de 1000 linhas ordenada em {dt*1000:.0f} ms (limite do ensaio 500 ms)", f"{dt:.3f}s")
+con, cur = como("res_ver")
+cur.execute("explain select * from lancamentos_rateados where atividade = 'cana'")
+plano = "\n".join(r[0] for r in cur.fetchall())
+con.rollback(); con.close()
+conf("InitPlan" in plano, "a pergunta de permissao roda uma vez por consulta (InitPlan), nao uma vez por linha")
+
+# idempotencia e quem recria a view
+con = nova_conexao(); cur = con.cursor()
+conf(escalar(cur, "select public.aplicar_regra_na_view_lancamentos_rateados()") == "A view ja tem a regra de permissao.", "aplicar de novo diz que ja esta aplicada")
+nesting = escalar(cur, "select (length(pg_get_viewdef('lancamentos_rateados'::regclass)) - length(replace(pg_get_viewdef('lancamentos_rateados'::regclass), 've_todo_o_financeiro', ''))) / length('ve_todo_o_financeiro')")
+# na definicao impressa o nome aparece duas vezes por aplicacao (a chamada e o apelido da subconsulta)
+conf(nesting == 2, "e a regra aparece uma vez so na definicao (nao empilha)", str(nesting))
+con.close()
+res, err = roda_arquivo("seguranca_02_view_so_para_quem_tem_permissao.sql")
+conf(err is None and len(res or []) == len(USUARIOS), "rodar o script de novo nao da erro")
+res, err = roda_arquivo("lancamentos_rateados_03_ano_safra.sql")
+conf(err is None, "o script que RECRIA a view roda sem erro com a regra instalada", str(err))
+r = conta("sem_nada")
+conf(r[0] == 0 and conta("res_ver")[0] == total and conta("pec_fin")[0] == pecuaria, "e depois de recriada a regra continua valendo (o script chama a funcao no fim)", f"{r} {conta('res_ver')} {conta('pec_fin')}")
+conf(conta("anon", role="anon") == "negado", "e o anon continua negado")
+
+# a funcao aplicadora nao e chamavel por quem usa a API
+for quem, role in (("pec_fin", "authenticated"), ("anon", "anon")):
+    con, cur = como(quem, role)
+    try:
+        cur.execute("select public.aplicar_regra_na_view_lancamentos_rateados()"); chamou = True
+    except psycopg2.errors.InsufficientPrivilege:
+        chamou = False
+    con.rollback(); con.close()
+    conf(not chamou, f"{role} nao consegue chamar a funcao que aplica a regra")
 
 print(f"\n  {passes} passaram, {falhas} falharam")
 srv.cleanup()

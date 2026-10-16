@@ -60,7 +60,8 @@ select l.id, null, l.tipo,
  where not exists (select 1 from lancamento_rateios r where r.lancamento_id = l.id);
 
 -- A view passa por cima do RLS: sem isto, qualquer pessoa com a chave publica do
--- site le o Financeiro inteiro por ela (ver seguranca_01_fecha_view_para_anonimo.sql).
+-- site le o Financeiro inteiro por ela (ver seguranca_01_fecha_view_para_anonimo.sql)
+-- e todo usuario logado le tudo, mesmo sem permissao (seguranca_02_...sql).
 do $trava_view$
 begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
@@ -69,6 +70,10 @@ begin
   revoke all on lancamentos_rateados from public;
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
     grant select on lancamentos_rateados to authenticated;
+  end if;
+  -- a regra de permissao, se o seguranca_02 ja foi rodado neste banco
+  if to_regprocedure('public.aplicar_regra_na_view_lancamentos_rateados()') is not null then
+    perform public.aplicar_regra_na_view_lancamentos_rateados();
   end if;
 end
 $trava_view$;

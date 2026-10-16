@@ -535,9 +535,10 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
 e view um estranho consegue ler; precisa de internet) e `ensaio_sql_banco.py`
-(roda os SQL de segurança e de troca de nome num Postgres descartável, 68
-checagens; precisa de um venv com `pgserver` e `psycopg2-binary`, instruções no
-topo do arquivo).
+(roda os SQL de segurança e de troca de nome num Postgres descartável, 114
+checagens, entre elas 19 perfis de usuário lendo a view como o PostgREST faz,
+com papel `authenticated` e JWT; precisa de um venv com `pgserver` e
+`psycopg2-binary`, instruções no topo do arquivo).
 
 Nada ainda cobre `AECombustivel.html`/`Adubacao.html`. **Confirmado em
 30/08/2026**: contagem batida arquivo por arquivo (a lista antiga listava só
@@ -569,10 +570,33 @@ filtra outros códigos de erro de rede, mas não esse).
   usa e em tudo que algum `.sql` do repositório cria (inclusive cópias de
   segurança, que o editor do Supabase cria abertas), sem baixar nada, e sai com
   1 se algo estiver aberto. Em 16/10/2026: 89 objetos, nenhum aberto.
-  - Em aberto: quem está logado lê a view inteira pela API mesmo sem permissão
-    naquela atividade (a tela filtra, o banco não; por construção da view, não
-    testado com um usuário de verdade). A solução certa é `security_invoker` na
-    view, mas antes é preciso conferir as políticas de `lancamento_rateios`.
+  - **Quem está logado lê o quê na view**
+    (`seguranca_02_view_so_para_quem_tem_permissao.sql`, entregue em
+    16/10/2026): sem isso todo usuário logado lia o Financeiro inteiro pela
+    API, mesmo sem permissão (a tela escondia, o banco não). A view agora filtra
+    pela permissão de quem consulta (`auth.uid()` via
+    `tem_permissao`): **tudo** para admin/proprietário, `matriz_resultados` e
+    `matriz_financeiro`; **só linhas de atividade `pecuaria`** (inclusive a fatia
+    rateada de um lançamento "geral") para `pec_financeiro`, `pec_resultados`,
+    `vendas`, `confinamento`, `pasto`, `cria`, `lotesGeral` (as telas de Pesagem
+    mostram o Custo/@, que soma o custo fixo vindo desta view); **nada** para o
+    resto. A regra é a das telas de hoje (quem usa não perde nada).
+    - Por que não `security_invoker`: a política da tabela só deixa a Pecuária ver
+      linhas de atividade `pecuaria`, mas a fatia de um lançamento "geral" que foi
+      rateada para a Pecuária (que a Pecuária precisa ver) só existe na view.
+      Com `security_invoker` a Pecuária perderia essa fatia e o custo dela
+      sairia menor, em silêncio.
+    - A regra mora em `ve_todo_o_financeiro()` e `ve_financeiro_da_pecuaria()`:
+      tela nova que leia a view para outro perfil entra ali (um `or` a mais).
+      `postgres` e `service_role` passam (os scripts de conferência rodados no
+      editor continuam vendo tudo, senão voltariam vazios sem avisar).
+    - `aplicar_regra_na_view_lancamentos_rateados()` embrulha a definição que a
+      view TEM no banco (`pg_get_viewdef`, sem redigitar coluna). Os scripts que
+      recriam a view a chamam no fim, então recriar não desfaz a regra.
+    - Se alguém perder uma tela que devia ter: dê a permissão certa em Usuários
+      (Resultados ou Financeiro do Matriz, ou o módulo da Pecuária) ou acrescente
+      o perfil na função. O script termina com a lista do que cada pessoa passa
+      a ver.
   - `lancamentos_financeiros` consultada pela chave pública responde 500
     (estourou os 3 s): a política avalia linha por linha. Não vaza, mas é uma
     consulta cara que qualquer um pode disparar.
