@@ -8,6 +8,7 @@ Executa de verdade, num Postgres descartavel, os 4 scripts:
   erp_21_confere_o_que_sobrou.sql
   erp_22_arremata_o_que_sobrou.sql
   seguranca_02_view_so_para_quem_tem_permissao.sql
+  seguranca_02_confere_como_cada_um_ve.sql
 sobre um banco montado como o de producao ANTES da troca de nome (view com a
 coluna antiga, indice parcial unico, trava de origem, gatilho de auditoria,
 tabela de pouso, comentarios) e confere o resultado.
@@ -547,6 +548,22 @@ cur.execute("explain select * from lancamentos_rateados where atividade = 'cana'
 plano = "\n".join(r[0] for r in cur.fetchall())
 con.rollback(); con.close()
 conf("InitPlan" in plano, "a pergunta de permissao roda uma vez por consulta (InitPlan), nao uma vez por linha")
+
+# a conferencia com dados reais: cada pessoa ativa assume o papel authenticated com o JWT dela
+res, err = roda_arquivo("seguranca_02_confere_como_cada_um_ve.sql")
+conf(err is None, "seguranca_02_confere_como_cada_um_ve.sql roda sem erro", str(err))
+linhas_conf = res or []
+ativos = [n for n, v in USUARIOS.items() if v[1]]
+conf(len(linhas_conf) == 1 + len(ativos), f"lista o total da view e as {len(ativos)} pessoas ativas", str(len(linhas_conf)))
+if linhas_conf:
+    nome0, papel0, deve0, vistas0, vpec0, outras0, sit0 = linhas_conf[0]
+    conf(vistas0 == total and vpec0 == pecuaria, "primeira linha: o total da view e o de pecuaria", str(linhas_conf[0]))
+    por_nome = {l[0]: l for l in linhas_conf[1:]}
+    conf(all(l[6] == "ok" for l in linhas_conf[1:]), "todas as pessoas: situacao ok (o banco fez o que a regra manda)",
+         str([l for l in linhas_conf[1:] if l[6] != "ok"]))
+    conf(por_nome["pec_fin"][3] == pecuaria and por_nome["pec_fin"][5] == 0, "e a Pecuaria so enxergou linhas de pecuaria", str(por_nome["pec_fin"]))
+    conf(por_nome["sem_nada"][3] == 0, "e quem nao tem permissao enxergou zero")
+conf("admin_inativo" not in {l[0] for l in linhas_conf}, "pessoa inativa nao entra na lista")
 
 # idempotencia e quem recria a view
 con = nova_conexao(); cur = con.cursor()

@@ -535,7 +535,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
 e view um estranho consegue ler; precisa de internet) e `ensaio_sql_banco.py`
-(roda os SQL de segurança e de troca de nome num Postgres descartável, 114
+(roda os SQL de segurança e de troca de nome num Postgres descartável, 121
 checagens, entre elas 19 perfis de usuário lendo a view como o PostgREST faz,
 com papel `authenticated` e JWT; precisa de um venv com `pgserver` e
 `psycopg2-binary`, instruções no topo do arquivo).
@@ -571,7 +571,7 @@ filtra outros códigos de erro de rede, mas não esse).
   segurança, que o editor do Supabase cria abertas), sem baixar nada, e sai com
   1 se algo estiver aberto. Em 16/10/2026: 89 objetos, nenhum aberto.
   - **Quem está logado lê o quê na view**
-    (`seguranca_02_view_so_para_quem_tem_permissao.sql`, entregue em
+    (`seguranca_02_view_so_para_quem_tem_permissao.sql`, rodado pelo Eduardo em
     16/10/2026): sem isso todo usuário logado lia o Financeiro inteiro pela
     API, mesmo sem permissão (a tela escondia, o banco não). A view agora filtra
     pela permissão de quem consulta (`auth.uid()` via
@@ -596,7 +596,14 @@ filtra outros códigos de erro de rede, mas não esse).
     - Se alguém perder uma tela que devia ter: dê a permissão certa em Usuários
       (Resultados ou Financeiro do Matriz, ou o módulo da Pecuária) ou acrescente
       o perfil na função. O script termina com a lista do que cada pessoa passa
-      a ver.
+      a ver. Em 16/10/2026, 14 pessoas ativas: 6 veem tudo (3 proprietários, o
+      admin e 2 colaboradores com Resultados/Financeiro), 5 só a Pecuária e 3
+      operadores nada, e nenhuma delas usa tela que dependa da view (conferido
+      no código: toda tela que lê a view é protegida por uma dessas permissões).
+    - `seguranca_02_confere_como_cada_um_ve.sql` prova isso com os dados reais:
+      assume o papel e o código (JWT) de cada pessoa ativa, conta as linhas da view
+      que ela enxerga e escreve ok/DIFERENTE ao lado do que a regra manda. Rode
+      depois de mexer nas funções ou nas permissões de alguém.
   - `lancamentos_financeiros` consultada pela chave pública responde 500
     (estourou os 3 s): a política avalia linha por linha. Não vaza, mas é uma
     consulta cara que qualquer um pode disparar.
