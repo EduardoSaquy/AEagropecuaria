@@ -569,7 +569,9 @@ filtra outros códigos de erro de rede, mas não esse).
   conta as linhas que a chave pública enxerga em cada tabela/view que o código
   usa e em tudo que algum `.sql` do repositório cria (inclusive cópias de
   segurança, que o editor do Supabase cria abertas), sem baixar nada, e sai com
-  1 se algo estiver aberto. Em 16/10/2026: 89 objetos, nenhum aberto.
+  1 se algo estiver aberto. Em 16/10/2026: 89 nomes testados (75 existem), nenhum
+  aberto; depois do `seguranca_03` todos respondem "acesso negado" (antes, as
+  tabelas com RLS respondiam vazio).
   - **Quem está logado lê o quê na view**
     (`seguranca_02_view_so_para_quem_tem_permissao.sql`, rodado pelo Eduardo em
     16/10/2026): sem isso todo usuário logado lia o Financeiro inteiro pela
@@ -607,8 +609,10 @@ filtra outros códigos de erro de rede, mas não esse).
       que ela enxerga e escreve ok/DIFERENTE ao lado do que a regra manda. Rode
       depois de mexer nas funções ou nas permissões de alguém.
   - **Anon sem acesso a tabela nenhuma**
-    (`seguranca_03_anon_sem_acesso_a_tabela.sql`, entregue em 16/10/2026, ainda
-    não rodado): nenhum app lê dado como anon (todos exigem login antes, e o
+    (`seguranca_03_anon_sem_acesso_a_tabela.sql`, rodado pelo Eduardo em
+    16/10/2026: 0 objetos abertos ao anon, e a conferência de fora mostra as 75
+    tabelas e views que existem respondendo "permissão negada"): nenhum app lê
+    dado como anon (todos exigem login antes, e o
     login passa pelo serviço de autenticação, não pelas tabelas). O script tira
     todo privilégio do anon em tabelas, views e sequências do schema `public` e
     muda o padrão para o que o editor (postgres) criar daqui para frente, para o
