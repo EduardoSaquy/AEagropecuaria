@@ -535,7 +535,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
 e view um estranho consegue ler; precisa de internet) e `ensaio_sql_banco.py`
-(roda os SQL de segurança e de troca de nome num Postgres descartável, 121
+(roda os SQL de segurança e de troca de nome num Postgres descartável, 141
 checagens, entre elas 19 perfis de usuário lendo a view como o PostgREST faz,
 com papel `authenticated` e JWT; precisa de um venv com `pgserver` e
 `psycopg2-binary`, instruções no topo do arquivo).
@@ -600,13 +600,25 @@ filtra outros códigos de erro de rede, mas não esse).
       admin e 2 colaboradores com Resultados/Financeiro), 5 só a Pecuária e 3
       operadores nada, e nenhuma delas usa tela que dependa da view (conferido
       no código: toda tela que lê a view é protegida por uma dessas permissões).
+      Conferido também com os dados reais (30.043 linhas na view, 11.284 de
+      Pecuária): cada uma das 14 viu exatamente o que a regra manda.
     - `seguranca_02_confere_como_cada_um_ve.sql` prova isso com os dados reais:
       assume o papel e o código (JWT) de cada pessoa ativa, conta as linhas da view
       que ela enxerga e escreve ok/DIFERENTE ao lado do que a regra manda. Rode
       depois de mexer nas funções ou nas permissões de alguém.
-  - `lancamentos_financeiros` consultada pela chave pública responde 500
-    (estourou os 3 s): a política avalia linha por linha. Não vaza, mas é uma
-    consulta cara que qualquer um pode disparar.
+  - **Anon sem acesso a tabela nenhuma**
+    (`seguranca_03_anon_sem_acesso_a_tabela.sql`, entregue em 16/10/2026, ainda
+    não rodado): nenhum app lê dado como anon (todos exigem login antes, e o
+    login passa pelo serviço de autenticação, não pelas tabelas). O script tira
+    todo privilégio do anon em tabelas, views e sequências do schema `public` e
+    muda o padrão para o que o editor (postgres) criar daqui para frente, para o
+    próximo esquecimento de RLS ou de revoke não abrir nada. Também acaba com a
+    consulta anônima cara: `lancamentos_financeiros` pela chave pública
+    respondia 500 (estourava os 3 s porque a política era avaliada linha por
+    linha; não vazava, mas qualquer um podia disparar). Funções não mudam (as de
+    permissão precisam continuar chamáveis). Depois dele, tabela ou view nova que
+    o app precise ler só precisa do GRANT para `authenticated` (o padrão do
+    Supabase já dá).
 - `entidades.documento` (AEMatriz.html, pode ter CNPJ/CPF de fornecedor) —
   achado na varredura de 29/08/2026, checado e **resolvido**: RLS ligado,
   as 4 policies (select/insert/update/delete) exigem `is_dono()` ou

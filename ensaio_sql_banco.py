@@ -9,6 +9,7 @@ Executa de verdade, num Postgres descartavel, os 4 scripts:
   erp_22_arremata_o_que_sobrou.sql
   seguranca_02_view_so_para_quem_tem_permissao.sql
   seguranca_02_confere_como_cada_um_ve.sql
+  seguranca_03_anon_sem_acesso_a_tabela.sql
 sobre um banco montado como o de producao ANTES da troca de nome (view com a
 coluna antiga, indice parcial unico, trava de origem, gatilho de auditoria,
 tabela de pouso, comentarios) e confere o resultado.
@@ -456,6 +457,11 @@ def como(nome_ou_uid, role="authenticated"):
     con = psycopg2.connect(uri); con.autocommit = False
     cur = con.cursor()
     cur.execute(f"set local role {role}")
+    if role == "anon":
+        # a chave publica nao tem 'sub': auth.uid() dela e nulo
+        cur.execute("select set_config('request.jwt.claims', %s, true), set_config('request.jwt.claim.sub', '', true)",
+                    (json.dumps({"role": "anon"}),))
+        return con, cur
     u = uid(nome_ou_uid) if nome_ou_uid in USUARIOS else nome_ou_uid
     cur.execute("select set_config('request.jwt.claims', %s, true), set_config('request.jwt.claim.sub', %s, true)",
                 (json.dumps({"sub": u, "role": role}), u))
@@ -589,6 +595,71 @@ for quem, role in (("pec_fin", "authenticated"), ("anon", "anon")):
         chamou = False
     con.rollback(); con.close()
     conf(not chamou, f"{role} nao consegue chamar a funcao que aplica a regra")
+
+# ---------------------------------------------------------------- F
+print("\n  7. seguranca_03_anon_sem_acesso_a_tabela.sql")
+monta_banco_permissoes()
+res, err = roda_arquivo("seguranca_02_view_so_para_quem_tem_permissao.sql")
+assert err is None, err
+con = nova_conexao(); cur = con.cursor()
+cur.execute("create sequence uma_sequencia; create table uma_tabela_do_editor (id int)")
+con.close()
+con, cur = como("anon", "anon")
+cur.execute("select count(*) from lancamentos_financeiros")
+antes_anon = cur.fetchone()[0]
+con.rollback(); con.close()
+conf(antes_anon == 0, "antes: o anon pergunta e recebe vazio pelo RLS (o banco avalia a politica; em producao estourava 3 s)")
+con = nova_conexao(); cur = con.cursor()
+conf(escalar(cur, "select has_table_privilege('anon', 'uma_tabela_do_editor', 'select')") is True, "antes: tabela criada pelo editor nasce aberta ao anon (reproduz o buraco)")
+con.close()
+
+res, err = roda_arquivo("seguranca_03_anon_sem_acesso_a_tabela.sql")
+conf(err is None, "o script roda inteiro sem erro", str(err))
+conf(res == [(0, "(nenhum)", True)], "resultado: 0 objetos abertos ao anon e quem esta logado continua lendo", str(res))
+
+for objeto in ("lancamentos_financeiros", "lancamento_rateios", "profiles", "lancamentos_rateados", "uma_tabela_do_editor"):
+    con, cur = como("anon", "anon")
+    try:
+        cur.execute(f"select 1 from {objeto} limit 1"); negado = False
+    except psycopg2.errors.InsufficientPrivilege:
+        negado = True
+    con.rollback(); con.close()
+    conf(negado, f"o anon recebe 'permission denied' em {objeto} (na hora, sem avaliar politica)")
+con = nova_conexao(); cur = con.cursor()
+conf(escalar(cur, "select has_sequence_privilege('anon', 'uma_sequencia', 'usage')") is False, "e na sequencia")
+cur.execute("create table tabela_nova_depois (id int); create view view_nova_depois as select 1 as x")
+conf(escalar(cur, "select has_table_privilege('anon', 'tabela_nova_depois', 'select') or has_table_privilege('anon', 'view_nova_depois', 'select')") is False, "tabela e view criadas DEPOIS do script ja nascem fechadas ao anon")
+conf(escalar(cur, "select has_table_privilege('authenticated', 'tabela_nova_depois', 'select')") is True, "e abertas a quem esta logado, como antes")
+con.close()
+
+# quem esta logado nao mudou
+conf(conta("res_ver")[0] == total and conta("pec_fin")[0] == pecuaria and conta("sem_nada")[0] == 0, "logado: a regra da view continua igual (tudo / so pecuaria / nada)")
+con, cur = como("fin_ver")
+cur.execute("select count(*) from lancamentos_financeiros")
+conf(cur.fetchone()[0] == 3000, "logado com Financeiro continua lendo a tabela de lancamentos (a politica da tabela e a de antes)")
+con.rollback(); con.close()
+# tabela com coluna serial (usa sequencia propria): quem esta logado continua inserindo, o anon nao
+con = nova_conexao(); cur = con.cursor()
+cur.execute("create table com_serial (id serial primary key, x int); grant all on all sequences in schema public to authenticated, service_role, anon")
+con.close()
+res3, err3 = roda_arquivo("seguranca_03_anon_sem_acesso_a_tabela.sql")
+conf(err3 is None and res3 == [(0, "(nenhum)", True)], "com uma tabela serial criada antes: o script roda e fecha tambem a sequencia dela", str(err3))
+con, cur = como("res_ver")
+cur.execute("insert into com_serial (x) values (1) returning id")
+conf(cur.fetchone()[0] == 1, "quem esta logado continua inserindo em tabela com sequencia propria")
+con.rollback(); con.close()
+con, cur = como("anon", "anon")
+try:
+    cur.execute("insert into com_serial (x) values (1)"); anon_inseriu = True
+except psycopg2.errors.InsufficientPrivilege:
+    anon_inseriu = False
+con.rollback(); con.close()
+conf(not anon_inseriu, "e o anon nao consegue inserir (permission denied)")
+conf(conta("anon", "anon") == "negado", "o anon continua negado na view")
+conf(conta("sem_nada", "service_role")[0] == total, "service_role continua vendo tudo")
+
+res2, err2 = roda_arquivo("seguranca_03_anon_sem_acesso_a_tabela.sql")
+conf(err2 is None and res2 == [(0, "(nenhum)", True)], "rodar de novo nao da erro nem muda o resultado", str(err2))
 
 print(f"\n  {passes} passaram, {falhas} falharam")
 srv.cleanup()
