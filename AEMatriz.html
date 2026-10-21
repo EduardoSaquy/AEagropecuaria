@@ -1154,6 +1154,7 @@ const state = {
   abaContas: 'pagar',
   filtroContas: 'abertos',
   searchContas: '',
+  contasSelecionadas: [], // ids marcados para baixar de uma vez
   erroTitulo: '',
   erroLancamento: '',
   searchDespesas: '',
@@ -5049,6 +5050,23 @@ function nomeContaBancaria(id){
 function rateiosDoTitulo(id){ return state.rateios.filter(r=>r.tituloId===id); }
 function baixasDoTitulo(id){ return state.baixas.filter(b=>b.tituloId===id); }
 function saldoDoTitulo(t){ return Math.max(0, Number(t.valor||0) - Number(t.valorBaixado||0)); }
+// Pode entrar na baixa (sozinha ou em lote): tem saldo, nao esta cancelado
+// e tem rateio (o banco recusa baixa de titulo sem rateio).
+function tituloBaixavel(t){ return saldoDoTitulo(t)>0 && !t.cancelado && rateiosDoTitulo(t.id).length>0; }
+function centavos(v){ return Math.round(Number(v||0)*100); }
+
+/* CONTA REPETIDA (pedido do Eduardo em 21/10/2026: "quando lancar contas
+ * duas vezes iguais nao permitir"). Igual = mesmo tipo, mesmo fornecedor,
+ * mesmo valor e mesmo vencimento, em titulo nao cancelado. A descricao
+ * fica de fora de proposito: a mesma conta lancada duas vezes costuma vir
+ * escrita de um jeito diferente em cada vez. Pago ou em aberto tanto faz:
+ * lancar de novo uma conta ja paga duplicaria a despesa na baixa. */
+function tituloRepetido(tipo, entidadeId, valor, vencimento, ignorarId){
+  if(!entidadeId || !vencimento) return null;
+  return state.titulos.find(t=>t.id!==ignorarId && !t.cancelado && t.tipo===tipo
+    && t.entidadeId===entidadeId && t.vencimento===vencimento
+    && centavos(t.valor)===centavos(valor)) || null;
+}
 
 /* Vencido depende do dia de hoje, entao nao fica guardado no banco — e
  * calculado aqui. hojeStr() e local; toISOString devolveria o dia seguinte
@@ -5125,6 +5143,12 @@ function PageContas(){
 
   const lista = titulosFiltrados();
   const rotulo = tipo==='pagar' ? 'conta a pagar' : 'conta a receber';
+  // Selecao para baixar de uma vez: so conta o que esta na lista e pode
+  // ser baixado (trocar o filtro esconde, nao baixa o que nao se ve).
+  const podeSelecionar = podeEditarContas();
+  const baixaveisDaLista = lista.filter(tituloBaixavel);
+  const selecionados = baixaveisDaLista.filter(t=>state.contasSelecionadas.includes(t.id));
+  const todosMarcados = baixaveisDaLista.length>0 && selecionados.length===baixaveisDaLista.length;
   const filtros = [
     ['abertos','Em aberto'], ['vencidos',`Vencidos (${vencidos.length})`],
     ['hoje','Vence hoje'], ['previsao','Previsão'], ['pagos','Pagos'], ['todos','Todos'],
@@ -5167,10 +5191,18 @@ function PageContas(){
     <input type="text" placeholder="Buscar por fornecedor, descrição, centro de custo..." value="${esc(state.searchContas)}" data-search-contas="1" style="max-width:340px;" autocomplete="off"/>
   </div>
 
+  ${podeSelecionar && selecionados.length>0 ? `
+  <div class="card card-pad" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+    <strong>${selecionados.length} ${selecionados.length===1?'conta selecionada':'contas selecionadas'} · R$ ${fmt(selecionados.reduce((a,t)=>a+saldoDoTitulo(t),0))}</strong>
+    <button class="btn btn-primary btn-sm" data-baixar-selecionados="1">${tipo==='pagar'?'Baixar selecionadas':'Receber selecionadas'}</button>
+    <button class="btn-ghost btn-sm" data-limpar-selecao="1">Limpar seleção</button>
+  </div>` : ''}
+
   <div class="card" style="overflow-x:auto;">
     ${lista.length===0 ? Empty('Nenhum título aqui', podeEditarContas()?'Use o botão acima para lançar. O filtro também pode estar escondendo linhas.':'O filtro pode estar escondendo linhas.') : `
     <table>
       <thead><tr>
+        ${podeSelecionar ? `<th style="width:28px;">${baixaveisDaLista.length>0 ? `<input type="checkbox" data-selecionar-todos="1" title="Selecionar todas as contas em aberto da lista" ${todosMarcados?'checked':''}/>` : ''}</th>` : ''}
         <th>Vencimento</th><th>${tipo==='pagar'?'Fornecedor':'Cliente'}</th><th>Descrição</th>
         <th>Onde pesa</th><th>Valor</th><th>Saldo</th><th>Situação</th><th></th>
       </tr></thead>
@@ -5180,6 +5212,7 @@ function PageContas(){
           const saldo = saldoDoTitulo(t);
           return `
           <tr>
+            ${podeSelecionar ? `<td>${tituloBaixavel(t) ? `<input type="checkbox" data-selecionar-titulo="${t.id}" ${state.contasSelecionadas.includes(t.id)?'checked':''}/>` : ''}</td>` : ''}
             <td class="mono">${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}</td>
             <td>${esc(nomeEntidade(t.entidadeId))}</td>
             <td><strong>${esc(t.descricao)}</strong>
@@ -5200,7 +5233,7 @@ function PageContas(){
           </tr>`;
         }).join('')}
         <tr>
-          <td colspan="4" style="text-align:right; font-weight:600;">Total listado</td>
+          <td colspan="${podeSelecionar?5:4}" style="text-align:right; font-weight:600;">Total listado</td>
           <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+Number(t.valor||0),0))}</td>
           <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td>
           <td colspan="2"></td>
@@ -5553,6 +5586,49 @@ function ModalBaixa(){
   </div>`;
 }
 
+// Baixa de varias contas de uma vez: cada uma quita o saldo inteiro (baixa
+// parcial continua sendo uma a uma). A data pode ser a do vencimento de
+// cada conta ou uma so para todas.
+function ModalBaixaLote(){
+  const d = editDraft;
+  const titulos = d._ids.map(id=>state.titulos.find(t=>t.id===id)).filter(Boolean);
+  const total = titulos.reduce((a,t)=>a+saldoDoTitulo(t),0);
+  const pagar = titulos[0]?.tipo==='pagar';
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head">
+        <h3>${pagar?'Baixar':'Receber'} ${titulos.length} ${titulos.length===1?'conta':'contas'}</h3>
+        <button class="modal-close" data-close="1">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="card" style="background:var(--cinza-bg); padding:12px; margin-bottom:12px; max-height:220px; overflow-y:auto;">
+          ${titulos.map(t=>`<div class="hint">${dataBr(t.vencimento)} · ${esc(nomeEntidade(t.entidadeId))} · ${esc(t.descricao)} · <strong>R$ ${fmt(saldoDoTitulo(t))}</strong></div>`).join('')}
+          <div style="font-size:18px; font-weight:700; margin-top:8px;">Total: R$ ${fmt(total)}</div>
+        </div>
+        <div class="field"><label>Data do pagamento</label>
+          <label style="display:flex; gap:8px; align-items:center; font-weight:400;"><input type="radio" name="f-bxl-modo" value="vencimento" ${d.modo!=='unica'?'checked':''} data-bxl-modo="1"/> A data do vencimento de cada conta</label>
+          <label style="display:flex; gap:8px; align-items:center; font-weight:400;"><input type="radio" name="f-bxl-modo" value="unica" ${d.modo==='unica'?'checked':''} data-bxl-modo="1"/> Uma data para todas</label>
+          ${d.modo==='unica' ? `<input id="f-bxl-data" type="date" value="${d.data||hojeStr()}" style="margin-top:6px;"/>` : ''}
+          <span class="hint">É esta data que vai para o Financeiro. O mês do lançamento é o mês do pagamento.</span></div>
+        <div class="field"><label>Conta bancária</label>
+          <select id="f-bxl-conta">
+            <option value="">— A de cada conta (ou não informada) —</option>
+            ${state.contasBancarias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${String(d.contaBancariaId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
+          </select></div>
+        <div class="field"><label>Observação (opcional)</label>
+          <textarea id="f-bxl-obs" rows="2">${esc(d.observacao||'')}</textarea></div>
+        <p class="hint">Cada conta é quitada pelo saldo inteiro. Para pagar só uma parte, use o botão Baixar da conta.</p>
+        ${state.erroTitulo ? `<div class="login-error">${esc(state.erroTitulo)}</div>` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="baixaLote">Confirmar ${titulos.length} ${titulos.length===1?'baixa':'baixas'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function ModalVerBaixas(){
   const t = state.titulos.find(x=>x.id===state.modal.tituloId);
   if(!t) return '';
@@ -5664,6 +5740,22 @@ async function salvarTitulo(){
     state.erroTitulo = 'Preencha: ' + faltando.join('; ') + '.';
     editDraft = d; render(); return;
   }
+  // Fornecedor novo (ainda sem cadastro) nao tem como repetir conta.
+  const nomeEnt = (d.entidadeNome||'').trim().toLowerCase();
+  const entExistente = nomeEnt ? state.entidades.find(e=>e.nome.trim().toLowerCase()===nomeEnt) : null;
+  if(entExistente){
+    const valoresParc = d._editId || nParcelas<=1 ? [total]
+      : ((d.valoresParcela||[]).length===nParcelas ? d.valoresParcela.map(Number) : repartir(total, nParcelas));
+    const datasParc = d._editId || nParcelas<=1 ? [d.vencimento] : valoresParc.map((_,i)=>(d.vencimentos||[])[i] || d.vencimento);
+    for(let i=0; i<valoresParc.length; i++){
+      const igual = tituloRepetido(d.tipo, entExistente.id, valoresParc[i], datasParc[i], d._editId || null);
+      if(igual){
+        state.erroTitulo = `Esta conta já está lançada: ${nomeEntidade(igual.entidadeId)} · R$ ${fmt(igual.valor)} · vence ${dataBr(igual.vencimento)} ("${igual.descricao}", ${SITUACAO_LABEL[igual.situacao]||igual.situacao}). `
+          + 'Não é permitido lançar a mesma conta duas vezes. Se for outra conta, confira o valor ou o vencimento.';
+        editDraft = d; render(); return;
+      }
+    }
+  }
   state.erroTitulo = '';
 
   const ent = await acharOuCriarEntidade(d.entidadeNome);
@@ -5754,6 +5846,36 @@ async function salvarTitulo(){
   await loadAll();
 }
 
+async function salvarBaixaLote(){
+  const d = editDraft;
+  const modo = document.querySelector('input[name="f-bxl-modo"]:checked')?.value || 'vencimento';
+  const dataUnica = document.getElementById('f-bxl-data')?.value || '';
+  const conta = document.getElementById('f-bxl-conta')?.value || '';
+  const obs = document.getElementById('f-bxl-obs')?.value.trim() || '';
+  if(modo==='unica' && !dataUnica){ state.erroTitulo = 'Informe a data do pagamento.'; render(); return; }
+  // Relido do estado: so entra quem ainda pode ser baixado agora.
+  const titulos = d._ids.map(id=>state.titulos.find(t=>t.id===id)).filter(t=>t && tituloBaixavel(t));
+  if(titulos.length===0){ state.erroTitulo = 'Nenhuma das contas selecionadas está em aberto.'; render(); return; }
+  const semData = titulos.filter(t=>modo==='vencimento' && !t.vencimento);
+  if(semData.length){ state.erroTitulo = `${semData.length} conta(s) sem vencimento: escolha "Uma data para todas".`; render(); return; }
+  state.erroTitulo = '';
+  // Um insert so: se o banco recusar uma, nenhuma entra (nada fica pela
+  // metade). O gatilho cria os lancamentos de cada baixa, como na baixa
+  // individual — a tela nao replica essa regra.
+  const {error} = await db.from('titulo_baixas').insert(titulos.map(t=>({
+    titulo_id: t.id,
+    data: modo==='unica' ? dataUnica : t.vencimento,
+    valor: saldoDoTitulo(t),
+    conta_bancaria_id: conta ? Number(conta) : (t.contaBancariaId || null),
+    observacao: obs || null,
+    criado_por: state.perfil?.nome || null,
+  })));
+  if(error){ alert('Não foi possível registrar as baixas: ' + error.message); return; }
+  state.contasSelecionadas = [];
+  state.modal = null; editDraft = null;
+  await loadAll();
+}
+
 async function salvarBaixa(){
   const d = editDraft;
   const t = state.titulos.find(x=>x.id===d._tituloId);
@@ -5794,7 +5916,7 @@ function rateioVazio(){
 
 function ligarEventosContas(){
   document.querySelectorAll('[data-aba-contas]').forEach(el=>{
-    el.onclick = ()=>{ state.abaContas = el.dataset.abaContas; render(); };
+    el.onclick = ()=>{ state.abaContas = el.dataset.abaContas; state.contasSelecionadas = []; render(); };
   });
   document.querySelectorAll('[data-filtro-contas]').forEach(el=>{
     el.onclick = ()=>{ state.filtroContas = el.dataset.filtroContas; render(); };
@@ -5842,6 +5964,47 @@ function ligarEventosContas(){
       editDraft = {_tituloId: t.id, data: hojeStr(), valor: saldoDoTitulo(t),
                    contaBancariaId: t.contaBancariaId ?? '', observacao:''};
       state.modal = {type:'baixa'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-selecionar-titulo]').forEach(el=>{
+    el.onchange = ()=>{
+      const id = Number(el.dataset.selecionarTitulo);
+      state.contasSelecionadas = el.checked
+        ? [...new Set([...state.contasSelecionadas, id])]
+        : state.contasSelecionadas.filter(x=>x!==id);
+      render();
+    };
+  });
+  const selTodos = document.querySelector('[data-selecionar-todos]');
+  if(selTodos){
+    selTodos.onchange = ()=>{
+      const ids = titulosFiltrados().filter(tituloBaixavel).map(t=>t.id);
+      state.contasSelecionadas = selTodos.checked
+        ? [...new Set([...state.contasSelecionadas, ...ids])]
+        : state.contasSelecionadas.filter(x=>!ids.includes(x));
+      render();
+    };
+  }
+  const limparSel = document.querySelector('[data-limpar-selecao]');
+  if(limparSel) limparSel.onclick = ()=>{ state.contasSelecionadas = []; render(); };
+  const baixarSel = document.querySelector('[data-baixar-selecionados]');
+  if(baixarSel){
+    baixarSel.onclick = ()=>{
+      const ids = titulosFiltrados().filter(t=>tituloBaixavel(t) && state.contasSelecionadas.includes(t.id)).map(t=>t.id);
+      if(ids.length===0) return;
+      state.erroTitulo = '';
+      editDraft = {_ids: ids, modo:'vencimento', data: hojeStr(), contaBancariaId:'', observacao:''};
+      state.modal = {type:'baixaLote'};
+      render();
+    };
+  }
+  document.querySelectorAll('[data-bxl-modo]').forEach(el=>{
+    el.onchange = ()=>{
+      editDraft = {...editDraft, modo: el.value,
+        data: document.getElementById('f-bxl-data')?.value || editDraft.data,
+        contaBancariaId: document.getElementById('f-bxl-conta')?.value || '',
+        observacao: document.getElementById('f-bxl-obs')?.value || ''};
       render();
     };
   });
@@ -6692,6 +6855,7 @@ function Modal(){
   if(state.modal.type==='lancamento') return ModalLancamento();
   if(state.modal.type==='titulo') return ModalTitulo();
   if(state.modal.type==='baixa') return ModalBaixa();
+  if(state.modal.type==='baixaLote') return ModalBaixaLote();
   if(state.modal.type==='verBaixas') return ModalVerBaixas();
   if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
@@ -7592,6 +7756,8 @@ function attachEvents(){
         await salvarTitulo(); return;
       } else if(type==='baixa'){
         await salvarBaixa(); return;
+      } else if(type==='baixaLote'){
+        await salvarBaixaLote(); return;
       } else if(type==='pagamentoParcela'){
         await salvarPagamentoParcela(); return;
       } else if(type==='quitarFin'){

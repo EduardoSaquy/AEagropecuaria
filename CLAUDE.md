@@ -301,6 +301,22 @@ Painel de Resultado dos Lotes, @ produzidas/Custo/@ (ganho = GMD × dias) e
 o GMD de cada animal no detalhe do lote. A tela diz qual método usou.
 `teste_gmd_boi_a_boi.py`.
 
+### Contas a Pagar/Receber: conta repetida e baixa em lote
+
+Pedidos do Eduardo em 21/10/2026 (AEMatriz.html):
+- **Não deixa lançar a mesma conta duas vezes** (`tituloRepetido`): mesmo
+  tipo, mesmo fornecedor, mesmo valor (centavos) e mesmo vencimento, em título
+  não cancelado, pago ou em aberto. A descrição fica de fora de propósito (a
+  mesma conta costuma vir escrita diferente). Em lançamento parcelado, se uma
+  parcela repete, nenhuma é gravada. É regra da tela, não do banco.
+- **Baixa em lote**: caixa de seleção em cada conta baixável
+  (`tituloBaixavel`: saldo > 0, não cancelada, com rateio), "marcar todas" da
+  lista filtrada e o modal `baixaLote` (data do vencimento de cada conta ou
+  uma data para todas). Quita o saldo inteiro de cada uma num **insert só** em
+  `titulo_baixas`: o banco aceita todas ou nenhuma, e o gatilho
+  `trg_baixa_gera_lancamento` cria os lançamentos como na baixa individual.
+  Baixa parcial continua uma a uma. `teste_contas_lote.py`.
+
 ### Resultados > Empresa: a empresa como uma atividade só
 
 Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
@@ -519,7 +535,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-27 arquivos `teste_*.py`, 678 checagens (21/10/2026; a tabela abaixo lista os
+28 arquivos `teste_*.py`, 696 checagens (21/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -548,6 +564,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
 | `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
 | `teste_gmd_boi_a_boi.py` | 7 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média) |
+| `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
