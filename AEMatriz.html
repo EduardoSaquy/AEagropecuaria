@@ -59,7 +59,7 @@
   .avatar{width:28px; height:28px; border-radius:50%; background:var(--verde-vivo); color:#0B2318; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0;}
   .btn-sair{background:rgba(255,255,255,0.1); border:none; color:#fff; padding:7px 11px; border-radius:8px; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;}
   .btn-sair:hover{background:rgba(255,255,255,0.2);}
-  .tabsrow{background:var(--branco); border-bottom:1px solid var(--cinza-claro); display:flex; gap:6px; padding:10px 20px; overflow-x:auto; flex-shrink:0;}
+  .tabsrow{background:var(--branco); border-bottom:1px solid var(--cinza-claro); display:flex; flex-wrap:wrap; gap:6px; padding:10px 20px; flex-shrink:0;}
   .mobile-nav-toggle{display:none;}
   .nav-item{display:flex; align-items:center; gap:7px; font-family:'Inter',sans-serif; font-size:13px; font-weight:700; color:var(--cinza); background:none; border:none; padding:9px 14px; border-radius:10px; cursor:pointer; white-space:nowrap; transition:background 0.12s, color 0.12s;}
   .nav-item svg{opacity:0.72; flex-shrink:0;}
@@ -132,7 +132,26 @@
      (data-rotulo), pra não precisar rolar de lado. */
   .tabela-cabecalho-quebra th{white-space:normal; line-height:1.25; vertical-align:bottom;}
   td.acoes .btn-sm{margin:2px 6px 2px 0;}
+  /* Contas a Pagar/Receber: largura fixa por coluna. Com layout automatico
+     uma descricao ou um centro de custo comprido esticava a tabela e os
+     botoes da direita sumiam atras de uma barra de rolagem (print do
+     Eduardo em 21/10/2026). Fixa, a tabela sempre cabe no card e o texto
+     quebra dentro da coluna. Abaixo de 1060 px vira bloco (tabela-em-blocos). */
+  .tabela-contas{table-layout:fixed;}
+  .tabela-contas th, .tabela-contas td{padding:10px 8px; overflow-wrap:anywhere;}
+  .tabela-contas td{font-size:13px;}
+  .tabela-contas .col-sel{width:34px;} .tabela-contas .col-venc{width:96px;} .tabela-contas .col-valor{width:112px;}
+  .tabela-contas .col-sit{width:92px;} .tabela-contas .col-acoes{width:96px;}
+  .tabela-contas .col-onde{width:24%;}
+  .tabela-contas td.acoes{display:flex; flex-direction:column; align-items:stretch; gap:4px;}
+  .tabela-contas td.acoes .btn-sm, .tabela-contas td.acoes button{margin:0; width:100%; justify-content:center;}
+  .tabela-contas td.num{white-space:nowrap; overflow-wrap:normal;}
   @media (max-width:1060px){
+    .tabela-contas{table-layout:auto;}
+    .tabela-contas td.acoes{flex-direction:row; flex-wrap:wrap;}
+    .tabela-contas td.acoes .btn-sm, .tabela-contas td.acoes button{width:auto;}
+    .tabela-contas tfoot td, .tabela-contas tr.linha-total td{justify-content:space-between;}
+    .tabela-em-blocos td.vazio-bloco{display:none;}
     .tabela-em-blocos thead{display:none;}
     .tabela-em-blocos, .tabela-em-blocos tbody, .tabela-em-blocos tr{display:block; width:100%;}
     .tabela-em-blocos tr{padding:8px 14px; border-bottom:1px solid var(--cinza-claro);}
@@ -143,6 +162,21 @@
     .tabela-em-blocos tr.linha-secao{padding:0; border-bottom:0;}
     .tabela-em-blocos tr.linha-secao td{padding:8px 14px; text-align:left; justify-content:flex-start;}
     .tabela-em-blocos .barra-mini{display:none;}
+  }
+  /* Tabelas curtas (Fazendas, Centros de Custo, Usuarios): so no celular viram bloco. */
+  @media (max-width:760px){
+    .tabela-quebra-celular th, .tabela-quebra-celular td{white-space:normal; padding:6px 4px;}
+    .tabela-blocos-celular td.vazio-bloco{display:none;}
+    .tabela-blocos-celular thead{display:none;}
+    .tabela-blocos-celular, .tabela-blocos-celular tbody, .tabela-blocos-celular tr{display:block; width:100%;}
+    .tabela-blocos-celular tr{padding:8px 14px; border-bottom:1px solid var(--cinza-claro);}
+    .tabela-blocos-celular td{display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:3px 0; border:0; white-space:normal; text-align:right;}
+    .tabela-blocos-celular td:first-child{justify-content:flex-start; font-weight:700; padding-bottom:5px;}
+    .tabela-blocos-celular td[data-rotulo]::before{content:attr(data-rotulo); font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; color:var(--cinza); text-align:left;}
+    .tabela-blocos-celular td.acoes{justify-content:flex-start; flex-wrap:wrap; gap:6px; padding-top:8px;}
+    .tabela-blocos-celular tr.linha-secao{padding:0; border-bottom:0;}
+    .tabela-blocos-celular tr.linha-secao td{padding:8px 14px; text-align:left; justify-content:flex-start;}
+    .tabela-blocos-celular .barra-mini{display:none;}
   }
   .painel-resultados{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
   .donut-wrap{flex-shrink:0;}
@@ -2618,7 +2652,7 @@ function PagePorHectare(){
       <p class="stat-label" style="margin-bottom:2px;">Por hectare — ${labelPeriodo(state.periodo)}</p>
       <p class="hint" style="margin-bottom:14px;">Clique num valor pra ver a evolução mês a mês dos últimos 12 meses.</p>
     </div>
-    <table>
+    <table class="tabela-blocos-celular tabela-sem-fixar">
       <thead><tr><th>Operação</th><th>Área (ha)</th><th>Despesa/ha</th><th>Receita/ha</th><th>Lucro/ha</th></tr></thead>
       <tbody>
         ${linhas.map(l=>{
@@ -2628,10 +2662,10 @@ function PagePorHectare(){
           const despesaHa = l.r.despesa/l.ha, receitaHa = l.r.receita/l.ha, resultadoHa = l.r.resultado/l.ha;
           return `<tr>
             <td>${chip}</td>
-            <td class="mono">${fmtInt(l.ha)}</td>
-            <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
-            <td class="mono"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
-            <td class="mono"><button class="valor-clicavel ${resultadoHa<0?'neg':''}" data-grafico-op="${l.slug}" data-grafico-metrica="resultadoHa">R$ ${fmt(resultadoHa)}</button></td>
+            <td class="mono" data-rotulo="Área (ha)">${fmtInt(l.ha)}</td>
+            <td class="mono" data-rotulo="Despesa/ha"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="despesaHa">R$ ${fmt(despesaHa)}</button></td>
+            <td class="mono" data-rotulo="Receita/ha"><button class="valor-clicavel" data-grafico-op="${l.slug}" data-grafico-metrica="receitaHa">R$ ${fmt(receitaHa)}</button></td>
+            <td class="mono" data-rotulo="Lucro/ha"><button class="valor-clicavel ${resultadoHa<0?'neg':''}" data-grafico-op="${l.slug}" data-grafico-metrica="resultadoHa">R$ ${fmt(resultadoHa)}</button></td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2680,7 +2714,7 @@ function PageResultadosGeral(){
   <div id="painel-tooltip" class="painel-tooltip"></div>
   ${PagePorHectare()}
   <div class="card" style="overflow-x:auto; margin-top:18px;">
-    <table>
+    <table class="tabela-blocos-celular tabela-sem-fixar">
       <thead><tr><th>Operação</th><th>Receita</th><th>Despesa</th><th>Resultado</th></tr></thead>
       <tbody>
         ${linhasResultado().map(l=>{
@@ -2689,9 +2723,9 @@ function PageResultadosGeral(){
           if(!r || r.erro) return `<tr><td>${chip}</td><td colspan="3" class="hint">${r?.erro || 'Sem dados ainda.'}</td></tr>`;
           return `<tr>
             <td>${chip}</td>
-            <td class="mono">R$ ${fmt(r.receita)}</td>
-            <td class="mono">R$ ${fmt(r.despesa)}</td>
-            <td class="mono">R$ ${fmt(r.resultado)}</td>
+            <td class="mono" data-rotulo="Receita">R$ ${fmt(r.receita)}</td>
+            <td class="mono" data-rotulo="Despesa">R$ ${fmt(r.despesa)}</td>
+            <td class="mono" data-rotulo="Resultado">R$ ${fmt(r.resultado)}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2752,7 +2786,7 @@ function CardResultadoOperacional(slug){
       </div>
     </div>
     ${semDados ? Empty('Sem dados ainda', r?.erro || 'Nenhum lançamento neste período.') : `
-    <div class="stat-row" style="grid-template-columns:repeat(2,1fr); margin-bottom:14px;">
+    <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); margin-bottom:14px;">
       <div class="stat-card">
         <div class="stat-label">Produtividade</div>
         <div class="stat-value" style="font-size:19px;">${prod && prod.porHa!=null ? fmt(prod.porHa,2)+' '+prod.unidade+'/ha' : '—'}</div>
@@ -2770,7 +2804,7 @@ function CardResultadoOperacional(slug){
         <div class="hint" style="margin-top:4px;">Resultado ÷ Receita</div>
       </div>
     </div>
-    <table>
+    <table class="tabela-compacta tabela-sem-fixar tabela-quebra-celular">
       <thead><tr><th></th><th>Total</th><th>Por hectare</th></tr></thead>
       <tbody>
         <tr><td>Receita</td><td class="mono">R$ ${fmt(r.receita)}</td><td class="mono">${ha>0?'R$ '+fmt(r.receita/ha):'—'}</td></tr>
@@ -3517,15 +3551,15 @@ function PageFazendas(){
   </div>
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhuma fazenda cadastrada','Cadastre as fazendas da operação — nome, estado, área total e, pra cada atividade, quantos hectares dela tem ali.') : `
-    <table>
+    <table class="tabela-blocos-celular tabela-sem-fixar">
       <thead><tr><th>Nome</th><th>Área total (ha)</th><th>Atividades</th><th></th></tr></thead>
       <tbody>
         ${linhas.map(f=>`
           <tr>
             <td><strong>${esc(f.nome)}</strong>${f.estado ? ` <span class="hint">(${esc(f.estado)})</span>` : ''}</td>
-            <td class="mono">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
-            <td>${chipsOperacoes(operacoesDaFazendaLavoura(f))}</td>
-            <td style="display:flex; gap:6px;">
+            <td class="mono" data-rotulo="Área total (ha)">${f.areaHa!=null ? fmtInt(f.areaHa) : '—'}</td>
+            <td data-rotulo="Atividades"><span style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end;">${chipsOperacoes(operacoesDaFazendaLavoura(f))}</span></td>
+            <td class="acoes" style="display:flex; gap:6px;">
               ${temPermissao('matriz_fazendas','editar') ? `
               <button class="btn-ghost btn-sm" data-editar-fazenda="${f.id}">Editar</button>
               <button class="btn-danger-ghost" data-excluir-fazenda="${f.id}">Excluir</button>
@@ -3633,11 +3667,11 @@ function PageCentrosCusto(){
   </div>` : ''}
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhum centro de custo','Cadastre os centros de custo que a operação usa nos lançamentos.') : `
-    <table>
+    <table class="tabela-blocos-celular tabela-sem-fixar">
       <thead><tr><th>Nome</th><th>Lançamentos</th><th></th></tr></thead>
       <tbody>
         ${grupos.map(g=>`
-          <tr><td colspan="3" style="background:var(--cinza-fundo,#f5f6f5); font-weight:600; font-size:12px; letter-spacing:.04em;">
+          <tr class="linha-secao"><td colspan="3" style="background:var(--cinza-fundo,#f5f6f5); font-weight:600; font-size:12px; letter-spacing:.04em;">
             ${g.tipo ? `<span class="pill ${g.tipo==='entrada'?'pill-ok':'pill-cat'}">${g.tipo==='entrada'?'Entrada':'Saída'}</span> ` : ''}
             ${esc(g.grupo)}
             <span class="hint" style="font-weight:400;"> · ${g.centros.length} centro(s)</span>
@@ -3649,8 +3683,8 @@ function PageCentrosCusto(){
             <tr${c.ativo===false ? ' style="opacity:.55;"' : ''}>
               <td style="padding-left:22px;"><strong>${esc(c.nome)}</strong>${c.ativo===false ? ' <span class="hint">(inativo)</span>' : ''}
                 ${sub ? `<div class="hint">${esc(sub)}</div>` : ''}</td>
-              <td class="mono">${usos>0 ? fmtInt(usos) : '—'}</td>
-              <td style="display:flex; gap:6px;">
+              <td class="mono" data-rotulo="Lançamentos">${usos>0 ? fmtInt(usos) : '—'}</td>
+              <td class="acoes" style="display:flex; gap:6px;">
                 ${podeEditar ? `
                 <button class="btn-ghost btn-sm" data-editar-centro="${c.id}">Editar</button>
                 ${usos===0 ? `<button class="btn-danger-ghost" data-excluir-centro="${c.id}">Excluir</button>`
@@ -5164,7 +5198,7 @@ function PageContas(){
     ${podeEditarContas() ? `<button class="btn btn-primary btn-sm" data-novo-titulo="${tipo}">+ Nova ${rotulo}</button>` : ''}
   </div>
 
-  <div class="stat-row" style="grid-template-columns:repeat(3,1fr); margin-bottom:14px;">
+  <div class="stat-row" style="margin-bottom:14px;">
     <div class="stat-card">
       <div class="stat-label">Em aberto</div>
       <div class="stat-value">R$ ${fmt(totalAberto)}</div>
@@ -5200,9 +5234,12 @@ function PageContas(){
 
   <div class="card" style="overflow-x:auto;">
     ${lista.length===0 ? Empty('Nenhum título aqui', podeEditarContas()?'Use o botão acima para lançar. O filtro também pode estar escondendo linhas.':'O filtro pode estar escondendo linhas.') : `
-    <table>
+    <table class="tabela-contas tabela-em-blocos tabela-cabecalho-quebra tabela-sem-fixar">
+      <colgroup>
+        ${podeSelecionar ? '<col class="col-sel">' : ''}<col class="col-venc"><col><col><col class="col-onde"><col class="col-valor"><col class="col-valor"><col class="col-sit"><col class="col-acoes">
+      </colgroup>
       <thead><tr>
-        ${podeSelecionar ? `<th style="width:28px;">${baixaveisDaLista.length>0 ? `<input type="checkbox" data-selecionar-todos="1" title="Selecionar todas as contas em aberto da lista" ${todosMarcados?'checked':''}/>` : ''}</th>` : ''}
+        ${podeSelecionar ? `<th>${baixaveisDaLista.length>0 ? `<input type="checkbox" data-selecionar-todos="1" title="Selecionar todas as contas em aberto da lista" ${todosMarcados?'checked':''}/>` : ''}</th>` : ''}
         <th>Vencimento</th><th>${tipo==='pagar'?'Fornecedor':'Cliente'}</th><th>Descrição</th>
         <th>Onde pesa</th><th>Valor</th><th>Saldo</th><th>Situação</th><th></th>
       </tr></thead>
@@ -5212,19 +5249,19 @@ function PageContas(){
           const saldo = saldoDoTitulo(t);
           return `
           <tr>
-            ${podeSelecionar ? `<td>${tituloBaixavel(t) ? `<input type="checkbox" data-selecionar-titulo="${t.id}" ${state.contasSelecionadas.includes(t.id)?'checked':''}/>` : ''}</td>` : ''}
-            <td class="mono">${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}</td>
-            <td>${esc(nomeEntidade(t.entidadeId))}</td>
-            <td><strong>${esc(t.descricao)}</strong>
+            ${podeSelecionar ? `<td data-rotulo="Selecionar">${tituloBaixavel(t) ? `<input type="checkbox" data-selecionar-titulo="${t.id}" ${state.contasSelecionadas.includes(t.id)?'checked':''}/>` : ''}</td>` : ''}
+            <td class="mono" data-rotulo="Vencimento"><span>${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}</span></td>
+            <td data-rotulo="${tipo==='pagar'?'Fornecedor':'Cliente'}">${esc(nomeEntidade(t.entidadeId))}</td>
+            <td data-rotulo="Descrição"><span><strong>${esc(t.descricao)}</strong>
               ${t.documento?`<div class="hint">doc ${esc(t.documento)}</div>`:''}
-              ${t.previsao?`<div class="hint"><span class="pill pill-warn">Previsão</span></div>`:''}</td>
-            <td>${rat.length===0
+              ${t.previsao?`<div class="hint"><span class="pill pill-warn">Previsão</span></div>`:''}</span></td>
+            <td data-rotulo="Onde pesa"><span>${rat.length===0
                   ? `<span class="pill pill-alerta">sem rateio</span>`
-                  : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(r.competencia)} · R$ ${fmt(r.valor)}</div>`).join('')}</td>
-            <td class="mono">R$ ${fmt(t.valor)}</td>
-            <td class="mono">${saldo>0?`R$ ${fmt(saldo)}`:'<span class="hint">—</span>'}</td>
-            <td>${PillSituacao(t)}</td>
-            <td style="display:flex; gap:6px; flex-wrap:wrap;">
+                  : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(r.competencia)} · R$ ${fmt(r.valor)}</div>`).join('')}</span></td>
+            <td class="mono num" data-rotulo="Valor">R$ ${fmt(t.valor)}</td>
+            <td class="mono num" data-rotulo="Saldo">${saldo>0?`R$ ${fmt(saldo)}`:'<span class="hint">—</span>'}</td>
+            <td data-rotulo="Situação">${PillSituacao(t)}</td>
+            <td class="acoes">
               ${podeEditarContas() && saldo>0 && !t.cancelado ? `<button class="btn btn-primary btn-sm" data-baixar-titulo="${t.id}">Baixar</button>` : ''}
               ${podeEditarContas() ? `<button class="btn-ghost btn-sm" data-edit-titulo="${t.id}">Editar</button>` : ''}
               ${baixasDoTitulo(t.id).length>0 ? `<button class="btn-ghost btn-sm" data-ver-baixas="${t.id}">Baixas</button>` : ''}
@@ -5232,11 +5269,11 @@ function PageContas(){
             </td>
           </tr>`;
         }).join('')}
-        <tr>
+        <tr class="linha-total">
           <td colspan="${podeSelecionar?5:4}" style="text-align:right; font-weight:600;">Total listado</td>
-          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+Number(t.valor||0),0))}</td>
-          <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td>
-          <td colspan="2"></td>
+          <td class="mono num" data-rotulo="Valor" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+Number(t.valor||0),0))}</td>
+          <td class="mono num" data-rotulo="Saldo" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td>
+          <td colspan="2" class="vazio-bloco"></td>
         </tr>
       </tbody>
     </table>`}
@@ -6755,16 +6792,16 @@ function PageUsuarios(){
   return `
   <div class="card" style="overflow-x:auto;">
     ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para quem vai usar a matriz.') : `
-    <table>
+    <table class="tabela-blocos-celular tabela-sem-fixar">
       <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${state.perfis.map(p=>`
           <tr>
             <td><span class="op-chip"><span class="avatar" style="width:28px; height:28px; font-size:11px; background:linear-gradient(135deg, var(--verde-medio), var(--verde-vivo)); color:#fff;">${esc(iniciais(p.nome))}</span><strong>${esc(p.nome)}</strong></span></td>
-            <td class="mono">${esc(p.usuario)}</td>
-            <td>${papelPill(p.papel)}</td>
-            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
-            <td>${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>` : ''}</td>
+            <td class="mono" data-rotulo="Usuário">${esc(p.usuario)}</td>
+            <td data-rotulo="Perfil">${papelPill(p.papel)}</td>
+            <td data-rotulo="Status"><span><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</span></td>
+            <td class="acoes">${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>` : ''}</td>
           </tr>
         `).join('')}
       </tbody>

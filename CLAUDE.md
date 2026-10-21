@@ -418,6 +418,15 @@ custo já existe em Resultados > Relatórios.
 - O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
   `blocoDfcDoGrupo` normaliza acento. "BANCO DO BRASIL" e "BANCO BRASIL" eram o
   mesmo credor: o script unifica.
+- **AE Matriz inteiro sem rolar de lado** (pedido do Eduardo em 21/10/2026,
+  print de Pagar/Receber com os botões escondidos atrás da barra):
+  `teste_layout_matriz.py` abre as 12 telas de 1920 a 320 px e falha se a
+  página ou um card rolar de lado. A tabela de Contas usa `tabela-contas`
+  (`table-layout:fixed` com `<colgroup>`: o texto quebra dentro da coluna
+  em vez de esticar a tabela) e vira bloco até 1060 px; Fazendas, Centros de
+  Custo, Usuários e as tabelas de Resultados > Geral usam
+  `tabela-blocos-celular` (bloco só até 760 px). O menu do topo quebra em duas
+  linhas em vez de rolar. Tela nova: rode esse teste.
 - **Sem rolar de lado** (pedido do Eduardo). A tabela do histórico tem 9
   colunas (~980 px só da tabela) e, com título em linha única, passava do card.
   Classes: `tabela-cabecalho-quebra` (título quebra em 2 linhas) e
@@ -535,7 +544,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-28 arquivos `teste_*.py`, 696 checagens (21/10/2026; a tabela abaixo lista os
+29 arquivos `teste_*.py`, 705 checagens (21/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -565,6 +574,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
 | `teste_gmd_boi_a_boi.py` | 7 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média) |
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
+| `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
