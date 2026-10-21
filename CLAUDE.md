@@ -251,6 +251,25 @@ fechado em 29/08/2026:
   parecem uma compra parcelada, e um de Alemar Rodrigues em ago) não
   tinham par exato — confirmados como investimento novo, ficaram intocados.
 
+**Acerto das despesas de 2026 com o ERP (21/10/2026, rodado pelo Eduardo).**
+Base: 4 relatórios de despesas pagas do ERP (Cana, Pecuária e Soja pagas em
+jan–out/2026; Milho desde 2023), 1.656 títulos, R$ 9.282.737,41, carregados
+numa mesa de pouso `despesas_erp_2026` (apagar depois). Cada título foi
+casado um a um com o app (mesmo id do ERP, ou mesmo valor na mesma
+atividade/geral com pagamento até 7 dias ou mesmo mês; cada lançamento serve
+de par uma vez só). Resultado: 1.133 já estavam, 520 lançados
+(`criado_por = 'ERP (acerto 21/10/2026)'`, data e mês = pagamento,
+competência e id na observação), 3 amortizações ficaram de fora. Apagados:
+os 270 lançamentos agrupados "ERP — Contas a Pagar cana…" de mai–out/2026
+(R$ 1.504.783,65, total do mês por centro de custo, sem data; trocados pelas
+notas) e os 8 "Mão de obra - importação ERP" da Pecuária de jan–ago/2026
+(R$ 300.652,88: a folha já estava salário a salário, contava em dobro).
+Fazenda Três Marias = Mata Verde. Na conferência mês a mês, "falta no app"
+num mês e "sobra" em outro é deslocamento, não erro: o lançamento antigo do
+ERP está no mês da competência, o relatório soma pelo mês do pagamento.
+Ficou para olhar: a Cana de jan–abr/2026 tem R$ 20–117 mil por mês no app
+sem par no ERP (itens que se repetem todo mês).
+
 **Cuidado ao reusar os scripts de dedup de Cana/receita 2026**: como a Cana
 manteve a versão do ERP (ao contrário de despesa/Pecuária, que mantiveram
 a versão manual), um script que apague `erp_id is not null` pra Cana em
