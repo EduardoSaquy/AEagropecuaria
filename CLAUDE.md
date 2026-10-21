@@ -251,6 +251,25 @@ fechado em 29/08/2026:
   parecem uma compra parcelada, e um de Alemar Rodrigues em ago) não
   tinham par exato — confirmados como investimento novo, ficaram intocados.
 
+**Acerto das despesas de 2026 com o ERP (21/10/2026, rodado pelo Eduardo).**
+Base: 4 relatórios de despesas pagas do ERP (Cana, Pecuária e Soja pagas em
+jan–out/2026; Milho desde 2023), 1.656 títulos, R$ 9.282.737,41, carregados
+numa mesa de pouso `despesas_erp_2026` (apagar depois). Cada título foi
+casado um a um com o app (mesmo id do ERP, ou mesmo valor na mesma
+atividade/geral com pagamento até 7 dias ou mesmo mês; cada lançamento serve
+de par uma vez só). Resultado: 1.133 já estavam, 520 lançados
+(`criado_por = 'ERP (acerto 21/10/2026)'`, data e mês = pagamento,
+competência e id na observação), 3 amortizações ficaram de fora. Apagados:
+os 270 lançamentos agrupados "ERP — Contas a Pagar cana…" de mai–out/2026
+(R$ 1.504.783,65, total do mês por centro de custo, sem data; trocados pelas
+notas) e os 8 "Mão de obra - importação ERP" da Pecuária de jan–ago/2026
+(R$ 300.652,88: a folha já estava salário a salário, contava em dobro).
+Fazenda Três Marias = Mata Verde. Na conferência mês a mês, "falta no app"
+num mês e "sobra" em outro é deslocamento, não erro: o lançamento antigo do
+ERP está no mês da competência, o relatório soma pelo mês do pagamento.
+Ficou para olhar: a Cana de jan–abr/2026 tem R$ 20–117 mil por mês no app
+sem par no ERP (itens que se repetem todo mês).
+
 **Cuidado ao reusar os scripts de dedup de Cana/receita 2026**: como a Cana
 manteve a versão do ERP (ao contrário de despesa/Pecuária, que mantiveram
 a versão manual), um script que apague `erp_id is not null` pra Cana em
@@ -418,6 +437,15 @@ custo já existe em Resultados > Relatórios.
 - O plano tem o mesmo grupo escrito de dois jeitos (`VARIACOES…`/`VARIAÇÕES…`);
   `blocoDfcDoGrupo` normaliza acento. "BANCO DO BRASIL" e "BANCO BRASIL" eram o
   mesmo credor: o script unifica.
+- **AE Matriz inteiro sem rolar de lado** (pedido do Eduardo em 21/10/2026,
+  print de Pagar/Receber com os botões escondidos atrás da barra):
+  `teste_layout_matriz.py` abre as 12 telas de 1920 a 320 px e falha se a
+  página ou um card rolar de lado. A tabela de Contas usa `tabela-contas`
+  (`table-layout:fixed` com `<colgroup>`: o texto quebra dentro da coluna
+  em vez de esticar a tabela) e vira bloco até 1060 px; Fazendas, Centros de
+  Custo, Usuários e as tabelas de Resultados > Geral usam
+  `tabela-blocos-celular` (bloco só até 760 px). O menu do topo quebra em duas
+  linhas em vez de rolar. Tela nova: rode esse teste.
 - **Sem rolar de lado** (pedido do Eduardo). A tabela do histórico tem 9
   colunas (~980 px só da tabela) e, com título em linha única, passava do card.
   Classes: `tabela-cabecalho-quebra` (título quebra em 2 linhas) e
@@ -535,7 +563,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-28 arquivos `teste_*.py`, 696 checagens (21/10/2026; a tabela abaixo lista os
+29 arquivos `teste_*.py`, 705 checagens (21/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -565,6 +593,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
 | `teste_gmd_boi_a_boi.py` | 7 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média) |
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
+| `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
