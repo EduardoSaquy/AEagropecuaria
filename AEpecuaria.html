@@ -2742,21 +2742,15 @@ function PageLotesGeral(){
 }
 
 /* ===================== PÁGINA: DETALHE DO LOTE (ANIMAIS + HISTÓRICO) ===================== */
-// Histórico de pesagens de UM animal (pelo número), dentro das pesagens já
-// registradas do lote -- cruza pesagens (evento, por lote) com
-// pesagensAnimais (peso individual dentro daquele evento), em ordem
-// cronológica.
-// pesagensAnimaisDoLote (opcional) já vem filtrado só pelas pesagens desse
-// lote -- evita varrer o state.pesagensAnimais inteiro (todos os lotes, todo
-// o histórico da fazenda) uma vez pra cada animal do lote.
-function historicoPesoAnimal(loteId, numeroAnimal, pesagensAnimaisDoLote){
-  const lista = pesagensAnimaisDoLote || state.pesagensAnimais;
-  return pesagensDoLote(loteId)
-    .map(p=>{
-      const pa = lista.find(x=>x.pesagemId===p.id && String(x.numeroAnimal)===String(numeroAnimal));
-      return pa ? {data:p.data, pesoKg:Number(pa.pesoKg)} : null;
-    })
-    .filter(Boolean);
+// Histórico de pesagens de UM animal (pelo número), em ordem cronológica,
+// em qualquer lote do mesmo tipo deste -- o boi apartado de um curral pro
+// outro leva o histórico junto (antes só contavam as pesagens deste lote,
+// e o GMD de quem mudou de curral sumia). Vaca com o mesmo número de um boi
+// fica de fora por estar em lote de outro tipo. Mesmo índice do ganho boi
+// a boi (indicePesosIndividuais).
+function historicoPesoAnimal(lote, numeroAnimal){
+  return (indicePesosIndividuais(loteTipo(lote)).porNumero.get(chaveNumeroAnimal(numeroAnimal))||[])
+    .map(x=>({data:x.data, pesoKg:x.pesoKg}));
 }
 // GMD do animal: da primeira à última pesagem individual dele -- mesmo
 // critério de "ganho desde a primeira pesagem" já usado no painel do lote.
@@ -2805,10 +2799,8 @@ function PageLoteDetalhe(){
   const podeEditarAnimal = temPermissao(TIPO_MODULO[loteTipo(lote)],'editar');
   const animais = [...state.animais.filter(a=>a.loteId===lote.id)].sort((a,b)=>String(a.numero).localeCompare(String(b.numero), undefined, {numeric:true}));
 
-  const pesagemIdsLote = new Set(pesagensDoLote(lote.id).map(p=>p.id));
-  const pesagensAnimaisDoLote = state.pesagensAnimais.filter(pa=>pesagemIdsLote.has(pa.pesagemId));
   const rows = animais.map(a=>{
-    const historico = historicoPesoAnimal(lote.id, a.numero, pesagensAnimaisDoLote);
+    const historico = historicoPesoAnimal(lote, a.numero);
     const ultima = historico[historico.length-1] || null;
     const gmd = gmdAnimal(historico);
     const reprod = (ehCria && a.sexo==='femea') ? situacaoReprodutivaVaca(lote.id, a.numero) : null;
@@ -2952,10 +2944,9 @@ function ContextoLoteDetalhe(lote, contexto){
     </div>`;
   }
   if(contexto==='pesagem'){
-    // historico vem em ordem crescente (pesagensDoLote) -- é dele que sai o
-    // GMD "desde a anterior" de cada linha, igual já é feito na lista de
-    // Todos os Lançamentos da tela Pesagem. itens é só a ordem de exibição
-    // (mais recente primeiro), não muda o cálculo.
+    // GMD de cada linha: gmdDesdeAnterior (boi a boi quando a pesagem tem
+    // peso por animal, senão média contra a pesagem anterior do lote) --
+    // igual à lista da tela Pesagem. itens é só a ordem de exibição.
     const historico = pesagensDoLote(lote.id);
     const itens = historico.slice().sort((a,b)=>b.data.localeCompare(a.data));
     return `
@@ -2966,13 +2957,12 @@ function ContextoLoteDetalhe(lote, contexto){
         <thead><tr><th>Data</th><th>Peso médio</th><th>GMD desde a anterior</th><th>Observação</th></tr></thead>
         <tbody>
           ${itens.map(p=>{
-            const idx = historico.findIndex(h=>h.id===p.id);
-            const gmd = idx>0 ? gmdEntre(Number(historico[idx-1].pesoMedioKg), Number(p.pesoMedioKg), historico[idx-1].data, p.data) : null;
+            const gmd = gmdDesdeAnterior(lote, p);
             return `
           <tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td class="mono">${fmt(Number(p.pesoMedioKg),1)} kg</td>
-            <td class="mono">${gmd!==null ? (gmd>=0?'+':'')+fmt(gmd,2)+' kg/dia' : '—'}</td>
+            <td class="mono">${fmtGmd(gmd)}</td>
             <td>${esc(p.observacao)||'—'}</td>
           </tr>`;}).join('')}
         </tbody>
@@ -3703,13 +3693,14 @@ function PainelResultadoLotes(lotesTipo){
     const historico = pesagensDoLote(l.id);
     if(historico.length===0) return {lote:l, semDados:true};
     const primeira = historico[0], ultima = historico[historico.length-1];
-    const ganhoTotal = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
-    const gmdMedio = gmdEntre(Number(primeira.pesoMedioKg), Number(ultima.pesoMedioKg), primeira.data, ultima.data);
+    const janela = ganhoDoLoteNaJanela(l, primeira, ultima);
+    const ganhoTotal = janela.ganhoKg;
+    const gmdMedio = janela.gmd;
     const arrobaPorAnimal = ganhoTotal/KG_POR_ARROBA;
     const numeroAnimaisArroba = numeroAnimaisParaArroba(l, ultima);
     const arrobaTotal = arrobaPorAnimal * numeroAnimaisArroba;
     const custoPorArroba = custoPorArrobaJanelaLote(l, primeira, ultima, arrobaTotal, numeroAnimaisArroba, fixoPorAnimalDia[loteTipo(l)]||0);
-    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, arrobaPorAnimal, arrobaTotal, custoPorArroba};
+    return {lote:l, semDados:false, primeira, ultima, ganhoTotal, gmdMedio, janela, arrobaPorAnimal, arrobaTotal, custoPorArroba};
   });
   return `
   <div class="card">
@@ -3726,7 +3717,7 @@ function PainelResultadoLotes(lotesTipo){
             <td class="mono">${fmt(Number(r.primeira.pesoMedioKg),1)} kg <span class="hint">(${r.primeira.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${fmt(Number(r.ultima.pesoMedioKg),1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${r.ganhoTotal>=0?'+':''}${fmt(r.ganhoTotal,1)} kg</td>
-            <td class="mono">${r.gmdMedio!==null?fmt(r.gmdMedio,3)+' kg/dia':'—'}</td>
+            <td class="mono">${fmtGmd(r.janela, 3)}</td>
             <td class="mono">${fmt(r.arrobaPorAnimal,2)} @</td>
             <td class="mono">${fmt(r.arrobaTotal,1)} @</td>
             <td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>
@@ -3736,7 +3727,7 @@ function PainelResultadoLotes(lotesTipo){
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:10px 0 18px;">Ganho, @/animal, @ produzidas e Custo/@ contam desde a primeira pesagem lançada de cada lote até a mais recente. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. "@/animal" é o ganho por cabeça (ganho no período ÷ 30 kg); "@ produzidas" é o total do lote (@/animal × nº de animais). Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.</p>`;
+  <p class="hint" style="margin:10px 0 18px;">Ganho, @/animal, @ produzidas e Custo/@ contam desde a primeira pesagem lançada de cada lote até a mais recente. Quando a pesagem tem peso por animal, o GMD é boi a boi (média dos animais pesados no começo e no fim do período, mesmo vindos de outro curral) e o ganho é esse GMD × dias; sem peso por animal, é a diferença das médias do lote. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. "@/animal" é o ganho por cabeça (ganho no período ÷ 30 kg); "@ produzidas" é o total do lote (@/animal × nº de animais). Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.</p>`;
 }
 
 function PagePesagem(tipo){
@@ -3767,15 +3758,13 @@ function PagePesagem(tipo){
       <tbody>
         ${rv.itens.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
-          const historico = lote ? pesagensDoLote(lote.id) : [];
-          const idx = historico.findIndex(h=>h.id===p.id);
-          const gmd = idx>0 ? gmdEntre(Number(historico[idx-1].pesoMedioKg), Number(p.pesoMedioKg), historico[idx-1].data, p.data) : null;
+          const gmd = lote && Number(p.pesoMedioKg)>0 ? gmdDesdeAnterior(lote, p) : null;
           const detalhesAnimais = state.pesagensAnimais.filter(pa=>pa.pesagemId===p.id);
           return `<tr>
             <td><strong>${lote?esc(lote.nome):'—'}</strong></td>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td class="mono">${fmt(Number(p.pesoMedioKg),1)} kg</td>
-            <td class="mono">${gmd!==null ? (gmd>=0?'+':'')+fmt(gmd,2)+' kg/dia' : '—'}</td>
+            <td class="mono">${fmtGmd(gmd)}</td>
             <td>${detalhesAnimais.length>0 ? `<button class="btn-ghost btn-sm" data-toggle-pesagem-animais="${p.id}">${detalhesAnimais.length} animal(is) ${state.pesagemExpandidaId===p.id?'▲':'▼'}</button>` : '—'}</td>
             <td>${esc(p.observacao)||'—'}</td>
             <td>${esc(p.criadoPor) || '—'}</td>
@@ -4167,6 +4156,107 @@ function gmdEntre(pesoAnterior, pesoAtual, dataAnterior, dataAtual){
   const dias = (new Date(dataAtual) - new Date(dataAnterior)) / 86400000;
   return dias>0 ? (pesoAtual-pesoAnterior)/dias : null;
 }
+
+/* GANHO BOI A BOI
+ *
+ * O ganho pela MÉDIA do lote (peso médio de agora - peso médio da pesagem
+ * anterior do lote) só vale se os mesmos animais estiverem nas duas
+ * pesagens. Quando o curral é apartado ou misturado entre uma pesagem e
+ * outra, a média muda por quem entrou e saiu, não pelo que engordaram: em
+ * 21/10/2026 o Curral 2 mostrava +0,22 kg/dia pela média (108 bois na
+ * pesagem anterior, 62 nesta) e +1,02 kg/dia boi a boi (os 59 bois que
+ * estavam nas duas). Pedido do Eduardo no mesmo dia.
+ *
+ * Sempre que a pesagem tem peso individual, o ganho sai do MESMO animal nas
+ * duas pesagens, procurado em qualquer lote do mesmo tipo (o boi pode ter
+ * vindo de outro curral; vaca com o mesmo número fica de fora porque está
+ * em lote de Cria/Pasto). Número que aparece duas vezes na mesma pesagem é
+ * ambíguo e não entra. Sem nenhum animal com peso anterior (pesagem só com
+ * média, como a "Entrada de animais"), cai na média do lote.
+ */
+function chaveNumeroAnimal(numero){ return String(numero??'').trim().toLowerCase(); }
+let cachePesosIndividuais = null;
+// Por tipo de lote: número do animal -> pesos individuais em ordem
+// cronológica, e pesagem -> pesos individuais dela. Refeito quando o
+// loadAll troca os arrays do state.
+function indicePesosIndividuais(tipo){
+  const c = cachePesosIndividuais;
+  if(!c || c.pesagens!==state.pesagens || c.pesagensAnimais!==state.pesagensAnimais || c.lotes!==state.lotes){
+    cachePesosIndividuais = {pesagens:state.pesagens, pesagensAnimais:state.pesagensAnimais, lotes:state.lotes, porTipo:{}};
+  }
+  const cache = cachePesosIndividuais.porTipo;
+  if(cache[tipo]) return cache[tipo];
+  const tipoDoLote = new Map(state.lotes.map(l=>[l.id, loteTipo(l)]));
+  const dataDaPesagem = new Map();
+  state.pesagens.forEach(p=>{ if(Number(p.pesoMedioKg)>0 && tipoDoLote.get(p.loteId)===tipo) dataDaPesagem.set(p.id, p.data); });
+  const repeticoes = new Map();
+  state.pesagensAnimais.forEach(pa=>{
+    if(!dataDaPesagem.has(pa.pesagemId)) return;
+    const k = pa.pesagemId+'|'+chaveNumeroAnimal(pa.numeroAnimal);
+    repeticoes.set(k, (repeticoes.get(k)||0)+1);
+  });
+  const porNumero = new Map(), porPesagem = new Map();
+  state.pesagensAnimais.forEach(pa=>{
+    const data = dataDaPesagem.get(pa.pesagemId);
+    const numero = chaveNumeroAnimal(pa.numeroAnimal);
+    if(!data || !numero || !(Number(pa.pesoKg)>0)) return;
+    if(repeticoes.get(pa.pesagemId+'|'+numero)>1) return;
+    const item = {numero, data, pesoKg:Number(pa.pesoKg), pesagemId:pa.pesagemId};
+    if(!porNumero.has(numero)) porNumero.set(numero, []);
+    porNumero.get(numero).push(item);
+    if(!porPesagem.has(pa.pesagemId)) porPesagem.set(pa.pesagemId, []);
+    porPesagem.get(pa.pesagemId).push(item);
+  });
+  porNumero.forEach(lista=>lista.sort((a,b)=>a.data.localeCompare(b.data) || a.pesagemId-b.pesagemId));
+  cache[tipo] = {porNumero, porPesagem};
+  return cache[tipo];
+}
+// GMD médio dos animais da pesagem `atual` que têm peso anterior (data
+// menor que a dela). Sem `desde`: o peso mais recente antes dela (ganho
+// "desde a anterior"). Com `desde`: o primeiro peso a partir dessa data
+// (ganho de uma janela, ex. da primeira à última pesagem do lote).
+// Retorna null quando nenhum animal tem par.
+function gmdBoiABoi(atual, tipo, desde){
+  const {porNumero, porPesagem} = indicePesosIndividuais(tipo);
+  const gmds = [];
+  (porPesagem.get(atual.id)||[]).forEach(item=>{
+    const antes = (porNumero.get(item.numero)||[]).filter(x=>x.data<atual.data && (!desde || x.data>=desde));
+    if(antes.length===0) return;
+    const ref = desde ? antes[0] : antes[antes.length-1];
+    const gmd = gmdEntre(ref.pesoKg, item.pesoKg, ref.data, atual.data);
+    if(gmd!==null) gmds.push(gmd);
+  });
+  if(gmds.length===0) return null;
+  return {gmd: gmds.reduce((a,g)=>a+g,0)/gmds.length, animais: gmds.length, boiABoi: true};
+}
+// GMD de uma pesagem do lote desde a anterior: boi a boi quando dá, senão
+// pela média do lote contra a pesagem anterior dele. Funciona também na
+// primeira pesagem de um lote novo, se os bois já tinham sido pesados em
+// outro curral. null quando não há com o que comparar.
+function gmdDesdeAnterior(lote, pesagem){
+  const boi = gmdBoiABoi(pesagem, loteTipo(lote), null);
+  if(boi) return boi;
+  const historico = pesagensDoLote(lote.id);
+  const idx = historico.findIndex(h=>h.id===pesagem.id);
+  if(idx<=0) return null;
+  const anterior = historico[idx-1];
+  const gmd = gmdEntre(Number(anterior.pesoMedioKg), Number(pesagem.pesoMedioKg), anterior.data, pesagem.data);
+  return gmd===null ? null : {gmd, animais:0, boiABoi:false};
+}
+// Ganho por animal (kg) e GMD entre duas pesagens do lote (janela): boi a
+// boi quando dá (GMD médio dos animais x dias da janela), senão diferença
+// das médias.
+function ganhoDoLoteNaJanela(lote, inicial, final){
+  const dias = (new Date(final.data) - new Date(inicial.data)) / 86400000;
+  const boi = dias>0 ? gmdBoiABoi(final, loteTipo(lote), inicial.data) : null;
+  if(boi) return {ganhoKg: boi.gmd*dias, gmd: boi.gmd, animais: boi.animais, boiABoi: true};
+  const ganhoKg = Number(final.pesoMedioKg) - Number(inicial.pesoMedioKg);
+  return {ganhoKg, gmd: gmdEntre(Number(inicial.pesoMedioKg), Number(final.pesoMedioKg), inicial.data, final.data), animais: 0, boiABoi: false};
+}
+function fmtGmd(r, casas){
+  if(!r || r.gmd===null || r.gmd===undefined) return '—';
+  return `${r.gmd>=0?'+':''}${fmt(r.gmd, casas||2)} kg/dia <span class="hint">${r.boiABoi ? `(boi a boi, ${fmtInt(r.animais)})` : '(média do lote)'}</span>`;
+}
 // Peso do lote na pesagem mais recente até (incluirIgual=true) ou antes de
 // (incluirIgual=false) uma data — usado pra "ganho de peso dentro do mês",
 // que precisa do peso mais próximo de antes do mês começar.
@@ -4194,7 +4284,9 @@ function ganhoPesoNoMes(loteId, mesStr){
     inicial = doMes[0];
   }
   if(inicial.data>=final.data) return null;
-  return {ganhoKg: Number(final.pesoMedioKg)-Number(inicial.pesoMedioKg), dataInicial:inicial.data, dataFinal:final.data};
+  const lote = state.lotes.find(l=>l.id===loteId);
+  const ganho = lote ? ganhoDoLoteNaJanela(lote, inicial, final) : {ganhoKg: Number(final.pesoMedioKg)-Number(inicial.pesoMedioKg)};
+  return {ganhoKg: ganho.ganhoKg, dataInicial:inicial.data, dataFinal:final.data};
 }
 // @ produzidas por um lote num mês = ganho de peso (kg) ÷ 30 × nº de animais.
 function arrobasProduzidasNoMes(loteId, mesStr, numeroAnimais){
@@ -4732,7 +4824,7 @@ function custosDiariosPorLote(){
     const historico = pesagensDoLote(lote.id);
     if(historico.length<2) return null;
     const primeira = historico[0], ultima = historico[historico.length-1];
-    const ganho = Number(ultima.pesoMedioKg) - Number(primeira.pesoMedioKg);
+    const ganho = ganhoDoLoteNaJanela(lote, primeira, ultima).ganhoKg;
     const arrobas = (ganho/KG_POR_ARROBA) * numeroAnimaisParaArroba(lote, ultima);
     if(arrobas<=0) return {arrobas, custoJanela:0, custoPorArroba:null};
     const racaoJanela = state.saidasRacao.filter(s=>s.loteId===lote.id && s.data>=primeira.data && s.data<=ultima.data).reduce((a,s)=>a+custoSaidaRacao(s),0);

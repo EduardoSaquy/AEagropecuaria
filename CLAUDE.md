@@ -285,6 +285,22 @@ Confinamento), aí sim dá pra repartir o custo — hoje não.
 - A venda de milho **é receita da Pecuária de propósito**: ela compra o milho
   da lavoura e revende a sobra. Não reclassificar.
 
+### Ganho de peso (GMD) é boi a boi, não pela média do lote
+
+Pedido do Eduardo em 21/10/2026. O GMD pela média (peso médio de agora −
+peso médio da pesagem anterior do lote) compara grupos diferentes quando o
+curral é apartado: o Curral 2 mostrava +0,22 kg/dia (108 bois antes, 62
+depois) e o ganho real, dos 59 bois presentes nas duas, era +1,02. Quando a
+pesagem tem peso por animal, `gmdDesdeAnterior`/`ganhoDoLoteNaJanela`
+(AEpecuaria.html) calculam com o **mesmo animal** nas duas pesagens,
+procurado em qualquer lote do mesmo tipo (`indicePesosIndividuais`: o boi
+apartado leva o histórico; a vaca com o mesmo número fica de fora por estar
+em lote de Cria). Número repetido na mesma pesagem é ambíguo e não entra.
+Sem peso por animal, volta pela média. Vale para "GMD desde a anterior",
+Painel de Resultado dos Lotes, @ produzidas/Custo/@ (ganho = GMD × dias) e
+o GMD de cada animal no detalhe do lote. A tela diz qual método usou.
+`teste_gmd_boi_a_boi.py`.
+
 ### Resultados > Empresa: a empresa como uma atividade só
 
 Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
@@ -503,7 +519,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-26 arquivos `teste_*.py`, 671 checagens (16/10/2026; a tabela abaixo lista os
+27 arquivos `teste_*.py`, 678 checagens (21/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -531,6 +547,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_sem_dados_sensiveis.py` | 14 | todo arquivo versionado (repositório público: sem CPF/CNPJ, número de conta, de contrato ou de documento; sem dumps de dados) |
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
 | `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
+| `teste_gmd_boi_a_boi.py` | 7 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
