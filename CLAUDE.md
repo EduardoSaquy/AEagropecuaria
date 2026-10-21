@@ -336,6 +336,21 @@ Pedidos do Eduardo em 21/10/2026 (AEMatriz.html):
   `trg_baixa_gera_lancamento` cria os lançamentos como na baixa individual.
   Baixa parcial continua uma a uma. `teste_contas_lote.py`.
 
+### Cana: área colhida na colheita
+
+Pedido do Eduardo em 21/10/2026. Coluna opcional `colheitas_cana.area_colhida`
+(`cana_colheita_area_colhida.sql`, rodar ANTES do app novo). Em branco = o
+talhão inteiro foi colhido. Serve para quando parte do talhão fica sem colher
+(cana planta do ano): o TCH do formulário e do histórico do talhão (média
+ponderada: soma das toneladas ÷ soma das áreas colhidas) e a produtividade do
+Matriz (`areaColhidaNoPeriodo`: por talhão, a área colhida informada ou a do
+talhão; com mais de um corte no período, a maior) usam esse número
+(`areaDaColheita` no AECana). Área colhida maior que o talhão não salva.
+`teste_area_colhida_cana.py`. Colheita de grãos não tem o campo.
+Na Palmito (21/10/2026) os talhões "Histórico 2023/2024/2025" foram apagados
+(as 3 colheitas deles divididas pela área dos Talhões 1 a 5) e a colheita de
+20/10/2026 (11.483,74 t) ficou em 112,41 ha colhidos de 152,41 ha.
+
 ### Resultados > Empresa: a empresa como uma atividade só
 
 Fluxo de caixa em 3 blocos, juros por ano e por ano-safra, cobertura de juros
@@ -563,7 +578,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-29 arquivos `teste_*.py`, 705 checagens (21/10/2026; a tabela abaixo lista os
+30 arquivos `teste_*.py`, 715 checagens (21/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -594,6 +609,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_gmd_boi_a_boi.py` | 7 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média) |
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
+| `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

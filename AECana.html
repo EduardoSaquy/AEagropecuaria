@@ -320,6 +320,13 @@ const OPCOES = {
  * escolher a cultura — nesse estado ele não some do cadastro, mas
  * fica de fora de Custo por Talhão/Histórico (não dá pra saber qual
  * conjunto de tabelas usar). */
+// Area que entra no TCH de uma colheita: a area colhida, se informada; senao
+// o talhao inteiro. Usado no formulario, na lista e no historico do talhao.
+function areaDaColheita(c){
+  if(Number(c?.areaColhida) > 0) return Number(c.areaColhida);
+  const t = state.talhoes.find(x=>x.id===c?.talhaoId);
+  return t && Number(t.areaHa) > 0 ? Number(t.areaHa) : null;
+}
 function frenteDoTalhao(t){
   if(!t || t.culturaId==null) return null;
   const c = state.culturas.find(x=>x.id===t.culturaId);
@@ -407,9 +414,15 @@ const CADASTROS = {
       {key:'data', label:'Data', type:'date', required:true},
       {key:'corte', label:'Corte', type:'number', step:'1', dec:0, hint:'1 = cana-planta, 2 = 1ª soca, 3 = 2ª soca...'},
       {key:'toneladas', label:'Toneladas', type:'number', step:'0.01', required:true},
+      // Area colhida: pedido do Eduardo em 21/10/2026 (Palmito: 40 ha de
+      // cana planta do ano no meio dos talhoes nao foram colhidos e o TCH
+      // pela area toda do talhao saia de 24 t/ha num talhao de 102). Em
+      // branco = o talhao inteiro foi colhido, como sempre foi.
+      {key:'areaColhida', label:'Área colhida (ha)', type:'number', step:'0.01', list:false,
+       hint:'Só se parte do talhão não foi colhida (ex: cana planta do ano). Em branco = o talhão inteiro.'},
       {key:'tch', label:'TCH (t/ha)', type:'computed', compute:item=>{
-        const t = state.talhoes.find(x=>x.id===item.talhaoId);
-        return (t && t.areaHa) ? fmt(Number(item.toneladas||0)/Number(t.areaHa)) : '—';
+        const area = areaDaColheita(item);
+        return area ? fmt(Number(item.toneladas||0)/area) : '—';
       }},
       // Mesma ideia do campo Safra (ano_safra) do financeiro no Matriz: em
       // branco, conta pelo mês da data de corte, como sempre foi. A usina já
@@ -1124,6 +1137,11 @@ async function salvarCadastro(key){
     if(f.type==='checkbox') val = !!raw;
     row[toSnake(f.key)] = (val===''? null : val);
   });
+  if(!erro && key==='colheitasCana' && Number(row.area_colhida) > 0){
+    const t = state.talhoes.find(x=>x.id===row.talhao_id);
+    if(t && Number(t.areaHa) > 0 && Number(row.area_colhida) > Number(t.areaHa) + 0.001)
+      erro = `A área colhida (${fmt(row.area_colhida)} ha) passa da área do talhão (${fmt(t.areaHa)} ha).`;
+  }
   if(erro){ state.cadastroError = erro; render(); return; }
   state.cadastroLoading = true; state.cadastroError = ''; render();
   let error;
@@ -1379,7 +1397,10 @@ function ModalHistoricoTalhao(){
 
   const colheitasDoTalhao = state[chaveColheitas].filter(c=>c.talhaoId===talhaoId).sort((a,b)=> (b.data||'').localeCompare(a.data||''));
   const producaoTotal = colheitasDoTalhao.reduce((a,c)=>a+Number(c[campoQtd]||0),0);
-  const produtividadeMedia = t.areaHa ? producaoTotal/Number(t.areaHa)/(colheitasDoTalhao.length||1) : null;
+  // Media ponderada pela area colhida de cada corte (sem area colhida, o
+  // talhao inteiro): soma das toneladas / soma das areas colhidas.
+  const areaColhidaTotal = colheitasDoTalhao.reduce((a,c)=>a+(frenteChave==='Cana' ? (areaDaColheita(c)||0) : Number(t.areaHa||0)),0);
+  const produtividadeMedia = areaColhidaTotal>0 ? producaoTotal/areaColhidaTotal : null;
 
   const aplicacoesDoTalhao = state[chaveAplicacoes].filter(a=>a.talhaoId===talhaoId);
   const porInsumo = {};
@@ -1419,7 +1440,8 @@ function ModalHistoricoTalhao(){
                 <td>${fmtData(c.data)}</td>
                 ${frenteChave==='Cana'?`<td>${c.corte ?? '—'}</td>`:''}
                 <td class="mono">${fmt(c[campoQtd])} ${unidade}</td>
-                <td class="mono">${t.areaHa ? fmt(Number(c[campoQtd]||0)/Number(t.areaHa)) + ' '+unidade+'/ha' : '—'}</td>
+                <td class="mono">${(()=>{ const a = frenteChave==='Cana' ? areaDaColheita(c) : Number(t.areaHa||0);
+                  return a ? fmt(Number(c[campoQtd]||0)/a) + ' '+unidade+'/ha' + (frenteChave==='Cana' && Number(c.areaColhida)>0 ? ` <span class="hint">(${fmt(a)} ha colhidos)</span>` : '') : '—'; })()}</td>
               </tr>
             `).join('')}
           </tbody>

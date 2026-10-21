@@ -806,11 +806,14 @@ async function carregarIndicadoresCana(){
       // que dividir pela área que foi colhida, não pela área total
       // cadastrada em Fazendas (essa serve pra despesa/receita por
       // hectare, não pra produtividade).
-      fetchAllRows(()=>db.from('colheitas_cana').select('data, toneladas, talhao_id, ano_safra').order('id')),
+      // select('*'): area_colhida (21/10/2026) entra sem quebrar se a coluna
+      // ainda nao existir no banco.
+      fetchAllRows(()=>db.from('colheitas_cana').select('*').order('id')),
     ]);
     if(planRes.error) throw planRes.error;
     if(colRes.error) throw colRes.error;
-    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0), talhaoId:c.talhao_id, anoSafra:c.ano_safra??null}));
+    state.colheitasCana = (colRes.data||[]).map(c=>({data:c.data, toneladas:Number(c.toneladas||0), talhaoId:c.talhao_id, anoSafra:c.ano_safra??null,
+      areaColhida: Number(c.area_colhida) > 0 ? Number(c.area_colhida) : null}));
     const hoje = new Date();
     const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     state.indicadores.cana = {
@@ -2333,23 +2336,24 @@ function resumoPecuariaNoPeriodo(periodo){
 // colhida ou não. Só Cana e Cereais têm "colheita" nesse sentido;
 // Pecuária não (pasto/confinamento não "colhe", continua por hectaresPorOperacao).
 function areaColhidaNoPeriodo(slug, periodo){
-  if(slug==='cana' && periodo.tipo==='safra'){
-    const talhoesColhidos = new Set(colheitasCanaNaSafra(periodo.safra).filter(c=>c.talhaoId!=null).map(c=>c.talhaoId));
-    return [...talhoesColhidos].reduce((soma,id)=>{
-      const t = state.talhoes.find(x=>x.id===id);
-      return soma + Number(t?.areaHa||0);
-    }, 0);
+  let colheitas;
+  if(slug==='cana' && periodo.tipo==='safra') colheitas = colheitasCanaNaSafra(periodo.safra);
+  else {
+    const meses = new Set(periodoMeses(periodo));
+    const todas = slug==='cana' ? state.colheitasCana : slug==='cereais' ? state.colheitasGraos : null;
+    if(!todas) return null;
+    colheitas = todas.filter(c=>c.data && meses.has(c.data.slice(0,7)));
   }
-  const meses = new Set(periodoMeses(periodo));
-  const colheitas = slug==='cana' ? state.colheitasCana : slug==='cereais' ? state.colheitasGraos : null;
-  if(!colheitas) return null;
-  const talhoesColhidos = new Set(
-    colheitas.filter(c=>c.data && meses.has(c.data.slice(0,7)) && c.talhaoId!=null).map(c=>c.talhaoId)
-  );
-  return [...talhoesColhidos].reduce((soma,id)=>{
-    const t = state.talhoes.find(x=>x.id===id);
-    return soma + Number(t?.areaHa||0);
-  }, 0);
+  // Cada talhao colhido conta uma vez: a area do talhao, ou a area colhida
+  // informada na colheita (cana: parte do talhao ficou sem colher, ex. cana
+  // planta do ano). Com mais de um corte no periodo, vale a maior.
+  const areaPorTalhao = new Map();
+  colheitas.filter(c=>c.talhaoId!=null).forEach(c=>{
+    const t = state.talhoes.find(x=>x.id===c.talhaoId);
+    const area = Number(c.areaColhida) > 0 ? Number(c.areaColhida) : Number(t?.areaHa||0);
+    areaPorTalhao.set(c.talhaoId, Math.max(areaPorTalhao.get(c.talhaoId)||0, area));
+  });
+  return [...areaPorTalhao.values()].reduce((a,v)=>a+v, 0);
 }
 // Ponto único: produtividade de uma operação no período, na unidade certa
 // pra cada uma. null quando não tem hectare cadastrado (mesma regra que
