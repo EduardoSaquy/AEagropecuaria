@@ -352,6 +352,13 @@
     }
     tbody tr:hover td:last-child{background:var(--cinza-bg);}
   }
+/* Financiamentos: valor e juros de cada parcela digitados. Bloco por parcela,
+   os 3 campos lado a lado quando cabem e um embaixo do outro no celular. */
+.parcela-manual{display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:6px 10px;
+  padding:8px 0; border-bottom:1px solid var(--cinza-claro);}
+.parcela-manual-num{grid-column:1/-1; font-weight:600; font-size:13px;}
+.parcela-manual label{display:flex; flex-direction:column; gap:3px; font-size:12px; font-weight:500; min-width:0;}
+.parcela-manual input{width:100%; min-width:0; box-sizing:border-box;}
 </style>
 </head>
 <body>
@@ -3757,6 +3764,13 @@ const SISTEMA_AMORT = [
   ['sac','SAC (amortização constante)'],
   ['price','Price (parcela fixa)'],
 ];
+// Intervalo entre as parcelas, em meses. Crédito rural costuma ser anual.
+const PERIODICIDADE_FIN = [[1,'Mensal'],[3,'Trimestral'],[6,'Semestral'],[12,'Anual']];
+const PERIODICIDADE_FIN_PLURAL = {1:'mensais', 3:'trimestrais', 6:'semestrais', 12:'anuais'};
+function periodicidadeFin(f){
+  const n = Number(f?.periodicidadeMeses);
+  return PERIODICIDADE_FIN.some(([k])=>k===n) ? n : 1;
+}
 const STATUS_FIN_LABEL = {ativo:'Ativo', quitado:'Quitado', renegociado:'Renegociado', cancelado:'Cancelado'};
 const STATUS_PARC_LABEL = {pendente:'Pendente', paga:'Paga', atrasada:'Atrasada', cancelada:'Cancelada'};
 const NOME_CENTRO_JUROS_FIN = 'Juros e Encargos de Financiamento';
@@ -3766,7 +3780,8 @@ function rowToFinanciamento(r){
           valorPrincipal:r.valor_principal, valorIof:r.valor_iof||0, valorSeguro:r.valor_seguro||0,
           dataContratacao:r.data_contratacao, taxaJurosAa:r.taxa_juros_aa,
           sistemaAmortizacao:r.sistema_amortizacao, numeroParcelas:r.numero_parcelas,
-          carenciaMeses:r.carencia_meses, atividade:r.atividade||'', fazendaId:r.fazenda_id,
+          carenciaMeses:r.carencia_meses, periodicidadeMeses:r.periodicidade_meses||1,
+          primeiroVencimento:r.primeiro_vencimento||'', atividade:r.atividade||'', fazendaId:r.fazenda_id,
           garantia:r.garantia||'', status:r.status, financiamentoOrigemId:r.financiamento_origem_id,
           observacao:r.observacao||''};
 }
@@ -3776,7 +3791,9 @@ function financiamentoToRow(f){
           data_contratacao:f.dataContratacao, taxa_juros_aa:Number(f.taxaJurosAa)||0,
           sistema_amortizacao:f.sistemaAmortizacao,
           numero_parcelas: f.sistemaAmortizacao==='parcela_unica' ? 1 : (Number(f.numeroParcelas)||1),
-          carencia_meses:Number(f.carenciaMeses)||0,
+          carencia_meses:carenciaDoContrato(f),
+          periodicidade_meses: f.sistemaAmortizacao==='parcela_unica' ? 12 : periodicidadeFin(f),
+          primeiro_vencimento: f.primeiroVencimento || null,
           // Capital de giro não tem uma atividade só — o juros de cada
           // parcela paga é dividido em 3 partes iguais ao ser lançado.
           atividade: f.finalidade==='capital_giro' ? null : (f.atividade||null),
@@ -3801,7 +3818,26 @@ function addMeses(dataStr, n){
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
 
+// Meses entre duas datas 'AAAA-MM-DD': exato quando o dia do mês é o mesmo
+// (15/11 -> 15/12 = 1), senão pelos dias corridos.
+function mesesEntre(a, b){
+  const [y1,m1,d1] = a.split('-').map(Number), [y2,m2,d2] = b.split('-').map(Number);
+  if(d1===d2) return (y2-y1)*12 + (m2-m1);
+  return (Date.UTC(y2,m2-1,d2) - Date.UTC(y1,m1-1,d1)) / 86400000 / 365 * 12;
+}
+// Carência gravada no contrato: com a data do 1º vencimento, é o que sobra
+// entre a contratação e ele além de um intervalo normal entre parcelas.
+function carenciaDoContrato(f){
+  if(!f.primeiroVencimento || !f.dataContratacao) return Number(f.carenciaMeses)||0;
+  const meses = Math.round(mesesEntre(f.dataContratacao, f.primeiroVencimento));
+  if(f.sistemaAmortizacao==='parcela_unica') return Math.max(0, meses);
+  return Math.max(0, meses - periodicidadeFin(f));
+}
+
 // Gera o cronograma inteiro de uma vez, a partir dos termos do contrato.
+// Com primeiroVencimento, as parcelas vencem nele e depois a cada
+// periodicidadeMeses; o juros da 1ª conta o prazo real desde a contratação.
+// Sem ele (contrato antigo), segue a carência, como sempre foi.
 // taxaJurosAa é % ao ano; a conversão pra taxa mensal composta é a mesma
 // convenção que os bancos usam pra montar tabela SAC/Price.
 function gerarParcelasFinanciamento(f){
@@ -3812,35 +3848,71 @@ function gerarParcelasFinanciamento(f){
     // Custeio agrícola típico: um desembolso, uma parcela só no fim do
     // ciclo (normalmente a colheita). "Carência" aqui é o prazo até esse
     // vencimento único, não meses sem pagar antes de outras parcelas.
-    const meses = carencia > 0 ? carencia : 12;
+    const venc = f.primeiroVencimento || addMeses(f.dataContratacao, carencia > 0 ? carencia : 12);
+    const meses = Math.max(0, mesesEntre(f.dataContratacao, venc));
     const juros = principal * (Math.pow(1+taxaAa/100, meses/12) - 1);
-    return [{numero:1, dataVencimento:addMeses(f.dataContratacao, meses),
+    return [{numero:1, dataVencimento:venc,
               valorParcela:principal+juros, valorAmortizacao:principal, valorJuros:juros, saldoDevedorApos:0}];
   }
   const n = Math.max(1, Number(f.numeroParcelas)||1);
-  const taxaMensal = Math.pow(1+taxaAa/100, 1/12) - 1;
+  const per = periodicidadeFin(f);
+  const primeiro = f.primeiroVencimento || '';
+  const vencimento = i => primeiro ? addMeses(primeiro, (i-1)*per) : addMeses(f.dataContratacao, carencia + i*per);
+  const taxaPeriodo = Math.pow(1+taxaAa/100, per/12) - 1;
+  // 1ª parcela com data informada: juros do prazo real desde a contratação
+  // (contratou em março, 1º vencimento em dezembro do ano seguinte = 21 meses)
+  const taxaDaParcela = i => (i===1 && primeiro)
+    ? Math.pow(1+taxaAa/100, Math.max(0, mesesEntre(f.dataContratacao, primeiro))/12) - 1
+    : taxaPeriodo;
   const parcelas = [];
   let saldo = principal;
   if(f.sistemaAmortizacao === 'sac'){
     const amortConstante = principal / n;
     for(let i=1; i<=n; i++){
-      const juros = saldo * taxaMensal;
+      const juros = saldo * taxaDaParcela(i);
       const amort = i===n ? saldo : amortConstante; // a última fecha o resíduo de arredondamento
       saldo -= amort;
-      parcelas.push({numero:i, dataVencimento:addMeses(f.dataContratacao, carencia+i),
+      parcelas.push({numero:i, dataVencimento:vencimento(i),
                       valorParcela:juros+amort, valorAmortizacao:amort, valorJuros:juros, saldoDevedorApos:Math.max(0,saldo)});
     }
-  } else { // price
-    const prestacao = taxaMensal===0 ? principal/n : principal*taxaMensal/(1-Math.pow(1+taxaMensal,-n));
+  } else { // price: a amortização segue a tabela; só o juros da 1ª muda com o prazo real
+    const prestacao = taxaPeriodo===0 ? principal/n : principal*taxaPeriodo/(1-Math.pow(1+taxaPeriodo,-n));
     for(let i=1; i<=n; i++){
-      const juros = saldo * taxaMensal;
-      const amort = i===n ? saldo : (prestacao - juros);
+      const juros = saldo * taxaDaParcela(i);
+      const amort = i===n ? saldo : (prestacao - saldo * taxaPeriodo);
       saldo -= amort;
-      parcelas.push({numero:i, dataVencimento:addMeses(f.dataContratacao, carencia+i),
-                      valorParcela: i===n ? amort+juros : prestacao, valorAmortizacao:amort, valorJuros:juros, saldoDevedorApos:Math.max(0,saldo)});
+      parcelas.push({numero:i, dataVencimento:vencimento(i),
+                      valorParcela: amort+juros, valorAmortizacao:amort, valorJuros:juros, saldoDevedorApos:Math.max(0,saldo)});
     }
   }
   return parcelas;
+}
+// Tabela digitada -> parcelas: amortização = parcela - juros; saldo a partir
+// do principal.
+function parcelasDosValoresInformados(f){
+  let saldo = Number(f.valorPrincipal)||0;
+  return f._parcelasManuais.map((p,i)=>{
+    const valor = Number(p.valorParcela)||0, juros = Number(p.valorJuros)||0, amort = valor - juros;
+    saldo = arred2(saldo - amort);
+    return {numero:i+1, dataVencimento:p.dataVencimento, valorParcela:valor, valorAmortizacao:amort,
+            valorJuros:juros, saldoDevedorApos:Math.max(0, saldo)};
+  });
+}
+function erroParcelasManuais(f){
+  const ps = f._parcelasManuais;
+  for(let i=0; i<ps.length; i++){
+    const p = ps[i], valor = Number(p.valorParcela), juros = Number(p.valorJuros);
+    if(!p.dataVencimento) return `Parcela ${i+1}: falta o vencimento.`;
+    if(i>0 && p.dataVencimento <= ps[i-1].dataVencimento) return `Parcela ${i+1}: o vencimento tem que ser depois do da parcela ${i}.`;
+    if(!(valor > 0)) return `Parcela ${i+1}: falta o valor da parcela.`;
+    if(!(juros >= 0) || String(p.valorJuros).trim()==='') return `Parcela ${i+1}: falta o juros (0 se não tiver).`;
+    if(juros > valor) return `Parcela ${i+1}: o juros é maior que a parcela.`;
+  }
+  const amort = ps.reduce((s,p)=>s + Number(p.valorParcela) - Number(p.valorJuros), 0);
+  const principal = Number(f.valorPrincipal)||0;
+  if(Math.abs(amort - principal) > 1)
+    return `A soma das amortizações (parcelas - juros) dá R$ ${fmt(amort)}, e o valor principal é R$ ${fmt(principal)}. Ajuste as parcelas ou o principal.`;
+  return '';
 }
 function parcelaToRow(p, financiamentoId){
   return {financiamento_id:financiamentoId, numero:p.numero, data_vencimento:p.dataVencimento,
@@ -4021,7 +4093,12 @@ function lerFinanciamentoDoFormulario(base){
     taxaJurosAa: v('f-taxafin'),
     sistemaAmortizacao: v('f-sistemafin') || base.sistemaAmortizacao,
     numeroParcelas: v('f-numparcelasfin'),
-    carenciaMeses: v('f-carenciafin'),
+    periodicidadeMeses: Number(v('f-periodicidadefin')) || base.periodicidadeMeses,
+    primeiroVencimento: v('f-vencfin'),
+    _parcelasManuais: base._parcelasManuais ? base._parcelasManuais.map((p,i)=>({
+      dataVencimento: document.querySelector(`[data-pm-venc="${i}"]`)?.value ?? p.dataVencimento,
+      valorParcela: document.querySelector(`[data-pm-valor="${i}"]`)?.value ?? p.valorParcela,
+      valorJuros: document.querySelector(`[data-pm-juros="${i}"]`)?.value ?? p.valorJuros})) : undefined,
     valorIof: v('f-ioffin'),
     valorSeguro: v('f-segurofin'),
     fazendaId: v('f-fazendafin'),
@@ -4114,10 +4191,11 @@ function PageFinanciamentoDetalhe(){
     ${podeEditar && f.status==='ativo' && parcelas.some(parcelaAberta) ? `<button class="btn btn-ghost btn-sm" data-quitar-financiamento="${f.id}">Quitar</button>` : ''}
     ${podeEditar && f.status==='ativo' ? `<button class="btn btn-ghost btn-sm" data-renegociar-financiamento="${f.id}">Renegociar</button>` : ''}
     ${podeEditar && (f.status==='ativo' || f.status==='quitado') ? `<button class="btn-danger-ghost" data-cancelar-financiamento="${f.id}">Cancelar contrato</button>` : ''}
+    ${podeExcluir() ? `<button class="btn-danger-ghost" data-excluir-financiamento="${f.id}">Excluir</button>` : ''}
   </div>
   <div class="card card-pad" style="margin-bottom:14px;">
     <h3 style="margin-bottom:8px;">${esc(f.banco)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
-    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}</p>
+    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}${f.sistemaAmortizacao!=='parcela_unica' && !importadoDoErp(f) ? ` · parcelas ${PERIODICIDADE_FIN_PLURAL[periodicidadeFin(f)]}` : ''}</p>
     ${f.garantia ? `<p class="hint">Garantia: ${esc(f.garantia)}</p>` : ''}
     ${f.financiamentoOrigemId ? `<p class="hint">Nasceu de renegociação do financiamento #${f.financiamentoOrigemId}.</p>` : ''}
     ${(Number(f.valorIof)>0 || Number(f.valorSeguro)>0) ? `<p class="hint">IOF: R$ ${fmt(f.valorIof)} · Seguro: R$ ${fmt(f.valorSeguro)} (informativo, não lançado no Financeiro)</p>` : ''}
@@ -4150,6 +4228,64 @@ function PageFinanciamentoDetalhe(){
       </tbody>
     </table>`}
   </div>`;
+}
+
+// "7 parcelas anuais, de 15/12/2024 a 15/12/2030" — confere o cronograma
+// antes de salvar.
+function resumoCronogramaFin(d){
+  if(!d.primeiroVencimento) return '';
+  const br = s => s.split('-').reverse().join('/');
+  if(d.sistemaAmortizacao==='parcela_unica') return `Parcela única em ${br(d.primeiroVencimento)}.`;
+  const n = Math.floor(Number(d.numeroParcelas));
+  if(!(n >= 1)) return '';
+  const per = periodicidadeFin(d);
+  const ultima = addMeses(d.primeiroVencimento, (n-1)*per);
+  return n===1 ? `1 parcela em ${br(d.primeiroVencimento)}.`
+               : `${n} parcelas ${PERIODICIDADE_FIN_PLURAL[per]}, de ${br(d.primeiroVencimento)} a ${br(ultima)}.`;
+}
+
+// Valor e juros de cada parcela digitados (os da cédula), em vez do cálculo
+// pela taxa. Abre já preenchida com o cálculo; amortização = parcela - juros.
+function TabelaParcelasManuais(d){
+  if(!d._parcelasManuais) return `
+        <div class="field"><button class="btn btn-ghost btn-sm" data-parcelas-manuais="1">Informar valor e juros de cada parcela</button>
+          <span class="hint">Use para lançar os valores da cédula do banco. Sem isso, o app calcula pela taxa.</span></div>`;
+  const linhas = d._parcelasManuais;
+  return `
+        <div class="field"><label>Parcelas (valores da cédula)</label>
+          ${linhas.map((p,i)=>`
+          <div class="parcela-manual">
+            <div class="parcela-manual-num">${i+1}ª parcela</div>
+            <label>Vencimento<input type="date" data-pm-venc="${i}" value="${p.dataVencimento||''}"/></label>
+            <label>Valor da parcela (R$)<input type="number" step="0.01" min="0" data-pm-valor="${i}" value="${p.valorParcela ?? ''}" autocomplete="off"/></label>
+            <label>Juros (R$)<input type="number" step="0.01" min="0" data-pm-juros="${i}" value="${p.valorJuros ?? ''}" autocomplete="off"/></label>
+          </div>`).join('')}
+          <span class="hint" id="soma-parcelas-manuais">${esc(somaParcelasManuais(d))}</span>
+          <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" data-parcelas-recalcular="1">Recalcular pela taxa</button>
+            <span class="hint">Mudou o número de parcelas, o pagamento ou o 1º vencimento? Recalcule para refazer a tabela.</span></div>
+        </div>`;
+}
+function somaParcelasManuais(d){
+  const amort = (d._parcelasManuais||[]).reduce((s,p)=>s + (Number(p.valorParcela)||0) - (Number(p.valorJuros)||0), 0);
+  const principal = Number(d.valorPrincipal)||0;
+  const dif = arred2(amort - principal);
+  return `Amortização (parcelas - juros): R$ ${fmt(amort)} · principal R$ ${fmt(principal)}`
+    + (Math.abs(dif) > 1 ? ` · diferença R$ ${fmt(dif)}` : ' · bate');
+}
+// Cronograma do formulário, já arredondado como vai para o banco.
+function parcelasCalculadasFin(d){
+  return gerarParcelasFinanciamento(d).map(p=>({dataVencimento:p.dataVencimento,
+    valorParcela:arred2(p.valorParcela), valorJuros:arred2(p.valorJuros)}));
+}
+// Contrato já salvo com valores digitados (não batem com o cálculo pela taxa):
+// ao editar, a tabela abre com eles, para não serem trocados pelo cálculo.
+function parcelasManuaisDoContrato(f){
+  const salvas = parcelasDoFinanciamento(f.id);
+  if(!salvas.length || !f.primeiroVencimento) return null;
+  const calc = parcelasCalculadasFin(f);
+  const igual = calc.length===salvas.length && calc.every((c,i)=>c.dataVencimento===salvas[i].dataVencimento
+    && Math.abs(c.valorParcela-Number(salvas[i].valorParcela))<0.02 && Math.abs(c.valorJuros-Number(salvas[i].valorJuros))<0.02);
+  return igual ? null : salvas.map(p=>({dataVencimento:p.dataVencimento, valorParcela:Number(p.valorParcela), valorJuros:Number(p.valorJuros)}));
 }
 
 function ModalFinanciamento(){
@@ -4201,12 +4337,20 @@ function ModalFinanciamento(){
             ${SISTEMA_AMORT.map(([k,l])=>`<option value="${k}" ${d.sistemaAmortizacao===k?'selected':''}>${l}</option>`).join('')}
           </select>
         </div>
-        <div class="field" id="campo-parcelasfin" style="${d.sistemaAmortizacao==='parcela_unica'?'display:none;':''}"><label>Número de parcelas</label>
-          <input id="f-numparcelasfin" type="number" step="1" min="1" value="${d.numeroParcelas || 12}" autocomplete="off"/>
+        ${d.sistemaAmortizacao==='parcela_unica' ? '' : `
+        <div class="field"><label>Pagamento das parcelas</label>
+          <select id="f-periodicidadefin">
+            ${PERIODICIDADE_FIN.map(([k,l])=>`<option value="${k}" ${periodicidadeFin(d)===k?'selected':''}>${l}</option>`).join('')}
+          </select>
         </div>
-        <div class="field"><label>Carência (meses)${d.sistemaAmortizacao==='parcela_unica'?' até o vencimento':' antes da 1ª parcela'}</label>
-          <input id="f-carenciafin" type="number" step="1" min="0" value="${d.carenciaMeses ?? (d.sistemaAmortizacao==='parcela_unica'?12:0)}" autocomplete="off"/>
+        <div class="field"><label>Número de parcelas</label>
+          <input id="f-numparcelasfin" type="number" step="1" min="1" value="${d.numeroParcelas ?? ''}" autocomplete="off"/>
+        </div>`}
+        <div class="field"><label>${d.sistemaAmortizacao==='parcela_unica' ? 'Data do vencimento' : 'Data do 1º vencimento'}</label>
+          <input id="f-vencfin" type="date" value="${d.primeiroVencimento||''}"/>
+          <span class="hint" id="resumo-cronogramafin">${esc(resumoCronogramaFin(d))}</span>
         </div>
+        ${TabelaParcelasManuais(d)}
         <div class="field"><label>IOF (R$, opcional)</label><input id="f-ioffin" type="number" step="0.01" min="0" value="${d.valorIof ?? 0}" autocomplete="off"/></div>
         <div class="field"><label>Seguro (R$, opcional)</label><input id="f-segurofin" type="number" step="0.01" min="0" value="${d.valorSeguro ?? 0}" autocomplete="off"/></div>`}
         <div class="field"><label>Fazenda (opcional)</label>
@@ -4579,6 +4723,42 @@ async function cancelarFinanciamento(id){
   if(error){ alert('Não foi possível cancelar: ' + error.message); return; }
   state.financiamentoDetalheId = null;
   await loadAll();
+}
+
+// Excluir de vez (contrato lançado errado). Diferente de Cancelar, que guarda
+// o histórico: aqui some o contrato, as parcelas e o juros que as parcelas
+// pagas lançaram no Financeiro. Linha do ERP que ele tinha assumido volta a
+// valer sozinha (on delete set null). Renegociação excluída devolve o contrato
+// de origem a ativo, com as parcelas que ela tinha cancelado.
+async function excluirFinanciamento(id){
+  const f = state.financiamentos.find(x=>x.id===id);
+  if(!f || !podeExcluir()) return;
+  const filho = state.financiamentos.find(x=>x.financiamentoOrigemId===id);
+  if(filho){
+    alert(`Este contrato foi renegociado no contrato ${filho.banco} (#${filho.id}). Exclua aquele primeiro.`);
+    return;
+  }
+  const parcelas = parcelasDoFinanciamento(id);
+  const idsJuros = parcelas.flatMap(p=>p.lancamentosFinanceiroIds);
+  const jurosLancado = state.lancamentos.filter(l=>idsJuros.includes(l.id)).reduce((s,l)=>s+(Number(l.valor)||0), 0);
+  const msg = `Excluir de vez o contrato ${f.banco} (R$ ${fmt(f.valorPrincipal)}, ${parcelas.length} parcelas)?`
+    + (idsJuros.length ? `\n\nTambém apaga ${idsJuros.length} lançamento(s) de juros no Financeiro (R$ ${fmt(jurosLancado)}).` : '')
+    + `\n\nNão dá para desfazer. Para guardar no histórico, use Cancelar contrato.`;
+  if(!confirm(msg)) return;
+  let error = null;
+  if(idsJuros.length) ({error} = await db.from('lancamentos_financeiros').delete().in('id', idsJuros));
+  if(!error) ({error} = await db.from('parcelas_financiamento').delete().eq('financiamento_id', id));
+  if(!error) ({error} = await db.from('financiamentos').delete().eq('id', id));
+  if(!error && f.financiamentoOrigemId){
+    ({error} = await db.from('financiamentos').update({status:'ativo'}).eq('id', f.financiamentoOrigemId));
+    if(!error) ({error} = await db.from('parcelas_financiamento').update({status:'pendente'})
+                  .eq('financiamento_id', f.financiamentoOrigemId).eq('status', 'cancelada'));
+  }
+  if(error){ alert('Não foi possível excluir: ' + error.message); await loadAll(); return; }
+  state.financiamentoDetalheId = null;
+  await loadAll();
+  // sem permissão o banco não dá erro: só não apaga nada
+  if(state.financiamentos.some(x=>x.id===id)) alert('O banco não deixou excluir este contrato (permissão). Peça ao administrador.');
 }
 
 /* ===================== FUNCIONÁRIOS ===================== */
@@ -7298,8 +7478,8 @@ function attachEvents(){
   const novoFinBtn = document.querySelector('[data-novo-financiamento]');
   if(novoFinBtn) novoFinBtn.onclick = ()=>{
     editDraft = {banco:'', finalidade:'investimento', atividade:'', valorPrincipal:'', dataContratacao:hojeStr(),
-                 taxaJurosAa:'', sistemaAmortizacao:'parcela_unica', numeroParcelas:1, carenciaMeses:12,
-                 valorIof:0, valorSeguro:0, fazendaId:'', garantia:'', observacao:''};
+                 taxaJurosAa:'', sistemaAmortizacao:'sac', periodicidadeMeses:12, numeroParcelas:'', primeiroVencimento:'',
+                 carenciaMeses:0, valorIof:0, valorSeguro:0, fazendaId:'', garantia:'', observacao:''};
     state.erroFinanciamento = '';
     state.modal = {type:'financiamento'}; render();
   };
@@ -7324,6 +7504,8 @@ function attachEvents(){
       // os dados do contrato, sem regerar as parcelas
       const travado = importadoDoErp(f) || parcelasDoFinanciamento(f.id).some(p=>p.status==='paga');
       editDraft = {...f, _editId: f.id, _travado: travado, _importado: importadoDoErp(f),
+                   primeiroVencimento: f.primeiroVencimento || parcelasDoFinanciamento(f.id)[0]?.dataVencimento || '',
+                   _parcelasManuais: travado ? undefined : (parcelasManuaisDoContrato(f) || undefined),
                    observacao: importadoDoErp(f) ? parteDoUsuarioNaObsErp(f.observacao) : f.observacao};
       state.erroFinanciamento = '';
       state.modal = {type:'financiamento'}; render();
@@ -7341,12 +7523,16 @@ function attachEvents(){
   document.querySelectorAll('[data-cancelar-financiamento]').forEach(el=>{
     el.onclick = ()=> cancelarFinanciamento(Number(el.dataset.cancelarFinanciamento));
   });
+  document.querySelectorAll('[data-excluir-financiamento]').forEach(el=>{
+    el.onclick = ()=> excluirFinanciamento(Number(el.dataset.excluirFinanciamento));
+  });
   document.querySelectorAll('[data-renegociar-financiamento]').forEach(el=>{
     el.onclick = ()=>{
       const f = state.financiamentos.find(x=>x.id===Number(el.dataset.renegociarFinanciamento));
       editDraft = {banco:f.banco, finalidade:f.finalidade, atividade:f.atividade||'',
                    valorPrincipal:saldoDevedorFinanciamento(f), dataContratacao:hojeStr(), taxaJurosAa:'',
-                   sistemaAmortizacao:f.sistemaAmortizacao, numeroParcelas:f.numeroParcelas, carenciaMeses:f.carenciaMeses,
+                   sistemaAmortizacao:f.sistemaAmortizacao, numeroParcelas:f.numeroParcelas, carenciaMeses:0,
+                   periodicidadeMeses:periodicidadeFin(f), primeiroVencimento:'',
                    valorIof:0, valorSeguro:0, fazendaId:f.fazendaId||'', garantia:f.garantia||'',
                    observacao:`Renegociação do financiamento #${f.id} (${f.banco}).`,
                    _origemId:f.id};
@@ -7374,10 +7560,36 @@ function attachEvents(){
   if(selSistemaFin) selSistemaFin.onchange = (e)=>{
     const draft = lerFinanciamentoDoFormulario(editDraft);
     draft.sistemaAmortizacao = e.target.value;
-    if(e.target.value==='parcela_unica' && !draft.carenciaMeses) draft.carenciaMeses = 12;
     editDraft = draft;
     render();
   };
+  const abrirTabelaManual = ()=>{
+    const draft = lerFinanciamentoDoFormulario(editDraft);
+    const faltando = [];
+    if(!(Number(draft.valorPrincipal) > 0)) faltando.push('valor principal');
+    if(!draft.dataContratacao) faltando.push('data de contratação');
+    if(draft.sistemaAmortizacao!=='parcela_unica' && !(Number(draft.numeroParcelas) >= 1)) faltando.push('número de parcelas');
+    if(!draft.primeiroVencimento) faltando.push('data do 1º vencimento');
+    if(faltando.length){ state.erroFinanciamento = 'Para montar a tabela, preencha: ' + faltando.join(', ') + '.'; editDraft = draft; render(); return; }
+    state.erroFinanciamento = '';
+    editDraft = {...draft, _parcelasManuais: parcelasCalculadasFin(draft)};
+    render();
+  };
+  document.querySelectorAll('[data-parcelas-manuais],[data-parcelas-recalcular]').forEach(el=>{ el.onclick = abrirTabelaManual; });
+  document.querySelectorAll('[data-pm-valor],[data-pm-juros],#f-principalfin').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const r = document.getElementById('soma-parcelas-manuais');
+      if(r) r.textContent = somaParcelasManuais(lerFinanciamentoDoFormulario(editDraft));
+    });
+  });
+  // o resumo do cronograma acompanha o que é digitado, sem redesenhar a tela
+  ['f-periodicidadefin','f-numparcelasfin','f-vencfin'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.oninput = el.onchange = ()=>{
+      const r = document.getElementById('resumo-cronogramafin');
+      if(r) r.textContent = resumoCronogramaFin(lerFinanciamentoDoFormulario(editDraft));
+    };
+  });
 
   // ---- fazendas ----
   const novaFazendaBtn = document.querySelector('[data-nova-fazenda]');
@@ -7819,8 +8031,9 @@ function attachEvents(){
           dataContratacao: document.getElementById('f-datafin').value,
           taxaJurosAa: document.getElementById('f-taxafin').value,
           sistemaAmortizacao: document.getElementById('f-sistemafin').value,
-          numeroParcelas: document.getElementById('f-numparcelasfin')?.value || 1,
-          carenciaMeses: document.getElementById('f-carenciafin').value,
+          numeroParcelas: document.getElementById('f-numparcelasfin') ? document.getElementById('f-numparcelasfin').value : 1,
+          periodicidadeMeses: Number(document.getElementById('f-periodicidadefin')?.value) || 12,
+          primeiroVencimento: document.getElementById('f-vencfin').value,
           valorIof: document.getElementById('f-ioffin').value,
           valorSeguro: document.getElementById('f-segurofin').value,
           fazendaId: document.getElementById('f-fazendafin').value,
@@ -7834,8 +8047,19 @@ function attachEvents(){
         if(!campos.dataContratacao) faltando.push('data de contratação');
         if(!(Number(campos.taxaJurosAa) >= 0)) faltando.push('taxa de juros');
         if(precisaAtividade && !campos.atividade) faltando.push('atividade');
-        if(faltando.length){
-          state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
+        if(campos.sistemaAmortizacao!=='parcela_unica' && !(Number(campos.numeroParcelas) >= 1)) faltando.push('número de parcelas');
+        if(!campos.primeiroVencimento) faltando.push(campos.sistemaAmortizacao==='parcela_unica' ? 'data do vencimento' : 'data do 1º vencimento');
+        const manuais = lerFinanciamentoDoFormulario(editDraft)._parcelasManuais;
+        if(manuais){
+          campos._parcelasManuais = manuais;
+          campos.numeroParcelas = manuais.length;
+          if(manuais[0]?.dataVencimento) campos.primeiroVencimento = manuais[0].dataVencimento;
+        }
+        const vencAntes = campos.primeiroVencimento && campos.dataContratacao && campos.primeiroVencimento <= campos.dataContratacao;
+        const erroManual = manuais ? erroParcelasManuais(campos) : '';
+        if(faltando.length || vencAntes || erroManual){
+          state.erroFinanciamento = faltando.length ? 'Preencha: ' + faltando.join(', ') + '.'
+            : vencAntes ? 'O vencimento tem que ser depois da data de contratação.' : erroManual;
           editDraft = {...editDraft, ...campos};
           render();
           return;
@@ -7863,7 +8087,8 @@ function attachEvents(){
             ({error} = await db.from('parcelas_financiamento').delete().eq('financiamento_id', financiamentoId));
           }
           if(!error){
-            const novasParcelas = gerarParcelasFinanciamento(campos).map(p=>parcelaToRow(p, financiamentoId));
+            const novasParcelas = (campos._parcelasManuais ? parcelasDosValoresInformados(campos) : gerarParcelasFinanciamento(campos))
+              .map(p=>parcelaToRow(p, financiamentoId));
             ({error} = await db.from('parcelas_financiamento').insert(novasParcelas));
           }
         }

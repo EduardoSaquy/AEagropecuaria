@@ -127,7 +127,9 @@ with sync_playwright() as pw:
     page.fill('#f-principalfin', '100000')
     page.fill('#f-datafin', '2026-01-15')
     page.fill('#f-taxafin', '8')
-    page.fill('#f-carenciafin', '12')
+    page.select_option('#f-sistemafin', 'parcela_unica')
+    page.wait_for_timeout(200)
+    page.fill('#f-vencfin', '2027-01-15')
     page.locator('[data-save="financiamento"]').click()
     page.wait_for_timeout(500)
 
@@ -175,7 +177,9 @@ with sync_playwright() as pw:
     page.fill('#f-principalfin', '30000')
     page.fill('#f-datafin', '2026-01-15')
     page.fill('#f-taxafin', '12')
-    page.fill('#f-carenciafin', '12')
+    page.select_option('#f-sistemafin', 'parcela_unica')
+    page.wait_for_timeout(200)
+    page.fill('#f-vencfin', '2027-01-15')
     page.locator('[data-save="financiamento"]').click()
     page.wait_for_timeout(500)
 
@@ -234,7 +238,9 @@ with sync_playwright() as pw:
     page.fill('#f-principalfin', '10000')
     page.fill('#f-datafin', '2026-01-15')
     page.fill('#f-taxafin', '10')
-    page.fill('#f-carenciafin', '12')
+    page.select_option('#f-sistemafin', 'parcela_unica')
+    page.wait_for_timeout(200)
+    page.fill('#f-vencfin', '2027-01-15')
     page.locator('[data-save="financiamento"]').click()
     page.wait_for_timeout(500)
 
