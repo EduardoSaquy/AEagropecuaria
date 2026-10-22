@@ -21,7 +21,9 @@ parcelas. O que este teste prova, com contas feitas a mao:
     calculo, a soma das amortizacoes tem que fechar com o principal, grava como
     digitado e editar depois nao troca pelo calculo;
   - Excluir apaga o contrato e as parcelas (pedido do mesmo dia: "botao de
-    exclusao para eu poder apagar o contrato caso lance errado").
+    exclusao para eu poder apagar o contrato caso lance errado");
+  - contrato que ja existia, lancado so pelo saldo (continuacao): nao entra
+    como emprestimo recebido no fluxo de caixa.
 """
 import json
 import sys
@@ -258,6 +260,44 @@ with sync_playwright() as pw:
         window.__DB__.parcelas_financiamento.filter(p=>p.financiamento_id===fid).length]""", fid)
     conf(sobrou == [False, 0], "Excluir apaga o contrato e as parcelas", str(sobrou))
     conf(page.evaluate("() => state.financiamentoDetalheId") is None, "depois de excluir volta para a lista")
+
+
+    # ---- contrato que ja existia, lancado so pelo saldo ----
+    page.evaluate("() => { state.financiamentoDetalheId = null; state.page='financiamentos'; render(); }")
+    page.wait_for_timeout(300)
+    page.locator('[data-novo-financiamento]').click()
+    page.wait_for_timeout(300)
+    page.fill('#f-bancofin', 'Banco Saldo')
+    page.check('#f-continuacaofin')
+    page.select_option('#f-atividadefin', 'pecuaria')
+    page.fill('#f-principalfin', '200000')
+    page.fill('#f-datafin', '2025-11-15')
+    page.fill('#f-taxafin', '10')
+    page.fill('#f-numparcelasfin', '2')
+    page.fill('#f-vencfin', '2026-11-15')
+    page.locator('[data-save="financiamento"]').click()
+    page.wait_for_timeout(500)
+    row = page.evaluate("() => window.__DB__.financiamentos.find(f=>f.banco==='Banco Saldo')")
+    conf(row and row.get("continuacao") is True, "grava continuacao = true", str(row))
+    fluxo = page.evaluate("""() => {
+      const f = state.financiamentos.find(x=>x.banco==='Banco Saldo');
+      const com = calcularFluxoEmpresa({tipo:'ano', ano:2025}).financiamento.emprestimosRecebidos;
+      f.continuacao = false;
+      const sem = calcularFluxoEmpresa({tipo:'ano', ano:2025}).financiamento.emprestimosRecebidos;
+      f.continuacao = true;
+      return [com, sem];
+    }""")
+    conf(fluxo == [0, 200000], "contrato que ja existia nao entra como emprestimo recebido (sem a marca entraria 200.000)", str(fluxo))
+    sid = row["id"] if row else -1
+    page.evaluate(f"() => {{ state.financiamentoDetalheId = {sid}; render(); }}")
+    page.wait_for_timeout(300)
+    conf("contrato que já existia" in page.inner_text("body"), "detalhe mostra que e contrato que ja existia")
+    page.evaluate("() => { state.financiamentoDetalheId = null; render(); }")
+    page.wait_for_timeout(200)
+    page.locator(f'[data-editar-financiamento="{sid}"]').click()
+    page.wait_for_timeout(300)
+    conf(page.is_checked('#f-continuacaofin'), "editar traz a caixa marcada")
+    page.locator('[data-close="1"]').first.click()
 
     conf(not erros, "nenhum erro de JavaScript no caminho todo", " | ".join(erros[:3]))
 
