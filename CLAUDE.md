@@ -516,6 +516,29 @@ custo já existe em Resultados > Relatórios.
   com `documentElement.clientWidth`, não com `innerWidth` (que inclui a barra
   de rolagem do Windows e escondeu 16 px de sobra).
 
+### Campos de dinheiro com ponto e vírgula ao digitar
+
+Pedido do Eduardo em 22/10/2026. No AE Matriz, os 13 campos de valor em R$
+(lançamento, conta a pagar/receber, rateio, parcela, baixa, financiamento,
+pagamento e edição de parcela) levam `data-moeda` em vez de `type="number"`:
+mostram `1.234.567,89` enquanto digita (ponto de milhar sozinho, vírgula ou
+ponto digitado viram os centavos, 2 casas, ao sair completa `,00`), mas
+`el.value` devolve `"1234567.89"`, como o campo numérico devolvia
+(`prepararCamposMoeda`, chamado no começo de `attachEvents`; o getter/setter
+fica no próprio elemento). O resto do código lê e grava sem mudar. Campo de
+dinheiro novo: `type="text" inputmode="decimal" data-moeda`. Taxa (%), área,
+quantidade e parcelas continuam `type="number"`. `teste_campo_moeda.py`.
+
+### Saída de ração: operador precisa ver as dietas
+
+Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: o app
+dizia "Não há lote de Cria ativo e com animais", mas o motivo provável era
+outro: a leitura de `dietas` só era liberada para quem tem a permissão
+"Dietas", então a lista de dietas vinha vazia. `pecuaria_dietas_leitura_operador.sql`
+libera a **leitura** de dietas para quem tem Confinamento, Pasto ou Cria
+(criar e mudar dieta continua exigindo Dietas: Editar). No AEpecuaria a falta de
+dieta tem mensagem própria (`SEM_DIETA_PARA_RACAO`), separada da de lote.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -618,7 +641,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-31 arquivos `teste_*.py`, 754 checagens (22/10/2026; a tabela abaixo lista os
+32 arquivos `teste_*.py`, 773 checagens (22/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -634,7 +657,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_venda.py` | 28 | AEMatriz.html |
 | `teste_unidade.py` | 31 | AEMatriz.html |
 | `teste_exclusao.py` | 20 | AEMatriz.html, AEpecuaria.html, AECana.html, AECereais.html |
-| `teste_lote_racao.py` | 15 | AEpecuaria.html |
+| `teste_lote_racao.py` | 18 | AEpecuaria.html (lote encerrado/zerado não recebe ração; sem dieta visível, o aviso fala da dieta) |
 | `teste_cereais_cultura.py` | 27 | AECereais.html |
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
@@ -650,6 +673,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 | `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |
+| `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

@@ -1556,6 +1556,11 @@ function loteTipo(lote){
  * qualificaria. Sem isso, abrir para corrigir a data de um lançamento
  * antigo trocaria o lote dele calado, para o primeiro da lista.
  */
+// Sem dieta nenhuma na lista: ou não há dieta cadastrada, ou o usuário não
+// tem permissão de ver as dietas (antes do pecuaria_dietas_leitura_operador
+// só quem tinha "Dietas" via). Antes a mensagem culpava o lote, e o lote
+// estava certo (caso do Joilson, 22/10/2026).
+const SEM_DIETA_PARA_RACAO = 'Nenhuma dieta aparece para você. Ou não há dieta cadastrada (Formulação de Dietas), ou seu usuário não tem permissão de ver as dietas: peça ao administrador.';
 function lotesQueRecebem(tipo, loteJaEscolhido){
   return state.lotes.filter(l =>
     loteTipo(l)===tipo && (
@@ -1858,7 +1863,8 @@ function openNewModal(type){
     state.modal = {type:'animal'};
   } else if(type==='saidaRacao'){
     const lotesConf = lotesQueRecebem('confinamento');
-    if(state.dietas.length===0 || lotesConf.length===0){
+    if(state.dietas.length===0){ alert(SEM_DIETA_PARA_RACAO); return false; }
+    if(lotesConf.length===0){
       alert('Não há lote de Confinamento ativo e com animais para receber ração. Confira em Lotes: o lote pode estar encerrado ou com zero cabeças.');
       return false;
     }
@@ -1866,7 +1872,8 @@ function openNewModal(type){
     state.modal = {type:'saidaRacao'};
   } else if(type==='saidaRacaoCria'){
     const lotesCria = lotesQueRecebem('reproducao');
-    if(state.dietas.length===0 || lotesCria.length===0){
+    if(state.dietas.length===0){ alert(SEM_DIETA_PARA_RACAO); return false; }
+    if(lotesCria.length===0){
       alert('Não há lote de Cria ativo e com animais para receber ração. Confira em Lotes: o lote pode estar encerrado ou com zero cabeças.');
       return false;
     }
@@ -1882,7 +1889,8 @@ function openNewModal(type){
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
     const lotesPasto = lotesQueRecebem('pasto');
-    if(lotesPasto.length===0 || state.dietas.length===0){
+    if(state.dietas.length===0){ alert(SEM_DIETA_PARA_RACAO); return false; }
+    if(lotesPasto.length===0){
       alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta antes de registrar uma saída de ração (pasto).');
       return false;
     }
