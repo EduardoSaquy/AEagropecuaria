@@ -103,6 +103,20 @@ with sync_playwright() as pw:
         page.evaluate("() => { state.modal = null; render(); }")
         page.wait_for_timeout(100)
 
+    # ---- sem dieta visivel a mensagem fala da dieta, nao do lote ----
+    # (Joilson, 22/10/2026: sem permissao de ver dietas, o app dizia que nao
+    # havia lote de Cria ativo, e o lote estava certo)
+    print("\n  -- sem dieta visivel --")
+    avisos = []
+    page.on("dialog", lambda d: (avisos.append(d.message), d.accept()))
+    for tipo_modal in ("saidaRacao", "saidaRacaoCria", "pasto"):
+        avisos.clear()
+        r = page.evaluate("(t) => { const guard = state.dietas; state.dietas = [];"
+                          "  const r = openNewModal(t); state.dietas = guard; return r; }", tipo_modal)
+        page.wait_for_timeout(100)
+        conf(r is False and avisos and "dieta" in avisos[0].lower() and "lote" not in avisos[0].lower(),
+             f"{tipo_modal}: sem dieta, o aviso fala da dieta (nao do lote)", str(avisos))
+
     browser.close()
 
 print(f"\n  {passes} passaram, {falhas} falharam")

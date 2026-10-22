@@ -529,6 +529,16 @@ fica no próprio elemento). O resto do código lê e grava sem mudar. Campo de
 dinheiro novo: `type="text" inputmode="decimal" data-moeda`. Taxa (%), área,
 quantidade e parcelas continuam `type="number"`. `teste_campo_moeda.py`.
 
+### Saída de ração: operador precisa ver as dietas
+
+Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: o app
+dizia "Não há lote de Cria ativo e com animais", mas o motivo provável era
+outro: a leitura de `dietas` só era liberada para quem tem a permissão
+"Dietas", então a lista de dietas vinha vazia. `pecuaria_dietas_leitura_operador.sql`
+libera a **leitura** de dietas para quem tem Confinamento, Pasto ou Cria
+(criar e mudar dieta continua exigindo Dietas: Editar). No AEpecuaria a falta de
+dieta tem mensagem própria (`SEM_DIETA_PARA_RACAO`), separada da de lote.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -631,7 +641,7 @@ quantidade e parcelas continuam `type="number"`. `teste_campo_moeda.py`.
 
 ## Testes
 
-32 arquivos `teste_*.py`, 770 checagens (22/10/2026; a tabela abaixo lista os
+32 arquivos `teste_*.py`, 773 checagens (22/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -647,7 +657,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_venda.py` | 28 | AEMatriz.html |
 | `teste_unidade.py` | 31 | AEMatriz.html |
 | `teste_exclusao.py` | 20 | AEMatriz.html, AEpecuaria.html, AECana.html, AECereais.html |
-| `teste_lote_racao.py` | 15 | AEpecuaria.html |
+| `teste_lote_racao.py` | 18 | AEpecuaria.html (lote encerrado/zerado não recebe ração; sem dieta visível, o aviso fala da dieta) |
 | `teste_cereais_cultura.py` | 27 | AECereais.html |
 | `teste_contas.py` | 83 | AEMatriz.html |
 | `teste_offline.py` | 24 | sw.js (offline dos 5 apps), abertura offline com login vencido, botão ← Painel, cards do Painel na mesma janela |
