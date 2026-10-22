@@ -3045,9 +3045,10 @@ function calcularFluxoEmpresa(periodo){
   });
   // contrato que nasceu de renegociação não é dinheiro novo entrando; o
   // importado do ERP também não (data aproximada e valor = só o que o ERP
-  // viu pagar, não o empréstimo)
+  // viu pagar, não o empréstimo); nem o que já existia e foi lançado só pelo
+  // saldo (o dinheiro entrou antes, a amortização paga está no ERP)
   state.financiamentos.forEach(f=>{
-    if(f.status==='cancelado' || f.financiamentoOrigemId || importadoDoErp(f)) return;
+    if(f.status==='cancelado' || f.financiamentoOrigemId || importadoDoErp(f) || f.continuacao) return;
     if(realizadoNoPeriodo(f.dataContratacao)) fin.emprestimosRecebidos += Number(f.valorPrincipal||0);
   });
   const contratosValidos = new Set(state.financiamentos.filter(f=>f.status!=='cancelado').map(f=>f.id));
@@ -3781,7 +3782,8 @@ function rowToFinanciamento(r){
           dataContratacao:r.data_contratacao, taxaJurosAa:r.taxa_juros_aa,
           sistemaAmortizacao:r.sistema_amortizacao, numeroParcelas:r.numero_parcelas,
           carenciaMeses:r.carencia_meses, periodicidadeMeses:r.periodicidade_meses||1,
-          primeiroVencimento:r.primeiro_vencimento||'', atividade:r.atividade||'', fazendaId:r.fazenda_id,
+          primeiroVencimento:r.primeiro_vencimento||'', continuacao:!!r.continuacao,
+          atividade:r.atividade||'', fazendaId:r.fazenda_id,
           garantia:r.garantia||'', status:r.status, financiamentoOrigemId:r.financiamento_origem_id,
           observacao:r.observacao||''};
 }
@@ -3794,6 +3796,7 @@ function financiamentoToRow(f){
           carencia_meses:carenciaDoContrato(f),
           periodicidade_meses: f.sistemaAmortizacao==='parcela_unica' ? 12 : periodicidadeFin(f),
           primeiro_vencimento: f.primeiroVencimento || null,
+          continuacao: !!f.continuacao,
           // Capital de giro não tem uma atividade só — o juros de cada
           // parcela paga é dividido em 3 partes iguais ao ser lançado.
           atividade: f.finalidade==='capital_giro' ? null : (f.atividade||null),
@@ -4095,6 +4098,7 @@ function lerFinanciamentoDoFormulario(base){
     numeroParcelas: v('f-numparcelasfin'),
     periodicidadeMeses: Number(v('f-periodicidadefin')) || base.periodicidadeMeses,
     primeiroVencimento: v('f-vencfin'),
+    continuacao: document.getElementById('f-continuacaofin') ? document.getElementById('f-continuacaofin').checked : !!base.continuacao,
     _parcelasManuais: base._parcelasManuais ? base._parcelasManuais.map((p,i)=>({
       dataVencimento: document.querySelector(`[data-pm-venc="${i}"]`)?.value ?? p.dataVencimento,
       valorParcela: document.querySelector(`[data-pm-valor="${i}"]`)?.value ?? p.valorParcela,
@@ -4195,7 +4199,7 @@ function PageFinanciamentoDetalhe(){
   </div>
   <div class="card card-pad" style="margin-bottom:14px;">
     <h3 style="margin-bottom:8px;">${esc(f.banco)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
-    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}${f.sistemaAmortizacao!=='parcela_unica' && !importadoDoErp(f) ? ` · parcelas ${PERIODICIDADE_FIN_PLURAL[periodicidadeFin(f)]}` : ''}</p>
+    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}${f.sistemaAmortizacao!=='parcela_unica' && !importadoDoErp(f) ? ` · parcelas ${PERIODICIDADE_FIN_PLURAL[periodicidadeFin(f)]}` : ''}${f.continuacao ? ' · contrato que já existia (só o saldo)' : ''}</p>
     ${f.garantia ? `<p class="hint">Garantia: ${esc(f.garantia)}</p>` : ''}
     ${f.financiamentoOrigemId ? `<p class="hint">Nasceu de renegociação do financiamento #${f.financiamentoOrigemId}.</p>` : ''}
     ${(Number(f.valorIof)>0 || Number(f.valorSeguro)>0) ? `<p class="hint">IOF: R$ ${fmt(f.valorIof)} · Seguro: R$ ${fmt(f.valorSeguro)} (informativo, não lançado no Financeiro)</p>` : ''}
@@ -4321,6 +4325,12 @@ function ModalFinanciamento(){
           <span class="hint">Define em qual atividade o juros pago entra como despesa.</span>
         </div>
         ${!precisaAtividade ? `<p class="hint" style="margin:-6px 0 14px;">Capital de giro: o juros de cada parcela paga é dividido em 3 partes iguais entre Pecuária, Cana e Grãos.</p>` : ''}
+        ${importar || impEdit || d._origemId ? '' : `
+        <div class="field"><label style="display:flex; gap:8px; align-items:flex-start; font-weight:500;">
+          <input type="checkbox" id="f-continuacaofin" ${d.continuacao?'checked':''} style="width:auto; margin-top:3px;"/>
+          <span>Contrato que já existia (lançar só o saldo a partir de agora)</span></label>
+          <span class="hint">Valor principal = saldo devedor; data de contratação = dia da última parcela paga. As parcelas já pagas estão no ERP: não entra como empréstimo recebido no fluxo de caixa e a dívida antiga não conta duas vezes.</span>
+        </div>`}
         <div class="field"><label>Valor principal (R$)</label><input id="f-principalfin" type="number" step="0.01" min="0" value="${d.valorPrincipal ?? ''}" ${(d._origemId||semCronograma)?'readonly':''} autocomplete="off"/>
           ${d._origemId ? `<span class="hint">Saldo devedor do financiamento anterior — não editável.</span>` : ''}
           ${importar || impEdit ? `<span class="hint">Soma das parcelas do ERP (pagas + a vencer). Se o contrato começou antes de 2023, o ERP não tem as parcelas antigas: o saldo devedor fica certo mesmo assim.</span>` : ''}
@@ -4692,6 +4702,7 @@ async function salvarEdicaoFinanciamentoTravado(){
     garantia: v('f-garantiafin').trim() || null,
     observacao: imp ? textoObsErp(contratoDaObsErp(f.observacao)) + (obsUsuario ? ' ' + obsUsuario : '') : (obsUsuario || null),
   };
+  if(!imp && document.getElementById('f-continuacaofin')) row.continuacao = document.getElementById('f-continuacaofin').checked;
   if(imp){ row.data_contratacao = dataContratacao; row.taxa_juros_aa = Number(taxaTxt); }
   let {error} = await db.from('financiamentos').update(row).eq('id', f.id);
   if(!error && imp && (Number(taxaTxt)!==Number(f.taxaJurosAa) || dataContratacao!==f.dataContratacao)){
@@ -8034,6 +8045,7 @@ function attachEvents(){
           numeroParcelas: document.getElementById('f-numparcelasfin') ? document.getElementById('f-numparcelasfin').value : 1,
           periodicidadeMeses: Number(document.getElementById('f-periodicidadefin')?.value) || 12,
           primeiroVencimento: document.getElementById('f-vencfin').value,
+          continuacao: !!document.getElementById('f-continuacaofin')?.checked,
           valorIof: document.getElementById('f-ioffin').value,
           valorSeguro: document.getElementById('f-segurofin').value,
           fazendaId: document.getElementById('f-fazendafin').value,

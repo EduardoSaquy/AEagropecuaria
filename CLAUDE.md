@@ -418,6 +418,18 @@ custo já existe em Resultados > Relatórios.
   que guarda histórico. No mesmo dia o Eduardo apagou os contratos vigentes que
   tinha lançado (ficaram os quitados) para lançar de novo assim.
   `teste_financiamentos_periodicidade.py`.
+- **Apagar a dívida a vencer do ERP derrubou o saldo médio do passado**
+  (achado pelo Eduardo no mesmo 22/10/2026: custo médio da dívida de 2025 foi
+  de 9,8% para 31,1% a.a.). A linha do tempo da dívida monta cada contrato do
+  ERP como "soma de todas as parcelas, pagas e a vencer"; sem as a vencer, a
+  dívida de 2025 encolheu e o juros de 2025 não. Volta quando os contratos
+  vigentes forem relançados **só pelo saldo**, com data de contratação = dia da
+  última parcela paga e a caixa **"Contrato que já existia"** marcada
+  (`financiamentos.continuacao`, `financiamentos_05_continuacao.sql`): o
+  histórico do ERP leva a dívida até aquela data e o contrato segue dali, sem
+  contar duas vezes, e ele **não** entra como empréstimo recebido no fluxo de
+  caixa. Relançar o contrato inteiro (principal original) dobraria a dívida
+  antiga, porque as parcelas pagas continuam no ERP.
 - **Contrato que já está no ERP: lance por "Lançar contrato", nunca à mão.**
   Em Financiamentos, a lista "Dívida do ERP ainda sem contrato"
   (`gruposErpParaLancar`) tem um botão por contrato (credor + apelido do contrato;
@@ -606,7 +618,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-31 arquivos `teste_*.py`, 750 checagens (22/10/2026; a tabela abaixo lista os
+31 arquivos `teste_*.py`, 754 checagens (22/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -638,7 +650,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 | `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |
-| `teste_financiamentos_periodicidade.py` | 35 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato) |
+| `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
