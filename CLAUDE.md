@@ -390,6 +390,34 @@ custo já existe em Resultados > Relatórios.
   lançamento: não somar de novo. Contrato nascido de renegociação não é
   dinheiro novo. Movimento com data futura é dívida a vencer, não fluxo
   realizado.
+- **22/10/2026: a dívida a vencer do ERP foi apagada, os contratos passam a
+  ser lançados à mão.** Pedido do Eduardo ("lançar de novo daqui para frente").
+  O módulo não tinha contrato nenhum; saíram as 14 linhas de
+  `movimentos_financiamento` com data depois de 22/10/2026 (R$ 4.287.031,96).
+  Ficaram as 61 já pagas (R$ 13.542.127,95), histórico de amortização da aba
+  Empresa. A lista "Dívida do ERP ainda sem contrato" fica vazia; o que segue
+  sobre "Lançar contrato" vale só se uma carga nova do ERP trouxer dívida a
+  vencer. Contrato lançado à mão: data real da cédula (senão vira empréstimo
+  recebido falso no fluxo de caixa) e parcela antiga não se marca paga (o juros
+  já está no Financeiro).
+- **Cadastro de contrato à mão (22/10/2026, pedido do Eduardo: "gerou parcelas
+  mensais mesmo eu colocando que o pagamento era anual").** Antes só gerava
+  parcela mensal, não tinha data do 1º vencimento (só "carência") e abria em
+  "Parcela única", que escondia o número de parcelas. Agora
+  (`financiamentos_04_periodicidade.sql`, rodar ANTES do app novo): abre em SAC
+  anual; "Pagamento das parcelas" (`periodicidade_meses` 1/3/6/12) e "Data do 1º
+  vencimento" (`primeiro_vencimento`; a carência gravada é derivada dela). O
+  juros da 1ª parcela conta o prazo real desde a contratação, as outras o
+  período. Contrato antigo (sem 1º vencimento) gera igual a antes.
+  "Informar valor e juros de cada parcela" abre a tabela da cédula (vem com o
+  cálculo; amortização = parcela - juros; a soma tem que fechar com o principal
+  em R$ 1); editar contrato com valores digitados reabre com eles
+  (`parcelasManuaisDoContrato`), para não trocar pelo cálculo. **Excluir**
+  (admin/dono) apaga contrato, parcelas e o juros que elas lançaram;
+  renegociação excluída devolve a de origem a ativo. Cancelar continua sendo o
+  que guarda histórico. No mesmo dia o Eduardo apagou os contratos vigentes que
+  tinha lançado (ficaram os quitados) para lançar de novo assim.
+  `teste_financiamentos_periodicidade.py`.
 - **Contrato que já está no ERP: lance por "Lançar contrato", nunca à mão.**
   Em Financiamentos, a lista "Dívida do ERP ainda sem contrato"
   (`gruposErpParaLancar`) tem um botão por contrato (credor + apelido do contrato;
@@ -578,7 +606,7 @@ custo já existe em Resultados > Relatórios.
 
 ## Testes
 
-30 arquivos `teste_*.py`, 715 checagens (21/10/2026; a tabela abaixo lista os
+31 arquivos `teste_*.py`, 750 checagens (22/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -610,6 +638,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 | `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |
+| `teste_financiamentos_periodicidade.py` | 35 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
