@@ -589,7 +589,7 @@ async function buscarTudo(consulta){
   return { data: todas, error: null };
 }
 
-async function loadAll(){
+async function loadAll(jaRenovouSessao){
   // .range() é obrigatório em toda consulta -- sem ele, o Supabase corta a
   // resposta em 1000 linhas por padrão (a API nem avisa, só devolve as 1000
   // primeiras pela ordenação pedida). Numa tabela como "movimentos", que
@@ -632,6 +632,18 @@ async function loadAll(){
     buscarTudo(()=>db.from('manejos').select('*').order('id')),
     buscarTudo(()=>db.from('protocolos_inseminacao').select('*').order('id')),
   ]);
+  // Consulta que falhou volta vazia: sem este aviso a tela mostrava "nenhum
+  // lote cadastrado" e o lançamento culpava o lote (Joilson, 22/10/2026).
+  // Login vencido (token de 1 h) renova uma vez e carrega de novo.
+  const essenciais = [['lotes', lot], ['dietas', diet], ['insumos', ing], ['animais', anim]];
+  const falhas = essenciais.filter(([, r])=>r?.error);
+  const textoFalha = falhas.map(([, r])=>r.error.message||'').join(' ');
+  if(falhas.length && !jaRenovouSessao && /jwt|token|expired|401|unauthorized/i.test(textoFalha)){
+    const renovada = await db.auth.refreshSession().catch(()=>null);
+    if(renovada?.data?.session){ state.session = renovada.data.session; return loadAll(true); }
+  }
+  state.erroCarga = falhas.length ? `${falhas.map(([n])=>n).join(', ')} (${falhas[0][1].error.message||'erro'})` : '';
+  state.carregouDados = true;
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.movimentos = (mov.data||[]).map(rowToMovimento);
   state.dietas = (diet.data||[]).map(rowToDieta);
@@ -798,6 +810,7 @@ function render(){
     conteudo = `
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos módulos.') : `
         ${Header()}
+        ${AvisoCarga()}
         ${SubTabs()}
         ${state.page==='ingredientes' ? PageIngredientes() : ''}
         ${state.page==='estoque' ? PageEstoque() : ''}
@@ -1778,6 +1791,24 @@ function iconLoteGrande(){ return `<svg width="30" height="30" viewBox="0 0 24 2
 function iconVenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M4 7h16"/><path d="M6 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M18 7l-2 6a4 4 0 0 0 8 0l-2-6"/><path d="M12 15v6"/><path d="M8 21h8"/></svg>`; }
 
 /* ===================== HEADER ===================== */
+// Dados ainda chegando (rede lenta no campo) ou que não carregaram: a tela
+// vazia parecia "nenhum lote cadastrado".
+function AvisoCarga(){
+  if(!state.carregouDados) return `<div class="card" style="padding:10px 14px; margin-bottom:12px;">Carregando os dados… com sinal fraco pode levar alguns segundos.</div>`;
+  if(state.erroCarga) return `<div class="card" style="padding:10px 14px; margin-bottom:12px; border-color:#C0432B; color:#C0432B;">
+      Os dados não carregaram: ${esc(state.erroCarga)}. Confira a internet e
+      <button class="btn-ghost btn-sm" data-recarregar-dados="1">tente de novo</button>
+      ou saia e entre de novo no app.</div>`;
+  return '';
+}
+// Lançar com a lista vazia por carga incompleta dava aviso enganoso.
+function dadosProntosParaLancar(){
+  if(aparelhoSemRede()) return true;   // sem rede: a fila offline continua como era
+  if(!state.carregouDados){ alert('Os dados ainda estão carregando. Espere alguns segundos e tente de novo.'); return false; }
+  if(state.erroCarga){ alert('Os dados não carregaram (' + state.erroCarga + '). Confira a internet, toque em "tente de novo" no aviso vermelho ou saia e entre de novo no app.'); return false; }
+  return true;
+}
+
 function Header(){
   const titles = {
     ingredientes:{eyebrow:'Cadastro', title:'Ingredientes', desc:'Composição nutricional, fornecedor e preço de cada insumo da fazenda.'},
@@ -1822,6 +1853,7 @@ function Header(){
 
 /* ===================== BOTÃO DE AÇÃO RÁPIDA (FAB) ===================== */
 function openNewModal(type){
+  if(!dadosProntosParaLancar()) return false;
   if(type==='ingrediente'){
     editDraft = {nome:'', categoria:'Energético', fornecedor:'', unidade:'kg', ms:'', pb:'', ndt:'', precoKg:'', estoqueMin:''};
     state.modal = {type:'ingrediente'};
@@ -6520,6 +6552,9 @@ function ModalDetalheGrafico(){
 
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
+  document.querySelectorAll('[data-recarregar-dados]').forEach(el=>{
+    el.onclick = async ()=>{ state.carregouDados = false; state.erroCarga = ''; render(); await loadAll(); };
+  });
   const loginForm = document.querySelector('[data-login-form]');
   if(loginForm){
     loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };

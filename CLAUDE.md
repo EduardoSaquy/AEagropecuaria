@@ -529,15 +529,28 @@ fica no próprio elemento). O resto do código lê e grava sem mudar. Campo de
 dinheiro novo: `type="text" inputmode="decimal" data-moeda`. Taxa (%), área,
 quantidade e parcelas continuam `type="number"`. `teste_campo_moeda.py`.
 
-### Saída de ração: operador precisa ver as dietas
+### Pecuária: dado que não carregou não pode parecer "nenhum lote"
 
-Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: o app
-dizia "Não há lote de Cria ativo e com animais", mas o motivo provável era
-outro: a leitura de `dietas` só era liberada para quem tem a permissão
-"Dietas", então a lista de dietas vinha vazia. `pecuaria_dietas_leitura_operador.sql`
-libera a **leitura** de dietas para quem tem Confinamento, Pasto ou Cria
-(criar e mudar dieta continua exigindo Dietas: Editar). No AEpecuaria a falta de
-dieta tem mensagem própria (`SEM_DIETA_PARA_RACAO`), separada da de lote.
+Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: a tela
+dizia "Nenhum lote de cria cadastrado" e o lançamento "Não há lote de Cria
+ativo", com 6 lotes de Cria ativos no banco, permissão Cria: Editar e as dietas
+visíveis (conferido com o banco). O `loadAll` do AEpecuaria pega cada consulta
+com `buscarTudo`, que devolve lista **vazia** quando a consulta falha (login
+vencido, rede ruim), e nada avisava; tocar antes de a carga terminar também
+dava lista vazia. Agora:
+- `state.carregouDados`/`state.erroCarga`: aviso "Carregando os dados…" e, se
+  lotes/dietas/insumos/animais falharem, aviso vermelho com "tente de novo"
+  (`AvisoCarga`); `openNewModal` explica em vez de culpar o lote
+  (`dadosProntosParaLancar`; sem rede continua liberado, a fila offline é como antes);
+- erro de login vencido (JWT) renova a sessão uma vez e carrega de novo.
+`teste_carga_pecuaria.py`.
+
+Antes disso a primeira suspeita foi a permissão de dietas (só quem tinha
+"Dietas" lia a tabela): `pecuaria_dietas_leitura_operador.sql` (rodado pelo
+Eduardo em 22/10/2026) libera a **leitura** de dietas para Confinamento, Pasto e
+Cria, e falta de dieta tem aviso próprio (`SEM_DIETA_PARA_RACAO`). O Joilson
+já tinha Dietas: não era a causa, mas a regra nova vale para os outros
+operadores.
 
 ## Armadilhas que já custaram caro
 
@@ -641,7 +654,7 @@ dieta tem mensagem própria (`SEM_DIETA_PARA_RACAO`), separada da de lote.
 
 ## Testes
 
-32 arquivos `teste_*.py`, 773 checagens (22/10/2026; a tabela abaixo lista os
+33 arquivos `teste_*.py`, 785 checagens (22/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -673,6 +686,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 | `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |
+| `teste_carga_pecuaria.py` | 12 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 
