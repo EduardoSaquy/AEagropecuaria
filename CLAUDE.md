@@ -390,6 +390,16 @@ custo já existe em Resultados > Relatórios.
   lançamento: não somar de novo. Contrato nascido de renegociação não é
   dinheiro novo. Movimento com data futura é dívida a vencer, não fluxo
   realizado.
+- **22/10/2026: a dívida a vencer do ERP foi apagada, os contratos passam a
+  ser lançados à mão.** Pedido do Eduardo ("lançar de novo daqui para frente").
+  O módulo não tinha contrato nenhum; saíram as 14 linhas de
+  `movimentos_financiamento` com data depois de 22/10/2026 (R$ 4.287.031,96).
+  Ficaram as 61 já pagas (R$ 13.542.127,95), histórico de amortização da aba
+  Empresa. A lista "Dívida do ERP ainda sem contrato" fica vazia; o que segue
+  sobre "Lançar contrato" vale só se uma carga nova do ERP trouxer dívida a
+  vencer. Contrato lançado à mão: data real da cédula (senão vira empréstimo
+  recebido falso no fluxo de caixa) e parcela antiga não se marca paga (o juros
+  já está no Financeiro).
 - **Contrato que já está no ERP: lance por "Lançar contrato", nunca à mão.**
   Em Financiamentos, a lista "Dívida do ERP ainda sem contrato"
   (`gruposErpParaLancar`) tem um botão por contrato (credor + apelido do contrato;
