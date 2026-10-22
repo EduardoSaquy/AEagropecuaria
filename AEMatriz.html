@@ -4261,8 +4261,8 @@ function TabelaParcelasManuais(d){
           <div class="parcela-manual">
             <div class="parcela-manual-num">${i+1}ª parcela</div>
             <label>Vencimento<input type="date" data-pm-venc="${i}" value="${p.dataVencimento||''}"/></label>
-            <label>Valor da parcela (R$)<input type="number" step="0.01" min="0" data-pm-valor="${i}" value="${p.valorParcela ?? ''}" autocomplete="off"/></label>
-            <label>Juros (R$)<input type="number" step="0.01" min="0" data-pm-juros="${i}" value="${p.valorJuros ?? ''}" autocomplete="off"/></label>
+            <label>Valor da parcela (R$)<input type="text" inputmode="decimal" data-moeda data-pm-valor="${i}" value="${p.valorParcela ?? ''}" autocomplete="off"/></label>
+            <label>Juros (R$)<input type="text" inputmode="decimal" data-moeda data-pm-juros="${i}" value="${p.valorJuros ?? ''}" autocomplete="off"/></label>
           </div>`).join('')}
           <span class="hint" id="soma-parcelas-manuais">${esc(somaParcelasManuais(d))}</span>
           <div style="margin-top:6px;"><button class="btn btn-ghost btn-sm" data-parcelas-recalcular="1">Recalcular pela taxa</button>
@@ -4331,7 +4331,7 @@ function ModalFinanciamento(){
           <span>Contrato que já existia (lançar só o saldo a partir de agora)</span></label>
           <span class="hint">Valor principal = saldo devedor; data de contratação = dia da última parcela paga. As parcelas já pagas estão no ERP: não entra como empréstimo recebido no fluxo de caixa e a dívida antiga não conta duas vezes.</span>
         </div>`}
-        <div class="field"><label>Valor principal (R$)</label><input id="f-principalfin" type="number" step="0.01" min="0" value="${d.valorPrincipal ?? ''}" ${(d._origemId||semCronograma)?'readonly':''} autocomplete="off"/>
+        <div class="field"><label>Valor principal (R$)</label><input id="f-principalfin" type="text" inputmode="decimal" data-moeda value="${d.valorPrincipal ?? ''}" ${(d._origemId||semCronograma)?'readonly':''} autocomplete="off"/>
           ${d._origemId ? `<span class="hint">Saldo devedor do financiamento anterior — não editável.</span>` : ''}
           ${importar || impEdit ? `<span class="hint">Soma das parcelas do ERP (pagas + a vencer). Se o contrato começou antes de 2023, o ERP não tem as parcelas antigas: o saldo devedor fica certo mesmo assim.</span>` : ''}
         </div>
@@ -4361,8 +4361,8 @@ function ModalFinanciamento(){
           <span class="hint" id="resumo-cronogramafin">${esc(resumoCronogramaFin(d))}</span>
         </div>
         ${TabelaParcelasManuais(d)}
-        <div class="field"><label>IOF (R$, opcional)</label><input id="f-ioffin" type="number" step="0.01" min="0" value="${d.valorIof ?? 0}" autocomplete="off"/></div>
-        <div class="field"><label>Seguro (R$, opcional)</label><input id="f-segurofin" type="number" step="0.01" min="0" value="${d.valorSeguro ?? 0}" autocomplete="off"/></div>`}
+        <div class="field"><label>IOF (R$, opcional)</label><input id="f-ioffin" type="text" inputmode="decimal" data-moeda value="${d.valorIof ?? 0}" autocomplete="off"/></div>
+        <div class="field"><label>Seguro (R$, opcional)</label><input id="f-segurofin" type="text" inputmode="decimal" data-moeda value="${d.valorSeguro ?? 0}" autocomplete="off"/></div>`}
         <div class="field"><label>Fazenda (opcional)</label>
           <select id="f-fazendafin">
             <option value="" ${!d.fazendaId?'selected':''}>Geral / toda a empresa</option>
@@ -4486,7 +4486,7 @@ function ModalPagamentoParcela(){
       <div class="modal-body">
         <p class="hint" style="margin-bottom:12px;">${esc(f.banco)} · vencimento ${p.dataVencimento} · amortização R$ ${fmt(p.valorAmortizacao)}. A amortização não é despesa: só reduz o saldo devedor.</p>
         <div class="field"><label>Data do pagamento</label><input id="f-pagdata" type="date" value="${d.data}"/></div>
-        <div class="field"><label>Juros pago (R$)</label><input id="f-pagjuros" type="number" step="0.01" min="0" value="${d.juros}" autocomplete="off"/>
+        <div class="field"><label>Juros pago (R$)</label><input id="f-pagjuros" type="text" inputmode="decimal" data-moeda value="${d.juros}" autocomplete="off"/>
           <span class="hint">Se veio estimado pela taxa, troque pelo valor que o banco cobrou.</span></div>
         <div class="field"><label style="display:flex; align-items:center; gap:8px; font-weight:400;"><input type="checkbox" id="f-paglancar" ${d.lancar?'checked':''} style="width:auto;"/> Lançar o juros como despesa no Financeiro</label>
           <span class="hint">Desmarque se o juros desta parcela já está no Financeiro (veio do ERP ou foi lançado à mão): lançar de novo dobraria a despesa.</span></div>
@@ -4603,9 +4603,9 @@ function ModalParcelaFin(){
       <div class="modal-body">
         <p class="hint" style="margin-bottom:12px;">${esc(f.banco)}${imp ? ' · cronograma importado do ERP' : ''}</p>
         <div class="field"><label>Vencimento</label><input id="f-parcdata" type="date" value="${d.data}"/></div>
-        <div class="field"><label>Amortização (R$)</label><input id="f-parcamort" type="number" step="0.01" min="0" value="${d.amort}" ${imp?'':'readonly'} autocomplete="off"/>
+        <div class="field"><label>Amortização (R$)</label><input id="f-parcamort" type="text" inputmode="decimal" data-moeda value="${d.amort}" ${imp?'':'readonly'} autocomplete="off"/>
           <span class="hint">${imp ? 'Mudar o valor refaz o saldo devedor de cada parcela e o principal do contrato (principal = soma das parcelas).' : 'Contrato lançado à mão: a amortização vem do cronograma e não muda aqui.'}</span></div>
-        <div class="field"><label>Juros (R$)</label><input id="f-parcjuros" type="number" step="0.01" min="0" value="${d.juros}" autocomplete="off"/>
+        <div class="field"><label>Juros (R$)</label><input id="f-parcjuros" type="text" inputmode="decimal" data-moeda value="${d.juros}" autocomplete="off"/>
           <span class="hint">É este valor que vira despesa quando a parcela for paga. Troque a estimativa pelo que o banco vai cobrar.</span></div>
         ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
       </div>
@@ -4770,6 +4770,91 @@ async function excluirFinanciamento(id){
   await loadAll();
   // sem permissão o banco não dá erro: só não apaga nada
   if(state.financiamentos.some(x=>x.id===id)) alert('O banco não deixou excluir este contrato (permissão). Peça ao administrador.');
+}
+
+/* ===================== CAMPOS DE DINHEIRO ===================== */
+// Pedido do Eduardo em 22/10/2026: valor em R$ já com ponto de milhar e
+// vírgula enquanto digita (1.234.567,89). Os campos levam data-moeda (texto,
+// teclado numérico) e mostram o número formatado, mas el.value devolve
+// "1234567.89", como o campo numérico devolvia: o resto do código lê e grava
+// do mesmo jeito. Ponto digitado sem vírgula vira a vírgula dos centavos.
+const VALOR_DO_INPUT = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+function moedaParaNumero(texto){
+  let t = String(texto ?? '').trim().replace(/[^\d.,]/g, '');
+  if(!t) return '';
+  if(t.includes(',')){
+    const i = t.indexOf(',');
+    t = t.slice(0, i).replace(/[.,]/g, '') + '.' + t.slice(i+1).replace(/[.,]/g, '');
+  } else if(!/^\d*\.\d{1,2}$/.test(t)){
+    t = t.replace(/\./g, '');          // 1.234.567 = milhar
+  }
+  if(t.startsWith('.')) t = '0' + t;
+  // como o campo numérico devolvia: "16500.00" -> "16500", "12.50" -> "12.5"
+  if(t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
+  return t;
+}
+function agruparMilhar(digitos){
+  const d = digitos.replace(/^0+(?=\d)/, '');
+  return d.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+// Texto enquanto digita: inteiro agrupado, vírgula e até 2 casas.
+function moedaDigitando(texto){
+  const t = String(texto ?? '').replace(/[^\d.,]/g, '');
+  if(!t) return '';
+  if(!t.includes(',') && /^\d+\.\d{1,2}$/.test(t)){   // colado/preenchido "1234.5"
+    const [i, d] = t.split('.');
+    return agruparMilhar(i) + ',' + d;
+  }
+  const v = t.indexOf(',');
+  if(v < 0) return agruparMilhar(t.replace(/\D/g, ''));
+  const inteiro = t.slice(0, v).replace(/\D/g, '');
+  return (inteiro ? agruparMilhar(inteiro) : '0') + ',' + t.slice(v+1).replace(/\D/g, '').slice(0, 2);
+}
+// Valor gravado (número ou "1234.5") -> "1.234,50".
+function moedaParaTexto(valor){
+  if(valor === '' || valor === null || valor === undefined) return '';
+  const n = Number(valor);
+  if(!Number.isFinite(n)) return moedaDigitando(valor);
+  return n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function prepararCamposMoeda(){
+  document.querySelectorAll('input[data-moeda]:not([data-moeda-ok])').forEach(el=>{
+    el.setAttribute('data-moeda-ok', '1');
+    Object.defineProperty(el, 'value', {
+      configurable: true,
+      get(){ return moedaParaNumero(VALOR_DO_INPUT.get.call(el)); },
+      set(v){ VALOR_DO_INPUT.set.call(el, moedaParaTexto(v)); },
+    });
+    VALOR_DO_INPUT.set.call(el, moedaParaTexto(el.getAttribute('value') ?? ''));
+    el.addEventListener('input', (e)=>{
+      let texto = VALOR_DO_INPUT.get.call(el);
+      let cursor = el.selectionStart ?? texto.length;
+      // ponto digitado (teclado do celular) sem vírgula ainda = vírgula dos centavos
+      if(e.data === '.' && texto.indexOf(',') < 0 && texto[cursor-1] === '.'){
+        texto = texto.slice(0, cursor-1) + ',' + texto.slice(cursor);
+      }
+      const novo = moedaDigitando(texto);
+      if(novo === VALOR_DO_INPUT.get.call(el)) return;
+      // cursor: mesma quantidade de dígitos/vírgula à esquerda
+      const antes = texto.slice(0, cursor).replace(/[^\d,]/g, '').replace(/^0+(?=\d)/, '').length;
+      let pos = 0, vistos = 0;
+      while(pos < novo.length && vistos < antes){ if(/[\d,]/.test(novo[pos])) vistos++; pos++; }
+      VALOR_DO_INPUT.set.call(el, novo);
+      try{ el.setSelectionRange(pos, pos); }catch(_){}
+    });
+    // apagar em cima do ponto de milhar apaga o dígito ao lado (o ponto voltaria)
+    el.addEventListener('keydown', (e)=>{
+      const ini = el.selectionStart, fim = el.selectionEnd, texto = VALOR_DO_INPUT.get.call(el);
+      if(ini === null || ini !== fim) return;
+      if(e.key === 'Backspace' && texto[ini-1] === '.') el.setSelectionRange(ini-1, ini-1);
+      if(e.key === 'Delete' && texto[ini] === '.') el.setSelectionRange(ini+1, ini+1);
+    });
+    // ao sair do campo, completa os centavos: 1.234 -> 1.234,00
+    el.addEventListener('blur', ()=>{
+      const n = moedaParaNumero(VALOR_DO_INPUT.get.call(el));
+      if(n !== '') VALOR_DO_INPUT.set.call(el, moedaParaTexto(n));
+    });
+  });
 }
 
 /* ===================== FUNCIONÁRIOS ===================== */
@@ -5620,7 +5705,7 @@ function ModalTitulo(){
         <div class="field"><label>Documento (nota ou boleto, opcional)</label>
           <input id="f-tit-documento" value="${esc(d.documento||'')}" autocomplete="off"/></div>
         <div class="field"><label>Valor total (R$)</label>
-          <input id="f-tit-valor" type="number" step="0.01" min="0" value="${d.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/>
+          <input id="f-tit-valor" type="text" inputmode="decimal" data-moeda value="${d.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/>
           ${nParcelas>1?`<span class="hint">Serão criados ${nParcelas} títulos de R$ ${fmt(total/nParcelas)} (o último absorve o arredondamento).</span>`:''}</div>
         <div class="field"><label>Vencimento${nParcelas>1?' da 1ª parcela':''}</label>
           <input id="f-tit-vencimento" type="date" value="${d.vencimento||''}"/></div>
@@ -5651,7 +5736,7 @@ function ModalTitulo(){
                 <tr>
                   <td class="mono">${i+1}/${nParcelas}</td>
                   <td><input id="f-tit-venc-${i}" type="date" value="${(d.vencimentos||[])[i]||''}" style="width:100%;"/></td>
-                  <td><input id="f-tit-valorparc-${i}" type="number" step="0.01" min="0"
+                  <td><input id="f-tit-valorparc-${i}" type="text" inputmode="decimal" data-moeda
                              value="${(d.valoresParcela||[])[i] ?? ''}" data-recalcula-parcela="1"
                              style="width:100%;" autocomplete="off"/></td>
                 </tr>`).join('')}
@@ -5727,7 +5812,7 @@ function ModalTitulo(){
             </div>
             ${campos}
             <div class="field"><label>Valor desta parte (R$)</label>
-              <input id="f-rat-valor-${i}" type="number" step="0.01" min="0" value="${r.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/></div>
+              <input id="f-rat-valor-${i}" type="text" inputmode="decimal" data-moeda value="${r.valor ?? ''}" data-recalcula-titulo="1" autocomplete="off"/></div>
           </div>`;
         }).join('')}
 
@@ -5785,7 +5870,7 @@ function ModalBaixa(){
           <input id="f-bx-data" type="date" value="${d.data||hojeStr()}"/>
           <span class="hint">É esta data que vai para o Financeiro. O mês do lançamento é o mês do pagamento.</span></div>
         <div class="field"><label>Valor pago (R$)</label>
-          <input id="f-bx-valor" type="number" step="0.01" min="0" max="${saldo}" value="${d.valor ?? saldo}" data-recalcula-baixa="1" autocomplete="off"/>
+          <input id="f-bx-valor" type="text" inputmode="decimal" data-moeda value="${d.valor ?? saldo}" data-recalcula-baixa="1" autocomplete="off"/>
           <span class="hint">Deixe o saldo inteiro para quitar, ou informe menos para uma baixa parcial.</span></div>
         <div class="field"><label>Conta bancária</label>
           <select id="f-bx-conta">
@@ -6893,7 +6978,7 @@ function ModalLancamento(){
         </div>` : ''}
         <div class="field"><label>Descrição</label><input id="f-descricaolanc" value="${esc(d.descricao||'')}" placeholder="${ehReceita?'Ex: Venda de boi gordo':'Ex: Mão de obra do curral'}" autocomplete="off"/></div>
         <div class="field"><label>Valor (R$)</label>
-          <input id="f-valorlanc" type="number" step="0.01" min="0"
+          <input id="f-valorlanc" type="text" inputmode="decimal" data-moeda
                  value="${d.ehVenda ? (Math.round(valorDaVenda(d)*100)/100) : (d.valor ?? '')}"
                  ${d.ehVenda?'readonly style="background:var(--cinza-bg); cursor:not-allowed;"':''} autocomplete="off"/>
           ${d.ehVenda?`<span class="hint">Calculado pelos campos da venda, logo abaixo.</span>`:''}
@@ -7413,6 +7498,7 @@ function ModalDespesaPorCentro(){
 
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
+  prepararCamposMoeda();
   const loginForm = document.querySelector('[data-login-form]');
   if(loginForm){
     loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };
