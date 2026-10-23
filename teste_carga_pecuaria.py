@@ -10,7 +10,10 @@ Consulta que falha (login vencido, rede ruim) voltava vazia sem aviso. Prova:
     lancamento explica que os dados nao carregaram (nao culpa o lote);
   - login vencido (JWT expired): renova a sessao uma vez e carrega sozinho;
   - "tente de novo" carrega quando a consulta volta a funcionar;
-  - sem rede, o lancamento continua liberado (fila offline como antes).
+  - sem rede, o lancamento continua liberado (fila offline como antes);
+  - sinal fraco (23/10/2026): o historico pesado carrega depois, a saida de
+    racao abre assim que lotes/dietas chegam; lotes sem resposta em 25 s
+    viram aviso com "tente de novo".
 """
 import json, sys
 from pathlib import Path
@@ -36,6 +39,11 @@ ADMIN = {"id": "u1", "nome": "Eduardo", "usuario": "eduardo", "papel": "admin", 
 FALHAR = """(() => {
   const orig = db.from.bind(db);
   db.from = (t) => {
+    if (window.__TRAVAR__ && window.__TRAVAR__[t]) {
+      const q = { select(){return q;}, order(){return q;}, eq(){return q;},
+                  range(){ return new Promise(()=>{}); } };   // rede que nunca responde
+      return q;
+    }
     if (window.__FALHA__ && window.__FALHA__[t]) {
       const msg = window.__FALHA__[t];
       const q = { select(){return q;}, order(){return q;}, eq(){return q;},
@@ -65,6 +73,7 @@ with sync_playwright() as pw:
     avisos = []
     page.on("dialog", lambda d: (avisos.append(d.message), d.accept()))
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
+    page.clock.install()
     page.add_init_script(STUB)
     page.add_init_script(f"window.__DB__ = {json.dumps(dict(DB, profiles=[ADMIN]))};"
                          f"window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};")
@@ -117,6 +126,33 @@ with sync_playwright() as pw:
     avisos.clear()
     r = page.evaluate("() => { const r = openNewModal('saidaRacaoCria'); render(); return r; }")
     conf(r is not False and not avisos and page.locator('#f-lote').count() == 1, "com os dados carregados a saida de racao abre", str(avisos))
+
+    # ---- sinal fraco: historico pesado nao responde, lancamento ja abre ----
+    # (Joilson, 23/10/2026: a carga so liberava a tela depois de baixar tudo,
+    # mais de 30 mil linhas; com sinal fraco nada podia ser lancado)
+    page.evaluate("() => { window.__TRAVAR__ = {movimentos: true, lancamentos_rateados: true, saidas_racao: true}; loadAll(); }")
+    page.wait_for_timeout(500)
+    estado = page.evaluate("() => ({c: state.carregouDados, e: state.erroCarga, h: state.carregandoHistorico, l: state.lotes.length})")
+    conf(estado == {"c": True, "e": "", "h": True, "l": 1}, "historico parado: lotes/dietas ja carregaram e a tela libera", str(estado))
+    conf("Carregando o histórico" in page.inner_text("body"), "aviso discreto de historico carregando")
+    avisos.clear()
+    r = page.evaluate("() => { const r = openNewModal('saidaRacaoCria'); render(); return r; }")
+    conf(r is not False and not avisos, "saida de racao abre sem esperar o historico", str(avisos))
+    page.evaluate("() => { state.modal = null; render(); }")
+
+    # ---- carga essencial parada: depois do limite vira aviso, nao trava ----
+    page.evaluate("() => { window.__TRAVAR__ = {lotes: true}; state.carregouDados = false; loadAll(); }")
+    page.clock.fast_forward(30000)
+    page.wait_for_timeout(300)
+    estado = page.evaluate("() => ({c: state.carregouDados, e: state.erroCarga})")
+    conf(estado["c"] is True and "não respondeu" in estado["e"], "lotes sem resposta em 25 s: aviso 'a internet nao respondeu'", str(estado))
+    conf(page.locator('[data-recarregar-dados]').count() == 1, "com o botao 'tente de novo'")
+    page.evaluate("() => { window.__TRAVAR__ = {}; }")
+    page.locator('[data-recarregar-dados]').click()
+    page.wait_for_timeout(500)
+    conf(page.evaluate("() => state.carregouDados && !state.erroCarga && !state.carregandoHistorico && state.lotes.length === 1"),
+         "'tente de novo' com a rede de volta carrega tudo")
+
     conf(not erros, "nenhum erro de JavaScript", " | ".join(erros[:3]))
     browser.close()
 
