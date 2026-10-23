@@ -3783,6 +3783,7 @@ function rowToFinanciamento(r){
           sistemaAmortizacao:r.sistema_amortizacao, numeroParcelas:r.numero_parcelas,
           carenciaMeses:r.carencia_meses, periodicidadeMeses:r.periodicidade_meses||1,
           primeiroVencimento:r.primeiro_vencimento||'', continuacao:!!r.continuacao,
+          saldoBanco:r.saldo_banco==null ? null : Number(r.saldo_banco), saldoBancoEm:r.saldo_banco_em||'',
           atividade:r.atividade||'', fazendaId:r.fazenda_id,
           garantia:r.garantia||'', status:r.status, financiamentoOrigemId:r.financiamento_origem_id,
           observacao:r.observacao||''};
@@ -3957,6 +3958,36 @@ function resumoFinanciamentos(){
   return {totalContratado, saldoDevedor, jurosPagoAno};
 }
 
+/* ---- Saldo devedor segundo o banco (opcional, só informativo) ----
+ * O extrato do banco soma ao principal o juros, a correção e os seguros
+ * financiados que ainda não foram pagos; o app conta como dívida só o principal
+ * (o juros vira despesa quando a parcela é paga). O saldo do extrato, com a data
+ * dele, fica ao lado do contrato e NÃO entra em conta nenhuma (dívida da aba
+ * Empresa, fluxo de caixa, juros). `encargos` = saldo do banco - principal, só
+ * quando os dois são da mesma data: parcela paga depois da data do extrato deixa
+ * o número do banco velho (`velho`) e a diferença não se mostra. */
+function saldoDoBanco(f){
+  if(f.status!=='ativo' || f.saldoBanco==null || !(Number(f.saldoBanco) > 0)) return null;
+  const valor = Number(f.saldoBanco), em = f.saldoBancoEm || '';
+  const velho = !!em && parcelasDoFinanciamento(f.id).some(p=>p.status==='paga' && (p.dataPagamento || p.dataVencimento) > em);
+  const dif = arred2(valor - (Number(saldoDevedorFinanciamento(f)) || 0));
+  return {valor, em, velho, encargos: (!velho && dif > 0) ? dif : null};
+}
+// Valor e data juntos, ou nenhum dos dois.
+function faltandoSaldoBanco(saldo, em){
+  if(saldo==='' || saldo==null) return [];
+  if(!(Number(saldo) > 0)) return ['saldo do banco (maior que zero)'];
+  return em ? [] : ['data do saldo do banco'];
+}
+// Só vai na gravação quando há valor ou o contrato já tinha um (para poder
+// apagar): salvar um contrato antes de rodar o SQL novo (financiamentos_06)
+// continua funcionando, porque as colunas só entram no pedido quando usadas.
+function colunasSaldoBanco(saldo, em, tinhaAntes){
+  const informado = saldo!=='' && saldo!=null;
+  if(!informado && !tinhaAntes) return {};
+  return {saldo_banco: informado ? Number(saldo) : null, saldo_banco_em: informado ? (em || null) : null};
+}
+
 /* ---- Contratos que já estão no ERP ----
  * O ERP guarda cada parcela de um contrato (paga ou a vencer) como uma linha
  * em movimentos_financiamento. "Lançar contrato" cria o financiamento com
@@ -4107,6 +4138,8 @@ function lerFinanciamentoDoFormulario(base){
     valorSeguro: v('f-segurofin'),
     fazendaId: v('f-fazendafin'),
     garantia: v('f-garantiafin'),
+    saldoBanco: document.getElementById('f-saldobancofin') ? v('f-saldobancofin') : base.saldoBanco,
+    saldoBancoEm: document.getElementById('f-saldobancoemfin') ? v('f-saldobancoemfin') : base.saldoBancoEm,
     observacao: v('f-obsfin'),
   };
 }
@@ -4136,24 +4169,24 @@ function PageFinanciamentos(){
   </div>
   <div class="card" style="overflow-x:auto;">
     ${linhas.length===0 ? Empty('Nenhum financiamento cadastrado','Cadastre os empréstimos e custeios tomados pela operação.') : `
-    <table>
-      <thead><tr><th>Banco</th><th>Finalidade</th><th>Contratado</th><th>Saldo devedor</th><th>Próxima parcela</th><th>Status</th><th></th></tr></thead>
+    <table class="tabela-sem-fixar tabela-cabecalho-quebra tabela-em-blocos">
+      <thead><tr><th>Banco</th><th>Contratado</th><th>Data do contrato</th><th>Saldo devedor</th><th>Próxima parcela</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${linhas.map(f=>{
           const prox = proximaParcela(f);
-          const semPagamento = parcelasDoFinanciamento(f.id).every(p=>p.status!=='paga');
+          const sb = saldoDoBanco(f);
           const atividadeLabel = f.finalidade==='capital_giro' ? 'Rateado (Pec./Cana/Grãos)' : (ATIVIDADES_LANC.find(([k])=>k===f.atividade)?.[1] || '—');
           return `
           <tr${f.status!=='ativo' ? ' style="opacity:.6;"' : ''}>
-            <td><strong>${esc(f.banco)}</strong><div class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)}</div></td>
-            <td class="mono">R$ ${fmt(f.valorPrincipal)}</td>
-            <td class="mono">${f.dataContratacao||'—'}</td>
-            <td class="mono">R$ ${fmt(saldoDevedorFinanciamento(f))}</td>
-            <td>${prox ? `${prox.dataVencimento} <span class="hint">R$ ${fmt(prox.valorParcela)}</span>` : '—'}</td>
-            <td><span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></td>
-            <td style="display:flex; gap:6px;">
+            <td><div style="text-align:left;"><strong>${esc(f.banco)}</strong><div class="hint" style="font-weight:400;">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)}</div></div></td>
+            <td class="mono" data-rotulo="Contratado" style="white-space:nowrap;">R$ ${fmt(f.valorPrincipal)}</td>
+            <td class="mono" data-rotulo="Data do contrato" style="white-space:nowrap;">${f.dataContratacao||'—'}</td>
+            <td class="mono" data-rotulo="Saldo devedor"><div><span style="white-space:nowrap;">R$ ${fmt(saldoDevedorFinanciamento(f))}</span>${sb ? `<div class="hint" style="font-family:'Inter',sans-serif;">No banco: R$ ${fmt(sb.valor)}${sb.em ? ' em ' + dataBr(sb.em) : ''}${sb.velho ? ' (desatualizado)' : ''}</div>` : ''}</div></td>
+            <td data-rotulo="Próxima parcela">${prox ? `${prox.dataVencimento} <span class="hint" style="white-space:nowrap;">R$ ${fmt(prox.valorParcela)}</span>` : '—'}</td>
+            <td data-rotulo="Status"><span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></td>
+            <td class="acoes" style="display:flex; gap:6px;">
               <button class="btn-ghost btn-sm" data-abrir-financiamento="${f.id}">Ver parcelas</button>
-              ${podeEditar && f.status==='ativo' && semPagamento && !importadoDoErp(f) ? `<button class="btn-ghost btn-sm" data-editar-financiamento="${f.id}">Editar</button>` : ''}
+              ${podeEditar && f.status==='ativo' ? `<button class="btn-ghost btn-sm" data-editar-financiamento="${f.id}">Editar</button>` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -4187,6 +4220,7 @@ function PageFinanciamentoDetalhe(){
   const podeEditar = temPermissao('matriz_financiamentos','editar');
   const parcelas = parcelasDoFinanciamento(f.id);
   const atividadeLabel = f.finalidade==='capital_giro' ? 'Rateado igualmente entre Pecuária, Cana e Grãos' : (ATIVIDADES_LANC.find(([k])=>k===f.atividade)?.[1] || '—');
+  const sb = saldoDoBanco(f);
   return `
   <div class="toolbar">
     <button class="btn-ghost btn-sm" data-voltar-financiamentos="1">&larr; Voltar</button>
@@ -4205,6 +4239,16 @@ function PageFinanciamentoDetalhe(){
     ${(Number(f.valorIof)>0 || Number(f.valorSeguro)>0) ? `<p class="hint">IOF: R$ ${fmt(f.valorIof)} · Seguro: R$ ${fmt(f.valorSeguro)} (informativo, não lançado no Financeiro)</p>` : ''}
     ${f.observacao ? `<p class="hint">${esc(f.observacao)}</p>` : ''}
   </div>
+  ${sb ? `
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-card-ic" style="background:#F5E9D7; color:var(--trigo);">${iconCarteira()}</div>
+      <div class="stat-label">Principal que falta pagar</div><div class="stat-value">R$ ${fmt(saldoDevedorFinanciamento(f))}</div></div>
+    <div class="stat-card"><div class="stat-card-ic" style="background:var(--bom-bg); color:var(--bom);">${iconFinanciamento()}</div>
+      <div class="stat-label">Saldo devedor segundo o banco${sb.em ? ' em ' + dataBr(sb.em) : ''}</div><div class="stat-value">R$ ${fmt(sb.valor)}</div></div>
+    ${sb.encargos!=null ? `<div class="stat-card"><div class="stat-card-ic" style="background:var(--alerta-bg); color:var(--alerta);">${iconSetaAlta()}</div>
+      <div class="stat-label">Juros, correção e seguros ainda não pagos</div><div class="stat-value">R$ ${fmt(sb.encargos)}</div></div>` : ''}
+  </div>
+  <p class="hint" style="margin:-8px 0 16px;">O banco soma ao principal o juros, a correção e os seguros financiados e cobra tudo junto com as parcelas. O app conta como dívida só o principal e lança o juros como despesa quando a parcela é paga.${sb.velho ? ' <strong>Este saldo do banco está desatualizado:</strong> houve pagamento depois da data dele. Informe o saldo novo em Editar.' : ''}</p>` : ''}
   <div class="card" style="overflow-x:auto;">
     ${parcelas.length===0 ? Empty('Sem parcelas', 'Este financiamento não tem cronograma gerado.') : `
     <table class="tabela-sem-fixar tabela-cabecalho-quebra tabela-em-blocos">
@@ -4370,6 +4414,15 @@ function ModalFinanciamento(){
           </select>
         </div>
         <div class="field"><label>Garantia (opcional)</label><input id="f-garantiafin" value="${esc(d.garantia||'')}" autocomplete="off"/></div>
+        ${importar ? '' : `
+        <div class="field"><label>Saldo devedor segundo o banco (R$, opcional)</label>
+          <input id="f-saldobancofin" type="text" inputmode="decimal" data-moeda value="${d.saldoBanco ?? ''}" autocomplete="off"/>
+          <span class="hint">O saldo devedor que o extrato do banco mostra: o principal mais o juros, a correção e os seguros que o banco já somou e ainda vai cobrar nas parcelas. Só aparece ao lado do contrato; a dívida do app continua sendo o principal que falta pagar.</span>
+        </div>
+        <div class="field"><label>Data desse saldo</label>
+          <input id="f-saldobancoemfin" type="date" value="${d.saldoBancoEm||''}"/>
+          <span class="hint">A "posição em" do extrato. Depois de pagar uma parcela, informe o saldo novo.</span>
+        </div>`}
         <div class="field"><label>Observação (opcional)</label><textarea id="f-obsfin" rows="2">${esc(d.observacao||'')}</textarea></div>
         ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
       </div>
@@ -4690,6 +4743,7 @@ async function salvarEdicaoFinanciamentoTravado(){
   if(finalidade!=='capital_giro' && !atividade) faltando.push('atividade');
   if(!dataContratacao) faltando.push('data');
   if(taxaTxt==='' || !(Number(taxaTxt) >= 0)) faltando.push('taxa de juros');
+  faltando.push(...faltandoSaldoBanco(v('f-saldobancofin'), v('f-saldobancoemfin')));
   if(faltando.length){
     state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
     editDraft = lerFinanciamentoDoFormulario(editDraft); render(); return;
@@ -4701,6 +4755,7 @@ async function salvarEdicaoFinanciamentoTravado(){
     fazenda_id: v('f-fazendafin') ? Number(v('f-fazendafin')) : null,
     garantia: v('f-garantiafin').trim() || null,
     observacao: imp ? textoObsErp(contratoDaObsErp(f.observacao)) + (obsUsuario ? ' ' + obsUsuario : '') : (obsUsuario || null),
+    ...colunasSaldoBanco(v('f-saldobancofin'), v('f-saldobancoemfin'), f.saldoBanco!=null),
   };
   if(!imp && document.getElementById('f-continuacaofin')) row.continuacao = document.getElementById('f-continuacaofin').checked;
   if(imp){ row.data_contratacao = dataContratacao; row.taxa_juros_aa = Number(taxaTxt); }
@@ -8136,11 +8191,14 @@ function attachEvents(){
           valorSeguro: document.getElementById('f-segurofin').value,
           fazendaId: document.getElementById('f-fazendafin').value,
           garantia: document.getElementById('f-garantiafin').value.trim(),
+          saldoBanco: document.getElementById('f-saldobancofin')?.value ?? '',
+          saldoBancoEm: document.getElementById('f-saldobancoemfin')?.value ?? '',
           observacao: document.getElementById('f-obsfin').value.trim(),
           status: 'ativo',
         };
         const faltando = [];
         if(!campos.banco) faltando.push('banco');
+        faltando.push(...faltandoSaldoBanco(campos.saldoBanco, campos.saldoBancoEm));
         if(!(Number(campos.valorPrincipal) > 0)) faltando.push('valor principal (maior que zero)');
         if(!campos.dataContratacao) faltando.push('data de contratação');
         if(!(Number(campos.taxaJurosAa) >= 0)) faltando.push('taxa de juros');
@@ -8164,6 +8222,8 @@ function attachEvents(){
         }
         state.erroFinanciamento = '';
         const row = financiamentoToRow(campos);
+        Object.assign(row, colunasSaldoBanco(campos.saldoBanco, campos.saldoBancoEm,
+          state.financiamentos.find(x=>x.id===editDraft._editId)?.saldoBanco != null));
         // Editar termos regera o cronograma do zero — só chega aqui se
         // nenhuma parcela foi paga ainda (o botão Editar da lista já
         // esconde essa opção quando há pagamento; confere de novo aqui

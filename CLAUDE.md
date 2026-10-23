@@ -469,7 +469,11 @@ custo já existe em Resultados > Relatórios.
     saldo de cada parcela e o principal se refazem), **Quitar** (todas as parcelas
     em aberto pagas numa data, sem juros), **Cancelar contrato** (só muda o
     status; as linhas do ERP voltam; não cancela se alguma parcela já virou
-    lançamento no Financeiro). Nada apaga histórico.
+    lançamento no Financeiro). Nada apaga histórico. **Editar o contrato** também
+    aparece na lista, para todo contrato ativo (24/10/2026: a lista escondia o
+    botão nos importados do ERP e nos com parcela paga e o Eduardo perguntou "pq
+    não posso editar um dos financiamentos"; o clique é o mesmo da tela do
+    contrato e já abre a edição reduzida, que nunca regera o cronograma).
   - O contrato "sem número" do Banco do Brasil (4 parcelas de R$ 456.737,72) tem
     duas parcelas em 15/08/2029 e nenhuma em 2028 no ERP: provável erro de
     digitação de lá; o total fecha, só o vencimento do meio sai errado.
@@ -477,6 +481,73 @@ custo já existe em Resultados > Relatórios.
     duplicaria o juros (já está no ERP).
 - O ERP **não tem entrada de empréstimo**, só amortização: sem ela, a
   cobertura do serviço da dívida sai pior que a realidade.
+- **Lançar contrato a partir do extrato do banco, sem duplicar** (feito em
+  24/10/2026 com dois extratos do Banco do Brasil). Antes de inserir qualquer
+  coisa, case cada pagamento do extrato, **por valor exato (centavo)**, com o que
+  o sistema já tem: amortizações do ERP (`movimentos_financiamento`, pelo apelido
+  C##) e despesas de juros e encargos do Financeiro. Compare a **soma do dia**,
+  não as partes: o ERP pode ter dividido o pagamento diferente do banco (um
+  financiamento de investimento foi lançado com amortização constante e o resto
+  como juros; o principal real era menor, mas o total do dia batia). O passado
+  que já está lá não se relança: o contrato só assume as linhas
+  (`financiamento_id`) e as parcelas pagas entram sem juros. Pagamento de antes
+  de 2023 não existe no ERP e não entra. Tarifa e IOF pagos à vista na liberação
+  de contrato posterior a ago/2026 não estão em lugar nenhum: conferir e lançar
+  como despesa (capital de giro: 3 partes iguais, como o juros).
+  - **Juros diferidos**: o banco acumula juros, TR e seguros financiados e cada
+    parcela cobra a fração (amortização ÷ principal em aberto) do acumulado
+    (conferido nos 4 pagamentos de um BB Investe Agro, com diferença de
+    centavos). O gerador SAC/Price não reproduz isso e subestima o total em
+    centenas de milhares: escreva as parcelas a vencer pela regra do banco
+    (estimativa, trocada pelo valor real em "Registrar pagamento"). O custeio do
+    BB acumula juros compostos por dia, base 365 (a liberação, não a assinatura,
+    é a data de início).
+  - **Como fazer**: por SQL, que o Eduardo cola no Supabase, com travas que
+    recusam se faltar uma linha esperada ou se o contrato já existir. Ache as
+    linhas do ERP pelo apelido do contrato (depois de 22/10/2026 nenhum contrato
+    tem linha a vencer: a dívida a vencer do ERP foi apagada, então a dívida
+    dele só passa a existir quando o contrato é lançado). Teste antes num
+    Postgres de teste com o DDL real do módulo **e no app de verdade**: o fluxo
+    de caixa dos meses já pagos tem que dar os mesmos números antes e depois.
+    Extratos, consultas e SQL de cada lançamento ficam na pasta privada, nunca
+    no repositório (têm valores e datas dos contratos).
+  - **Dois jeitos de lançar contrato vigente; nunca os dois para o mesmo
+    contrato.** (a) "Contrato que já existia" (`continuacao`, pelo saldo, data da
+    última parcela paga, as pagas seguem livres no histórico do ERP): é o jeito
+    da tela. (b) "Estilo importado" (usado para o financiamento dos tratores):
+    contrato com todas as parcelas (as pagas iguais ao ERP, sem juros) e
+    observação `Importado do ERP (contrato C##)`, que **assume** as linhas pagas
+    do ERP (`financiamento_id`). Os dois não contam a dívida duas vezes e não
+    entram como empréstimo recebido; o (b) devolve ao saldo médio de 2023 em
+    diante o saldo que o contrato tinha (medido: +R$ 240 mil por ano no
+    contrato dos tratores), que é o que a exclusão da dívida a vencer derrubou.
+    Se um contrato foi lançado por um jeito, lançar pelo outro dobra a dívida.
+- **Saldo devedor segundo o banco** (pedido do Eduardo em 24/10/2026, depois de
+  lançar os extratos: "o saldo devedor que vc colocou é um e no contrato é outro").
+  O extrato soma ao principal o juros, a correção e os seguros financiados que
+  ainda não foram pagos (nos tratores o banco mostrava R$ 455 mil e o principal
+  era R$ 240 mil); o app conta só o principal como dívida e só lança o juros como
+  despesa quando a parcela é paga. Não se resolve mudando a conta, e sim
+  mostrando o número do banco ao lado: `financiamentos.saldo_banco` e
+  `saldo_banco_em` (`financiamentos_06_saldo_segundo_o_banco.sql`, opcionais;
+  **rodado pelo Eduardo em 24/10/2026**, e os dois contratos lançados dos
+  extratos já têm o saldo do banco) aparecem na lista ("No banco: R$ … em dd/mm/aaaa" embaixo do saldo devedor) e na
+  tela do contrato (cartões: principal que falta pagar, saldo segundo o banco e
+  juros, correção e seguros ainda não pagos). **Só informativo: não entra na
+  dívida da aba Empresa, nos vencimentos, no saldo médio, no fluxo nem nos juros**
+  (`teste_saldo_banco.py` compara tudo com e sem o campo). `saldoDoBanco(f)`:
+  só contrato ativo; parcela paga **depois** da data do extrato deixa o saldo
+  "desatualizado" e some a diferença (seria falsa); valor e data andam juntos. O
+  app só manda as colunas quando há valor ou o contrato já tinha um (salvar contrato
+  antes de rodar o SQL continua funcionando). **Ao lançar contrato a partir de
+  extrato, grave também o saldo e a "posição em" do extrato.** A correção
+  monetária desses contratos é "TR por data", 100% da TR (a parte da poupança que
+  corrige o saldo, sem os 0,5% ao mês da poupança inteira): ~0,17% ao mês nos
+  últimos 12 meses, já nas estimativas das parcelas a vencer.
+  A lista de contratos virou bloco no celular (`tabela-em-blocos`; rolava 457 px de
+  lado em 376 px e o `teste_layout_matriz.py` não via, porque o banco dele não
+  tem contrato) e o cabeçalho "Finalidade", que desde o começo do módulo ficava em
+  cima do valor contratado, virou "Contratado" e "Data do contrato".
 - **Dívida no tempo** (`vencimentosDaDivida`, `taxaMediaContratos`,
   `linhaDoTempoDivida`, `saldoMedioDivida`): vencimentos juntam as parcelas em
   aberto dos contratos ativos (com o juros estimado) e as linhas do ERP que
@@ -666,7 +737,7 @@ operadores.
 
 ## Testes
 
-33 arquivos `teste_*.py`, 791 checagens (22/10/2026; a tabela abaixo lista os
+34 arquivos `teste_*.py`, 844 checagens (24/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -689,7 +760,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
 | `teste_empresa.py` | 63 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do ERP assumida por contrato, sem rolar de lado de 1280 a 320 px) |
 | `teste_divida_empresa.py` | 42 | AEMatriz.html (Empresa, Fase 2: vencimentos em 12 meses/por ano/por safra, taxa média ponderada, saldo e custo médio, lançar contrato não muda o saldo médio) |
-| `teste_financiamentos_erp.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do ERP: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
+| `teste_financiamentos_erp.py` | 42 | AEMatriz.html (Financiamentos > Lançar contrato do ERP: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, Editar na lista abre a edição reduzida, cancelar devolve) |
 | `teste_financiamentos_editar.py` | 40 | AEMatriz.html (Financiamentos: registrar pagamento com data/juros reais, editar parcela e contrato, quitar, cancelar; tela do contrato sem rolar de lado) |
 | `teste_sem_dados_sensiveis.py` | 14 | todo arquivo versionado (repositório público: sem CPF/CNPJ, número de conta, de contrato ou de documento; sem dumps de dados) |
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
@@ -701,6 +772,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 18 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua; histórico pesado parado não trava o lançamento; lotes sem resposta em 25 s viram aviso) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
+| `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
