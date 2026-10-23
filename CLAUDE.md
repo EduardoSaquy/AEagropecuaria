@@ -469,7 +469,11 @@ custo já existe em Resultados > Relatórios.
     saldo de cada parcela e o principal se refazem), **Quitar** (todas as parcelas
     em aberto pagas numa data, sem juros), **Cancelar contrato** (só muda o
     status; as linhas do ERP voltam; não cancela se alguma parcela já virou
-    lançamento no Financeiro). Nada apaga histórico.
+    lançamento no Financeiro). Nada apaga histórico. **Editar o contrato** também
+    aparece na lista, para todo contrato ativo (24/10/2026: a lista escondia o
+    botão nos importados do ERP e nos com parcela paga e o Eduardo perguntou "pq
+    não posso editar um dos financiamentos"; o clique é o mesmo da tela do
+    contrato e já abre a edição reduzida, que nunca regera o cronograma).
   - O contrato "sem número" do Banco do Brasil (4 parcelas de R$ 456.737,72) tem
     duas parcelas em 15/08/2029 e nenhuma em 2028 no ERP: provável erro de
     digitação de lá; o total fecha, só o vencimento do meio sai errado.
@@ -721,7 +725,7 @@ operadores.
 
 ## Testes
 
-34 arquivos `teste_*.py`, 834 checagens (24/10/2026; a tabela abaixo lista os
+34 arquivos `teste_*.py`, 838 checagens (24/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -744,7 +748,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_resultado_por_unidade_drilldown.py` | 51 | AEMatriz.html (Resultados > Operacional: por unidade produzida, Pecuária como atividade toda) |
 | `teste_empresa.py` | 63 | AEMatriz.html (Resultados > Empresa: fluxo de caixa em 3 blocos, juros por ano e safra, cobertura, dívida, linha do ERP assumida por contrato, sem rolar de lado de 1280 a 320 px) |
 | `teste_divida_empresa.py` | 42 | AEMatriz.html (Empresa, Fase 2: vencimentos em 12 meses/por ano/por safra, taxa média ponderada, saldo e custo médio, lançar contrato não muda o saldo médio) |
-| `teste_financiamentos_erp.py` | 40 | AEMatriz.html (Financiamentos > Lançar contrato do ERP: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, cancelar devolve) |
+| `teste_financiamentos_erp.py` | 42 | AEMatriz.html (Financiamentos > Lançar contrato do ERP: lista, cronograma real, vínculo das linhas, divida sem contar duas vezes, Editar na lista abre a edição reduzida, cancelar devolve) |
 | `teste_financiamentos_editar.py` | 40 | AEMatriz.html (Financiamentos: registrar pagamento com data/juros reais, editar parcela e contrato, quitar, cancelar; tela do contrato sem rolar de lado) |
 | `teste_sem_dados_sensiveis.py` | 14 | todo arquivo versionado (repositório público: sem CPF/CNPJ, número de conta, de contrato ou de documento; sem dumps de dados) |
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
@@ -756,7 +760,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 12 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
-| `teste_saldo_banco.py` | 49 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; lista e contrato sem rolar de lado de 1920 a 320 px) |
+| `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

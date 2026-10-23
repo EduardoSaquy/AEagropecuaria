@@ -4175,7 +4175,6 @@ function PageFinanciamentos(){
         ${linhas.map(f=>{
           const prox = proximaParcela(f);
           const sb = saldoDoBanco(f);
-          const semPagamento = parcelasDoFinanciamento(f.id).every(p=>p.status!=='paga');
           const atividadeLabel = f.finalidade==='capital_giro' ? 'Rateado (Pec./Cana/Grãos)' : (ATIVIDADES_LANC.find(([k])=>k===f.atividade)?.[1] || '—');
           return `
           <tr${f.status!=='ativo' ? ' style="opacity:.6;"' : ''}>
@@ -4187,7 +4186,7 @@ function PageFinanciamentos(){
             <td data-rotulo="Status"><span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></td>
             <td class="acoes" style="display:flex; gap:6px;">
               <button class="btn-ghost btn-sm" data-abrir-financiamento="${f.id}">Ver parcelas</button>
-              ${podeEditar && f.status==='ativo' && semPagamento && !importadoDoErp(f) ? `<button class="btn-ghost btn-sm" data-editar-financiamento="${f.id}">Editar</button>` : ''}
+              ${podeEditar && f.status==='ativo' ? `<button class="btn-ghost btn-sm" data-editar-financiamento="${f.id}">Editar</button>` : ''}
             </td>
           </tr>`;
         }).join('')}

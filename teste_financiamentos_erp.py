@@ -15,8 +15,9 @@ O que este teste prova, com contas conhecidas (hoje = 14/10/2026):
   - as linhas do ERP ficam ligadas ao contrato (financiamento_id) e saem das
     contas: a divida e a amortizacao nao contam duas vezes;
   - nenhum lancamento financeiro e criado (o juros do passado ja esta la);
-  - o contrato importado nao conta como emprestimo recebido, nao tem "Editar"
-    (regerar apagaria o cronograma real) e, se for cancelado, as linhas voltam;
+  - o contrato importado nao conta como emprestimo recebido, o "Editar" dele (na lista,
+    como na tela do contrato) so mexe nos dados e nunca regera o cronograma real, e,
+    se for cancelado, as linhas voltam;
   - lancar contrato digitado a mao enquanto ha divida do ERP avisa na tela.
 """
 import json
@@ -172,7 +173,7 @@ with sync_playwright() as pw:
          and fin[0]["numero_parcelas"] == 5 and fin[0]["status"] == "ativo" and fin[0]["finalidade"] == "custeio" and fin[0]["atividade"] == "graos",
          "criou 1 financiamento ativo: Banco do Brasil, principal R$ 700.000, 5 parcelas, custeio de graos", str(fin))
     conf(fin and fin[0]["observacao"].startswith("Importado do ERP (contrato C01)"),
-         "a observacao marca o contrato como importado do ERP (o app usa isso para esconder 'Editar')", str(fin[:1]))
+         "a observacao marca o contrato como importado do ERP (o app usa isso para nunca regerar o cronograma ao editar)", str(fin[:1]))
     conf([p["data_vencimento"] for p in parc] == ["2024-11-15", "2025-11-15", "2026-11-16", "2027-11-15", "2028-11-15"],
          "as 5 parcelas tem as datas REAIS do ERP (anuais), nao as mensais do gerador", str([p["data_vencimento"] for p in parc]))
     conf([round(p["valor_amortizacao"]) for p in parc] == [100000, 120000, 150000, 160000, 170000],
@@ -223,9 +224,9 @@ with sync_playwright() as pw:
          "as 3 parcelas a vencer tem 'Marcar como paga'; as 2 do passado nao")
     page.evaluate("() => { state.financiamentoDetalheId = null; render(); }")
 
-    # ---- 7b. contrato so com parcelas a vencer: nada pago, mas tambem sem 'Editar' ----
-    # (sem nenhuma parcela paga o botao Editar apareceria; regerar o cronograma
-    # apagaria as parcelas reais do ERP)
+    # ---- 7b. contrato so com parcelas a vencer: nada pago, e o 'Editar' dele e o reduzido ----
+    # (o botao aparece na lista como na tela do contrato, mas a edicao nunca regera o
+    # cronograma: regerar apagaria as parcelas reais do ERP)
     page.click('[data-lancar-erp="SICOOB COCRED|C02"]')
     page.wait_for_timeout(300)
     page.select_option("#f-finalidadefin", "capital_giro")
@@ -237,9 +238,20 @@ with sync_playwright() as pw:
     conf(len(fin2) == 2 and fin2[1]["banco"] == "Sicoob Cocred" and fin2[1]["atividade"] is None
          and len(parc2) == 1 and parc2[0]["status"] == "pendente" and perto(parc2[0]["valor_amortizacao"], 80000),
          "contrato D (so a vencer, capital de giro): 1 parcela pendente de R$ 80.000, sem atividade (capital de giro e rateado)", str(fin2[1:]))
-    tem_editar = page.evaluate("() => !!document.querySelector('[data-editar-financiamento]')")
-    conf(not tem_editar,
-         "contrato importado do ERP nao tem 'Editar', mesmo sem parcela paga (regerar apagaria o cronograma real)")
+    id_d = fin2[1]["id"]
+    tem_editar = page.evaluate("(id) => !!document.querySelector('[data-editar-financiamento=\"' + id + '\"]')", id_d)
+    conf(tem_editar, "contrato importado do ERP tem 'Editar' na lista, mesmo sem parcela paga")
+    page.click(f'[data-editar-financiamento="{id_d}"]')
+    page.wait_for_timeout(300)
+    modal_d = page.evaluate("""() => ({temSistema: !!document.getElementById('f-sistemafin'), temNumero: !!document.getElementById('f-numparcelasfin'),
+        principalSoLeitura: document.getElementById('f-principalfin').readOnly, texto: document.querySelector('.modal-body').innerText.toLowerCase()})""")
+    conf(not modal_d["temSistema"] and not modal_d["temNumero"] and modal_d["principalSoLeitura"] and "importado do erp" in modal_d["texto"],
+         "e abre a edicao reduzida: sem sistema nem numero de parcelas, principal so leitura (o cronograma real nao e regerado)", str(modal_d))
+    page.click('.modal-close')
+    page.wait_for_timeout(200)
+    parc_d = page.evaluate("(id) => window.__DB__.parcelas_financiamento.filter(p => p.financiamento_id === id)", id_d)
+    conf(len(parc_d) == 1 and parc_d[0]["status"] == "pendente" and perto(parc_d[0]["valor_amortizacao"], 80000),
+         "fechar sem salvar deixa as parcelas como estavam (1 parcela pendente de R$ 80.000)", str(parc_d))
 
     # ---- 8. cancelar o contrato devolve as linhas ----
     page.evaluate("() => { state.financiamentos = state.financiamentos.map(f => ({...f, status: 'cancelado'})); render(); }")

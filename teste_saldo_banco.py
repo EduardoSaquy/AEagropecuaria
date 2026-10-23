@@ -157,6 +157,15 @@ with sync_playwright() as pw:
     cab = page.evaluate("() => [...document.querySelectorAll('thead th')].map(t => t.textContent.trim())")
     conf(cab[:6] == ["Banco", "Contratado", "Data do contrato", "Saldo devedor", "Próxima parcela", "Status"],
          "cabecalho da lista bate com as colunas (antes 'Finalidade' ficava em cima do valor contratado)", str(cab))
+    botoes = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('tbody tr')].map(tr =>
+        [tr.querySelector('strong').innerText, !!tr.querySelector('[data-editar-financiamento]')]))""")
+    conf(botoes.get("Banco Alfa") and botoes.get("Banco Delta") and botoes.get("Banco Beta") and botoes.get("Banco Gama") and not botoes.get("Banco Epsilon"),
+         "lista: 'Editar' em todo contrato ativo (o importado do ERP e o com parcela paga tambem), e nao no quitado", str(botoes))
+    page.click('[data-editar-financiamento="1"]')
+    page.wait_for_timeout(250)
+    modal = page.evaluate("() => ({saldo: !!document.getElementById('f-saldobancofin'), sistema: !!document.getElementById('f-sistemafin')})")
+    conf(modal["saldo"] and not modal["sistema"], "o 'Editar' da lista abre a edicao reduzida do contrato importado, com o campo do saldo do banco", str(modal))
+    page.evaluate("() => { state.modal = null; editDraft = null; render(); }")
 
     # ---- 2. a tela do contrato ----
     abrir(1)
