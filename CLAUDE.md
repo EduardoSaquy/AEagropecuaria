@@ -518,6 +518,31 @@ custo já existe em Resultados > Relatórios.
     diante o saldo que o contrato tinha (medido: +R$ 240 mil por ano no
     contrato dos tratores), que é o que a exclusão da dívida a vencer derrubou.
     Se um contrato foi lançado por um jeito, lançar pelo outro dobra a dívida.
+- **Saldo devedor segundo o banco** (pedido do Eduardo em 24/10/2026, depois de
+  lançar os extratos: "o saldo devedor que vc colocou é um e no contrato é outro").
+  O extrato soma ao principal o juros, a correção e os seguros financiados que
+  ainda não foram pagos (nos tratores o banco mostrava R$ 455 mil e o principal
+  era R$ 240 mil); o app conta só o principal como dívida e só lança o juros como
+  despesa quando a parcela é paga. Não se resolve mudando a conta, e sim
+  mostrando o número do banco ao lado: `financiamentos.saldo_banco` e
+  `saldo_banco_em` (`financiamentos_06_saldo_segundo_o_banco.sql`, opcionais)
+  aparecem na lista ("No banco: R$ … em dd/mm/aaaa" embaixo do saldo devedor) e na
+  tela do contrato (cartões: principal que falta pagar, saldo segundo o banco e
+  juros, correção e seguros ainda não pagos). **Só informativo: não entra na
+  dívida da aba Empresa, nos vencimentos, no saldo médio, no fluxo nem nos juros**
+  (`teste_saldo_banco.py` compara tudo com e sem o campo). `saldoDoBanco(f)`:
+  só contrato ativo; parcela paga **depois** da data do extrato deixa o saldo
+  "desatualizado" e some a diferença (seria falsa); valor e data andam juntos. O
+  app só manda as colunas quando há valor ou o contrato já tinha um (salvar contrato
+  antes de rodar o SQL continua funcionando). **Ao lançar contrato a partir de
+  extrato, grave também o saldo e a "posição em" do extrato.** A correção
+  monetária desses contratos é "TR por data", 100% da TR (a parte da poupança que
+  corrige o saldo, sem os 0,5% ao mês da poupança inteira): ~0,17% ao mês nos
+  últimos 12 meses, já nas estimativas das parcelas a vencer.
+  A lista de contratos virou bloco no celular (`tabela-em-blocos`; rolava 457 px de
+  lado em 376 px e o `teste_layout_matriz.py` não via, porque o banco dele não
+  tem contrato) e o cabeçalho "Finalidade", que desde o começo do módulo ficava em
+  cima do valor contratado, virou "Contratado" e "Data do contrato".
 - **Dívida no tempo** (`vencimentosDaDivida`, `taxaMediaContratos`,
   `linhaDoTempoDivida`, `saldoMedioDivida`): vencimentos juntam as parcelas em
   aberto dos contratos ativos (com o juros estimado) e as linhas do ERP que
@@ -695,7 +720,7 @@ operadores.
 
 ## Testes
 
-33 arquivos `teste_*.py`, 785 checagens (22/10/2026; a tabela abaixo lista os
+34 arquivos `teste_*.py`, 834 checagens (24/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -730,6 +755,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 12 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
+| `teste_saldo_banco.py` | 49 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
