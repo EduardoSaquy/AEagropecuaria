@@ -589,6 +589,14 @@ async function buscarTudo(consulta){
   return { data: todas, error: null };
 }
 
+// Carga em duas etapas (Joilson, 23/10/2026: com sinal fraco no campo nada
+// podia ser lançado). 1ª: o que os lançamentos precisam (lotes, dietas,
+// insumos, animais, perfis), pequeno; libera a tela. 2ª: o histórico pesado
+// (movimentos, saídas, pesagens, financeiro: dezenas de milhares de linhas),
+// em segundo plano. A 1ª tem limite de tempo: rede que não responde vira
+// aviso com "tente de novo" em vez de tela vazia para sempre.
+const LIMITE_CARGA_ESSENCIAL_MS = 25000;
+let cargaAtual = 0;
 async function loadAll(jaRenovouSessao){
   // .range() é obrigatório em toda consulta -- sem ele, o Supabase corta a
   // resposta em 1000 linhas por padrão (a API nem avisa, só devolve as 1000
@@ -596,11 +604,45 @@ async function loadAll(jaRenovouSessao){
   // passa de 1000 linhas com o tempo, isso fazia lançamentos novos (com o
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
-  const [ing, mov, diet, lot, sr, lc, pt, rc, lanc, cCusto, pa, cfg, perfis, faz, prt, pesag, prod, abt, dg, desm, anim, pesagAnim, manj, protIA] = await Promise.all([
+  const minhaCarga = ++cargaAtual;
+  const demorou = new Promise(res=>setTimeout(()=>res('demorou'), LIMITE_CARGA_ESSENCIAL_MS));
+  const essenciais = Promise.all([
     buscarTudo(()=>db.from('ingredientes').select('*').order('id')),
-    buscarTudo(()=>db.from('movimentos').select('*').order('id')),
     buscarTudo(()=>db.from('dietas').select('*').order('id')),
     buscarTudo(()=>db.from('lotes').select('*').order('id')),
+    buscarTudo(()=>db.from('animais').select('*').order('id')),
+    buscarTudo(()=>db.from('profiles').select('*').order('nome')),
+  ]);
+  const r1 = await Promise.race([essenciais, demorou]);
+  if(minhaCarga !== cargaAtual) return;          // outra carga começou depois
+  if(r1 === 'demorou'){
+    state.erroCarga = 'a internet não respondeu em ' + Math.round(LIMITE_CARGA_ESSENCIAL_MS/1000) + ' segundos';
+    state.carregouDados = true;
+    render();
+    return;
+  }
+  const [ing, diet, lot, anim, perfis] = r1;
+  // Consulta que falha volta vazia: sem este aviso a tela mostrava "nenhum
+  // lote cadastrado" e o lançamento culpava o lote (Joilson, 22/10/2026).
+  // Login vencido (token de 1 h) renova uma vez e carrega de novo.
+  const falhas = [['lotes', lot], ['dietas', diet], ['insumos', ing], ['animais', anim]].filter(([, r])=>r?.error);
+  const textoFalha = falhas.map(([, r])=>r.error.message||'').join(' ');
+  if(falhas.length && !jaRenovouSessao && /jwt|token|expired|401|unauthorized/i.test(textoFalha)){
+    const renovada = await db.auth.refreshSession().catch(()=>null);
+    if(renovada?.data?.session){ state.session = renovada.data.session; return loadAll(true); }
+  }
+  state.erroCarga = falhas.length ? `${falhas.map(([n])=>n).join(', ')} (${falhas[0][1].error.message||'erro'})` : '';
+  state.carregouDados = true;
+  state.ingredientes = (ing.data||[]).map(rowToIngrediente);
+  state.dietas = (diet.data||[]).map(rowToDieta);
+  state.lotes = (lot.data||[]).map(rowToLote);
+  state.animais = (anim.data||[]).map(rowToAnimal);
+  state.perfis = (perfis.data||[]).map(rowToPerfil);
+  state.carregandoHistorico = true;
+  render();
+
+  const [mov, sr, lc, pt, rc, lanc, cCusto, pa, cfg, faz, prt, pesag, prod, abt, dg, desm, pesagAnim, manj, protIA] = await Promise.all([
+    buscarTudo(()=>db.from('movimentos').select('*').order('id')),
     buscarTudo(()=>db.from('saidas_racao').select('*').order('id')),
     buscarTudo(()=>db.from('leituras_cocho').select('*').order('id')),
     buscarTudo(()=>db.from('pasto').select('*').order('id')),
@@ -619,7 +661,6 @@ async function loadAll(jaRenovouSessao){
     buscarTudo(()=>db.from('centros_custo').select('id, nome')),
     buscarTudo(()=>db.from('precos_arroba').select('*').order('id')),
     db.from('config_financeiro').select('*').eq('id', 1),
-    buscarTudo(()=>db.from('profiles').select('*').order('nome')),
     buscarTudo(()=>dbLavoura.from('fazenda_atividades').select('area_ha, fazenda_id, fazendas(nome)').eq('atividade','pecuaria').order('fazenda_id')),
     buscarTudo(()=>db.from('partos').select('*').order('id')),
     buscarTudo(()=>db.from('pesagens').select('*').order('id')),
@@ -627,40 +668,21 @@ async function loadAll(jaRenovouSessao){
     buscarTudo(()=>db.from('abates').select('*').order('id')),
     buscarTudo(()=>db.from('diagnosticos_gestacionais').select('*').order('id')),
     buscarTudo(()=>db.from('desmamas').select('*').order('id')),
-    buscarTudo(()=>db.from('animais').select('*').order('id')),
     buscarTudo(()=>db.from('pesagens_animais').select('*').order('id')),
     buscarTudo(()=>db.from('manejos').select('*').order('id')),
     buscarTudo(()=>db.from('protocolos_inseminacao').select('*').order('id')),
   ]);
-  // Consulta que falhou volta vazia: sem este aviso a tela mostrava "nenhum
-  // lote cadastrado" e o lançamento culpava o lote (Joilson, 22/10/2026).
-  // Login vencido (token de 1 h) renova uma vez e carrega de novo.
-  const essenciais = [['lotes', lot], ['dietas', diet], ['insumos', ing], ['animais', anim]];
-  const falhas = essenciais.filter(([, r])=>r?.error);
-  const textoFalha = falhas.map(([, r])=>r.error.message||'').join(' ');
-  if(falhas.length && !jaRenovouSessao && /jwt|token|expired|401|unauthorized/i.test(textoFalha)){
-    const renovada = await db.auth.refreshSession().catch(()=>null);
-    if(renovada?.data?.session){ state.session = renovada.data.session; return loadAll(true); }
-  }
-  state.erroCarga = falhas.length ? `${falhas.map(([n])=>n).join(', ')} (${falhas[0][1].error.message||'erro'})` : '';
-  state.carregouDados = true;
-  state.ingredientes = (ing.data||[]).map(rowToIngrediente);
+  if(minhaCarga !== cargaAtual) return;
+  state.carregandoHistorico = false;
   state.movimentos = (mov.data||[]).map(rowToMovimento);
-  state.dietas = (diet.data||[]).map(rowToDieta);
-  state.lotes = (lot.data||[]).map(rowToLote);
   state.saidasRacao = (sr.data||[]).map(rowToSaidaRacao);
   state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
   state.pasto = (pt.data||[]).map(rowToPasto);
-  state.perfis = (perfis.data||[]).map(rowToPerfil);
   state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
   state.partos = (prt.data||[]).map(rowToParto);
   state.pesagens = (pesag.data||[]).map(rowToPesagem);
   state.vendas = (abt.data||[]).map(rowToVenda);
   state.producoesRacao = (prod.data||[]).map(rowToProducaoRacao);
-  // As telas deste app continuam trabalhando com as formas antigas
-  // (custosFixos, investimentos, receitas). Só a origem mudou: os três
-  // saem agora da mesma tabela, separados por tipo. Assim nenhuma tela de
-  // Resultados, Por Lote ou Reprodução precisou ser reescrita.
   const nomeCentro = new Map((cCusto.data||[]).map(x=>[x.id, x.nome]));
   const lancamentos = lanc.data||[];
   state.centroVendasId = (cCusto.data||[]).find(x=>x.nome==='Vendas')?.id ?? null;
@@ -690,7 +712,6 @@ async function loadAll(jaRenovouSessao){
   state.fazendas = (faz.data||[]).map(rowToFazenda);
   state.diagnosticos = (dg.data||[]).map(rowToDiagnostico);
   state.desmamas = (desm.data||[]).map(rowToDesmama);
-  state.animais = (anim.data||[]).map(rowToAnimal);
   state.pesagensAnimais = (pesagAnim.data||[]).map(rowToPesagemAnimal);
   state.manejos = (manj.data||[]).map(rowToManejo);
   state.protocolosInseminacao = (protIA.data||[]).map(rowToProtocoloInseminacao);
@@ -1799,6 +1820,7 @@ function AvisoCarga(){
       Os dados não carregaram: ${esc(state.erroCarga)}. Confira a internet e
       <button class="btn-ghost btn-sm" data-recarregar-dados="1">tente de novo</button>
       ou saia e entre de novo no app.</div>`;
+  if(state.carregandoHistorico) return `<div class="hint" style="margin:0 0 10px;">Carregando o histórico (estoque, pesagens, financeiro)… os lançamentos já podem ser feitos; os números desta tela ainda podem mudar.</div>`;
   return '';
 }
 // Lançar com a lista vazia por carga incompleta dava aviso enganoso.

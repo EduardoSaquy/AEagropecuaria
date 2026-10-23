@@ -543,6 +543,18 @@ dava lista vazia. Agora:
   (`AvisoCarga`); `openNewModal` explica em vez de culpar o lote
   (`dadosProntosParaLancar`; sem rede continua liberado, a fila offline é como antes);
 - erro de login vencido (JWT) renova a sessão uma vez e carrega de novo.
+
+No dia seguinte (23/10/2026) ele ainda não conseguia lançar **nada**: entrando
+no banco como ele (papel `authenticated` + id dele), via os 14 lotes, as 11
+dietas e tudo o mais; com o perfil dele no stub o lançamento abria. O que
+travava era a carga: o `loadAll` só liberava a tela depois de baixar tudo
+(9.614 movimentos, 11.409 lançamentos, 1.697 saídas...), e com sinal fraco no
+campo isso não terminava; com o bloqueio do dia anterior, nada passava. Agora
+a carga tem **duas etapas**: lotes, dietas, insumos, animais e perfis primeiro
+(liberam a tela e os lançamentos; limite de 25 s, `LIMITE_CARGA_ESSENCIAL_MS`,
+depois vira aviso com "tente de novo") e o histórico pesado em segundo plano
+(`state.carregandoHistorico`, aviso discreto). Salvar ração/cocho/pasto não
+depende do histórico. `cargaAtual` descarta carga antiga se outra começou.
 `teste_carga_pecuaria.py`.
 
 Antes disso a primeira suspeita foi a permissão de dietas (só quem tinha
@@ -654,7 +666,7 @@ operadores.
 
 ## Testes
 
-33 arquivos `teste_*.py`, 785 checagens (22/10/2026; a tabela abaixo lista os
+33 arquivos `teste_*.py`, 791 checagens (22/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -686,7 +698,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 | `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |
-| `teste_carga_pecuaria.py` | 12 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua) |
+| `teste_carga_pecuaria.py` | 18 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua; histórico pesado parado não trava o lançamento; lotes sem resposta em 25 s viram aviso) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 
