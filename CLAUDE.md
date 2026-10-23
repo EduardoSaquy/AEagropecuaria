@@ -477,6 +477,47 @@ custo já existe em Resultados > Relatórios.
     duplicaria o juros (já está no ERP).
 - O ERP **não tem entrada de empréstimo**, só amortização: sem ela, a
   cobertura do serviço da dívida sai pior que a realidade.
+- **Lançar contrato a partir do extrato do banco, sem duplicar** (feito em
+  24/10/2026 com dois extratos do Banco do Brasil). Antes de inserir qualquer
+  coisa, case cada pagamento do extrato, **por valor exato (centavo)**, com o que
+  o sistema já tem: amortizações do ERP (`movimentos_financiamento`, pelo apelido
+  C##) e despesas de juros e encargos do Financeiro. Compare a **soma do dia**,
+  não as partes: o ERP pode ter dividido o pagamento diferente do banco (um
+  financiamento de investimento foi lançado com amortização constante e o resto
+  como juros; o principal real era menor, mas o total do dia batia). O passado
+  que já está lá não se relança: o contrato só assume as linhas
+  (`financiamento_id`) e as parcelas pagas entram sem juros. Pagamento de antes
+  de 2023 não existe no ERP e não entra. Tarifa e IOF pagos à vista na liberação
+  de contrato posterior a ago/2026 não estão em lugar nenhum: conferir e lançar
+  como despesa (capital de giro: 3 partes iguais, como o juros).
+  - **Juros diferidos**: o banco acumula juros, TR e seguros financiados e cada
+    parcela cobra a fração (amortização ÷ principal em aberto) do acumulado
+    (conferido nos 4 pagamentos de um BB Investe Agro, com diferença de
+    centavos). O gerador SAC/Price não reproduz isso e subestima o total em
+    centenas de milhares: escreva as parcelas a vencer pela regra do banco
+    (estimativa, trocada pelo valor real em "Registrar pagamento"). O custeio do
+    BB acumula juros compostos por dia, base 365 (a liberação, não a assinatura,
+    é a data de início).
+  - **Como fazer**: por SQL, que o Eduardo cola no Supabase, com travas que
+    recusam se faltar uma linha esperada ou se o contrato já existir. Ache as
+    linhas do ERP pelo apelido do contrato (depois de 22/10/2026 nenhum contrato
+    tem linha a vencer: a dívida a vencer do ERP foi apagada, então a dívida
+    dele só passa a existir quando o contrato é lançado). Teste antes num
+    Postgres de teste com o DDL real do módulo **e no app de verdade**: o fluxo
+    de caixa dos meses já pagos tem que dar os mesmos números antes e depois.
+    Extratos, consultas e SQL de cada lançamento ficam na pasta privada, nunca
+    no repositório (têm valores e datas dos contratos).
+  - **Dois jeitos de lançar contrato vigente; nunca os dois para o mesmo
+    contrato.** (a) "Contrato que já existia" (`continuacao`, pelo saldo, data da
+    última parcela paga, as pagas seguem livres no histórico do ERP): é o jeito
+    da tela. (b) "Estilo importado" (usado para o financiamento dos tratores):
+    contrato com todas as parcelas (as pagas iguais ao ERP, sem juros) e
+    observação `Importado do ERP (contrato C##)`, que **assume** as linhas pagas
+    do ERP (`financiamento_id`). Os dois não contam a dívida duas vezes e não
+    entram como empréstimo recebido; o (b) devolve ao saldo médio de 2023 em
+    diante o saldo que o contrato tinha (medido: +R$ 240 mil por ano no
+    contrato dos tratores), que é o que a exclusão da dívida a vencer derrubou.
+    Se um contrato foi lançado por um jeito, lançar pelo outro dobra a dívida.
 - **Dívida no tempo** (`vencimentosDaDivida`, `taxaMediaContratos`,
   `linhaDoTempoDivida`, `saldoMedioDivida`): vencimentos juntam as parcelas em
   aberto dos contratos ativos (com o juros estimado) e as linhas do ERP que
