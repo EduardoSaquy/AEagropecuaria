@@ -525,8 +525,9 @@ custo já existe em Resultados > Relatórios.
   era R$ 240 mil); o app conta só o principal como dívida e só lança o juros como
   despesa quando a parcela é paga. Não se resolve mudando a conta, e sim
   mostrando o número do banco ao lado: `financiamentos.saldo_banco` e
-  `saldo_banco_em` (`financiamentos_06_saldo_segundo_o_banco.sql`, opcionais)
-  aparecem na lista ("No banco: R$ … em dd/mm/aaaa" embaixo do saldo devedor) e na
+  `saldo_banco_em` (`financiamentos_06_saldo_segundo_o_banco.sql`, opcionais;
+  **rodado pelo Eduardo em 24/10/2026**, e os dois contratos lançados dos
+  extratos já têm o saldo do banco) aparecem na lista ("No banco: R$ … em dd/mm/aaaa" embaixo do saldo devedor) e na
   tela do contrato (cartões: principal que falta pagar, saldo segundo o banco e
   juros, correção e seguros ainda não pagos). **Só informativo: não entra na
   dívida da aba Empresa, nos vencimentos, no saldo médio, no fluxo nem nos juros**
