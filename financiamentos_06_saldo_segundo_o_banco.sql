@@ -1,5 +1,5 @@
 -- ============================================================
--- Financiamentos - saldo devedor segundo o banco (pedido do Eduardo em 24/10/2026:
+-- Financiamentos - saldo devedor segundo o banco (pedido do Eduardo em 23/10/2026:
 -- "o saldo devedor que vc colocou e um e no contrato e outro").
 --
 -- O extrato do banco mostra o saldo devedor com o juros, a correcao e os seguros

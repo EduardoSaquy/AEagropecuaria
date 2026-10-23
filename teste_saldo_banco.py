@@ -1,5 +1,5 @@
 """
-Financiamentos: saldo devedor segundo o banco (pedido do Eduardo, 24/10/2026: "o saldo
+Financiamentos: saldo devedor segundo o banco (pedido do Eduardo, 23/10/2026: "o saldo
 devedor que vc colocou e um e no contrato e outro"). O extrato do banco soma ao principal o
 juros, a correcao e os seguros que ainda nao foram pagos; o app conta so o principal. O
 campo (opcional, com data) mostra o numero do banco ao lado do contrato, sem entrar em conta

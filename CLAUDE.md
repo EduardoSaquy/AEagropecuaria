@@ -470,7 +470,7 @@ custo já existe em Resultados > Relatórios.
     em aberto pagas numa data, sem juros), **Cancelar contrato** (só muda o
     status; as linhas do ERP voltam; não cancela se alguma parcela já virou
     lançamento no Financeiro). Nada apaga histórico. **Editar o contrato** também
-    aparece na lista, para todo contrato ativo (24/10/2026: a lista escondia o
+    aparece na lista, para todo contrato ativo (23/10/2026: a lista escondia o
     botão nos importados do ERP e nos com parcela paga e o Eduardo perguntou "pq
     não posso editar um dos financiamentos"; o clique é o mesmo da tela do
     contrato e já abre a edição reduzida, que nunca regera o cronograma).
@@ -482,7 +482,7 @@ custo já existe em Resultados > Relatórios.
 - O ERP **não tem entrada de empréstimo**, só amortização: sem ela, a
   cobertura do serviço da dívida sai pior que a realidade.
 - **Lançar contrato a partir do extrato do banco, sem duplicar** (feito em
-  24/10/2026 com dois extratos do Banco do Brasil). Antes de inserir qualquer
+  23/10/2026 com dois extratos do Banco do Brasil). Antes de inserir qualquer
   coisa, case cada pagamento do extrato, **por valor exato (centavo)**, com o que
   o sistema já tem: amortizações do ERP (`movimentos_financiamento`, pelo apelido
   C##) e despesas de juros e encargos do Financeiro. Compare a **soma do dia**,
@@ -522,7 +522,7 @@ custo já existe em Resultados > Relatórios.
     diante o saldo que o contrato tinha (medido: +R$ 240 mil por ano no
     contrato dos tratores), que é o que a exclusão da dívida a vencer derrubou.
     Se um contrato foi lançado por um jeito, lançar pelo outro dobra a dívida.
-- **Saldo devedor segundo o banco** (pedido do Eduardo em 24/10/2026, depois de
+- **Saldo devedor segundo o banco** (pedido do Eduardo em 23/10/2026, depois de
   lançar os extratos: "o saldo devedor que vc colocou é um e no contrato é outro").
   O extrato soma ao principal o juros, a correção e os seguros financiados que
   ainda não foram pagos (nos tratores o banco mostrava R$ 455 mil e o principal
@@ -530,7 +530,7 @@ custo já existe em Resultados > Relatórios.
   despesa quando a parcela é paga. Não se resolve mudando a conta, e sim
   mostrando o número do banco ao lado: `financiamentos.saldo_banco` e
   `saldo_banco_em` (`financiamentos_06_saldo_segundo_o_banco.sql`, opcionais;
-  **rodado pelo Eduardo em 24/10/2026**, e os dois contratos lançados dos
+  **rodado pelo Eduardo em 23/10/2026**, e os dois contratos lançados dos
   extratos já têm o saldo do banco) aparecem na lista ("No banco: R$ … em dd/mm/aaaa" embaixo do saldo devedor) e na
   tela do contrato (cartões: principal que falta pagar, saldo segundo o banco e
   juros, correção e seguros ainda não pagos). **Só informativo: não entra na
@@ -737,7 +737,7 @@ operadores.
 
 ## Testes
 
-34 arquivos `teste_*.py`, 844 checagens (24/10/2026; a tabela abaixo lista os
+34 arquivos `teste_*.py`, 844 checagens (23/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
