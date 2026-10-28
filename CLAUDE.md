@@ -745,7 +745,8 @@ Pedidos do mesmo dia:
   morto vai para Vacas Vazias Santa Alice, vivo para Vacas 07/08,
   `pecuaria_parto_37_sem_lote.sql`, que parou ao achar o 57) e unificação pela
   mesma regra dos duplicados, fica o id 1 no Vacas 07/08
-  (`pecuaria_parto_37_unifica.sql`). Ficou para 28/10/2026: as cabeças do
+  (`pecuaria_parto_37_unifica.sql`, **rodado em 27/10/2026**: 0 parto sem lote,
+  0 vaca com parto repetido). Ficou para 28/10/2026: as cabeças do
   Vacas 09/10 (70, com 72 vacas paridas), o Eduardo passa a contagem real.
 - **Resumo de partos por lote mostra bezerros vivos e perdas à parte**
   (pedido do Eduardo no mesmo dia: no Vacas Vazias os bezerros nasceram mortos e
