@@ -710,7 +710,15 @@ Pedidos do mesmo dia:
   animal do mesmo sexo com ele: "512 2S" fica PENDENTE (já existe o 512 macho
   do Curral 2), assim como qualquer "Alice N" cujo N já for de outro animal.
   Ensaiado no Postgres 16 descartável com os mesmos casos: repetível, numa
-  transação só, e recusa rodar antes do SQL das colunas.
+  transação só, e recusa rodar antes do SQL das colunas. **Rodado pelo Eduardo
+  em 27/10/2026**: 20 resolvidos (inclusive "Alice 2", que não colidiu), o
+  cadastro "721 abortou" apagado (a vaca 721 já existia), parto 197 virou
+  aborto, partos 3 e 4 ("368/370 pariu morto", de 26/07/2026) viraram nasceu
+  morto; só o "512 2S" ficou pendente. Decisão dele: o bezerro vira **512000**
+  (fácil de reconhecer) e "2S" vai para o Nome,
+  `pecuaria_512_2s_vira_512000.sql` (ensaiado; ele roda em 28/10/2026). O 512
+  adulto do Curral 2 foi vendido e sai em 28/10/2026, mas o histórico de
+  pesagem dele continua com o número 512: não reaproveitar.
 
 ## Armadilhas que já custaram caro
 
