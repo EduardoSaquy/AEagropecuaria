@@ -98,8 +98,9 @@ def abrir(pw, db, toque=False):
     browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
     ctx = browser.new_context(has_touch=toque, is_mobile=toque, viewport={"width": 390, "height": 844} if toque else {"width": 1280, "height": 900})
     page = ctx.new_page()
-    page.avisos = []; page.erros = []
-    page.on("dialog", lambda d: (page.avisos.append(d.message), d.accept()))
+    page.avisos = []; page.erros = []; page.recusar = False
+    # confirm() e aceito, a menos que page.recusar esteja ligado
+    page.on("dialog", lambda d: (page.avisos.append(d.message), d.dismiss() if (d.type == "confirm" and page.recusar) else d.accept()))
     page.on("pageerror", lambda e: page.erros.append(str(e)) if "ServiceWorker" not in str(e) else None)
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.add_init_script(STUB)
@@ -197,7 +198,7 @@ with sync_playwright() as pw:
     conf(page.locator('#f-lotemanejo').input_value() == "", "Manejo: lote abre em branco")
     conf(page.locator('[data-iniciar-manejo]').is_disabled(), "Manejo: 'Iniciar' desligado ate escolher o lote")
     # sem lote nao salva
-    page.evaluate("() => { state.page='reproducaoGeral'; state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.evaluate("() => { state.page='reproducaoGeral'; state.modal=null; editDraft=null; openNewModal('parto'); render(); }"); page.fill('#f-data', HOJE)
     page.fill('#f-numeromae', '128'); page.select_option('#f-sexobezerro', 'femea')
     antes = page.evaluate("() => window.__DB__.partos.length")
     page.avisos.clear()
@@ -217,7 +218,7 @@ with sync_playwright() as pw:
     # ================= NUMERO SO COM ALGARISMOS + NOME =================
     print("\n  NUMERO DO ANIMAL SO COM ALGARISMOS E CAMPO NOME")
     browser, page = abrir(pw, banco())
-    page.evaluate("() => { state.page='reproducaoGeral'; state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.evaluate("() => { state.page='reproducaoGeral'; state.modal=null; editDraft=null; openNewModal('parto'); render(); }"); page.fill('#f-data', HOJE)
     page.locator('#f-numeromae').type('721 abortou')
     conf(page.locator('#f-numeromae').input_value() == "721", "digitar '721 abortou' no numero da mae fica 721", page.locator('#f-numeromae').input_value())
     # texto que escapou do filtro (colado por script) nao passa no Salvar
@@ -260,7 +261,7 @@ with sync_playwright() as pw:
     # antes do SQL: banco sem as colunas novas
     print("\n  ANTES DE RODAR O SQL (banco sem tipo/obito/nome)")
     browser, page = abrir(pw, banco(com_colunas_novas=False))
-    page.evaluate("() => { state.page='reproducaoGeral'; state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.evaluate("() => { state.page='reproducaoGeral'; state.modal=null; editDraft=null; openNewModal('parto'); render(); }"); page.fill('#f-data', HOJE)
     page.select_option('#f-lote', '6'); page.fill('#f-numeromae', '128'); page.select_option('#f-sexobezerro', 'femea')
     page.evaluate("() => { window.__ESCRITAS__.length = 0; }")
     page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
@@ -301,7 +302,7 @@ with sync_playwright() as pw:
     page.locator('[data-save="parto"]').click(); page.wait_for_timeout(300)
     conf(page.avisos and "desmama" in page.avisos[0] and parto_db(page, 199)["tipo"] == "nascimento", "parto com desmama nao pode virar aborto", str(page.avisos))
     # novo aborto pelo botao
-    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }"); page.fill('#f-data', HOJE)
     page.select_option('#f-lote', '6'); page.select_option('#f-tipoparto', 'aborto'); page.wait_for_timeout(60)
     page.fill('#f-numeromae', '300')
     page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
@@ -337,7 +338,7 @@ with sync_playwright() as pw:
     print("\n  NASCEU MORTO (nascimento com obito no mesmo dia)")
     browser, page = abrir(pw, banco())
     tela_partos(page)
-    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }"); page.fill('#f-data', HOJE)
     page.select_option('#f-lote', '6'); page.select_option('#f-tipoparto', 'natimorto'); page.wait_for_timeout(60)
     conf(page.locator('#f-sexobezerro').count() == 1, "nasceu morto mantem sexo/raca do bezerro (opcional)")
     page.fill('#f-numeromae', '721'); page.avisos.clear()
@@ -375,6 +376,50 @@ with sync_playwright() as pw:
     page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
     p198 = parto_db(page, 198)
     conf(p198["raca_bezerro"] == "nelore" and p198["data_obito"] == "2026-10-22" and p198["causa_obito"] == "diarreia", "editar a raca preserva o obito registrado", str(p198))
+    conf(not page.erros, "nenhum erro de JavaScript", " | ".join(page.erros[:3]))
+    browser.close()
+
+    # ================= DATA EM BRANCO E PARTO REPETIDO =================
+    print("\n  DATA DO PARTO EM BRANCO E AVISO DE PARTO REPETIDO")
+    browser, page = abrir(pw, banco())
+    tela_partos(page)
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    conf(page.locator('#f-data').input_value() == "", "novo parto abre com a data em branco")
+    page.select_option('#f-lote', '6'); page.fill('#f-numeromae', '721'); page.select_option('#f-sexobezerro', 'macho')
+    antes = page.evaluate("() => window.__DB__.partos.length"); page.avisos.clear()
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(300)
+    conf(page.avisos and "Data" in page.avisos[0] and page.evaluate("() => window.__DB__.partos.length") == antes, "sem data nao salva", str(page.avisos))
+    page.fill('#f-data', '2099-01-01'); page.avisos.clear()
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(300)
+    conf(page.avisos and "futuro" in page.avisos[0], "data no futuro nao salva", str(page.avisos))
+    # vaca 128 ja tem parto em 20/10/2026 (id 198): novo parto dela hoje pergunta
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.select_option('#f-lote', '6'); page.fill('#f-data', HOJE); page.fill('#f-numeromae', '128'); page.select_option('#f-sexobezerro', 'femea')
+    antes = page.evaluate("() => window.__DB__.partos.length"); page.avisos.clear(); page.recusar = True
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    conf(page.avisos and "já tem um parto lançado em 20/10/2026" in page.avisos[0] and "gêmeo" in page.avisos[0],
+         "vaca com parto ha menos de 8 meses: pergunta se e gemeo", str(page.avisos))
+    conf(page.evaluate("() => window.__DB__.partos.length") == antes and page.evaluate("() => !!state.modal"), "cancelar nao grava e deixa a janela aberta")
+    page.recusar = False; page.avisos.clear()
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    conf(page.evaluate("() => window.__DB__.partos.length") == antes + 1, "confirmar (gemeo) grava")
+    # editar o proprio parto nao se acusa
+    page.locator('[data-edit-parto="198"]').click()
+    page.select_option('#f-racabezerro', 'nelore'); page.avisos.clear()
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    conf(not any("já tem" in a and "20/10/2026" in a for a in page.avisos), "editar um parto nao acusa ele mesmo", str(page.avisos))
+    # parto de outra estacao (mais de 8 meses) nao pergunta
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.select_option('#f-lote', '6'); page.fill('#f-data', '2025-09-01'); page.fill('#f-numeromae', '300'); page.select_option('#f-sexobezerro', 'macho')
+    page.avisos.clear(); page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    conf(not page.avisos, "parto da mesma vaca 13 meses antes nao pergunta", str(page.avisos))
+    # historico ainda carregando: a lista local esta vazia, pergunta ao banco
+    page.evaluate("() => { state.carregandoHistorico = true; state.partos = []; state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.select_option('#f-lote', '6'); page.fill('#f-data', HOJE); page.fill('#f-numeromae', '300'); page.select_option('#f-sexobezerro', 'macho')
+    page.avisos.clear(); page.recusar = True
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(500)
+    conf(page.avisos and "já tem um parto lançado em 10/10/2026" in page.avisos[0], "com o historico carregando, confere direto no banco", str(page.avisos))
+    page.recusar = False
     conf(not page.erros, "nenhum erro de JavaScript", " | ".join(page.erros[:3]))
     browser.close()
 

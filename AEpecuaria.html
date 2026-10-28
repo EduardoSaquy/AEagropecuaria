@@ -2078,8 +2078,10 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Cria, ou um lote de Confinamento com sexo Fêmeas (aba Lotes), antes de registrar um parto.');
       return false;
     }
-    // Sexo do bezerro também começa em branco (antes vinha "Macho").
-    editDraft = {loteId:'', data:hojeStr(), tipo:'nascimento', numeroMae:'', sexoBezerro:'', racaBezerro:''};
+    // Sexo do bezerro e data também começam em branco (antes vinham
+    // "Macho" e hoje): em 27/10/2026 o Joilson lançou partos de 14/10 que
+    // saíram com a data do dia.
+    editDraft = {loteId:'', data:'', tipo:'nascimento', numeroMae:'', sexoBezerro:'', racaBezerro:''};
     state.modal = {type:'parto'};
   } else if(type==='desmama'){
     const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
@@ -6428,6 +6430,31 @@ function partosSemDesmama(loteId, ignorarDesmamaId){
   return state.partos.filter(p=>p.loteId===loteId && partoComBezerroVivo(p) && !state.desmamas.some(x=>x.partoId===p.id && x.id!==ignorarDesmamaId));
 }
 function desmamaDoParto(parto){ return state.desmamas.find(d=>d.partoId===parto.id) || null; }
+// Outro parto/aborto da mesma vaca a menos de 240 dias (8 meses) da data
+// informada: devolve a pergunta pro confirm(), ou null. Uma vaca não pare
+// duas vezes nesse intervalo -- é lançamento em dobro ou gêmeo. Com o
+// histórico ainda carregando (partos vêm na 2ª etapa), pergunta ao banco;
+// sem resposta em 5 s (sinal fraco) não trava o lançamento.
+const DIAS_ENTRE_PARTOS = 240;
+async function partoRepetidoDaVaca(numero, data, ignorarId){
+  const num = String(numero||'').trim().toLowerCase();
+  if(!num || !data) return null;
+  let partos = state.partos;
+  if(state.carregandoHistorico || !state.carregouDados){
+    const busca = db.from('partos').select('*').eq('numero_mae', String(numero).trim());
+    const limite = new Promise(res=>setTimeout(()=>res(null), 5000));
+    const res = await Promise.race([busca, limite]).catch(()=>null);
+    partos = (res && !res.error && res.data) ? res.data.map(rowToParto) : state.partos;
+  }
+  const perto = partos
+    .filter(p=>p.id!==ignorarId && p.data && String(p.numeroMae||'').trim().toLowerCase()===num
+      && Math.abs(new Date(p.data+'T00:00:00') - new Date(data+'T00:00:00'))/86400000 < DIAS_ENTRE_PARTOS)
+    .sort((a,b)=>b.data.localeCompare(a.data))[0];
+  if(!perto) return null;
+  const lote = state.lotes.find(l=>l.id===perto.loteId);
+  const oque = partoEhAborto(perto) ? 'um aborto' : 'um parto';
+  return `A vaca ${String(numero).trim()} já tem ${oque} lançado em ${perto.data.split('-').reverse().join('/')}${lote?` (${lote.nome.trim()})`:''}.\n\nSó confirme se for gêmeo ou outro parto de verdade. Se for o mesmo parto, cancele e corrija o que já está lançado.\n\nLançar mesmo assim?`;
+}
 // Texto curto do que aconteceu com aquele parto, pras listas.
 function situacaoDoParto(p){
   if(partoEhAborto(p)) return {texto:'Aborto', classe:'pill-cat'};
@@ -8769,7 +8796,7 @@ function attachEvents(){
         if(!exigirLote(Number(document.getElementById('f-lote').value))) return;
         if(!validarObrigatorios([[dataPartoVal,'Data'],[numeroMaeVal,'Número da mãe']])) return;
         if(ocorrenciaVal==='nascimento' && !sexoBezerroVal){ alert('Informe o sexo do bezerro.'); return; }
-        if(natimorto && dataPartoVal > hojeStr()){ alert('A data do parto não pode ser no futuro.'); return; }
+        if(dataPartoVal > hojeStr()){ alert('A data do parto não pode ser no futuro.'); return; }
         const erroNumeroMae = erroNumeroAnimal(numeroMaeVal, partoOriginal?.numeroMae);
         if(erroNumeroMae){ alert(erroNumeroMae); return; }
         if((aborto || natimorto) && partoOriginal){
@@ -8782,6 +8809,10 @@ function attachEvents(){
         // Número antigo com texto, sem mexer: salva o resto e não cria nem
         // move cadastro de animal com esse número.
         const legadoMae = !numeroAnimalSoDigitos(numeroMaeVal);
+        // Mesma vaca com outro parto/aborto a menos de 8 meses: lançamento em
+        // dobro (13 casos em 27/10/2026) ou gêmeo. Pergunta antes de gravar.
+        const repetido = await partoRepetidoDaVaca(numeroMaeVal, dataPartoVal, editDraft._editId);
+        if(repetido && !confirm(repetido)) return;
         const erroAnimalMae = legadoMae ? null : validarAnimalNovo(numeroMaeVal, 'femea', racaMaeVal);
         if(erroAnimalMae){ alert(erroAnimalMae); return; }
         const campos = {

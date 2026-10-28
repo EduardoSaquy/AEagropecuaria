@@ -721,6 +721,31 @@ Pedidos do mesmo dia:
   com isso nenhum número de animal tem mais texto no banco). O 512
   adulto do Curral 2 foi vendido e sai em 28/10/2026, mas o histórico de
   pesagem dele continua com o número 512: não reaproveitar.
+- **Vaca do parto no lote do parto** (pedido do Eduardo em 27/10/2026: "o
+  número de animais do lote não bate com o de partos"). O app já move a mãe
+  para o lote do parto a cada parto lançado ou editado (`upsertAnimal` no
+  gancho do parto), mas só o cadastro: não mexe em `lotes.numero_animais` (o
+  Manejo com troca de lote mexe). `pecuaria_confere_vacas_no_lote_do_parto.sql`
+  (só leitura) deu 0 vacas fora do lote: a diferença era **13 partos lançados
+  em dobro** (`pecuaria_confere_partos_repetidos.sql`: 4 vacas relançadas em
+  27/10 que já tinham parto em 14/10, 3 lançadas duas vezes no mesmo dia, a 316
+  três vezes com toque duplo, e 4 com datas próximas) e 8 mães sem cadastro.
+  Decisões do Eduardo: não há gêmeos, os duplicados se unificam
+  (`pecuaria_unifica_partos_duplicados.sql`: fica o lançamento mais antigo, na
+  316 o de 26/09; o que fica herda raça/sexo em branco e a desmama do que sai);
+  vaca com raça em branco vira nelore (mesmo script); a 19 (ex "19 ES") não é a
+  019 do parto e vira **19099**; os partos de 26/07 da 368/370 (sem lote, lote
+  apagado) são do **Vacas vazia Santa Alice**; 019, 057, 076, 080, 083 e 147
+  ganham cadastro em Vacas 07/08 (`pecuaria_vacas_sem_cadastro_e_19099.sql`,
+  **rodado em 27/10/2026**; sobrou 1 parto sem lote, listado na conferência do
+  script de unificar). Cabeças do Vacas 09/10 (70, com 72 vacas paridas): o
+  Eduardo passa a contagem real.
+- **Para não repetir** (mesmo dia): a data do parto começa em branco (vinha
+  hoje; os partos de 14/10 relançados em 27/10 saíram com a data do dia), não
+  aceita data futura, e `partoRepetidoDaVaca()` pergunta antes de gravar quando
+  a mesma vaca tem outro parto/aborto a menos de 240 dias (`DIAS_ENTRE_PARTOS`):
+  "é gêmeo?". Com o histórico ainda carregando, pergunta ao banco (5 s de
+  limite, sem travar o lançamento com sinal fraco).
 
 ## Armadilhas que já custaram caro
 
@@ -824,7 +849,7 @@ Pedidos do mesmo dia:
 
 ## Testes
 
-35 arquivos `teste_*.py`, 922 checagens (27/10/2026; a tabela abaixo lista os
+35 arquivos `teste_*.py`, 932 checagens (27/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -859,7 +884,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 18 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua; histórico pesado parado não trava o lançamento; lotes sem resposta em 25 s viram aviso) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
-| `teste_parto_aborto_lote_numero.py` | 78 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto) |
+| `teste_parto_aborto_lote_numero.py` | 88 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
