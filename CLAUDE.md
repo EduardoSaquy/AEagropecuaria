@@ -740,9 +740,19 @@ Pedidos do mesmo dia:
   **rodado em 27/10/2026**; sobrou 1 parto sem lote, listado na conferência do
   script de unificar). **Unificação rodada em 27/10/2026**: os 13 saíram, 8
   vacas viraram nelore, 0 vaca com parto repetido; Vacas 07/08 com 84 partos de
-  84 vacas. Ficou: o parto id 1 (vaca 37, 23/07/2026, Joilson) sem lote, e as
-  cabeças do Vacas 09/10 (70, com 72 vacas paridas): o Eduardo passa a contagem
-  real.
+  84 vacas. O parto id 1 (vaca 37, 23/07/2026, sem lote) era o mesmo parto do
+  id 57 (13/08/2026, Vacas 07/08): regra do Eduardo para parto sem lote (bezerro
+  morto vai para Vacas Vazias Santa Alice, vivo para Vacas 07/08,
+  `pecuaria_parto_37_sem_lote.sql`, que parou ao achar o 57) e unificação pela
+  mesma regra dos duplicados, fica o id 1 no Vacas 07/08
+  (`pecuaria_parto_37_unifica.sql`). Ficou para 28/10/2026: as cabeças do
+  Vacas 09/10 (70, com 72 vacas paridas), o Eduardo passa a contagem real.
+- **Resumo de partos por lote mostra bezerros vivos e perdas à parte**
+  (pedido do Eduardo no mesmo dia: no Vacas Vazias os bezerros nasceram mortos e
+  o resumo ainda contava nascidos, machos e fêmeas). Colunas: Partos, Bezerros
+  vivos (machos/fêmeas só dos vivos) e Perdas (nasceram mortos, morreram antes
+  da desmama, abortos). Na taxa de desmame (Resultados > Reprodução) o bezerro
+  morto continua nascido, de propósito: é perda que a taxa tem que mostrar.
 - **Para não repetir** (mesmo dia): a data do parto começa em branco (vinha
   hoje; os partos de 14/10 relançados em 27/10 saíram com a data do dia), não
   aceita data futura, e `partoRepetidoDaVaca()` pergunta antes de gravar quando
@@ -852,7 +862,7 @@ Pedidos do mesmo dia:
 
 ## Testes
 
-35 arquivos `teste_*.py`, 932 checagens (27/10/2026; a tabela abaixo lista os
+35 arquivos `teste_*.py`, 933 checagens (27/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -887,7 +897,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 18 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua; histórico pesado parado não trava o lançamento; lotes sem resposta em 25 s viram aviso) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
-| `teste_parto_aborto_lote_numero.py` | 88 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido) |
+| `teste_parto_aborto_lote_numero.py` | 89 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido; resumo do lote sem o bezerro morto nos vivos) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

@@ -3664,36 +3664,46 @@ const SEXO_LOTE_LABEL = {femea:'Fêmeas', macho:'Machos', misto:'Misto'};
 // lote abre o Detalhe do Lote.
 function PainelResumoPartos(lotesElegiveis){
   if(lotesElegiveis.length===0) return '';
-  // Aborto não é nascimento: sai do total de nascidos e ganha coluna própria.
+  // Bezerro morto não aparece como bezerro do lote (27/10/2026, pedido do
+  // Eduardo: no Vacas Vazias os bezerros nasceram mortos e o resumo ainda
+  // contava "nascidos", machos e fêmeas). Aqui: bezerros vivos (com machos e
+  // fêmeas só deles) e as perdas à parte. Na taxa de desmame (Resultados >
+  // Reprodução) o bezerro morto continua contando como nascido.
   const linhas = lotesElegiveis.map(l=>{
     const doLote = state.partos.filter(p=>p.loteId===l.id);
-    const nascidos = doLote.filter(p=>!partoEhAborto(p));
-    const machos = nascidos.filter(p=>p.sexoBezerro==='macho').length;
-    const femeas = nascidos.filter(p=>p.sexoBezerro==='femea').length;
-    const mortos = nascidos.filter(p=>p.dataObito).length;
-    const abortos = doLote.length - nascidos.length;
-    return {lote:l, registros:doLote.length, total:nascidos.length, machos, femeas, mortos, abortos};
+    const vivos = doLote.filter(partoComBezerroVivo); // desmamado continua vivo
+    const natimortos = doLote.filter(partoEhNatimorto).length;
+    const morreram = doLote.filter(p=>!partoEhAborto(p) && p.dataObito && !partoEhNatimorto(p)).length;
+    const abortos = doLote.filter(partoEhAborto).length;
+    return {lote:l, partos:doLote.length, vivos:vivos.length,
+      machos: vivos.filter(p=>p.sexoBezerro==='macho').length,
+      femeas: vivos.filter(p=>p.sexoBezerro==='femea').length,
+      natimortos, morreram, abortos};
   });
+  const perdas = r => [
+    r.natimortos ? `${fmtInt(r.natimortos)} ${r.natimortos===1?'nasceu morto':'nasceram mortos'}` : '',
+    r.morreram ? `${fmtInt(r.morreram)} ${r.morreram===1?'morreu':'morreram'} antes da desmama` : '',
+    r.abortos ? `${fmtInt(r.abortos)} ${r.abortos===1?'aborto':'abortos'}` : '',
+  ].filter(Boolean).join(' · ') || '—';
   return `
   <div class="card" style="margin-bottom:22px;">
     <table>
-      <thead><tr><th>Lote</th><th>Total nascidos</th><th>Machos</th><th>Fêmeas</th><th>Mortos antes da desmama</th><th>Abortos</th></tr></thead>
+      <thead><tr><th>Lote</th><th>Partos</th><th>Bezerros vivos</th><th>Perdas</th></tr></thead>
       <tbody>
         ${linhas.map(r=>`
           <tr>
             <td><button class="link-nome" data-ver-lote="${r.lote.id}">${esc(r.lote.nome)}</button></td>
-            ${r.registros===0 ? `<td class="mono" colspan="5">Nenhum parto registrado ainda</td>` : `
-            <td class="mono">${fmtInt(r.total)}</td>
-            <td class="mono">${fmtInt(r.machos)}</td>
-            <td class="mono">${fmtInt(r.femeas)}</td>
-            <td class="mono">${fmtInt(r.mortos)}</td>
-            <td class="mono">${fmtInt(r.abortos)}</td>
+            ${r.partos===0 ? `<td class="mono" colspan="3">Nenhum parto registrado ainda</td>` : `
+            <td class="mono">${fmtInt(r.partos)}</td>
+            <td class="mono">${fmtInt(r.vivos)}<div class="hint">${fmtInt(r.machos)} machos · ${fmtInt(r.femeas)} fêmeas</div></td>
+            <td>${perdas(r)}</td>
             `}
           </tr>
         `).join('')}
       </tbody>
     </table>
-  </div>`;
+  </div>
+  <p class="hint" style="margin:-14px 0 22px;">Bezerros vivos não contam os que nasceram mortos, morreram ou foram abortados. Na taxa de desmame (Resultados &gt; Reprodução) o bezerro que nasceu morto ou morreu continua contando como nascido.</p>`;
 }
 function PagePartos(){
   const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
@@ -5234,7 +5244,7 @@ function PageResultadosReproducao(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">Taxa de desmame = bezerros desmamados ÷ bezerros nascidos daquele lote. Aborto não conta como nascido; bezerro que morreu antes da desmama conta como nascido e não desmamado.</p>
+  <p class="hint" style="margin:-14px 0 22px;">Taxa de desmame = bezerros desmamados ÷ bezerros nascidos daquele lote. Aborto não conta como nascido; bezerro que nasceu morto ou morreu antes da desmama conta como nascido e não desmamado (coluna "Mortos antes da desmama").</p>
 
   <p class="eyebrow" style="margin:22px 0 10px;">Custo por bezerro desmamado</p>
   <div class="card">

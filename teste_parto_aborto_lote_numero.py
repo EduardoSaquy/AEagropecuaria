@@ -351,6 +351,10 @@ with sync_playwright() as pw:
     conf(page.evaluate(f"() => !partosSemDesmama(6).some(p=>p.id==={nid})"), "nao aparece pra desmama")
     t = page.evaluate("() => taxasDesmamePorLote().find(r=>r.lote.id===6)")
     conf(t["nascidos"] == 4 and t["mortos"] == 1, "conta como nascido e como morto antes da desmama", str({k: t[k] for k in ("nascidos","mortos")}))
+    page.evaluate("() => { state.modal=null; editDraft=null; render(); }")
+    resumo = page.locator('[data-ver-lote="6"]').first.locator('xpath=ancestor::tr').inner_text()
+    conf("nasceu morto" in resumo and "\t3" in resumo and "2 machos · 1 fêmeas" in resumo,
+         "resumo do lote: bezerro que nasceu morto sai dos vivos (3 de 4) e aparece em Perdas", resumo)
     # editar: abre como 'Nasceu morto'; trocar a data leva o obito junto
     page.locator(f'[data-edit-parto="{nid}"]').click()
     conf(page.locator('#f-tipoparto').input_value() == "natimorto", "editar abre com 'Nasceu morto' marcado")
