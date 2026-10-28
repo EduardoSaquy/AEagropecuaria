@@ -3865,7 +3865,8 @@ function fixoPorAnimalDiaPorTipo(){
   const animaisPasto = animaisPorTipo('pasto');
   const animaisCria = animaisPorTipo('reproducao');
   const ctxArea = {animaisConfinamento, animaisPasto, animaisCria, animaisPastoCria: animaisPasto+animaisCria, totalAnimais: animaisConfinamento+animaisPasto+animaisCria};
-  const alocacaoArea = alocarDespesasPorArea(custosFixosDoMes(mesAtualStr()), ctxArea);
+  // sem a compra de ração: a ração deste custo por animal entra pelo consumo
+  const alocacaoArea = alocarDespesasPorArea(custosFixosSemCompraRacaoDoMes(mesAtualStr()), ctxArea);
   const totalAnimaisPorTipo = {confinamento: animaisConfinamento, pasto: animaisPasto, reproducao: animaisCria};
   const fixoAreaMes = {confinamento: alocacaoArea.confinamento, pasto: alocacaoArea.pasto, reproducao: alocacaoArea.cria};
   const resultado = {};
@@ -4565,6 +4566,25 @@ function custosFixosDoMes(mesStr){
 function fixosDoMes(mesStr){
   return custosFixosDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
 }
+// A COMPRA de ração está dentro das despesas lançadas (centro Nutrição animal,
+// ou a conta lançada à mão com esse nome em Insumos pecuários), e a ração
+// também entra pelo CONSUMO (saída de ração x preço da dieta) em todo custo
+// por animal e por lote. Somar as duas contava a ração duas vezes. Decisão do
+// Eduardo (28/10/2026): o resultado financeiro conta a COMPRA (fixosDoMes,
+// resultadoMes, comparativoMensal não mudam); o custo por animal/lote conta o
+// CONSUMO e o fixo SEM a compra. Reconhece pelo nome do centro de custo ou pelo
+// nome EXATO da conta, nunca por "contém": fornecedor com "nutrição animal" no
+// nome, em outro centro (ex.: manutenção), não é compra de ração.
+function semAcentoMinusculo(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+function ehCompraDeRacao(c){
+  return semAcentoMinusculo(c.categoria)==='nutricao animal' || semAcentoMinusculo(c.nome)==='nutricao animal';
+}
+function custosFixosSemCompraRacaoDoMes(mesStr){
+  return custosFixosDoMes(mesStr).filter(c=>!ehCompraDeRacao(c));
+}
+function fixosSemCompraRacaoDoMes(mesStr){
+  return custosFixosSemCompraRacaoDoMes(mesStr).reduce((a,c)=>a+Number(c.valorMensal||0),0);
+}
 // O mês de uma receita vem do campo mes; a data é só reserva para
 // lançamento antigo que não tenha o mes preenchido. Receita de competência
 // mensal (histórico do ERP) tem mes e NÃO tem data — ler r.data direto
@@ -4707,8 +4727,13 @@ function dadosFinanceiroBase(){
   const reproducaoMes = state.reproducao.filter(r=>r.data.startsWith(mes)).reduce((a,r)=>a+custoReproducao(r),0);
   const criaMes = racaoCriaMes + reproducaoMes;
   const variavelMes = racaoMes + pastoMes + reproducaoMes;
+  // fixosMes é a despesa lançada INTEIRA (financeiro: inclui a compra de
+  // ração). Pro custo por animal/lote o fixo vai sem a compra de ração
+  // (fixosCustoMes), porque a ração entra pelo consumo em variavelMes.
   const fixosMes = fixosDoMes(mes);
-  const totalMes = variavelMes + fixosMes;
+  const fixosCustoMes = fixosSemCompraRacaoDoMes(mes);
+  const compraRacaoMes = fixosMes - fixosCustoMes;
+  const totalMes = variavelMes + fixosCustoMes;
 
   const lotesAtivos = state.lotes.filter(l=>!l.dataFim);
   const totalAnimais = lotesAtivos.reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
@@ -4718,7 +4743,7 @@ function dadosFinanceiroBase(){
   // zerados em qualquer dia sem lançamento exato, mesmo com gasto normal
   // recente. Mesmo critério já usado em Por Curral: total do mês até agora
   // ÷ dias já passados do mês.
-  const fixoDiario = fixosMes/30;
+  const fixoDiario = fixosCustoMes/30;
   const diasDecorridosMes = Number(hoje.split('-')[2]);
   const custoVariavelMedioDia = variavelMes/diasDecorridosMes;
   const custoPorAnimalMedioDia = totalAnimais>0 ? custoVariavelMedioDia/totalAnimais : 0;
@@ -4740,9 +4765,16 @@ function dadosFinanceiroBase(){
   const fixoPasto = alocacaoArea.pasto;
   const fixoCria = alocacaoArea.cria;
   const detalhesPorArea = alocacaoArea.detalhes;
-  const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamento;
-  const custoTotalPastoMes = pastoMes + fixoPasto;
-  const custoTotalCriaMes = criaMes + fixoCria;
+  // Mesma divisão por área, mas sem a compra de ração: é a que entra no custo
+  // por animal/lote (fixoConfinamento etc. seguem sendo a despesa lançada
+  // inteira, pra tela de despesas por área).
+  const alocacaoAreaCusto = alocarDespesasPorArea(custosFixosSemCompraRacaoDoMes(mes), ctxArea);
+  const fixoConfinamentoCusto = alocacaoAreaCusto.confinamento;
+  const fixoPastoCusto = alocacaoAreaCusto.pasto;
+  const fixoCriaCusto = alocacaoAreaCusto.cria;
+  const custoTotalConfinamentoMes = racaoConfMes + fixoConfinamentoCusto;
+  const custoTotalPastoMes = pastoMes + fixoPastoCusto;
+  const custoTotalCriaMes = criaMes + fixoCriaCusto;
 
   const valorEstoque = state.ingredientes.reduce((a,i)=>{
     const saldo = saldoIngrediente(i.id);
@@ -4764,17 +4796,19 @@ function dadosFinanceiroBase(){
   const mesesAno = mesesDoAnoAteAgora();
   const variavelAno = mesesAno.reduce((a,m)=>a+custoVariavelDoMes(m),0);
   const fixosAno = mesesAno.reduce((a,m)=>a+fixosDoMes(m),0);
-  const totalAno = variavelAno + fixosAno;
+  const fixosAnoCusto = mesesAno.reduce((a,m)=>a+fixosSemCompraRacaoDoMes(m),0);
+  const compraRacaoAno = fixosAno - fixosAnoCusto;
+  const totalAno = variavelAno + fixosAnoCusto;
   const custoTotalPorAnimalAno = totalAnimais>0 ? totalAno/totalAnimais : 0;
   const arrobasAno = mesesAno.reduce((a,m)=>a+arrobasProduzidasFazendaNoMes(m),0);
   const custoPorArrobaAno = arrobasAno>0 ? totalAno/arrobasAno : null;
 
   return {hoje, mes,
-    racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, totalMes,
-    fixoConfinamento, fixoPasto, fixoCria, detalhesPorArea,
+    racaoConfMes, racaoCriaMes, racaoMes, pastoMes, reproducaoMes, criaMes, variavelMes, fixosMes, fixosCustoMes, compraRacaoMes, totalMes,
+    fixoConfinamento, fixoPasto, fixoCria, fixoConfinamentoCusto, fixoPastoCusto, fixoCriaCusto, detalhesPorArea,
     custoTotalConfinamentoMes, custoTotalPastoMes, custoTotalCriaMes, animaisConfinamento, animaisPasto, animaisCria, receitaMes, resultadoMes, margemAtualPct,
     totalAnimais, custoVariavelMedioDia, custoPorAnimalMedioDia, custoTotalPorAnimalMedioDia, custoTotalPorAnimalMes, valorEstoque,
-    variavelAno, fixosAno, totalAno, custoTotalPorAnimalAno, arrobasAno, custoPorArrobaAno};
+    variavelAno, fixosAno, fixosAnoCusto, compraRacaoAno, totalAno, custoTotalPorAnimalAno, arrobasAno, custoPorArrobaAno};
 }
 
 // @ produzidas/custo por @ da fazenda no mês -- soma os mesmos números já
@@ -4834,12 +4868,12 @@ function PageFinanceiroResumo(){
     <div class="stat-card"><div class="stat-label">Total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalMes,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Custo por @ produzida</div><div class="stat-value">${d.custoPorArrobaMes!==null ? 'R$ '+fmt(d.custoPorArrobaMes,2) : '—'}</div><div class="hint" style="margin-top:3px;">${fmt(d.arrobasMes,1)} @ produzidas na fazenda</div></div>
   </div>
-  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário). "@ produzidas" vem das pesagens lançadas em Confinamento, Pasto e Cria — sem pesagem no mês, aparece "—".</p>
+  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário). "@ produzidas" vem das pesagens lançadas em Confinamento, Pasto e Cria — sem pesagem no mês, aparece "—".${d.compraRacaoMes>0 ? ` Dos custos fixos do mês, R$ ${fmt(d.compraRacaoMes)} são compra de ração (Nutrição animal): essa compra não entra no "com fixo", no total nem no custo por @, porque a ração já entra pelo consumo (saída de ração) — somar as duas contaria a ração duas vezes. No resultado financeiro (receita − despesa) a compra continua contando.` : ''}</p>
 
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
       <div>
-        <div class="stat-label">Total do mês (variável + fixo)</div>
+        <div class="stat-label">Total do mês (variável + fixo, sem a compra de ração)</div>
         <div class="stat-value" style="font-size:26px;">R$ ${fmt(d.totalMes)}</div>
       </div>
       <span class="hint">${fmtInt(d.totalAnimais)} animais em lotes ativos</span>
@@ -4895,12 +4929,12 @@ function PageFinanceiroResumo(){
     <div class="stat-card"><div class="stat-label">Total/animal/ano (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalAno,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Custo por @ produzida no ano</div><div class="stat-value">${d.custoPorArrobaAno!==null ? 'R$ '+fmt(d.custoPorArrobaAno,2) : '—'}</div><div class="hint" style="margin-top:3px;">${fmt(d.arrobasAno,1)} @ produzidas na fazenda</div></div>
   </div>
-  <p class="hint" style="margin:10px 0 20px;">Acumulado de janeiro até o mês atual (mesmo critério do "Este mês", somado mês a mês) — vai se consolidando conforme o ano avança.</p>
+  <p class="hint" style="margin:10px 0 20px;">Acumulado de janeiro até o mês atual (mesmo critério do "Este mês", somado mês a mês) — vai se consolidando conforme o ano avança.${d.compraRacaoAno>0 ? ` Dos custos fixos do ano, R$ ${fmt(d.compraRacaoAno)} são compra de ração e ficam de fora do "com fixo", do total e do custo por @ (a ração entra pelo consumo).` : ''}</p>
 
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
       <div>
-        <div class="stat-label">Total do ano (variável + fixo)</div>
+        <div class="stat-label">Total do ano (variável + fixo, sem a compra de ração)</div>
         <div class="stat-value" style="font-size:26px;">R$ ${fmt(d.totalAno)}</div>
       </div>
       <span class="hint">${fmtInt(d.totalAnimais)} animais em lotes ativos</span>
@@ -4987,7 +5021,8 @@ function custosDiariosPorLote(){
   // maior do que o tempo real que ele consumiu esse custo compartilhado.
   const pesoAnimalDiasPorTipo = tipo => lotesAtivos.filter(l=>loteTipo(l)===tipo).reduce((a,l)=>a+Number(l.numeroAnimais||0)*diasAtivosNoMes(l), 0);
   const pesoAnimalDiasPorAreaMes = {confinamento: pesoAnimalDiasPorTipo('confinamento'), pasto: pesoAnimalDiasPorTipo('pasto'), reproducao: pesoAnimalDiasPorTipo('reproducao')};
-  const fixoAreaMes = {confinamento: d.fixoConfinamento, pasto: d.fixoPasto, reproducao: d.fixoCria};
+  // sem a compra de ração (a ração deste custo por lote entra pelo consumo)
+  const fixoAreaMes = {confinamento: d.fixoConfinamentoCusto, pasto: d.fixoPastoCusto, reproducao: d.fixoCriaCusto};
   function fixoLoteAlocado(lote, fixoDaAreaNoPeriodo){
     const tipo = loteTipo(lote);
     const totalPesoArea = pesoAnimalDiasPorAreaMes[tipo];

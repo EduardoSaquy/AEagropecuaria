@@ -202,10 +202,20 @@ de R$ 2,07 mi). Corrigido em `carregarResultadoPecuaria()`: `despesa` e
 `teste_matriz_racao_nao_duplica.py`. Mesma classe de erro do insumo agrícola
 contado duas vezes: não reintroduzir.
 
-Pendente (decisão dele): o custo por animal e por lote do AE Pecuária
-(`custoVariavelDoMes` + custo fixo rateado) ainda soma o consumo da ração e o
-fixo que já tem a compra dela. Para custo por animal o certo é consumo e fixo
-**sem** a compra de ração.
+Mesma regra no AE Pecuária (corrigido em 28/10/2026): **custo por animal e por
+lote = consumo da ração + fixo SEM a compra de ração**; **resultado financeiro
+= despesa lançada inteira** (a compra fica). `ehCompraDeRacao(c)` reconhece a
+compra pelo nome do centro de custo ("Nutrição animal") ou pelo nome EXATO da
+conta lançada à mão ("Nutrição animal" em Insumos pecuários) -- nunca por
+"contém" (um fornecedor com "nutrição animal" no nome, em centro de manutenção,
+não é ração). `dadosFinanceiroBase()` devolve `fixosMes` (lançado inteiro, vai
+pro resultado), `fixosCustoMes`/`fixoConfinamentoCusto`/`fixoPastoCusto`/
+`fixoCriaCusto`/`fixosAnoCusto` (sem a compra, vão pro `totalMes`, `totalAno`,
+custo por animal, Custo/@ e `fixoAreaMes` do Por Lote) e `compraRacaoMes`/
+`compraRacaoAno` (quanto ficou de fora; a tela do Resumo avisa). As despesas por
+área (`fixoConfinamento`, `fixoPasto`, `fixoCria`) seguem com a compra, são
+despesa. Coberto por `teste_pecuaria_custo_sem_compra_racao.py`. Se alguém
+renomear o centro "Nutrição animal", o teste pega.
 
 ### Financiamentos: só o juros vira despesa
 
@@ -882,7 +892,7 @@ Pedidos do mesmo dia:
 
 ## Testes
 
-36 arquivos `teste_*.py`, 941 checagens (28/10/2026; a tabela abaixo lista os
+37 arquivos `teste_*.py`, 961 checagens (28/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -894,6 +904,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_apps_lavoura.py` | 44 | AECana.html, AECereais.html |
 | `teste_matriz.py` | 32 | AEMatriz.html |
 | `teste_matriz_racao_nao_duplica.py` | 8 | AEMatriz.html (resultado da Pecuária conta a compra da ração, não o consumo: despesa = só o lançado, consumo fica em `consumoGerencial`, Resultados sem "Ração (Confinamento)") |
+| `teste_pecuaria_custo_sem_compra_racao.py` | 20 | AEpecuaria.html (custo por animal/lote = consumo da ração + fixo sem a compra de ração; resultado financeiro segue com a compra; só centro "Nutrição animal" ou conta com esse nome exato conta como compra; a tela avisa quanto ficou de fora; sem compra lançada nada muda) |
 | `teste_paginacao.py` | 2 | AEMatriz.html, AEpecuaria.html |
 | `teste_financiamentos.py` | 35 | AEMatriz.html |
 | `teste_venda.py` | 28 | AEMatriz.html |
