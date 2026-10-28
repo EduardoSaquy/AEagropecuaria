@@ -738,8 +738,11 @@ Pedidos do mesmo dia:
   apagado) são do **Vacas vazia Santa Alice**; 019, 057, 076, 080, 083 e 147
   ganham cadastro em Vacas 07/08 (`pecuaria_vacas_sem_cadastro_e_19099.sql`,
   **rodado em 27/10/2026**; sobrou 1 parto sem lote, listado na conferência do
-  script de unificar). Cabeças do Vacas 09/10 (70, com 72 vacas paridas): o
-  Eduardo passa a contagem real.
+  script de unificar). **Unificação rodada em 27/10/2026**: os 13 saíram, 8
+  vacas viraram nelore, 0 vaca com parto repetido; Vacas 07/08 com 84 partos de
+  84 vacas. Ficou: o parto id 1 (vaca 37, 23/07/2026, Joilson) sem lote, e as
+  cabeças do Vacas 09/10 (70, com 72 vacas paridas): o Eduardo passa a contagem
+  real.
 - **Para não repetir** (mesmo dia): a data do parto começa em branco (vinha
   hoje; os partos de 14/10 relançados em 27/10 saíram com a data do dia), não
   aceita data futura, e `partoRepetidoDaVaca()` pergunta antes de gravar quando
