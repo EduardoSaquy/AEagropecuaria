@@ -716,7 +716,9 @@ Pedidos do mesmo dia:
   aborto, partos 3 e 4 ("368/370 pariu morto", de 26/07/2026) viraram nasceu
   morto; só o "512 2S" ficou pendente. Decisão dele: o bezerro vira **512000**
   (fácil de reconhecer) e "2S" vai para o Nome,
-  `pecuaria_512_2s_vira_512000.sql` (ensaiado; ele roda em 28/10/2026). O 512
+  `pecuaria_512_2s_vira_512000.sql` (ensaiado; **rodado pelo Eduardo em 27/10/2026**:
+  512000 macho nos Bezerros Invernada, 1 pesagem, nenhum "512 2S" sobrando;
+  com isso nenhum número de animal tem mais texto no banco). O 512
   adulto do Curral 2 foi vendido e sai em 28/10/2026, mas o histórico de
   pesagem dele continua com o número 512: não reaproveitar.
 
