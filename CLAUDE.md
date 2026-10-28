@@ -635,6 +635,68 @@ Cria, e falta de dieta tem aviso próprio (`SEM_DIETA_PARA_RACAO`). O Joilson
 já tinha Dietas: não era a causa, mas a regra nova vale para os outros
 operadores.
 
+### Pecuária: parto que "não salvava", lote em branco, número só com algarismos, aborto e óbito
+
+Em 27/10/2026 o Eduardo editava o parto do Joilson com mãe "721 abortou"
+(id 197; ele não tinha onde lançar aborto e escreveu no número) e a alteração
+"não salvava". Duas causas, as duas reproduzidas e cobertas por
+`teste_parto_aborto_lote_numero.py`:
+- **Toque perdido.** Vários campos de texto redesenham a janela inteira no
+  `change` (número da mãe/vaca atualiza a raça, número no Manejo e na Pesagem
+  mostra os campos de animal novo, lista de números na entrada de animais).
+  Digitar e tocar direto em Salvar: o toque tira o foco, o `change` redesenha,
+  o botão tocado é trocado por outro e o navegador não entrega o click a
+  ninguém. Nada acontecia, sem aviso; precisava de dois toques. Valia também
+  para o "Salvar e ir pro próximo animal" do **Manejo**. Correção genérica no
+  fim do arquivo: se o botão apertado saiu da página no meio do toque e nenhum
+  click chegou, repete o click no botão equivalente (mesmo id e `data-*`).
+  Botão novo não precisa de nada.
+- **Tela velha.** Partos, desmamas, diagnósticos e inseminações vêm na 2ª
+  etapa da carga (histórico pesado); depois de salvar, a lista mostrava o
+  dado antigo até essa etapa inteira terminar. `recarregarReproducao()`
+  (`TIPOS_REPRODUCAO`) recarrega só essas tabelas, pequenas, logo depois de
+  salvar ou excluir. E `atualizarUmaLinha()` avisa quando o update não acha a
+  linha (apagada ou recusada pelo banco), em vez de fechar a janela calado.
+
+Pedidos do mesmo dia:
+- **Lote sempre em branco** em todo lançamento (parto, inseminação,
+  diagnóstico, ração, cocho, pasto, venda, pesagem, desmama, animal, entrada em
+  lote existente, Manejo e lote de destino do Manejo): `opcaoSelecioneLote()` e
+  `exigirLote()`. Vinha o primeiro lote cadastrado ("VACAS INVERNADA") e
+  lançamento caía no lote errado. Escolher o lote não marca mais o primeiro
+  bezerro na desmama, e o sexo do bezerro também começa em branco (vinha
+  "Macho") e é obrigatório.
+- **Número do animal só com algarismos**: `data-numero-animal` limpa ao
+  digitar (teclado numérico), `erroNumeroAnimal()` barra no Salvar,
+  `validarAnimalNovo()`/`upsertAnimal()` nunca criam cadastro com texto. A
+  lista de números aceita só algarismos e separadores. **Número antigo com
+  texto, sem mexer, continua salvando** o resto do lançamento e não cria nem
+  move cadastro (`legadoMae`/`legadoInsem`/`legadoDg`). Texto do animal vai em
+  `animais.nome` (campo "Nome / observação" no Editar do animal; aparece
+  embaixo do número no lote e nos lançamentos de reprodução).
+- **Aborto**: `partos.tipo` ('nascimento'|'aborto'), escolhido em "O que
+  aconteceu" no Novo parto. Aborto não tem sexo/raça de bezerro, não conta em
+  nascidos (coluna própria no resumo), não espera desmama e deixa a vaca como
+  "Abortou" na situação reprodutiva. Parto com desmama ou óbito não vira aborto.
+- **Óbito do bezerro antes da desmama**: `partos.data_obito`/`causa_obito`,
+  botão "Registrar óbito" na lista de partos (some depois da desmama;
+  "Remover óbito" desfaz). Continua contando como nascido, sai da desmama, e a
+  taxa de desmame ganhou a coluna "Mortos antes da desmama". Morte depois da
+  desmama continua sendo no cadastro do animal.
+- SQL: `pecuaria_parto_aborto_obito_nome_animal.sql` (colunas e 3 travas;
+  ensaiado num Postgres 16 descartável com as tabelas reais, repetível e numa
+  transação só). O app funciona antes dele: parto normal não manda `tipo` e
+  animal sem nome não manda `nome` (`_temTipo`/`_temNome`, mesmo padrão do
+  `saldo_banco`); aborto, óbito e nome antes do SQL mostram "Rode no Supabase…"
+  (`mensagemColunaFaltando`). A conferência do SQL lista os números com texto
+  que ainda existem. **Rodado pelo Eduardo em 27/10/2026** (4 colunas, 3 travas,
+  176 partos, todos nascimento) e achou 21 números com texto: em `animais`
+  "19 ES", "37 ES", "351 não quis o bezerro descarte", "512 2S", "721 abortou"
+  e "Alice 1" a "Alice 4"; em `partos.numero_mae` os mesmos 19/37/351, "37 Es",
+  "721 " (com espaço) e "368/370 pariu morto" (bezerro que nasceu morto: no
+  modelo novo é nascimento com óbito no mesmo dia); em `pesagens_animais`
+  "512 2S" e "Alice 1" a "Alice 4". Limpeza ainda por fazer.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -737,7 +799,7 @@ operadores.
 
 ## Testes
 
-34 arquivos `teste_*.py`, 844 checagens (23/10/2026; a tabela abaixo lista os
+35 arquivos `teste_*.py`, 910 checagens (27/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -772,6 +834,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 18 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua; histórico pesado parado não trava o lançamento; lotes sem resposta em 25 s viram aviso) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
+| `teste_parto_aborto_lote_numero.py` | 66 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

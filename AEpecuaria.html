@@ -414,16 +414,59 @@ function rowToReproducaoCusto(r){ return {id:r.id, data:r.data, loteId:r.lote_id
 function reproducaoCustoToRow(r){ return {data:r.data, lote_id:r.loteId, numero_vaca:r.numeroVaca, raca_touro:r.racaTouro, qual_inseminacao:r.qualInseminacao, custo:r.custo, manejo_id:manter(r.manejoId)}; }
 function rowToDiagnostico(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroVaca:r.numero_vaca||'', resultado:r.resultado, previsaoParto:r.previsao_parto||'', criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
 function diagnosticoToRow(d){ return {data:d.data, lote_id:d.loteId, numero_vaca:d.numeroVaca, resultado:d.resultado, previsao_parto: d.resultado==='prenha' ? (d.previsaoParto||null) : null, manejo_id:manter(d.manejoId)}; }
-function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, racaBezerro:r.raca_bezerro, criadoPor:r.criado_por||''}; }
-function partoToRow(p){ return {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro:p.sexoBezerro, raca_bezerro:p.racaBezerro||null}; }
+// Parto: tipo 'nascimento' (o de sempre) ou 'aborto' (27/10/2026, pedido do
+// Eduardo -- o Joilson lançou "721 abortou" como número da mãe porque não
+// havia onde registrar aborto). Aborto não tem bezerro: sem sexo/raça, não
+// conta como nascido e não espera desmama. Óbito do bezerro antes da
+// desmama fica no próprio parto (data_obito/causa_obito): o bezerro nasceu,
+// mas não vai desmamar.
+// _temTipo: a coluna "tipo" já existe no banco (o SQL
+// pecuaria_parto_aborto_obito_nome_animal.sql já rodou). Sem ela, nascimento
+// grava sem mandar "tipo" (o app novo funciona antes do SQL); só aborto
+// precisa da coluna.
+function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, racaBezerro:r.raca_bezerro, criadoPor:r.criado_por||'', tipo:r.tipo||'nascimento', dataObito:r.data_obito||null, causaObito:r.causa_obito||'', _temTipo:('tipo' in r)}; }
+function partoToRow(p){
+  const aborto = p.tipo==='aborto';
+  const row = {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro: aborto ? null : (p.sexoBezerro||null), raca_bezerro: aborto ? null : (p.racaBezerro||null)};
+  if(aborto || p._temTipo) row.tipo = aborto ? 'aborto' : 'nascimento';
+  return row;
+}
+const partoEhAborto = p => p.tipo==='aborto';
+// Bezerro que nasceu e ainda pode ser desmamado: nem aborto, nem morto.
+const partoComBezerroVivo = p => !partoEhAborto(p) && !p.dataObito;
 function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca:r.raca||'', pesoKg:r.peso_kg, criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
 function desmamaToRow(d){ return {parto_id:d.partoId, data:d.data, raca:d.raca, peso_kg:d.pesoKg, manejo_id:manter(d.manejoId)}; }
 function rowToManejo(r){ return {id:r.id, data:r.data, loteId:r.lote_id, loteDestinoId:r.lote_destino_id||null, acoes:r.acoes||[], vacinacao:!!r.vacinacao, vermifugacao:!!r.vermifugacao, status:r.status||'aberto', totalAnimais:r.total_animais||0, criadoPor:r.criado_por||''}; }
 function manejoToRow(m){ return {data:m.data, lote_id:m.loteId, lote_destino_id:m.loteDestinoId||null, acoes:m.acoes||[], vacinacao:!!m.vacinacao, vermifugacao:!!m.vermifugacao, status:m.status||'aberto', total_animais:m.totalAnimais||0}; }
 function rowToProtocoloInseminacao(r){ return {id:r.id, manejoId:r.manejo_id, loteId:r.lote_id, numeroAnimal:r.numero_animal, data:r.data, criadoPor:r.criado_por||''}; }
 function protocoloInseminacaoToRow(p){ return {manejo_id:p.manejoId, lote_id:p.loteId, numero_animal:p.numeroAnimal, data:p.data}; }
-function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', status:r.status||'ativo', dataMorte:r.data_morte||null, criadoPor:r.criado_por||''}; }
-function animalToRow(a){ return {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null}; }
+// nome: texto livre do animal (apelido, característica, observação) --
+// 27/10/2026, o número ficou só com dígitos e o que era escrito junto dele
+// ("721 abortou", "512 2S") passa a ir aqui. Só é mandado ao banco quando
+// tem valor ou o animal já tinha a coluna (o app novo funciona antes do SQL).
+function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', status:r.status||'ativo', dataMorte:r.data_morte||null, criadoPor:r.criado_por||'', nome:r.nome||'', _temNome:('nome' in r)}; }
+function animalToRow(a){
+  const row = {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null};
+  if(a.nome || a._temNome) row.nome = (a.nome||'').trim() || null;
+  return row;
+}
+// Número do animal: só dígitos (27/10/2026, pedido do Eduardo). Texto junto
+// do número virava outro animal ("721 abortou" ficou cadastrado como uma
+// vaca nova, separada da 721). Número antigo que já tem texto continua
+// valendo enquanto ninguém mexer nele (original): editar outro campo do
+// lançamento não obriga a corrigir o número na hora.
+function numeroAnimalSoDigitos(numero){ return /^[0-9]+$/.test(String(numero||'').trim()); }
+function erroNumeroAnimal(numero, original){
+  const n = String(numero||'').trim();
+  if(!n || numeroAnimalSoDigitos(n)) return null;
+  if(original!=null && n===String(original).trim()) return null;
+  return `O número do animal só pode ter algarismos (0 a 9): "${n}" não serve. Observação ou característica do animal vai no campo Nome do animal (Lotes > clique no lote > Editar o animal).`;
+}
+// Nome do animal (se tiver) pra mostrar ao lado do número nos lançamentos.
+function nomeDoAnimal(numero, sexo){
+  const a = animalCadastrado(numero, sexo);
+  return a && a.nome ? a.nome : '';
+}
 // Animal já cadastrado com esse número. O número SOZINHO não identifica o
 // animal -- pode haver macho e fêmea com o mesmo número (são dois animais
 // diferentes que por acaso repetem o número do brinco). Passe sexo pra
@@ -453,6 +496,7 @@ function validarAnimalNovo(numero, sexo, raca){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return null; // sem número aqui -- quem valida isso é validarObrigatorios
   if(animalCadastrado(numeroNorm, sexo)) return null; // já existe esse número+sexo, upsertAnimal só atualiza
+  if(!numeroAnimalSoDigitos(numeroNorm)) return erroNumeroAnimal(numeroNorm); // cadastro novo: só dígitos
   if(!sexo || !raca) return `O animal número ${numeroNorm} ainda não está cadastrado. Informe sexo e raça dele antes de lançar.`;
   return null;
 }
@@ -498,6 +542,8 @@ async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
   if(!extra.sexo || !extra.raca){
     return {error:{message:`O animal ${numeroNorm} ainda não está cadastrado -- informe sexo e raça antes de lançar.`}};
   }
+  // Última barreira: cadastro novo nunca nasce com texto no número.
+  if(!numeroAnimalSoDigitos(numeroNorm)) return {error:{message: erroNumeroAnimal(numeroNorm)}};
   const res = await db.from('animais').insert({...row, criado_por:autorAtual()}).select().single();
   if(!res.error && criadosNestaLeva) criadosNestaLeva.push({numero:numeroNorm, id:res.data?.id, sexo:extra.sexo});
   return res;
@@ -507,6 +553,17 @@ async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
 function parseNumerosAnimais(texto){
   return String(texto||'').split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
 }
+// Erro de banco que só acontece antes de rodar o SQL novo (coluna que o
+// app já usa e o banco ainda não tem) vira uma instrução, não um texto
+// técnico em inglês.
+function mensagemColunaFaltando(error){
+  const msg = String(error?.message||'');
+  const m = msg.match(/'([a-z_]+)' column|column "?([a-z_]+)"? (?:of relation "?[a-z_]+"? )?does not exist|column [a-z_]+\.([a-z_]+) does not exist/i);
+  if(!m) return null;
+  const coluna = m[1]||m[2]||m[3];
+  return `O banco ainda não tem o campo "${coluna}". Rode no Supabase o SQL pecuaria_parto_aborto_obito_nome_animal.sql (o Eduardo tem o texto) e tente de novo.`;
+}
+function textoErroBanco(error){ return mensagemColunaFaltando(error) || error?.message || 'erro desconhecido'; }
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||'', manejo_id:manter(p.manejoId)}; }
 function rowToPesagemAnimal(r){ return {id:r.id, pesagemId:r.pesagem_id, numeroAnimal:r.numero_animal, pesoKg:r.peso_kg}; }
@@ -1476,6 +1533,35 @@ async function executarInsertLancamento(type, campos){
 // de mostrar erro — do ponto de vista de quem está usando, "salvou" mesmo
 // assim (só que localmente, até a internet voltar).
 const ERRO_FILA_INDISPONIVEL = {message:'Sem conexão, e não foi possível guardar o lançamento neste aparelho (armazenamento local indisponível ou cheio). Nada foi salvo — anote os dados e tente lançar de novo.'};
+// Update que não acha a linha (apagada nesse meio tempo, ou a regra de
+// acesso do banco recusou) volta sem erro e sem linha nenhuma: sem esta
+// checagem a janela fechava como se tivesse salvo e nada mudava.
+async function atualizarUmaLinha(tabela, row, id){
+  const res = await db.from(tabela).update(row).eq('id', id).select();
+  if(res.error) return {error: res.error};
+  if(!res.data || res.data.length===0){
+    return {error:{message:'nada foi gravado: o lançamento não foi encontrado no banco ou seu usuário não tem permissão de editar. Recarregue a tela e confira.'}};
+  }
+  return {error:null, data: res.data[0]};
+}
+// Partos, desmamas, diagnósticos e inseminações vêm na 2ª etapa da carga
+// (o histórico pesado). Depois de salvar um deles, a tela mostrava o dado
+// antigo até essa etapa inteira terminar -- com sinal fraco, minutos: a
+// edição "não salvava" (27/10/2026). Estas tabelas são pequenas: recarrega
+// só elas logo depois de salvar, antes da carga completa.
+const TIPOS_REPRODUCAO = new Set(['parto','obitoBezerro','desmama','diagnosticoGestacional','reproducaoCusto']);
+async function recarregarReproducao(){
+  const [prt, desm, dg, rc] = await Promise.all([
+    buscarTudo(()=>db.from('partos').select('*').order('id')),
+    buscarTudo(()=>db.from('desmamas').select('*').order('id')),
+    buscarTudo(()=>db.from('diagnosticos_gestacionais').select('*').order('id')),
+    buscarTudo(()=>db.from('reproducao_custos').select('*').order('id')),
+  ]);
+  if(!prt.error) state.partos = (prt.data||[]).map(rowToParto);
+  if(!desm.error) state.desmamas = (desm.data||[]).map(rowToDesmama);
+  if(!dg.error) state.diagnosticos = (dg.data||[]).map(rowToDiagnostico);
+  if(!rc.error) state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
+}
 async function salvarOuEnfileirar(type, campos){
   // Saída de Ração e Produção descontam estoque na proporção da composição
   // da dieta NA HORA do lançamento. Se isso acabar indo pra fila offline e
@@ -1595,6 +1681,17 @@ function loteTipo(lote){
 // só quem tinha "Dietas" via). Antes a mensagem culpava o lote, e o lote
 // estava certo (caso do Joilson, 22/10/2026).
 const SEM_DIETA_PARA_RACAO = 'Nenhuma dieta aparece para você. Ou não há dieta cadastrada (Formulação de Dietas), ou seu usuário não tem permissão de ver as dietas: peça ao administrador.';
+// Lote sempre começa em branco nos lançamentos (27/10/2026, pedido do
+// Eduardo): vir com o primeiro lote cadastrado ("VACAS INVERNADA")
+// selecionado fazia lançamento cair no lote errado. Sem lote, não salva.
+function opcaoSelecioneLote(valorAtual){
+  return `<option value="" ${!valorAtual?'selected':''}>— Selecione o lote —</option>`;
+}
+function exigirLote(loteId, rotulo){
+  if(loteId) return true;
+  alert(`Selecione o ${rotulo||'lote'}.`);
+  return false;
+}
 function lotesQueRecebem(tipo, loteJaEscolhido){
   return state.lotes.filter(l =>
     loteTipo(l)===tipo && (
@@ -1913,7 +2010,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote (aba Cadastro) antes de numerar um animal.');
       return false;
     }
-    editDraft = {numero:'', loteId: lotesAtivos[0].id, sexo:'', raca:''};
+    editDraft = {numero:'', loteId:'', sexo:'', raca:'', nome:''};
     state.modal = {type:'animal'};
   } else if(type==='saidaRacao'){
     const lotesConf = lotesQueRecebem('confinamento');
@@ -1922,7 +2019,7 @@ function openNewModal(type){
       alert('Não há lote de Confinamento ativo e com animais para receber ração. Confira em Lotes: o lote pode estar encerrado ou com zero cabeças.');
       return false;
     }
-    editDraft = {dietaId: lotesConf[0]?.dietaId||'', loteId: lotesConf[0]?.id||'', data:hojeStr(), quantidadeKg:''};
+    editDraft = {dietaId:'', loteId:'', data:hojeStr(), quantidadeKg:''};
     state.modal = {type:'saidaRacao'};
   } else if(type==='saidaRacaoCria'){
     const lotesCria = lotesQueRecebem('reproducao');
@@ -1931,7 +2028,7 @@ function openNewModal(type){
       alert('Não há lote de Cria ativo e com animais para receber ração. Confira em Lotes: o lote pode estar encerrado ou com zero cabeças.');
       return false;
     }
-    editDraft = {dietaId: lotesCria[0]?.dietaId||'', loteId: lotesCria[0]?.id||'', data:hojeStr(), quantidadeKg:''};
+    editDraft = {dietaId:'', loteId:'', data:hojeStr(), quantidadeKg:''};
     state.modal = {type:'saidaRacaoCria'};
   } else if(type==='cocho'){
     const lotesConf = lotesQueRecebem('confinamento');
@@ -1939,7 +2036,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Confinamento (aba Lotes) antes de registrar uma leitura de cocho.');
       return false;
     }
-    editDraft = {loteId: lotesConf[0]?.id||'', data:hojeStr(), nota:2, observacao:''};
+    editDraft = {loteId:'', data:hojeStr(), nota:2, observacao:''};
     state.modal = {type:'cocho'};
   } else if(type==='pasto'){
     const lotesPasto = lotesQueRecebem('pasto');
@@ -1948,7 +2045,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta antes de registrar uma saída de ração (pasto).');
       return false;
     }
-    editDraft = {loteId: lotesPasto[0]?.id||'', dietaId: lotesPasto[0]?.dietaId||'', data:hojeStr(), quantidade:''};
+    editDraft = {loteId:'', dietaId:'', data:hojeStr(), quantidade:''};
     state.modal = {type:'pasto'};
   } else if(type==='reproducaoCusto'){
     const lotesReprod = state.lotes.filter(l=>loteTipo(l)==='reproducao');
@@ -1956,7 +2053,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Cria (aba Lotes) antes de registrar uma inseminação.');
       return false;
     }
-    editDraft = {loteId: lotesReprod[0]?.id||'', data:hojeStr(), numeroVaca:'', racaTouro:'', qualInseminacao:'1', custo:''};
+    editDraft = {loteId:'', data:hojeStr(), numeroVaca:'', racaTouro:'', qualInseminacao:'1', custo:''};
     state.modal = {type:'reproducaoCusto'};
   } else if(type==='diagnosticoGestacional'){
     const lotesReprod = state.lotes.filter(l=>loteTipo(l)==='reproducao');
@@ -1964,7 +2061,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Cria (aba Lotes) antes de registrar um diagnóstico gestacional.');
       return false;
     }
-    editDraft = {loteId: lotesReprod[0]?.id||'', data:hojeStr(), numeroVaca:'', resultado:'prenha', previsaoParto:''};
+    editDraft = {loteId:'', data:hojeStr(), numeroVaca:'', resultado:'prenha', previsaoParto:''};
     state.modal = {type:'diagnosticoGestacional'};
   } else if(type==='parto'){
     const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
@@ -1972,7 +2069,8 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote com destino Cria, ou um lote de Confinamento com sexo Fêmeas (aba Lotes), antes de registrar um parto.');
       return false;
     }
-    editDraft = {loteId: lotesElegiveis[0]?.id||'', data:hojeStr(), numeroMae:'', sexoBezerro:'macho', racaBezerro:''};
+    // Sexo do bezerro também começa em branco (antes vinha "Macho").
+    editDraft = {loteId:'', data:hojeStr(), tipo:'nascimento', numeroMae:'', sexoBezerro:'', racaBezerro:''};
     state.modal = {type:'parto'};
   } else if(type==='desmama'){
     const lotesElegiveis = state.lotes.filter(loteElegivelParaParto);
@@ -1981,8 +2079,7 @@ function openNewModal(type){
       alert('Nenhum parto aguardando desmama. Registre um parto (Cria > Reprodução > Parto) antes de lançar uma desmama.');
       return false;
     }
-    const partosDisponiveis = partosSemDesmama(loteComPartoDisponivel.id);
-    editDraft = {loteId: loteComPartoDisponivel.id, partoId: partosDisponiveis[0].id, data:hojeStr(), raca:partosDisponiveis[0].racaBezerro||'', pesoKg:''};
+    editDraft = {loteId:'', partoId:'', data:hojeStr(), raca:'', pesoKg:''};
     state.modal = {type:'desmama'};
   } else if(type==='pesagem'){
     const grupoAtual = currentGroupKey();
@@ -1992,7 +2089,7 @@ function openNewModal(type){
       alert(`Cadastre ao menos um lote com destino ${TIPO_PESAGEM_LABEL[tipo]} (aba Lotes) antes de registrar uma pesagem.`);
       return false;
     }
-    editDraft = {tipo, loteId: lotesTipo[0].id, data:hojeStr(), pesoMedioKg:'', observacao:'', entradasPesagem:[]};
+    editDraft = {tipo, loteId:'', data:hojeStr(), pesoMedioKg:'', observacao:'', entradasPesagem:[]};
     state.modal = {type:'pesagem'};
   } else if(type==='venda'){
     const lotesElegiveis = state.lotes.filter(l=>!l.dataFim && Number(l.numeroAnimais||0)>0);
@@ -2000,8 +2097,7 @@ function openNewModal(type){
       alert('Cadastre ao menos um lote ativo com animais (Confinamento, Pasto ou Cria) antes de registrar uma venda.');
       return false;
     }
-    const primeiroLote = lotesElegiveis[0];
-    editDraft = {tipo: loteTipo(primeiroLote), loteId: primeiroLote.id, data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', categoria:'abate', sexo:sexoFixoDoLote(primeiroLote.id)||'', observacao:''};
+    editDraft = {tipo:'', loteId:'', data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', categoria:'abate', sexo:'', observacao:''};
     state.modal = {type:'venda'};
   } else if(type==='custoFixo'){
     editDraft = {nome:'', categoria:'', descricao:'', fornecedor:'', valorMensal:'', mes:'', data:'', areas:[], observacao:''};
@@ -2042,7 +2138,7 @@ function FabMenu(){
     {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Nova inseminação'},
     {type:'diagnosticoGestacional', label:'Novo diagnóstico gestacional'},
-    {type:'parto', label:'Novo parto'},
+    {type:'parto', label:'Novo parto / aborto'},
     // Desmama e Pesagem só são lançadas pelo Manejo agora (fluxo guiado por
     // animal) -- tirado daqui de propósito, não é esquecimento. As telas
     // continuam mostrando o histórico e permitindo editar/excluir um
@@ -2469,20 +2565,23 @@ function PageManejoInicio(){
     return Empty('Nenhum lote disponível', 'Cadastre um lote (aba Cadastro) antes de iniciar um manejo.');
   }
   if(!editDraft || !editDraft._manejoSetup){
-    editDraft = {loteId: lotesDisponiveis[0].id, data: hojeStr(), mudaLote:false, loteDestinoId:'', acoes:['pesagem'], vacinacao:false, vermifugacao:false, _manejoSetup:true};
+    editDraft = {loteId:'', data: hojeStr(), mudaLote:false, loteDestinoId:'', acoes:['pesagem'], vacinacao:false, vermifugacao:false, _manejoSetup:true};
   }
   const d = editDraft;
   const loteSelecionadoManejo = state.lotes.find(l=>l.id===d.loteId);
   // Se a pessoa não tem permissão pra alguma ação já marcada (ex: trocou de
   // lote, ou o admin tirou a permissão de Cria depois de marcar), tira do
   // rascunho -- não deixa uma ação sem permissão pendurada mesmo escondida.
-  d.acoes = d.acoes.filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo));
+  // Sem lote escolhido ainda, não poda (senão a Pesagem marcada por padrão
+  // sumia antes de a pessoa escolher o lote).
+  if(loteSelecionadoManejo) d.acoes = d.acoes.filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo));
   const historico = [...state.manejos].sort((a,b)=>b.id-a.id);
   return `
   <div class="card card-pad" style="margin-bottom:18px;">
     <div class="field-row campo-grande">
       <div class="field"><label>Lote a manejar</label>
         <select id="f-lotemanejo">
+          ${opcaoSelecioneLote(d.loteId)}
           ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
         </select>
       </div>
@@ -2498,18 +2597,20 @@ function PageManejoInicio(){
     ${d.mudaLote ? `
     <div class="field campo-grande"><label>Lote de destino</label>
       <select id="f-lotedestinomanejo">
+        ${opcaoSelecioneLote(d.loteDestinoId)}
         ${lotesDisponiveis.filter(l=>l.id!=d.loteId).map(l=>`<option value="${l.id}" ${d.loteDestinoId==l.id?'selected':''}>${esc(l.nome)} (${TIPO_PESAGEM_LABEL[loteTipo(l)]})</option>`).join('')}
       </select>
     </div>
     ` : ''}
     <div class="field">
       <label>O que vai ser feito nesse manejo?</label>
+      ${!loteSelecionadoManejo ? `<p class="hint">Escolha o lote acima pra ver as ações.</p>` : ''}
       <div class="manejo-acoes-check">
         ${Object.keys(ACAO_MANEJO_LABEL).filter(acao=>acaoManejoPermitida(acao, loteSelecionadoManejo)).map(acao=>`
         <label class="manejo-check"><input type="checkbox" data-acao-manejo="${acao}" ${d.acoes.includes(acao)?'checked':''}/> ${ACAO_MANEJO_LABEL[acao]}</label>
         `).join('')}
       </div>
-      ${Object.keys(ACAO_MANEJO_LABEL).some(acao=>!acaoManejoPermitida(acao, loteSelecionadoManejo)) ? `<p class="hint">Algumas ações não aparecem aqui porque esse usuário não tem permissão de editar em Cria (Inseminação/Diagnóstico são sempre de reprodução, mesmo num lote de Confinamento).</p>` : ''}
+      ${loteSelecionadoManejo && Object.keys(ACAO_MANEJO_LABEL).some(acao=>!acaoManejoPermitida(acao, loteSelecionadoManejo)) ? `<p class="hint">Algumas ações não aparecem aqui porque esse usuário não tem permissão de editar em Cria (Inseminação/Diagnóstico são sempre de reprodução, mesmo num lote de Confinamento).</p>` : ''}
     </div>
     <div class="field-row">
       <label class="manejo-check"><input type="checkbox" id="f-vacinacaomanejo" ${d.vacinacao?'checked':''}/> Foi feita vacinação nesse manejo</label>
@@ -2517,7 +2618,7 @@ function PageManejoInicio(){
     </div>
     ${d.acoes.length===0 && !d.mudaLote ? `<p class="hint">Marque ao menos uma ação, ou ative "Vai mudar de lote" acima pra um manejo só de troca de lote.</p>` : ''}
     <div class="toolbar" style="margin-top:18px; justify-content:flex-end;">
-      <button class="btn btn-primary btn-lg" data-iniciar-manejo="1" ${(d.acoes.length===0 && !d.mudaLote)?'disabled':''}>Iniciar manejo</button>
+      <button class="btn btn-primary btn-lg" data-iniciar-manejo="1" ${(!loteSelecionadoManejo || (d.acoes.length===0 && !d.mudaLote))?'disabled':''}>Iniciar manejo</button>
     </div>
   </div>
   <div class="toolbar"><span class="hint">Histórico de manejos</span></div>
@@ -2584,7 +2685,7 @@ function PageManejoAtivo(){
   </div>
   <p class="hint" style="margin:6px 0 16px;">${esc(resumoManejo)}</p>
   <div class="card card-pad" style="margin-bottom:18px; border:1.5px solid var(--verde-medio);">
-    <div class="field campo-grande"><label>Número do animal${precisaNumero?' (obrigatório)':' (opcional)'}</label><input id="f-numanimalmanejo" value="${esc(m.numeroAtualDraft||'')}" placeholder="Bate o número e aperta Enter"/></div>
+    <div class="field campo-grande"><label>Número do animal${precisaNumero?' (obrigatório)':' (opcional)'}</label><input id="f-numanimalmanejo" value="${esc(m.numeroAtualDraft||'')}" placeholder="Bate o número e aperta Enter" inputmode="numeric" autocomplete="off" data-numero-animal="1"/></div>
     ${animalNovo ? `
     <div class="field-row">
       ${!sexoLoteFixo ? `<div class="field"><label>Sexo (animal novo -- obrigatório)</label>
@@ -2840,9 +2941,14 @@ function situacaoReprodutivaVaca(loteId, numero){
     detalheStatus = 'Vazia';
   } else {
     const partoDoCiclo = partos.find(p=>p.data>=ultimoDiagnostico.data);
-    if(partoDoCiclo){
+    if(partoDoCiclo && partoEhAborto(partoDoCiclo)){
+      // Abortou depois do diagnóstico de prenha: não está mais prenha.
+      status = 'abortou';
+      detalheStatus = `Abortou em ${partoDoCiclo.data.split('-').reverse().join('/')}`;
+    } else if(partoDoCiclo){
       status = 'pariu';
-      detalheStatus = `Prenha — pariu ${SEXO_BEZERRO_LABEL[partoDoCiclo.sexoBezerro]||''} em ${partoDoCiclo.data.split('-').reverse().join('/')}`;
+      detalheStatus = `Prenha — pariu ${SEXO_BEZERRO_LABEL[partoDoCiclo.sexoBezerro]||''} em ${partoDoCiclo.data.split('-').reverse().join('/')}`
+        + (partoDoCiclo.dataObito ? ` (bezerro morreu em ${partoDoCiclo.dataObito.split('-').reverse().join('/')})` : '');
     } else {
       status = 'prenha';
       detalheStatus = `Prenha${ultimoDiagnostico.previsaoParto ? ' — previsão de parto ' + ultimoDiagnostico.previsaoParto.split('-').reverse().join('/') : ''}`;
@@ -2886,14 +2992,14 @@ function PageLoteDetalhe(){
       <tbody>
         ${rows.map(r=>`
           <tr${r.a.status==='morto'?' style="opacity:.6;"':''}>
-            <td class="mono"><strong>${esc(r.a.numero)}</strong></td>
+            <td class="mono"><strong>${esc(r.a.numero)}</strong>${r.a.nome ? `<div class="hint" style="font-family:inherit;">${esc(r.a.nome)}</div>` : ''}</td>
             <td>${SEXO_BEZERRO_LABEL[r.a.sexo]||'<span class="hint">—</span>'}</td>
             <td>${RACA_TOURO_LABEL[r.a.raca]||'<span class="hint">—</span>'}</td>
             <td>${r.a.status==='morto' ? `<span class="pill pill-cat">Morto${r.a.dataMorte?' em '+r.a.dataMorte.split('-').reverse().join('/'):''}</span>` : `<span class="pill pill-ok">Ativo</span>`}</td>
             <td class="mono">${r.ultima ? `${fmt(r.ultima.pesoKg,1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span>` : '—'}</td>
             <td class="mono">${r.gmd!==null ? (r.gmd>=0?'+':'')+fmt(r.gmd,2)+' kg/dia' : '—'}</td>
             ${ehCria ? `
-            <td><span class="${r.reprod ? 'pill '+(r.reprod.status==='vazia'||r.reprod.status==='sem-diagnostico'?'pill-cat':'pill-ok') : 'hint'}">${r.reprod ? r.reprod.detalheStatus : '—'}</span></td>
+            <td><span class="${r.reprod ? 'pill '+(r.reprod.status==='vazia'||r.reprod.status==='sem-diagnostico'||r.reprod.status==='abortou'?'pill-cat':'pill-ok') : 'hint'}">${r.reprod ? r.reprod.detalheStatus : '—'}</span></td>
             <td class="mono">${r.reprod && r.reprod.ultimaInseminacao ? `${QUAL_INSEMINACAO_LABEL[r.reprod.ultimaInseminacao.qualInseminacao]||'—'} em ${r.reprod.ultimaInseminacao.data.split('-').reverse().join('/')}` : '—'}</td>
             ` : ''}
             ${podeEditarAnimal ? `
@@ -2925,15 +3031,16 @@ function ContextoLoteDetalhe(lote, contexto){
     <div class="card" style="margin-bottom:22px;">
       ${itens.length===0 ? Empty('Nenhum parto registrado neste lote','Registre um parto na aba Parto.') : `
       <table>
-        <thead><tr><th>Data</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Raça do bezerro</th></tr></thead>
+        <thead><tr><th>Data</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Raça do bezerro</th><th>Situação</th></tr></thead>
         <tbody>
-          ${itens.map(p=>`
+          ${itens.map(p=>{ const sit = situacaoDoParto(p); return `
           <tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td class="mono">${esc(p.numeroMae)||'—'}</td>
-            <td>${SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—'}</td>
-            <td>${RACA_TOURO_LABEL[p.racaBezerro]||'—'}</td>
-          </tr>`).join('')}
+            <td>${partoEhAborto(p) ? '—' : (SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—')}</td>
+            <td>${partoEhAborto(p) ? '—' : (RACA_TOURO_LABEL[p.racaBezerro]||'—')}</td>
+            <td><span class="pill ${sit.classe}">${esc(sit.texto)}</span></td>
+          </tr>`;}).join('')}
         </tbody>
       </table>
       `}
@@ -3546,24 +3653,30 @@ const SEXO_LOTE_LABEL = {femea:'Fêmeas', macho:'Machos', misto:'Misto'};
 // lote abre o Detalhe do Lote.
 function PainelResumoPartos(lotesElegiveis){
   if(lotesElegiveis.length===0) return '';
+  // Aborto não é nascimento: sai do total de nascidos e ganha coluna própria.
   const linhas = lotesElegiveis.map(l=>{
-    const partosLote = state.partos.filter(p=>p.loteId===l.id);
-    const machos = partosLote.filter(p=>p.sexoBezerro==='macho').length;
-    const femeas = partosLote.filter(p=>p.sexoBezerro==='femea').length;
-    return {lote:l, total:partosLote.length, machos, femeas};
+    const doLote = state.partos.filter(p=>p.loteId===l.id);
+    const nascidos = doLote.filter(p=>!partoEhAborto(p));
+    const machos = nascidos.filter(p=>p.sexoBezerro==='macho').length;
+    const femeas = nascidos.filter(p=>p.sexoBezerro==='femea').length;
+    const mortos = nascidos.filter(p=>p.dataObito).length;
+    const abortos = doLote.length - nascidos.length;
+    return {lote:l, registros:doLote.length, total:nascidos.length, machos, femeas, mortos, abortos};
   });
   return `
   <div class="card" style="margin-bottom:22px;">
     <table>
-      <thead><tr><th>Lote</th><th>Total nascidos</th><th>Machos</th><th>Fêmeas</th></tr></thead>
+      <thead><tr><th>Lote</th><th>Total nascidos</th><th>Machos</th><th>Fêmeas</th><th>Mortos antes da desmama</th><th>Abortos</th></tr></thead>
       <tbody>
         ${linhas.map(r=>`
           <tr>
             <td><button class="link-nome" data-ver-lote="${r.lote.id}">${esc(r.lote.nome)}</button></td>
-            ${r.total===0 ? `<td class="mono" colspan="3">Nenhum parto registrado ainda</td>` : `
+            ${r.registros===0 ? `<td class="mono" colspan="5">Nenhum parto registrado ainda</td>` : `
             <td class="mono">${fmtInt(r.total)}</td>
             <td class="mono">${fmtInt(r.machos)}</td>
             <td class="mono">${fmtInt(r.femeas)}</td>
+            <td class="mono">${fmtInt(r.mortos)}</td>
+            <td class="mono">${fmtInt(r.abortos)}</td>
             `}
           </tr>
         `).join('')}
@@ -3582,28 +3695,33 @@ function PagePartos(){
   ${PainelResumoPartos(lotesElegiveis)}
   <p class="eyebrow" style="margin:0 0 10px;">Todos os lançamentos</p>
   <div class="toolbar">
-    <span class="hint">${list.length} parto(s) registrado(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
+    <span class="hint">${list.length} parto(s)/aborto(s) registrado(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
     ${botaoToggleLista('parto', rv)}
   </div>
   <div class="card">
     ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhum parto registrado','Registre os partos por lote, com o número da mãe e o sexo do bezerro.') : Empty('Nenhum parto hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Raça do bezerro</th><th>Lançado por</th><th></th>
+        <th>Data</th><th>Lote</th><th>Número da mãe</th><th>Sexo do bezerro</th><th>Raça do bezerro</th><th>Situação</th><th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${rv.itens.map(p=>{
           const lote = state.lotes.find(l=>l.id===p.loteId);
+          const sit = situacaoDoParto(p);
+          // Óbito só antes da desmama e só de bezerro que nasceu.
+          const podeObito = !partoEhAborto(p) && !desmamaDoParto(p);
           return `<tr>
             <td class="mono">${p.data.split('-').reverse().join('/')}</td>
             <td>${lote?esc(lote.nome):'—'}</td>
             <td class="mono">${esc(p.numeroMae)||'—'}</td>
-            <td>${SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—'}</td>
-            <td>${RACA_TOURO_LABEL[p.racaBezerro]||'—'}</td>
+            <td>${partoEhAborto(p) ? '—' : (SEXO_BEZERRO_LABEL[p.sexoBezerro]||'—')}</td>
+            <td>${partoEhAborto(p) ? '—' : (RACA_TOURO_LABEL[p.racaBezerro]||'—')}</td>
+            <td><span class="pill ${sit.classe}" ${p.causaObito ? `title="${esc(p.causaObito)}"` : ''}>${esc(sit.texto)}</span>${p.causaObito ? `<div class="hint">${esc(p.causaObito)}</div>` : ''}</td>
             <td>${esc(p.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
               <button class="btn-ghost btn-sm" data-edit-parto="${p.id}">Editar</button>
+              ${podeObito ? `<button class="btn-ghost btn-sm" data-obito-parto="${p.id}">${p.dataObito ? 'Óbito' : 'Registrar óbito'}</button>` : ''}
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-parto="${p.id}">Excluir</button>` : ''}
               ` : ''}
             </td>
@@ -5044,11 +5162,15 @@ function taxasPrenhezPorLote(){
 // daquele lote.
 function taxasDesmamePorLote(){
   const lotes = state.lotes.filter(loteElegivelParaParto);
+  // Aborto não entra em nascidos; bezerro morto continua nascido (é perda
+  // que a taxa de desmame tem que mostrar), só ganha coluna própria.
   return lotes.map(l=>{
-    const nascidos = state.partos.filter(p=>p.loteId===l.id).length;
+    const nascidosLote = state.partos.filter(p=>p.loteId===l.id && !partoEhAborto(p));
+    const nascidos = nascidosLote.length;
+    const mortos = nascidosLote.filter(p=>p.dataObito).length;
     const desmamados = state.desmamas.filter(d=>{ const p=state.partos.find(pp=>pp.id===d.partoId); return p && p.loteId===l.id; }).length;
     const taxa = nascidos>0 ? desmamados/nascidos*100 : null;
-    return {lote:l, nascidos, desmamados, taxa};
+    return {lote:l, nascidos, mortos, desmamados, taxa};
   }).filter(r=>r.nascidos>0);
 }
 function PageResultadosReproducao(){
@@ -5087,12 +5209,13 @@ function PageResultadosReproducao(){
   <div class="card" style="margin-bottom:22px;">
     ${desmame.length===0 ? Empty('Nenhum parto registrado','Registre partos (Cria &gt; Reprodução) para ver a taxa de desmame de cada lote.') : `
     <table>
-      <thead><tr><th>Lote</th><th>Nascidos</th><th>Desmamados</th><th>Taxa de desmame</th></tr></thead>
+      <thead><tr><th>Lote</th><th>Nascidos</th><th>Mortos antes da desmama</th><th>Desmamados</th><th>Taxa de desmame</th></tr></thead>
       <tbody>
         ${desmame.map(r=>`
           <tr>
             <td><strong>${esc(r.lote.nome)}</strong></td>
             <td class="mono">${fmtInt(r.nascidos)}</td>
+            <td class="mono">${fmtInt(r.mortos)}</td>
             <td class="mono">${fmtInt(r.desmamados)}</td>
             <td class="mono">${r.taxa!==null ? fmt(r.taxa,1)+'%' : '—'}</td>
           </tr>
@@ -5100,7 +5223,7 @@ function PageResultadosReproducao(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">Taxa de desmame = bezerros desmamados ÷ bezerros nascidos (partos) daquele lote.</p>
+  <p class="hint" style="margin:-14px 0 22px;">Taxa de desmame = bezerros desmamados ÷ bezerros nascidos daquele lote. Aborto não conta como nascido; bezerro que morreu antes da desmama conta como nascido e não desmamado.</p>
 
   <p class="eyebrow" style="margin:22px 0 10px;">Custo por bezerro desmamado</p>
   <div class="card">
@@ -5558,6 +5681,7 @@ function Modal(){
   if(state.modal.type==='reproducaoCusto') return ModalReproducaoCusto();
   if(state.modal.type==='diagnosticoGestacional') return ModalDiagnostico();
   if(state.modal.type==='parto') return ModalParto();
+  if(state.modal.type==='obitoBezerro') return ModalObitoBezerro();
   if(state.modal.type==='desmama') return ModalDesmama();
   if(state.modal.type==='pesagem') return ModalPesagem();
   if(state.modal.type==='venda') return ModalVenda();
@@ -5833,7 +5957,7 @@ function ModalLote(){
         </div>
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
-        <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
+        <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130" data-numeros-animais="1">${esc(d.numerosAnimais||'')}</textarea></div>
         <p class="hint">Se já souber os números desses animais, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos, só quem você for numerando agora (clique no lote depois pra ver e completar aos poucos).</p>
         ${camposAnimalNovoLote}` : ''}
         <div class="field"><label>Data de encerramento (opcional)</label><input id="f-datafim" type="date" value="${d.dataFim||''}"/></div>
@@ -5841,6 +5965,7 @@ function ModalLote(){
         ` : `
         <div class="field"><label>Lote de destino</label>
           <select id="f-loteexistente">
+            ${opcaoSelecioneLote(d.loteExistenteId)}
             ${lotesExistentesPermitidos.map(l=>`<option value="${l.id}" ${d.loteExistenteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
           </select>
         </div>
@@ -5849,7 +5974,7 @@ function ModalLote(){
           <div class="field"><label>Peso médio dos animais chegando (kg)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         </div>
         <div class="field"><label>Data de entrada</label><input id="f-dataentrada" type="date" value="${d.dataEntrada}"/></div>
-        <div class="field"><label>Números dos animais chegando (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130">${esc(d.numerosAnimais||'')}</textarea></div>
+        <div class="field"><label>Números dos animais chegando (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130" data-numeros-animais="1">${esc(d.numerosAnimais||'')}</textarea></div>
         <p class="hint">O número de animais soma no lote escolhido, e o peso médio do lote é recalculado por média ponderada (peso e quantidade de quem já estava + de quem está chegando). Se já souber os números, liste aqui (separados por vírgula, espaço ou linha) — não precisa listar todos.</p>
         ${camposAnimalNovoLote}
         `}
@@ -5879,9 +6004,10 @@ function ModalAnimal(){
       <div class="modal-head"><h3>${d._editId?'Editar animal':'Cadastrar animal'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Número do animal</label><input id="f-numeroanimal" value="${esc(d.numero)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número do animal</label><input id="f-numeroanimal" value="${esc(d.numero)}" placeholder="Ex: 128" inputmode="numeric" autocomplete="off" data-numero-animal="1"/></div>
           <div class="field"><label>Lote</label>
             <select id="f-loteanimal">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesElegiveisAnimal.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${DESTINO_LOTE_LABEL[l.destino]||l.destino})</option>`).join('')}
             </select>
           </div>
@@ -5903,6 +6029,8 @@ function ModalAnimal(){
             </select>
           </div>
         </div>
+        <div class="field"><label>Nome / observação (opcional)</label><input id="f-nomeanimal" value="${esc(d.nome||'')}" maxlength="80" placeholder="Ex: Mocha, marca 2S, chifre torto"/></div>
+        <p class="hint">O número do animal é só com algarismos. Apelido, marca ou qualquer característica vai no Nome.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -5941,6 +6069,7 @@ function ModalSaidaRacao(){
         <div class="field-row">
           <div class="field"><label>Lote de destino (Confinamento)</label>
             <select id="f-lote">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('confinamento', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
@@ -5977,6 +6106,7 @@ function ModalSaidaRacaoCria(){
         <div class="field-row">
           <div class="field"><label>Lote de destino (Cria)</label>
             <select id="f-lote">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('reproducao', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
@@ -6013,6 +6143,7 @@ function ModalCocho(){
         <div class="field-row">
           <div class="field"><label>Curral (Confinamento)</label>
             <select id="f-lote">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('confinamento', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
@@ -6048,6 +6179,7 @@ function ModalPasto(){
         <div class="field-row">
           <div class="field"><label>Lote (Pasto)</label>
             <select id="f-lote">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('pasto', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
@@ -6084,10 +6216,12 @@ function ModalReproducaoCusto(){
         <div class="field-row">
           <div class="field"><label>Lote (Cria)</label>
             <select id="f-lote">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('reproducao', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128" inputmode="numeric" autocomplete="off" data-numero-animal="1"/>
+            ${nomeDoAnimal(d.numeroVaca,'femea') ? `<div class="hint">${esc(nomeDoAnimal(d.numeroVaca,'femea'))}</div>` : ''}</div>
         </div>
         <div class="field-row">
           <div class="field"><label>Raça da vaca${vacaJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
@@ -6142,10 +6276,12 @@ function ModalDiagnostico(){
         <div class="field-row">
           <div class="field"><label>Lote (Cria)</label>
             <select id="f-lote">
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('reproducao', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128" inputmode="numeric" autocomplete="off" data-numero-animal="1"/>
+            ${nomeDoAnimal(d.numeroVaca,'femea') ? `<div class="hint">${esc(nomeDoAnimal(d.numeroVaca,'femea'))}</div>` : ''}</div>
         </div>
         <div class="field-row">
           <div class="field"><label>Raça da vaca${vacaJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
@@ -6180,21 +6316,34 @@ function ModalParto(){
   const d = editDraft;
   const racaMaeAtual = d.racaMae!==undefined ? d.racaMae : racaConhecida(d.numeroMae, 'femea');
   const maeJaCadastrada = !!animalCadastrado(d.numeroMae, 'femea');
+  const nomeMae = nomeDoAnimal(d.numeroMae, 'femea');
+  const aborto = d.tipo==='aborto';
+  // O lote do parto sendo editado aparece mesmo se deixou de ser elegível
+  // (senão o campo abria em branco e obrigava a trocar o lote).
+  const lotesParto = state.lotes.filter(l=>loteElegivelParaParto(l) || (d._editId && l.id==d.loteId));
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar parto':'Novo parto'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId ? (aborto?'Editar aborto':'Editar parto') : (aborto?'Novo aborto':'Novo parto')}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
           <div class="field"><label>Lote (Cria ou Confinamento fêmeas)</label>
             <select id="f-lote">
-              ${state.lotes.filter(loteElegivelParaParto).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
+              ${opcaoSelecioneLote(d.loteId)}
+              ${lotesParto.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Data</label><input id="f-data" type="date" value="${d.data}"/></div>
         </div>
+        <div class="field"><label>O que aconteceu</label>
+          <select id="f-tipoparto">
+            <option value="nascimento" ${!aborto?'selected':''}>Nasceu o bezerro</option>
+            <option value="aborto" ${aborto?'selected':''}>Aborto</option>
+          </select>
+        </div>
         <div class="field-row">
-          <div class="field"><label>Número da mãe</label><input id="f-numeromae" value="${esc(d.numeroMae)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número da mãe</label><input id="f-numeromae" value="${esc(d.numeroMae)}" placeholder="Ex: 128" inputmode="numeric" autocomplete="off" data-numero-animal="1"/>
+            ${nomeMae ? `<div class="hint">${esc(nomeMae)}</div>` : ''}</div>
           <div class="field"><label>Raça da mãe${maeJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
             <select id="f-racamae">
               <option value="" ${!racaMaeAtual?'selected':''}>— Selecione —</option>
@@ -6204,9 +6353,11 @@ function ModalParto(){
             </select>
           </div>
         </div>
+        ${aborto ? `<p class="hint">Aborto não conta como bezerro nascido e não aparece pra desmama. Se a vaca tinha diagnóstico de prenha, ela passa a aparecer como "Abortou".</p>` : `
         <div class="field-row">
           <div class="field"><label>Sexo do bezerro</label>
             <select id="f-sexobezerro">
+              <option value="" ${!d.sexoBezerro?'selected':''}>— Selecione —</option>
               <option value="macho" ${d.sexoBezerro==='macho'?'selected':''}>Macho</option>
               <option value="femea" ${d.sexoBezerro==='femea'?'selected':''}>Fêmea</option>
             </select>
@@ -6220,10 +6371,38 @@ function ModalParto(){
             </select>
           </div>
         </div>
+        <p class="hint">Bezerro que morreu antes da desmama: salve o parto e use "Registrar óbito" na lista de partos.</p>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="parto">${d._editId?'Salvar alterações':'Salvar parto'}</button>
+        <button class="btn btn-primary" data-save="parto">${d._editId?'Salvar alterações':(aborto?'Salvar aborto':'Salvar parto')}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Óbito do bezerro antes da desmama (27/10/2026). Fica no próprio parto:
+// o bezerro nasceu (conta nos nascidos), mas sai da lista de desmama.
+function ModalObitoBezerro(){
+  const d = editDraft;
+  const parto = state.partos.find(p=>p.id===d.partoId);
+  const lote = parto ? state.lotes.find(l=>l.id===parto.loteId) : null;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Óbito do bezerro</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <p class="hint">${parto ? `Bezerro ${SEXO_BEZERRO_LABEL[parto.sexoBezerro]? SEXO_BEZERRO_LABEL[parto.sexoBezerro].toLowerCase()+' ' : ''}da vaca ${esc(parto.numeroMae)||'—'}${lote?` (${esc(lote.nome)})`:''}, nascido em ${parto.data.split('-').reverse().join('/')}.` : ''}</p>
+        <div class="field-row">
+          <div class="field"><label>Data do óbito</label><input id="f-dataobito" type="date" value="${d.dataObito||''}"/></div>
+          <div class="field"><label>Causa (opcional)</label><input id="f-causaobito" value="${esc(d.causaObito||'')}" maxlength="120" placeholder="Ex: diarreia, pisoteado"/></div>
+        </div>
+        <p class="hint">O bezerro continua contando como nascido e deixa de aparecer pra desmama.</p>
+      </div>
+      <div class="modal-foot">
+        ${d._jaTinhaObito ? `<button class="btn btn-ghost" data-remover-obito="1">Remover óbito</button>` : ''}
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="obitoBezerro">Salvar óbito</button>
       </div>
     </div>
   </div>`;
@@ -6232,8 +6411,18 @@ function ModalParto(){
 // Partos daquele lote que ainda não têm desmama vinculada -- na edição, o
 // próprio parto já vinculado à desmama sendo editada continua na lista
 // (senão ele sumiria do dropdown assim que a desmama é criada).
+// Aborto e bezerro que morreu não esperam desmama (27/10/2026).
 function partosSemDesmama(loteId, ignorarDesmamaId){
-  return state.partos.filter(p=>p.loteId===loteId && !state.desmamas.some(x=>x.partoId===p.id && x.id!==ignorarDesmamaId));
+  return state.partos.filter(p=>p.loteId===loteId && partoComBezerroVivo(p) && !state.desmamas.some(x=>x.partoId===p.id && x.id!==ignorarDesmamaId));
+}
+function desmamaDoParto(parto){ return state.desmamas.find(d=>d.partoId===parto.id) || null; }
+// Texto curto do que aconteceu com aquele parto, pras listas.
+function situacaoDoParto(p){
+  if(partoEhAborto(p)) return {texto:'Aborto', classe:'pill-cat'};
+  if(p.dataObito) return {texto:`Bezerro morreu em ${p.dataObito.split('-').reverse().join('/')}`, classe:'pill-cat'};
+  const ds = desmamaDoParto(p);
+  if(ds) return {texto:`Desmamado em ${ds.data.split('-').reverse().join('/')}`, classe:'pill-ok'};
+  return {texto:'Aguardando desmama', classe:'pill-ok'};
 }
 function ModalDesmama(){
   const d = editDraft;
@@ -6248,12 +6437,13 @@ function ModalDesmama(){
         <div class="field-row">
           <div class="field"><label>Lote (da vaca)</label>
             <select id="f-lote" ${d._editId?'disabled':''}>
+              ${opcaoSelecioneLote(d.loteId)}
               ${lotesElegiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Bezerro (parto)</label>
             <select id="f-parto" ${d._editId?'disabled':''}>
-              ${partosDisponiveis.length===0 ? `<option value="">— nenhum parto disponível neste lote —</option>` : partosDisponiveis.map(p=>`<option value="${p.id}" ${d.partoId==p.id?'selected':''}>Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
+              ${!d.loteId ? `<option value="">— selecione o lote primeiro —</option>` : partosDisponiveis.length===0 ? `<option value="">— nenhum parto disponível neste lote —</option>` : (d._editId ? '' : `<option value="" ${!d.partoId?'selected':''}>— Selecione o bezerro —</option>`) + partosDisponiveis.map(p=>`<option value="${p.id}" ${d.partoId==p.id?'selected':''}>Nº mãe ${esc(p.numeroMae)||'—'} · nasceu em ${p.data.split('-').reverse().join('/')}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -6300,6 +6490,7 @@ function ModalPesagem(){
       <div class="modal-body">
         <div class="field"><label>Lote (${TIPO_PESAGEM_LABEL[d.tipo]})</label>
           <select id="f-lotepesagem">
+            ${opcaoSelecioneLote(d.loteId)}
             ${lotesTipo.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
           </select>
         </div>
@@ -6309,7 +6500,7 @@ function ModalPesagem(){
         </div>
         ${!d._editId ? `
         <div class="field-row">
-          <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" value="${esc(numeroAtual)}" placeholder="Ex: 128"/></div>
+          <div class="field"><label>Número do animal (opcional)</label><input id="f-numeropesado" value="${esc(numeroAtual)}" placeholder="Ex: 128" inputmode="numeric" autocomplete="off" data-numero-animal="1"/></div>
           <div class="field"><label>Peso (kg)</label><input id="f-pesopesado" type="number" step="0.1" placeholder="Ex: 320" value="${d.pesoPesadoDraft||''}"/></div>
         </div>
         ${animalNovoPesagem ? `
@@ -6377,6 +6568,7 @@ function ModalVenda(){
       <div class="modal-body">
         <div class="field"><label>Lote</label>
           <select id="f-lotevenda">
+            ${opcaoSelecioneLote(d.loteId)}
             ${lotesDisponiveis.map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)} (${TIPO_PESAGEM_LABEL[loteTipo(l)]} · ${fmtInt(l.numeroAnimais)} animais)</option>`).join('')}
           </select>
         </div>
@@ -6574,6 +6766,15 @@ function ModalDetalheGrafico(){
 
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
+  // Número do animal: só algarismos, já enquanto digita (o teclado do
+  // celular abre numérico). Na lista de números (Nova entrada de animais)
+  // também ficam espaço, vírgula e ponto e vírgula, que separam os números.
+  document.querySelectorAll('input[data-numero-animal]').forEach(el=>{
+    el.addEventListener('input', ()=>{ const limpo = el.value.replace(/[^0-9]/g,''); if(limpo!==el.value) el.value = limpo; });
+  });
+  document.querySelectorAll('textarea[data-numeros-animais]').forEach(el=>{
+    el.addEventListener('input', ()=>{ const limpo = el.value.replace(/[^0-9\s,;]/g,''); if(limpo!==el.value) el.value = limpo; });
+  });
   document.querySelectorAll('[data-recarregar-dados]').forEach(el=>{
     el.onclick = async ()=>{ state.carregouDados = false; state.erroCarga = ''; render(); await loadAll(); };
   });
@@ -7024,6 +7225,7 @@ function attachEvents(){
       const id = Number(el.dataset.delReproducao);
       const {error} = await db.from('reproducao_custos').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir esta inseminação: ' + error.message); return; }
+      await recarregarReproducao();
       await loadAll();
     };
   });
@@ -7041,6 +7243,7 @@ function attachEvents(){
       const id = Number(el.dataset.delDiagnostico);
       const {error} = await db.from('diagnosticos_gestacionais').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir este diagnóstico: ' + error.message); return; }
+      await recarregarReproducao();
       await loadAll();
     };
   });
@@ -7052,12 +7255,31 @@ function attachEvents(){
       render();
     };
   });
+  document.querySelectorAll('[data-obito-parto]').forEach(el=>{
+    el.onclick = ()=>{
+      const p = state.partos.find(x=>x.id===Number(el.dataset.obitoParto));
+      if(!p) return;
+      editDraft = {partoId:p.id, dataObito:p.dataObito||hojeStr(), causaObito:p.causaObito||'', _jaTinhaObito:!!p.dataObito};
+      state.modal = {type:'obitoBezerro'};
+      render();
+    };
+  });
+  const removerObitoBtn = document.querySelector('[data-remover-obito]');
+  if(removerObitoBtn) removerObitoBtn.onclick = async ()=>{
+    if(!confirm('Remover o óbito deste bezerro? Ele volta a aparecer como aguardando desmama.')) return;
+    const {error} = await atualizarUmaLinha('partos', {data_obito:null, causa_obito:null}, editDraft.partoId);
+    if(error){ alert('Não foi possível remover o óbito: ' + textoErroBanco(error)); return; }
+    state.modal = null; editDraft = null;
+    render(); await recarregarReproducao(); render();
+    await loadAll();
+  };
   document.querySelectorAll('[data-del-parto]').forEach(el=>{
     el.onclick = async ()=>{
       if(!confirm('Excluir este parto? Essa ação não pode ser desfeita -- a desmama vinculada a este parto (se houver) também é apagada junto.')) return;
       const id = Number(el.dataset.delParto);
       const {error} = await db.from('partos').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir este parto: ' + error.message); return; }
+      await recarregarReproducao();
       await loadAll();
     };
   });
@@ -7076,6 +7298,7 @@ function attachEvents(){
       const id = Number(el.dataset.delDesmama);
       const {error} = await db.from('desmamas').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir esta desmama: ' + error.message); return; }
+      await recarregarReproducao();
       await loadAll();
     };
   });
@@ -7415,16 +7638,27 @@ function attachEvents(){
     // volta pro valor antigo assim que a pessoa digita/sai do campo do
     // número da mãe, mesmo já tendo trocado o lote na tela -- e o parto
     // acaba sendo salvo no lote errado.
+    // Lê tudo que está na janela antes de redesenhar (sexo/raça do bezerro
+    // somem quando é aborto, por isso o "?.").
+    function capturarParto(){
+      editDraft.loteId = document.getElementById('f-lote').value;
+      editDraft.data = document.getElementById('f-data').value;
+      editDraft.tipo = document.getElementById('f-tipoparto')?.value || 'nascimento';
+      editDraft.numeroMae = document.getElementById('f-numeromae').value;
+      editDraft.racaMae = document.getElementById('f-racamae').value;
+      const sexoEl = document.getElementById('f-sexobezerro');
+      const racaEl = document.getElementById('f-racabezerro');
+      if(sexoEl) editDraft.sexoBezerro = sexoEl.value;
+      if(racaEl) editDraft.racaBezerro = racaEl.value;
+    }
     const numMaeEl = document.getElementById('f-numeromae');
     if(numMaeEl) numMaeEl.onchange = (e)=>{
-      editDraft.loteId = document.getElementById('f-lote').value;
-      editDraft.numeroMae = e.target.value;
-      editDraft.data = document.getElementById('f-data').value;
-      editDraft.sexoBezerro = document.getElementById('f-sexobezerro').value;
-      editDraft.racaBezerro = document.getElementById('f-racabezerro').value;
+      capturarParto();
       editDraft.racaMae = racaConhecida(e.target.value, 'femea');
       render();
     };
+    const tipoPartoEl = document.getElementById('f-tipoparto');
+    if(tipoPartoEl) tipoPartoEl.onchange = ()=>{ capturarParto(); render(); };
   }
   // Lote/parto só existem no formulário na criação (não na edição, onde
   // ficam desabilitados) -- trocar o lote refaz a lista de partos ainda
@@ -7435,11 +7669,10 @@ function attachEvents(){
       editDraft.data = document.getElementById('f-data').value;
       editDraft.pesoKg = document.getElementById('f-pesodesmama').value;
       editDraft.loteId = Number(e.target.value);
-      const partosDoLote = partosSemDesmama(editDraft.loteId, null);
-      editDraft.partoId = partosDoLote[0]?.id || '';
-      // Trocou de lote -> é outro bezerro. A raça vem pré-preenchida com a
-      // que foi lançada no parto (se tiver); a pessoa ainda pode trocar.
-      editDraft.raca = partosDoLote[0]?.racaBezerro || '';
+      // Trocou de lote -> é outro bezerro, escolhido pela pessoa (nada de
+      // vir o primeiro da lista marcado). A raça vem do parto escolhido.
+      editDraft.partoId = '';
+      editDraft.raca = '';
       render();
     };
     const partoDesmamaEl = document.getElementById('f-parto');
@@ -7488,8 +7721,11 @@ function attachEvents(){
       const pesoEl = document.getElementById('f-pesopesado');
       const numero = (numEl.value||'').trim();
       const peso = pesoEl.value;
-      if(!peso || Number(peso)<=0){ alert('Informe um peso maior que zero.'); return; }
       const loteIdAtual = Number(document.getElementById('f-lotepesagem').value);
+      if(!exigirLote(loteIdAtual)) return;
+      const erroNumeroPesado = erroNumeroAnimal(numero);
+      if(erroNumeroPesado){ alert(erroNumeroPesado); return; }
+      if(!peso || Number(peso)<=0){ alert('Informe um peso maior que zero.'); return; }
       const sexoFixo = sexoFixoDoLote(loteIdAtual);
       let sexoNovo = '', racaNovo = '';
       if(numero && !animalCadastrado(numero, sexoFixo||undefined)){
@@ -7566,6 +7802,7 @@ function attachEvents(){
       iniciarBtn.disabled = true;
       try{
         const loteId = Number(document.getElementById('f-lotemanejo').value);
+        if(!exigirLote(loteId, 'lote a manejar')) return;
         const data = document.getElementById('f-datamanejo').value;
         const mudaLote = document.getElementById('f-mudalotemanejo').value==='sim';
         const loteDestinoId = mudaLote ? Number(document.getElementById('f-lotedestinomanejo').value) : null;
@@ -7652,6 +7889,8 @@ function attachEvents(){
       const numero = (numEl.value||'').trim();
       const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a)) || !!m.loteDestinoId;
       if(precisaNumero && !numero){ alert('Informe o número do animal — obrigatório pra inseminação, diagnóstico, protocolo de inseminação ou mudança de lote.'); return; }
+      const erroNumeroManejo = erroNumeroAnimal(numero);
+      if(erroNumeroManejo){ alert(erroNumeroManejo); return; }
       // Mesmo raciocínio do template: o sexo fixo é do lote de destino
       // (quando o manejo move de lote), não do lote sendo manejado.
       const sexoFixo = sexoFixoDoLote(m.loteDestinoId || m.loteId);
@@ -7977,6 +8216,13 @@ function attachEvents(){
         const numerosAnimaisLista = parseNumerosAnimais(document.getElementById('f-numerosanimais')?.value);
         const sexoNovosVal = document.getElementById('f-sexoanimaisnovos')?.value || '';
         const racaNovosVal = document.getElementById('f-racaanimaisnovos')?.value || '';
+        // Lista de números: cada um só com algarismos (texto no meio da
+        // lista virava um animal com aquele texto como número).
+        const numerosComTexto = numerosAnimaisLista.filter(n=>!numeroAnimalSoDigitos(n));
+        if(numerosComTexto.length){
+          alert(`Os números dos animais só podem ter algarismos (0 a 9). Corrija: ${numerosComTexto.join(', ')}. Observação ou característica do animal vai no campo Nome do animal.`);
+          return;
+        }
         if(numerosAnimaisLista.length>0){
           const loteAlvoParaValidar = modoEntrada==='existente'
             ? state.lotes.find(l=>l.id===Number(document.getElementById('f-loteexistente')?.value))
@@ -8087,13 +8333,17 @@ function attachEvents(){
         const loteAnimalVal = document.getElementById('f-loteanimal').value;
         const sexoAnimalVal = document.getElementById('f-sexoanimal').value;
         const racaAnimalVal = document.getElementById('f-racaanimal').value;
+        const nomeAnimalVal = (document.getElementById('f-nomeanimal')?.value||'').trim();
         if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote'],[sexoAnimalVal,'Sexo'],[racaAnimalVal,'Raça']])) return;
+        const animalOriginal = editDraft._editId ? state.animais.find(a=>a.id===editDraft._editId) : null;
+        const erroNumeroCadastro = erroNumeroAnimal(numeroAnimalVal, animalOriginal?.numero);
+        if(erroNumeroCadastro){ alert(erroNumeroCadastro); return; }
         const animalComEsseNumero = animalCadastrado(numeroAnimalVal, sexoAnimalVal);
         if(animalComEsseNumero && animalComEsseNumero.id!==editDraft._editId){
           alert(`Já existe um animal ${sexoAnimalVal==='macho'?'macho':'fêmea'} cadastrado com o número ${numeroAnimalVal}. Escolha um número diferente.`);
           return;
         }
-        const rowAnimal = animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal});
+        const rowAnimal = animalToRow({numero:numeroAnimalVal, loteId:Number(loteAnimalVal), sexo:sexoAnimalVal, raca:racaAnimalVal, nome:nomeAnimalVal, _temNome: !!animalOriginal?._temNome});
         if(editDraft._editId){
           ({error} = await db.from('animais').update(rowAnimal).eq('id', editDraft._editId));
         } else {
@@ -8123,6 +8373,7 @@ function attachEvents(){
         // por segurança (o input desabilitado não deveria mudar mesmo).
         const data = (editDraft._editId && !souAdmin()) ? editDraft.data : document.getElementById('f-data').value;
         const qtdRacaoVal = document.getElementById('f-qtdracao').value;
+        if(!exigirLote(loteId)) return;
         // Dieta em branco (lote sem dieta padrão vinculada e ninguém trocou
         // manualmente) não pode ser lançada -- é exatamente o erro que essa
         // vinculação lote->dieta existe pra evitar (dieta errada ou faltando).
@@ -8191,6 +8442,7 @@ function attachEvents(){
         }
       } else if(type==='cocho'){
         const dataCochoVal = document.getElementById('f-data').value;
+        if(!exigirLote(Number(document.getElementById('f-lote').value), 'curral')) return;
         if(!validarObrigatorios([[dataCochoVal,'Data']])) return;
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
@@ -8215,6 +8467,7 @@ function attachEvents(){
         const dietaId = Number(dietaIdVal);
         const data = document.getElementById('f-data').value;
         const qtdPastoVal = document.getElementById('f-qtdpasto').value;
+        if(!exigirLote(loteId)) return;
         if(!validarObrigatorios([[data,'Data'],[qtdPastoVal,'Quantidade'],[dietaIdVal,'Dieta']])) return;
         if(Number(qtdPastoVal)<=0){ alert('A quantidade precisa ser maior que zero.'); return; }
         const incompletaPasto = composicaoIncompleta(dietaId);
@@ -8299,6 +8552,7 @@ function attachEvents(){
         const categoria = document.getElementById('f-categoriavenda').value;
         const sexo = document.getElementById('f-sexovenda').value;
         const observacao = document.getElementById('f-obsvenda').value;
+        if(!exigirLote(loteId)) return;
         if(!validarObrigatorios([[data,'Data'],[qtdVal,'Quantidade de animais'],[sexo,'Sexo']])) return;
         if(Number(qtdVal)<=0){ alert('A quantidade de animais precisa ser maior que zero.'); return; }
         const quantidade = Number(qtdVal);
@@ -8404,11 +8658,18 @@ function attachEvents(){
         const racaTouroVal = document.getElementById('f-racatouro').value;
         const qualInsemVal = document.getElementById('f-qualinsem').value;
         const custoVal = document.getElementById('f-custoreproducao').value;
+        if(!exigirLote(Number(document.getElementById('f-lote').value))) return;
         if(!validarObrigatorios([[dataReprodVal,'Data'],[numVacaVal,'Número da vaca'],[racaTouroVal,'Raça do touro'],[custoVal,'Custo do protocolo']])) return;
+        const numeroOriginalInsem = editDraft._editId ? state.reproducao.find(r=>r.id===editDraft._editId)?.numeroVaca : null;
+        const erroNumeroInsem = erroNumeroAnimal(numVacaVal, numeroOriginalInsem);
+        if(erroNumeroInsem){ alert(erroNumeroInsem); return; }
+        // Número antigo com texto, sem mexer: salva o resto e não cria nem
+        // move cadastro de animal com esse número.
+        const legadoInsem = !numeroAnimalSoDigitos(numVacaVal);
         if(Number(custoVal)<=0){ alert('O custo precisa ser maior que zero.'); return; }
         // Vaca ainda não cadastrada -- não dá pra lançar sem a raça dela
         // (sexo já é sempre fêmea, isso o próprio lançamento já garante).
-        const erroAnimalVaca = validarAnimalNovo(numVacaVal, 'femea', racaVacaVal);
+        const erroAnimalVaca = legadoInsem ? null : validarAnimalNovo(numVacaVal, 'femea', racaVacaVal);
         if(erroAnimalVaca){ alert(erroAnimalVaca); return; }
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
@@ -8420,14 +8681,14 @@ function attachEvents(){
           custo: Number(custoVal),
         };
         if(editDraft._editId){
-          ({error} = await db.from('reproducao_custos').update(reproducaoCustoToRow(campos)).eq('id', editDraft._editId));
+          ({error} = await atualizarUmaLinha('reproducao_custos', reproducaoCustoToRow(campos), editDraft._editId));
           // A vaca inseminada entra (ou é movida) na composição do lote --
           // é sempre fêmea. Não bloqueia o save (best-effort, mesmo motivo
           // do gancho de entrada de animais). No caminho de criação isso já
           // roda dentro de executarInsertLancamento (também no caso de
           // sincronizar depois de ficar offline); aqui é só o caminho de
           // edição, que não passa por lá.
-          if(!error){
+          if(!error && !legadoInsem){
             const resAnimalInsem = await upsertAnimal(numVacaVal, campos.loteId, {sexo:'femea', raca:racaVacaVal||undefined});
             if(resAnimalInsem.error) alert('A inseminação foi salva, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalInsem.error.message);
           }
@@ -8446,8 +8707,12 @@ function attachEvents(){
         const numVacaDgVal = document.getElementById('f-numvaca').value;
         const racaVacaDgVal = document.getElementById('f-racavaca').value;
         const resultadoVal = document.getElementById('f-resultadodg').value;
+        if(!exigirLote(Number(document.getElementById('f-lote').value))) return;
         if(!validarObrigatorios([[dataDgVal,'Data'],[numVacaDgVal,'Número da vaca'],[resultadoVal,'Resultado']])) return;
-        const erroAnimalVacaDg = validarAnimalNovo(numVacaDgVal, 'femea', racaVacaDgVal);
+        const erroNumeroDg = erroNumeroAnimal(numVacaDgVal, editDraft._editId ? state.diagnosticos.find(d=>d.id===editDraft._editId)?.numeroVaca : null);
+        if(erroNumeroDg){ alert(erroNumeroDg); return; }
+        const legadoDg = !numeroAnimalSoDigitos(numVacaDgVal);
+        const erroAnimalVacaDg = legadoDg ? null : validarAnimalNovo(numVacaDgVal, 'femea', racaVacaDgVal);
         if(erroAnimalVacaDg){ alert(erroAnimalVacaDg); return; }
         const previsaoPartoEl = document.getElementById('f-previsaoparto');
         const campos = {
@@ -8459,10 +8724,10 @@ function attachEvents(){
           previsaoParto: previsaoPartoEl ? previsaoPartoEl.value : '',
         };
         if(editDraft._editId){
-          ({error} = await db.from('diagnosticos_gestacionais').update(diagnosticoToRow(campos)).eq('id', editDraft._editId));
+          ({error} = await atualizarUmaLinha('diagnosticos_gestacionais', diagnosticoToRow(campos), editDraft._editId));
           // Mesmo gancho da inseminação (upsertAnimal best-effort) -- só o
           // caminho de edição, que não passa por executarInsertLancamento.
-          if(!error){
+          if(!error && !legadoDg){
             const resAnimalDg = await upsertAnimal(numVacaDgVal, campos.loteId, {sexo:'femea', raca:racaVacaDgVal||undefined});
             if(resAnimalDg.error) alert('O diagnóstico foi salvo, mas não deu pra atualizar o cadastro da vaca: ' + resAnimalDg.error.message);
           }
@@ -8480,22 +8745,42 @@ function attachEvents(){
         const dataPartoVal = document.getElementById('f-data').value;
         const numeroMaeVal = document.getElementById('f-numeromae').value;
         const racaMaeVal = document.getElementById('f-racamae').value;
+        const tipoPartoVal = document.getElementById('f-tipoparto')?.value || 'nascimento';
+        const aborto = tipoPartoVal==='aborto';
+        const sexoBezerroVal = aborto ? '' : (document.getElementById('f-sexobezerro')?.value || '');
+        const partoOriginal = editDraft._editId ? state.partos.find(p=>p.id===editDraft._editId) : null;
+        if(!exigirLote(Number(document.getElementById('f-lote').value))) return;
         if(!validarObrigatorios([[dataPartoVal,'Data'],[numeroMaeVal,'Número da mãe']])) return;
-        const erroAnimalMae = validarAnimalNovo(numeroMaeVal, 'femea', racaMaeVal);
+        if(!aborto && !sexoBezerroVal){ alert('Informe o sexo do bezerro.'); return; }
+        const erroNumeroMae = erroNumeroAnimal(numeroMaeVal, partoOriginal?.numeroMae);
+        if(erroNumeroMae){ alert(erroNumeroMae); return; }
+        if(aborto && partoOriginal){
+          // Virar aborto um parto que já tem desmama ou óbito deixaria o
+          // bezerro "desmamado" ou "morto" sem ter nascido.
+          if(desmamaDoParto(partoOriginal)){ alert('Este parto já tem desmama lançada. Exclua a desmama antes de marcar como aborto.'); return; }
+          if(partoOriginal.dataObito){ alert('Este parto tem óbito do bezerro registrado. Remova o óbito antes de marcar como aborto.'); return; }
+        }
+        // Número antigo com texto, sem mexer: salva o resto e não cria nem
+        // move cadastro de animal com esse número.
+        const legadoMae = !numeroAnimalSoDigitos(numeroMaeVal);
+        const erroAnimalMae = legadoMae ? null : validarAnimalNovo(numeroMaeVal, 'femea', racaMaeVal);
         if(erroAnimalMae){ alert(erroAnimalMae); return; }
         const campos = {
           loteId: Number(document.getElementById('f-lote').value),
           data: dataPartoVal,
+          tipo: tipoPartoVal,
           numeroMae: numeroMaeVal,
           racaMae: racaMaeVal,
-          sexoBezerro: document.getElementById('f-sexobezerro').value,
-          racaBezerro: document.getElementById('f-racabezerro').value,
+          sexoBezerro: sexoBezerroVal,
+          racaBezerro: aborto ? '' : (document.getElementById('f-racabezerro')?.value || ''),
+          _temTipo: !!partoOriginal?._temTipo,
         };
+        if(partoOriginal && partoOriginal.dataObito && campos.data > partoOriginal.dataObito){ alert('A data do parto não pode ficar depois da data do óbito do bezerro.'); return; }
         if(editDraft._editId){
-          ({error} = await db.from('partos').update(partoToRow(campos)).eq('id', editDraft._editId));
+          ({error} = await atualizarUmaLinha('partos', partoToRow(campos), editDraft._editId));
           // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
           // -- só o caminho de edição, que não passa por executarInsertLancamento.
-          if(!error){
+          if(!error && !legadoMae){
             const resAnimalParto = await upsertAnimal(numeroMaeVal, campos.loteId, {sexo:'femea', raca:racaMaeVal||undefined});
             if(resAnimalParto.error) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resAnimalParto.error.message);
           }
@@ -8509,10 +8794,22 @@ function attachEvents(){
           error = resultado.error;
           if(!error && resultado.avisoAnimal) alert('O parto foi salvo, mas não deu pra atualizar o cadastro da mãe: ' + resultado.avisoAnimal);
         }
+      } else if(type==='obitoBezerro'){
+        const parto = state.partos.find(p=>p.id===editDraft.partoId);
+        if(!parto){ alert('Parto não encontrado. Recarregue a tela.'); return; }
+        const dataObitoVal = document.getElementById('f-dataobito').value;
+        const causaObitoVal = (document.getElementById('f-causaobito').value||'').trim();
+        if(!validarObrigatorios([[dataObitoVal,'Data do óbito']])) return;
+        if(dataObitoVal < parto.data){ alert('A data do óbito não pode ser antes do nascimento (' + parto.data.split('-').reverse().join('/') + ').'); return; }
+        if(dataObitoVal > hojeStr()){ alert('A data do óbito não pode ser no futuro.'); return; }
+        if(partoEhAborto(parto)){ alert('Aborto não tem óbito de bezerro.'); return; }
+        if(desmamaDoParto(parto)){ alert('Este bezerro já foi desmamado. Morte depois da desmama se registra no cadastro do animal.'); return; }
+        ({error} = await atualizarUmaLinha('partos', {data_obito:dataObitoVal, causa_obito:causaObitoVal||null}, parto.id));
       } else if(type==='desmama'){
         const dataDesmamaVal = document.getElementById('f-data').value;
         const racaVal = document.getElementById('f-racadesmama').value;
         const pesoVal = document.getElementById('f-pesodesmama').value;
+        if(!editDraft._editId && !exigirLote(Number(document.getElementById('f-lote').value))) return;
         if(!editDraft._editId && !editDraft.partoId){ alert('Selecione o bezerro (parto) que está sendo desmamado.'); return; }
         if(!validarObrigatorios([[dataDesmamaVal,'Data da desmama'],[racaVal,'Raça'],[pesoVal,'Peso']])) return;
         if(Number(pesoVal)<=0){ alert('O peso precisa ser maior que zero.'); return; }
@@ -8523,7 +8820,7 @@ function attachEvents(){
           pesoKg: Number(pesoVal),
         };
         if(editDraft._editId){
-          ({error} = await db.from('desmamas').update(desmamaToRow(campos)).eq('id', editDraft._editId));
+          ({error} = await atualizarUmaLinha('desmamas', desmamaToRow(campos), editDraft._editId));
         } else {
           const resultado = await salvarOuEnfileirar(type, campos);
           if(resultado.enfileirado){
@@ -8536,6 +8833,7 @@ function attachEvents(){
       } else if(type==='pesagem'){
         const dataPesagemVal = document.getElementById('f-datapesagem').value;
         const loteIdPesagemVal = Number(document.getElementById('f-lotepesagem').value);
+        if(!exigirLote(loteIdPesagemVal)) return;
         if(!editDraft._editId){
           const entradasPesagem = editDraft.entradasPesagem||[];
           if(!validarObrigatorios([[dataPesagemVal,'Data']])) return;
@@ -8638,10 +8936,13 @@ function attachEvents(){
         return;
       }
       if(error){
-        alert('Não foi possível salvar: ' + error.message);
+        alert('Não foi possível salvar: ' + textoErroBanco(error));
         return;
       }
       state.modal = null; editDraft = null;
+      // Reprodução vem na 2ª etapa (lenta) da carga: recarrega só ela antes,
+      // pra tela já mostrar o que acabou de ser salvo.
+      if(TIPOS_REPRODUCAO.has(type)){ render(); await recarregarReproducao(); render(); }
       await loadAll();
     };
   }
@@ -8724,6 +9025,46 @@ if('serviceWorker' in navigator){
 // dispara de forma confiável em todo dispositivo/navegador).
 window.addEventListener('online', tentarSincronizarFila);
 setInterval(tentarSincronizarFila, 30000);
+
+// Toque perdido no botão (27/10/2026, parto que "não salvava"). Digitar num
+// campo e tocar direto em "Salvar": o toque tira o foco do campo, o campo
+// dispara 'change' e vários desses handlers redesenham a janela inteira
+// (render) pra atualizar raça, campos de animal novo etc. O botão tocado é
+// trocado por um igual antes de o toque terminar e o navegador não entrega
+// o click a ninguém: nada acontece, sem aviso, e quem fecha a janela perde
+// a alteração. Se o botão apertado sumiu da página no meio do toque e
+// nenhum click chegou, repete o click no botão equivalente da tela nova
+// (mesmo id e mesmos data-*). Vale para todo botão do app, inclusive o
+// "Salvar e ir pro próximo animal" do Manejo, que tinha o mesmo problema.
+(function(){
+  let pendente = null;
+  const chaveBotao = el => el.tagName + '|' + [...el.attributes]
+    .filter(a=>a.name==='id' || a.name.startsWith('data-'))
+    .map(a=>a.name+'='+a.value).sort().join('|');
+  function marcar(e){
+    const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(pendente && pendente.el===btn) return;
+    pendente = btn ? {el:btn, chave:chaveBotao(btn), clicou:false} : null;
+  }
+  document.addEventListener('pointerdown', marcar, true);
+  document.addEventListener('mousedown', marcar, true);
+  document.addEventListener('click', e=>{
+    if(!pendente) return;
+    const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(btn && chaveBotao(btn)===pendente.chave) pendente.clicou = true;
+  }, true);
+  document.addEventListener('mouseup', ()=>{
+    const p = pendente;
+    if(!p) return;
+    setTimeout(()=>{
+      if(pendente!==p) return;
+      pendente = null;
+      if(p.clicou || p.el.isConnected) return;
+      const iguais = [...document.querySelectorAll(p.el.tagName)].filter(b=>chaveBotao(b)===p.chave);
+      if(iguais.length===1 && !iguais[0].disabled) iguais[0].click();
+    }, 0);
+  }, true);
+})();
 // se sobrou algo pendente de uma sessão anterior (app fechado antes de
 // sincronizar), tenta assim que o app abre de novo.
 setTimeout(tentarSincronizarFila, 3000);
