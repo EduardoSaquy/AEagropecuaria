@@ -161,8 +161,8 @@ com `mes` dentro da janela maio-abril da safra conta nela A MENOS QUE tenha
 vem de `lancamentos_financeiros` — despesa fixa (Pecuária) / despesa geral
 (Cana, Cereais) e a receita inteira. Ração, pasto e reprodução da Pecuária
 vêm de outras tabelas (`saidas_racao`, `pasto`, `reproducao_custos`), não têm
-`ano_safra`, e continuam somadas por calendário dentro da janela — não faz
-sentido remarcar custo variável de ração pra outra safra manualmente.
+`ano_safra`. Desde 28/10/2026 elas **não entram mais na despesa** (veja "Ração:
+a compra é o custo financeiro" abaixo); ficam só em `consumoGerencial`.
 Recorrente (despesa sem `mes`) também não usa `ano_safra`: continua vigente
 em toda a janela como sempre foi, via `vigentesNoMes()`.
 
@@ -187,6 +187,25 @@ amarrar centro a fazenda específica.
 A compra do adubo já é despesa lançada. A aplicação no talhão serve para
 **repartir** esse custo entre talhões, nunca para somar ao total. A tela de
 Resultados já somou as duas coisas — foi corrigido. Não reintroduzir.
+
+### Ração: a compra é o custo financeiro, o consumo é custo por animal
+
+Decisão do Eduardo em 28/10/2026. O custo **financeiro** da ração (e do pasto)
+é a **compra** do insumo, que já é despesa lançada (centro Nutrição animal /
+Insumos pecuários, na despesa fixa da Pecuária). A **saída de ração** (kg x
+preço da dieta, `saidas_racao`) só serve para saber quanto se gasta por animal
+e por lote. O Matriz somava as duas coisas e contava a ração duas vezes
+(R$ 99 mil de jul a out/2026; a Pecuária no Matriz mostrava R$ 1,65 mi em vez
+de R$ 2,07 mi). Corrigido em `carregarResultadoPecuaria()`: `despesa` e
+`despesaPorCategoria` só têm o lançado (`fixa`); o consumo fica em
+`consumoGerencial` (racao, pasto, reproducao), só informativo. Coberto por
+`teste_matriz_racao_nao_duplica.py`. Mesma classe de erro do insumo agrícola
+contado duas vezes: não reintroduzir.
+
+Pendente (decisão dele): o custo por animal e por lote do AE Pecuária
+(`custoVariavelDoMes` + custo fixo rateado) ainda soma o consumo da ração e o
+fixo que já tem a compra dela. Para custo por animal o certo é consumo e fixo
+**sem** a compra de ração.
 
 ### Financiamentos: só o juros vira despesa
 
@@ -375,9 +394,9 @@ custo já existe em Resultados > Relatórios.
   os custos "geral" chegam às atividades só pela metade, de R$ 38 mil a R$ 170
   mil por mês). Relatórios, Geral e Operacional leem a visão e herdam o buraco;
   a aba Empresa avisa a diferença do período. Diagnóstico:
-  `rateio_confere_soma_das_partes.sql`. Os totais também diferem de
-  Geral/Operacional porque estas usam o custo de cada app (ração e pasto
-  consumidos).
+  `rateio_confere_soma_das_partes.sql`. Os totais podem diferir de
+  Geral/Operacional por esse buraco do rateio (até 28/10/2026 também porque
+  estas somavam a ração e o pasto consumidos; hoje contam só a compra).
 - O bloco de cada linha vem do **grupo** do plano de contas
   (`blocoDfcDoGrupo`). Juros e despesas financeiras estão no grupo
   FINANCIAMENTOS, então "Resultado operacional" já sai antes dos juros. "Juros
@@ -863,7 +882,7 @@ Pedidos do mesmo dia:
 
 ## Testes
 
-35 arquivos `teste_*.py`, 933 checagens (27/10/2026; a tabela abaixo lista os
+36 arquivos `teste_*.py`, 941 checagens (28/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -874,6 +893,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 |---|---|---|
 | `teste_apps_lavoura.py` | 44 | AECana.html, AECereais.html |
 | `teste_matriz.py` | 32 | AEMatriz.html |
+| `teste_matriz_racao_nao_duplica.py` | 8 | AEMatriz.html (resultado da Pecuária conta a compra da ração, não o consumo: despesa = só o lançado, consumo fica em `consumoGerencial`, Resultados sem "Ração (Confinamento)") |
 | `teste_paginacao.py` | 2 | AEMatriz.html, AEpecuaria.html |
 | `teste_financiamentos.py` | 35 | AEMatriz.html |
 | `teste_venda.py` | 28 | AEMatriz.html |

@@ -931,7 +931,13 @@ async function carregarResultadoPecuaria(){
       const racao = (srRes.data||[]).filter(s=>s.data && s.data.startsWith(prefixo)).reduce((a,s)=>a+(custoKgPorDieta.get(s.dieta_id)||0)*Number(s.quantidade_kg||0), 0);
       const pasto = (ptRes.data||[]).filter(p=>p.data && p.data.startsWith(prefixo)).reduce((a,p)=>a+(custoKgPorDieta.get(p.dieta_id)||0)*Number(p.quantidade||0), 0);
       const reproducao = (rcRes.data||[]).filter(r=>r.data && r.data.startsWith(prefixo)).reduce((a,r)=>a+Number(r.custo||0), 0);
-      return {racao, pasto, reproducao, total: racao+pasto+reproducao};
+      // Ração, pasto e reprodução são CONSUMO (kg x preço da dieta): servem
+      // pro custo por animal e por lote, não pro resultado financeiro. O
+      // custo financeiro é a COMPRA do insumo, que já está nas despesas
+      // lançadas (centro Nutrição animal/Insumos pecuários, em "fixa").
+      // Somar o consumo por cima contava a ração duas vezes (R$ 99 mil de
+      // jul a out/2026). Decisão do Eduardo, 28/10/2026. Não reintroduzir.
+      return {racao, pasto, reproducao, total: 0};
     }
     // Despesa fixa e receita vêm do modelo único, a MESMA fonte do
     // Financeiro. Antes esta tela agrupava custos_fixos por conta própria,
@@ -958,7 +964,9 @@ async function carregarResultadoPecuaria(){
       const receita = receitasDoMes.reduce((a,r)=>a+Number(r.valor||0),0);
       return {
         mes: mesStr, despesa: variavel.total+fixa, receita, resultado: receita-(variavel.total+fixa),
-        despesaPorCategoria: {racao: variavel.racao, pasto: variavel.pasto, reproducao: variavel.reproducao, fixa},
+        despesaPorCategoria: {fixa},
+        // só informativo (custo por animal): NÃO entra em despesa nem em despesaPorCategoria
+        consumoGerencial: {racao: variavel.racao, pasto: variavel.pasto, reproducao: variavel.reproducao},
         receitas: receitasDoMes.map(r=>({data:r.data, descricao:r.descricao||'Receita', valor:Number(r.valor||0)})),
       };
     });
