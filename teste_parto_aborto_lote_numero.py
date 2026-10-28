@@ -333,5 +333,50 @@ with sync_playwright() as pw:
     conf(not page.erros, "nenhum erro de JavaScript", " | ".join(page.erros[:3]))
     browser.close()
 
+    # ================= NASCEU MORTO =================
+    print("\n  NASCEU MORTO (nascimento com obito no mesmo dia)")
+    browser, page = abrir(pw, banco())
+    tela_partos(page)
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('parto'); render(); }")
+    page.select_option('#f-lote', '6'); page.select_option('#f-tipoparto', 'natimorto'); page.wait_for_timeout(60)
+    conf(page.locator('#f-sexobezerro').count() == 1, "nasceu morto mantem sexo/raca do bezerro (opcional)")
+    page.fill('#f-numeromae', '721'); page.avisos.clear()
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    nm = page.evaluate("() => window.__DB__.partos[window.__DB__.partos.length-1]")
+    conf(nm["numero_mae"] == "721" and nm.get("tipo", "nascimento") == "nascimento" and "tipo" not in nm and nm["data_obito"] == nm["data"] and nm["causa_obito"] == "nasceu morto",
+         "grava nascimento com obito no dia do parto, causa 'nasceu morto', sem pedir sexo", str(nm) + str(page.avisos))
+    nid = nm["id"]
+    conf(page.evaluate(f"() => situacaoDoParto(state.partos.find(p=>p.id==={nid})).texto") == "Nasceu morto", "lista mostra 'Nasceu morto'")
+    conf(page.evaluate(f"() => !partosSemDesmama(6).some(p=>p.id==={nid})"), "nao aparece pra desmama")
+    t = page.evaluate("() => taxasDesmamePorLote().find(r=>r.lote.id===6)")
+    conf(t["nascidos"] == 4 and t["mortos"] == 1, "conta como nascido e como morto antes da desmama", str({k: t[k] for k in ("nascidos","mortos")}))
+    # editar: abre como 'Nasceu morto'; trocar a data leva o obito junto
+    page.locator(f'[data-edit-parto="{nid}"]').click()
+    conf(page.locator('#f-tipoparto').input_value() == "natimorto", "editar abre com 'Nasceu morto' marcado")
+    page.fill('#f-data', '2026-10-25'); page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    nm = parto_db(page, nid)
+    conf(nm["data"] == "2026-10-25" and nm["data_obito"] == "2026-10-25", "trocar a data do parto leva a data do obito junto", str(nm))
+    # voltar para 'Nasceu o bezerro' limpa o obito
+    page.locator(f'[data-edit-parto="{nid}"]').click()
+    page.select_option('#f-tipoparto', 'nascimento'); page.wait_for_timeout(60); page.select_option('#f-sexobezerro', 'macho')
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    nm = parto_db(page, nid)
+    conf(nm["data_obito"] is None and nm["causa_obito"] is None and nm["sexo_bezerro"] == "macho", "voltar para 'Nasceu o bezerro' tira o obito", str(nm))
+    # obito depois do nascimento nao vira 'nasceu morto' sem remover antes
+    page.evaluate("() => { const p = window.__DB__.partos.find(x=>x.id===198); p.data_obito='2026-10-22'; p.causa_obito='diarreia'; }")
+    page.evaluate("async () => { await recarregarReproducao(); render(); }")
+    page.locator('[data-edit-parto="198"]').click()
+    conf(page.locator('#f-tipoparto').input_value() == "nascimento", "parto com obito dias depois abre como 'Nasceu o bezerro'")
+    page.select_option('#f-tipoparto', 'natimorto'); page.wait_for_timeout(60); page.avisos.clear()
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(300)
+    conf(page.avisos and "Remova o óbito" in page.avisos[0] and parto_db(page, 198)["data_obito"] == "2026-10-22", "e nao vira 'nasceu morto' sem remover o obito antes", str(page.avisos))
+    # editar outro campo de um parto com obito posterior nao mexe no obito
+    page.select_option('#f-tipoparto', 'nascimento'); page.wait_for_timeout(60); page.select_option('#f-racabezerro', 'nelore')
+    page.locator('[data-save="parto"]').click(); page.wait_for_timeout(400)
+    p198 = parto_db(page, 198)
+    conf(p198["raca_bezerro"] == "nelore" and p198["data_obito"] == "2026-10-22" and p198["causa_obito"] == "diarreia", "editar a raca preserva o obito registrado", str(p198))
+    conf(not page.erros, "nenhum erro de JavaScript", " | ".join(page.erros[:3]))
+    browser.close()
+
 print(f"\n  {passes} passaram, {falhas} falharam")
 sys.exit(1 if falhas else 0)

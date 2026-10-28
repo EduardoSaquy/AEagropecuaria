@@ -678,6 +678,13 @@ Pedidos do mesmo dia:
   aconteceu" no Novo parto. Aborto não tem sexo/raça de bezerro, não conta em
   nascidos (coluna própria no resumo), não espera desmama e deixa a vaca como
   "Abortou" na situação reprodutiva. Parto com desmama ou óbito não vira aborto.
+- **Nasceu morto** (terceira opção em "O que aconteceu", pedido do Eduardo no
+  mesmo dia; o Joilson escrevia "pariu morto" no número): grava nascimento com
+  óbito no dia do parto e causa "nasceu morto" (`CAUSA_NATIMORTO`,
+  `partoEhNatimorto`), num lançamento só; sexo do bezerro opcional. Trocar a
+  data leva o óbito junto; voltar para "Nasceu o bezerro" tira o óbito. Parto
+  com óbito dias depois do nascimento abre como "Nasceu o bezerro" e não vira
+  "nasceu morto" sem remover o óbito antes.
 - **Óbito do bezerro antes da desmama**: `partos.data_obito`/`causa_obito`,
   botão "Registrar óbito" na lista de partos (some depois da desmama;
   "Remover óbito" desfaz). Continua contando como nascido, sai da desmama, e a
@@ -695,7 +702,15 @@ Pedidos do mesmo dia:
   e "Alice 1" a "Alice 4"; em `partos.numero_mae` os mesmos 19/37/351, "37 Es",
   "721 " (com espaço) e "368/370 pariu morto" (bezerro que nasceu morto: no
   modelo novo é nascimento com óbito no mesmo dia); em `pesagens_animais`
-  "512 2S" e "Alice 1" a "Alice 4". Limpeza ainda por fazer.
+  "512 2S" e "Alice 1" a "Alice 4". Limpeza:
+  `pecuaria_limpa_numeros_com_texto.sql` (decisão do Eduardo: o número fica só
+  com algarismos e Alice, 2S, ES e a observação da 351 vão para o Nome; o parto
+  197 vira aborto da 721 e o cadastro duplicado "721 abortou" sai; 368/370
+  "pariu morto" viram nasceu morto). Só troca um número se não existir outro
+  animal do mesmo sexo com ele: "512 2S" fica PENDENTE (já existe o 512 macho
+  do Curral 2), assim como qualquer "Alice N" cujo N já for de outro animal.
+  Ensaiado no Postgres 16 descartável com os mesmos casos: repetível, numa
+  transação só, e recusa rodar antes do SQL das colunas.
 
 ## Armadilhas que já custaram caro
 
@@ -799,7 +814,7 @@ Pedidos do mesmo dia:
 
 ## Testes
 
-35 arquivos `teste_*.py`, 910 checagens (27/10/2026; a tabela abaixo lista os
+35 arquivos `teste_*.py`, 922 checagens (27/10/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -834,7 +849,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_pecuaria.py` | 18 | AEpecuaria.html (consulta que falha ou ainda carregando: aviso na tela, lançamento explica em vez de culpar o lote, login vencido renova e recarrega, sem rede a fila offline continua; histórico pesado parado não trava o lançamento; lotes sem resposta em 25 s viram aviso) |
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
-| `teste_parto_aborto_lote_numero.py` | 66 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro) |
+| `teste_parto_aborto_lote_numero.py` | 78 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

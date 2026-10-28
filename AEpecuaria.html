@@ -425,13 +425,22 @@ function diagnosticoToRow(d){ return {data:d.data, lote_id:d.loteId, numero_vaca
 // grava sem mandar "tipo" (o app novo funciona antes do SQL); só aborto
 // precisa da coluna.
 function rowToParto(r){ return {id:r.id, data:r.data, loteId:r.lote_id, numeroMae:r.numero_mae, sexoBezerro:r.sexo_bezerro, racaBezerro:r.raca_bezerro, criadoPor:r.criado_por||'', tipo:r.tipo||'nascimento', dataObito:r.data_obito||null, causaObito:r.causa_obito||'', _temTipo:('tipo' in r)}; }
+// ocorrencia (só na tela): 'nascimento' | 'natimorto' | 'aborto'. Nasceu
+// morto (27/10/2026, o Joilson escrevia "pariu morto" no número) é
+// nascimento com óbito no mesmo dia, causa "nasceu morto": conta como
+// nascido e como morto antes da desmama, num lançamento só.
+const CAUSA_NATIMORTO = 'nasceu morto';
 function partoToRow(p){
   const aborto = p.tipo==='aborto';
   const row = {data:p.data, lote_id:p.loteId, numero_mae:p.numeroMae, sexo_bezerro: aborto ? null : (p.sexoBezerro||null), raca_bezerro: aborto ? null : (p.racaBezerro||null)};
   if(aborto || p._temTipo) row.tipo = aborto ? 'aborto' : 'nascimento';
+  if(p.ocorrencia==='natimorto'){ row.data_obito = p.data; row.causa_obito = CAUSA_NATIMORTO; }
+  else if(p._eraNatimorto || (aborto && p._temTipo)){ row.data_obito = null; row.causa_obito = null; }
   return row;
 }
 const partoEhAborto = p => p.tipo==='aborto';
+const partoEhNatimorto = p => !partoEhAborto(p) && !!p.dataObito && p.dataObito===p.data && String(p.causaObito||'').trim().toLowerCase()===CAUSA_NATIMORTO;
+const ocorrenciaDoParto = p => partoEhAborto(p) ? 'aborto' : partoEhNatimorto(p) ? 'natimorto' : 'nascimento';
 // Bezerro que nasceu e ainda pode ser desmamado: nem aborto, nem morto.
 const partoComBezerroVivo = p => !partoEhAborto(p) && !p.dataObito;
 function rowToDesmama(r){ return {id:r.id, partoId:r.parto_id, data:r.data, raca:r.raca||'', pesoKg:r.peso_kg, criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
@@ -2948,7 +2957,7 @@ function situacaoReprodutivaVaca(loteId, numero){
     } else if(partoDoCiclo){
       status = 'pariu';
       detalheStatus = `Prenha — pariu ${SEXO_BEZERRO_LABEL[partoDoCiclo.sexoBezerro]||''} em ${partoDoCiclo.data.split('-').reverse().join('/')}`
-        + (partoDoCiclo.dataObito ? ` (bezerro morreu em ${partoDoCiclo.dataObito.split('-').reverse().join('/')})` : '');
+        + (partoEhNatimorto(partoDoCiclo) ? ' (nasceu morto)' : partoDoCiclo.dataObito ? ` (bezerro morreu em ${partoDoCiclo.dataObito.split('-').reverse().join('/')})` : '');
     } else {
       status = 'prenha';
       detalheStatus = `Prenha${ultimoDiagnostico.previsaoParto ? ' — previsão de parto ' + ultimoDiagnostico.previsaoParto.split('-').reverse().join('/') : ''}`;
@@ -6317,7 +6326,9 @@ function ModalParto(){
   const racaMaeAtual = d.racaMae!==undefined ? d.racaMae : racaConhecida(d.numeroMae, 'femea');
   const maeJaCadastrada = !!animalCadastrado(d.numeroMae, 'femea');
   const nomeMae = nomeDoAnimal(d.numeroMae, 'femea');
-  const aborto = d.tipo==='aborto';
+  const ocorrencia = d.ocorrencia || ocorrenciaDoParto(d);
+  const aborto = ocorrencia==='aborto';
+  const natimorto = ocorrencia==='natimorto';
   // O lote do parto sendo editado aparece mesmo se deixou de ser elegível
   // (senão o campo abria em branco e obrigava a trocar o lote).
   const lotesParto = state.lotes.filter(l=>loteElegivelParaParto(l) || (d._editId && l.id==d.loteId));
@@ -6337,7 +6348,8 @@ function ModalParto(){
         </div>
         <div class="field"><label>O que aconteceu</label>
           <select id="f-tipoparto">
-            <option value="nascimento" ${!aborto?'selected':''}>Nasceu o bezerro</option>
+            <option value="nascimento" ${ocorrencia==='nascimento'?'selected':''}>Nasceu o bezerro</option>
+            <option value="natimorto" ${natimorto?'selected':''}>Nasceu morto</option>
             <option value="aborto" ${aborto?'selected':''}>Aborto</option>
           </select>
         </div>
@@ -6355,7 +6367,7 @@ function ModalParto(){
         </div>
         ${aborto ? `<p class="hint">Aborto não conta como bezerro nascido e não aparece pra desmama. Se a vaca tinha diagnóstico de prenha, ela passa a aparecer como "Abortou".</p>` : `
         <div class="field-row">
-          <div class="field"><label>Sexo do bezerro</label>
+          <div class="field"><label>Sexo do bezerro${natimorto?' (se souber)':''}</label>
             <select id="f-sexobezerro">
               <option value="" ${!d.sexoBezerro?'selected':''}>— Selecione —</option>
               <option value="macho" ${d.sexoBezerro==='macho'?'selected':''}>Macho</option>
@@ -6371,7 +6383,7 @@ function ModalParto(){
             </select>
           </div>
         </div>
-        <p class="hint">Bezerro que morreu antes da desmama: salve o parto e use "Registrar óbito" na lista de partos.</p>`}
+        <p class="hint">${natimorto ? 'Conta como bezerro nascido e morto antes da desmama (óbito no dia do parto, causa "nasceu morto"). Não aparece pra desmama.' : 'Bezerro que morreu depois de nascer, antes da desmama: salve o parto e use "Registrar óbito" na lista de partos.'}</p>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -6419,6 +6431,7 @@ function desmamaDoParto(parto){ return state.desmamas.find(d=>d.partoId===parto.
 // Texto curto do que aconteceu com aquele parto, pras listas.
 function situacaoDoParto(p){
   if(partoEhAborto(p)) return {texto:'Aborto', classe:'pill-cat'};
+  if(partoEhNatimorto(p)) return {texto:'Nasceu morto', classe:'pill-cat'};
   if(p.dataObito) return {texto:`Bezerro morreu em ${p.dataObito.split('-').reverse().join('/')}`, classe:'pill-cat'};
   const ds = desmamaDoParto(p);
   if(ds) return {texto:`Desmamado em ${ds.data.split('-').reverse().join('/')}`, classe:'pill-ok'};
@@ -7643,7 +7656,8 @@ function attachEvents(){
     function capturarParto(){
       editDraft.loteId = document.getElementById('f-lote').value;
       editDraft.data = document.getElementById('f-data').value;
-      editDraft.tipo = document.getElementById('f-tipoparto')?.value || 'nascimento';
+      editDraft.ocorrencia = document.getElementById('f-tipoparto')?.value || 'nascimento';
+      editDraft.tipo = editDraft.ocorrencia==='aborto' ? 'aborto' : 'nascimento';
       editDraft.numeroMae = document.getElementById('f-numeromae').value;
       editDraft.racaMae = document.getElementById('f-racamae').value;
       const sexoEl = document.getElementById('f-sexobezerro');
@@ -8745,20 +8759,25 @@ function attachEvents(){
         const dataPartoVal = document.getElementById('f-data').value;
         const numeroMaeVal = document.getElementById('f-numeromae').value;
         const racaMaeVal = document.getElementById('f-racamae').value;
-        const tipoPartoVal = document.getElementById('f-tipoparto')?.value || 'nascimento';
-        const aborto = tipoPartoVal==='aborto';
+        const ocorrenciaVal = document.getElementById('f-tipoparto')?.value || 'nascimento';
+        const aborto = ocorrenciaVal==='aborto';
+        const natimorto = ocorrenciaVal==='natimorto';
+        const tipoPartoVal = aborto ? 'aborto' : 'nascimento';
         const sexoBezerroVal = aborto ? '' : (document.getElementById('f-sexobezerro')?.value || '');
         const partoOriginal = editDraft._editId ? state.partos.find(p=>p.id===editDraft._editId) : null;
+        const eraNatimorto = !!partoOriginal && partoEhNatimorto(partoOriginal);
         if(!exigirLote(Number(document.getElementById('f-lote').value))) return;
         if(!validarObrigatorios([[dataPartoVal,'Data'],[numeroMaeVal,'Número da mãe']])) return;
-        if(!aborto && !sexoBezerroVal){ alert('Informe o sexo do bezerro.'); return; }
+        if(ocorrenciaVal==='nascimento' && !sexoBezerroVal){ alert('Informe o sexo do bezerro.'); return; }
+        if(natimorto && dataPartoVal > hojeStr()){ alert('A data do parto não pode ser no futuro.'); return; }
         const erroNumeroMae = erroNumeroAnimal(numeroMaeVal, partoOriginal?.numeroMae);
         if(erroNumeroMae){ alert(erroNumeroMae); return; }
-        if(aborto && partoOriginal){
-          // Virar aborto um parto que já tem desmama ou óbito deixaria o
-          // bezerro "desmamado" ou "morto" sem ter nascido.
-          if(desmamaDoParto(partoOriginal)){ alert('Este parto já tem desmama lançada. Exclua a desmama antes de marcar como aborto.'); return; }
-          if(partoOriginal.dataObito){ alert('Este parto tem óbito do bezerro registrado. Remova o óbito antes de marcar como aborto.'); return; }
+        if((aborto || natimorto) && partoOriginal){
+          // Virar aborto ou nasceu morto um parto que já tem desmama, ou que
+          // tem óbito depois do nascimento, contradiz o que já foi lançado.
+          const oque = aborto ? 'aborto' : 'nasceu morto';
+          if(desmamaDoParto(partoOriginal)){ alert(`Este parto já tem desmama lançada. Exclua a desmama antes de marcar como ${oque}.`); return; }
+          if(partoOriginal.dataObito && !eraNatimorto){ alert(`Este parto tem óbito do bezerro registrado depois do nascimento. Remova o óbito antes de marcar como ${oque}.`); return; }
         }
         // Número antigo com texto, sem mexer: salva o resto e não cria nem
         // move cadastro de animal com esse número.
@@ -8769,13 +8788,15 @@ function attachEvents(){
           loteId: Number(document.getElementById('f-lote').value),
           data: dataPartoVal,
           tipo: tipoPartoVal,
+          ocorrencia: ocorrenciaVal,
+          _eraNatimorto: eraNatimorto,
           numeroMae: numeroMaeVal,
           racaMae: racaMaeVal,
           sexoBezerro: sexoBezerroVal,
           racaBezerro: aborto ? '' : (document.getElementById('f-racabezerro')?.value || ''),
           _temTipo: !!partoOriginal?._temTipo,
         };
-        if(partoOriginal && partoOriginal.dataObito && campos.data > partoOriginal.dataObito){ alert('A data do parto não pode ficar depois da data do óbito do bezerro.'); return; }
+        if(partoOriginal && partoOriginal.dataObito && !eraNatimorto && ocorrenciaVal==='nascimento' && campos.data > partoOriginal.dataObito){ alert('A data do parto não pode ficar depois da data do óbito do bezerro.'); return; }
         if(editDraft._editId){
           ({error} = await atualizarUmaLinha('partos', partoToRow(campos), editDraft._editId));
           // Mesmo gancho da inseminação/diagnóstico (upsertAnimal best-effort)
