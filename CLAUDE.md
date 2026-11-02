@@ -877,10 +877,23 @@ passaram antes e depois. Corrigido:
   à esquerda; mensagem errada na venda editada sem centro "Vendas" (dizia que
   a venda não mudou, mas o abate já tinha sido gravado).
 
-Ficou anotado, sem mexer: a fila offline do Pecuária reenvia o lançamento se
-a rede cair depois de o banco gravar e antes da resposta chegar (pode
-duplicar). Resolver pede uma chave do aparelho no banco (como o
-`client_uuid` do Combustível): coluna nova em cada tabela da fila.
+### Pecuária: fila offline sem duplicar (client_uuid)
+
+Pedido do Eduardo em 02/11/2026 (achado da revisão). Com sinal fraco, o banco
+gravava o lançamento e a resposta se perdia: o app guardava na fila e
+reenviava, e o lançamento (e a baixa de estoque) ficava em dobro. Agora
+`salvarOuEnfileirar` cria uma chave no 1º envio (`campos._chave`, viaja na
+fila) e `inserirUmaVez()` grava em `client_uuid`; o banco recusa chave
+repetida (índice único parcial, `pecuaria_fila_offline_sem_duplicar.sql`,
+10 tabelas: saidas_racao, leituras_cocho, pasto, producoes_racao, abates,
+reproducao_custos, diagnosticos_gestacionais, partos, desmamas, pesagens) e
+o app pega a linha que já existe e **só completa o que faltou**: baixa de
+estoque (`movimentos` pela FK), receita da venda (`abate_id`), pesos por
+animal (`pesagem_id`). O desfazer de cada tipo também apaga a parte que pode
+ter entrado com a resposta perdida (baixa órfã). Antes do SQL (coluna não
+existe) grava como antes (`tabelasSemChave`). Venda: com a receita já
+gravada, conta como terminada (a baixa do lote vem logo depois; se só ela
+faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Armadilhas que já custaram caro
 
@@ -1025,6 +1038,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_matriz_reproducao_operacional.py` | 15 | AEMatriz.html (Resultados > Operacional > Reprodução (Cria): custo por bezerro desmamado = inseminação + ração/pasto dos lotes de Cria + fatia do fixo sem a compra de ração; taxa de prenhez; desmamados machos/fêmeas; sem rolar de lado) |
 | `teste_qual_animal.py` | 25 | AEpecuaria.html ("Qual animal é?": 11 x 11099 · ES pergunta antes de gravar inseminação/diagnóstico/parto; 57 = 057 não pergunta e usa o cadastro; o campo tira zero à esquerda; sem parecido ou editando sem mexer no número não pergunta; Voltar não grava; regra das 3 IATF: crias, IA desde o último parto, 1ª/2ª/3ª automática, aviso na 4ª que não bloqueia) |
 | `teste_lavoura_texto_escapado.py` | 8 | AECana.html, AECereais.html (nome com aspas, `<` e `&`: aparece inteiro na lista, não vira HTML e volta inteiro no campo de edição) |
+| `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
