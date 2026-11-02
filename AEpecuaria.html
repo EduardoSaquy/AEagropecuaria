@@ -1470,10 +1470,59 @@ function autorAtual(){ return state.perfil?.nome || state.perfil?.usuario || nul
 // insumo cru foi a Produção de Ração, antes). Desfaz a linha se o desconto
 // falhar -- sem isso, um reenfileiramento por falha de rede duplicaria o
 // lançamento inteiro no retry.
-async function inserirSaidaComDesconto(tabela, fkCol, row, campos){
+// FILA OFFLINE SEM DUPLICAR (Eduardo, 02/11/2026). Com sinal fraco, o banco
+// pode gravar o lançamento e a resposta se perder no caminho: o app achava
+// que falhou, guardava na fila e reenviava -- lançamento em dobro (e estoque
+// baixado duas vezes). Agora cada lançamento leva uma chave gerada no
+// aparelho no primeiro envio (campos._chave, viaja junto na fila) e gravada
+// em client_uuid, que o banco não aceita repetida
+// (pecuaria_fila_offline_sem_duplicar.sql). Reenvio de algo que já entrou
+// volta "chave repetida": o app pega a linha que já existe e só completa o
+// que faltou (baixa de estoque, receita da venda, peso por animal). Antes do
+// SQL (coluna não existe), grava sem a chave, como era antes.
+const tabelasSemChave = new Set();
+function novaChaveLancamento(){
+  if(typeof crypto!=='undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+    const r = Math.random()*16|0; return (c==='x' ? r : (r&0x3|0x8)).toString(16);
+  });
+}
+function textoDoErro(err){ return String(err?.message||'') + ' ' + String(err?.details||'') + ' ' + String(err?.hint||''); }
+function erroChaveRepetida(err){ return !!err && err.code==='23505' && /client_uuid/.test(textoDoErro(err)); }
+function erroColunaChaveFalta(err){ return !!err && err.code!=='23505' && /client_uuid/.test(textoDoErro(err)) && /schema cache|does not exist|column/i.test(textoDoErro(err)); }
+// Insere uma linha uma vez só. {data, novo:true} = gravou agora;
+// {data, novo:false} = já tinha entrado num envio anterior (resposta perdida).
+async function inserirUmaVez(tabela, row, chave){
+  if(chave && !tabelasSemChave.has(tabela)){
+    const res = await db.from(tabela).insert({...row, client_uuid: chave}).select().single();
+    if(!res.error) return {data: res.data, novo: true, error: null};
+    if(erroChaveRepetida(res.error)){
+      const ja = await db.from(tabela).select('*').eq('client_uuid', chave).limit(1);
+      if(ja.error) return {error: ja.error};
+      if(ja.data && ja.data[0]) return {data: ja.data[0], novo: false, error: null};
+      return {error: res.error};
+    }
+    if(!erroColunaChaveFalta(res.error)) return {error: res.error};
+    tabelasSemChave.add(tabela);   // SQL ainda não rodou: grava como antes
+  }
   const res = await db.from(tabela).insert(row).select().single();
+  return res.error ? {error: res.error} : {data: res.data, novo: true, error: null};
+}
+async function jaExisteLinha(tabela, coluna, valor){
+  const r = await db.from(tabela).select('id').eq(coluna, valor).limit(1);
+  if(r.error) return {error: r.error};
+  return {existe: !!(r.data && r.data.length), error: null};
+}
+async function inserirSaidaComDesconto(tabela, fkCol, row, campos){
+  const res = await inserirUmaVez(tabela, row, campos._chave);
   if(res.error) return {error:res.error};
   const novoId = res.data.id;
+  if(!res.novo){
+    // a saída já tinha entrado: só falta a baixa do estoque se ela não entrou
+    const ja = await jaExisteLinha('movimentos', fkCol, novoId);
+    if(ja.error) return {error: ja.error};
+    if(ja.existe) return {error:null};
+  }
   const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
   if(dieta && dieta.consumoDireto){
     const quantidadeBase = campos.quantidadeKg!==undefined ? campos.quantidadeKg : campos.quantidade;
@@ -1485,6 +1534,9 @@ async function inserirSaidaComDesconto(tabela, fkCol, row, campos){
     if(movs.length){
       const {error} = await db.from('movimentos').insert(movs);
       if(error){
+        // a baixa pode ter entrado e só a resposta se perdido: apaga as duas
+        // partes, senão o reenvio baixava o estoque de novo
+        await db.from('movimentos').delete().eq(fkCol, novoId);
         await db.from(tabela).delete().eq('id', novoId);
         return {error};
       }
@@ -1498,7 +1550,7 @@ async function executarInsertLancamento(type, campos){
     return await inserirSaidaComDesconto('saidas_racao', 'saida_racao_id', row, campos);
   }
   if(type==='cocho'){
-    const {error} = await db.from('leituras_cocho').insert({...leituraCochoToRow(campos), criado_por:autorAtual()});
+    const {error} = await inserirUmaVez('leituras_cocho', {...leituraCochoToRow(campos), criado_por:autorAtual()}, campos._chave);
     return {error};
   }
   if(type==='pasto'){
@@ -1508,9 +1560,14 @@ async function executarInsertLancamento(type, campos){
   if(type==='producaoRacao'){
     const dieta = campos._dietaSnapshot || state.dietas.find(x=>x.id===campos.dietaId);
     const row = {data:campos.data, dieta_id:campos.dietaId, quantidade_kg:campos.quantidadeKg, criado_por:autorAtual()};
-    const res = await db.from('producoes_racao').insert(row).select().single();
+    const res = await inserirUmaVez('producoes_racao', row, campos._chave);
     if(res.error) return {error:res.error};
     const producaoId = res.data.id;
+    if(!res.novo){
+      const ja = await jaExisteLinha('movimentos', 'producao_racao_id', producaoId);
+      if(ja.error) return {error: ja.error};
+      if(ja.existe) return {error:null};
+    }
     if(dieta){
       const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
         const ing = getIng(it.ingredienteId);
@@ -1523,6 +1580,7 @@ async function executarInsertLancamento(type, campos){
           // Mesma lógica da Saída de Ração acima: sem o desconto de estoque,
           // não faz sentido deixar a produção salva sozinha, e desfazer evita
           // que um reenfileiramento duplique a produção no retry.
+          await db.from('movimentos').delete().eq('producao_racao_id', producaoId);
           await db.from('producoes_racao').delete().eq('id', producaoId);
           return {error};
         }
@@ -1533,9 +1591,16 @@ async function executarInsertLancamento(type, campos){
   if(type==='venda'){
     const lote = state.lotes.find(l=>l.id===campos.loteId);
     const row = {...vendaToRow(campos), criado_por:autorAtual()};
-    const res = await db.from('abates').insert(row).select().single();
+    const res = await inserirUmaVez('abates', row, campos._chave);
     if(res.error) return {error:res.error};
     const vendaId = res.data.id;
+    if(!res.novo){
+      // a venda já tinha entrado; com a receita junto, ela terminou (a
+      // receita é gravada antes de baixar o lote)
+      const ja = await jaExisteLinha('lancamentos_financeiros', 'abate_id', vendaId);
+      if(ja.error) return {error: ja.error};
+      if(ja.existe) return {error:null};
+    }
     const arrobas = campos.tipoVenda==='arroba' ? arrobasVenda(campos) : null;
     const valorTotal = valorVenda(campos);
     const descricao = `${TIPO_VENDA_LABEL[campos.tipoVenda]||'Venda'} — ${lote?lote.nome:'Lote'} (${fmtInt(campos.quantidade)} animais)`;
@@ -1574,7 +1639,7 @@ async function executarInsertLancamento(type, campos){
     return {error:null};
   }
   if(type==='reproducaoCusto'){
-    const {error} = await db.from('reproducao_custos').insert({...reproducaoCustoToRow(campos), criado_por:autorAtual()});
+    const {error} = await inserirUmaVez('reproducao_custos', {...reproducaoCustoToRow(campos), criado_por:autorAtual()}, campos._chave);
     if(error) return {error};
     // A vaca inseminada entra (ou é movida) na composição do lote -- é
     // sempre fêmea. Best-effort (não bloqueia nem contamina o erro
@@ -1586,32 +1651,39 @@ async function executarInsertLancamento(type, campos){
     return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='diagnosticoGestacional'){
-    const {error} = await db.from('diagnosticos_gestacionais').insert({...diagnosticoToRow(campos), criado_por:autorAtual()});
+    const {error} = await inserirUmaVez('diagnosticos_gestacionais', {...diagnosticoToRow(campos), criado_por:autorAtual()}, campos._chave);
     if(error) return {error};
     const resAnimal = await upsertAnimal(campos.numeroVaca, campos.loteId, {sexo:'femea', raca:campos.racaVaca||undefined});
     return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='parto'){
-    const {error} = await db.from('partos').insert({...partoToRow(campos), criado_por:autorAtual()});
+    const {error} = await inserirUmaVez('partos', {...partoToRow(campos), criado_por:autorAtual()}, campos._chave);
     if(error) return {error};
     const resAnimal = await upsertAnimal(campos.numeroMae, campos.loteId, {sexo:'femea', raca:campos.racaMae||undefined});
     return {error:null, avisoAnimal: resAnimal.error ? resAnimal.error.message : null};
   }
   if(type==='desmama'){
-    const {error} = await db.from('desmamas').insert({...desmamaToRow(campos), criado_por:autorAtual()});
+    const {error} = await inserirUmaVez('desmamas', {...desmamaToRow(campos), criado_por:autorAtual()}, campos._chave);
     return {error};
   }
   if(type==='pesagem'){
-    const res = await db.from('pesagens').insert(pesagemToRow(campos)).select().single();
+    const res = await inserirUmaVez('pesagens', pesagemToRow(campos), campos._chave);
     if(res.error) return {error: res.error};
     const entradas = campos.entradasPesagem||[];
-    if(entradas.length>0){
+    let pesosJaEntraram = false;
+    if(!res.novo){
+      const ja = await jaExisteLinha('pesagens_animais', 'pesagem_id', res.data.id);
+      if(ja.error) return {error: ja.error};
+      pesosJaEntraram = ja.existe;
+    }
+    if(entradas.length>0 && !pesosJaEntraram){
       const linhasAnimais = entradas.map(en=>({pesagem_id: res.data.id, numero_animal: en.numero || null, peso_kg: Number(en.pesoKg)}));
       const resAnimais = await db.from('pesagens_animais').insert(linhasAnimais);
       if(resAnimais.error){
         // Sem o detalhe por animal a pesagem fica incompleta (é a parte que
         // forma a própria média) -- desfaz a linha já criada em vez de
         // deixar "pela metade", senão salvar de novo depois duplicaria.
+        await db.from('pesagens_animais').delete().eq('pesagem_id', res.data.id);
         await db.from('pesagens').delete().eq('id', res.data.id);
         return {error: resAnimais.error};
       }
@@ -1667,6 +1739,9 @@ async function recarregarReproducao(){
   if(!rc.error) state.reproducao = (rc.data||[]).map(rowToReproducaoCusto);
 }
 async function salvarOuEnfileirar(type, campos){
+  // A chave nasce aqui, antes do 1º envio, e viaja com o lançamento se ele
+  // for para a fila: o reenvio usa a MESMA chave (ver inserirUmaVez).
+  if(!campos._chave) campos = {...campos, _chave: novaChaveLancamento()};
   // Saída de Ração e Produção descontam estoque na proporção da composição
   // da dieta NA HORA do lançamento. Se isso acabar indo pra fila offline e
   // só sincronizar depois, precisa usar essa composição de agora — não a
