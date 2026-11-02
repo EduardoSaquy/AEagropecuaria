@@ -317,8 +317,11 @@ begin
   if v_qtd <> 1 then raise exception 'Lote "Vacas 09/10": achei % (%). Confira o nome.', v_qtd, coalesce(v_nomes,'nenhum'); end if;
 
   select count(*), min(id), string_agg(nome, ' / ') into v_qtd, v_lote_vsa, v_nomes
-    from lotes where lower(trim(nome)) ~ '^vacas? vazias? santa alice$';
-  if v_qtd <> 1 then raise exception 'Lote "Vacas Vazia Santa Alice": achei % (%). Confira o nome.', v_qtd, coalesce(v_nomes,'nenhum'); end if;
+    from lotes where lower(nome) like '%vazi%' and lower(nome) like '%alice%';
+  if v_qtd <> 1 then
+    select string_agg(nome, ' / ') into v_nomes from lotes where lower(nome) like '%vaz%' or lower(nome) like '%alice%' or lower(nome) like '%solt%';
+    raise exception 'Lote "Vacas Vazia Santa Alice": achei % com vazi+alice. Lotes parecidos: %', v_qtd, coalesce(v_nomes,'nenhum');
+  end if;
 
   select count(*), min(id), string_agg(nome, ' / ') into v_qtd, v_lote_nov, v_nomes
     from lotes where lower(trim(nome)) like 'novilhas eradas%';
