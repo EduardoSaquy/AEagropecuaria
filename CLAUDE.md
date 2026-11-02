@@ -894,6 +894,7 @@ ter entrado com a resposta perdida (baixa órfã). Antes do SQL (coluna não
 existe) grava como antes (`tabelasSemChave`). Venda: com a receita já
 gravada, conta como terminada (a baixa do lote vem logo depois; se só ela
 faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
+**SQL rodado pelo Eduardo em 02/11/2026**: as 10 tabelas com coluna e índice.
 
 ## Armadilhas que já custaram caro
 
