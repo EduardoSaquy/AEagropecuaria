@@ -32,11 +32,19 @@ DB = {
         animal(id=2, numero="11099", nome="ES", lote_id=7),
         animal(id=3, numero="057"),
         animal(id=4, numero="200"),
+        animal(id=6, numero="300"),
         animal(id=5, numero="11", sexo="macho", lote_id=8),   # macho 11: nao e opcao numa vaca
     ],
-    "partos": [], "desmamas": [], "diagnosticos_gestacionais": [],
+    "partos": [
+        {"id": 1, "data": "2025-08-01", "lote_id": 6, "numero_mae": "300", "sexo_bezerro": "macho", "tipo": "nascimento"},
+        {"id": 2, "data": "2026-07-01", "lote_id": 6, "numero_mae": "300", "sexo_bezerro": "femea", "tipo": "nascimento"},
+    ],
+    "desmamas": [], "diagnosticos_gestacionais": [],
     "reproducao_custos": [{"id": 900, "data": "2026-10-19", "lote_id": 6, "numero_vaca": "11", "raca_touro": "nelore",
-                           "qual_inseminacao": "1", "custo": 46.30, "criado_por": "x", "manejo_id": None, "item": None}],
+                           "qual_inseminacao": "1", "custo": 46.30, "criado_por": "x", "manejo_id": None, "item": None}]
+        + [{"id": 900+i, "data": d, "lote_id": 6, "numero_vaca": "300", "raca_touro": "nelore", "qual_inseminacao": q,
+            "custo": 46.30, "criado_por": "x", "manejo_id": None, "item": None}
+           for i, (d, q) in enumerate([("2026-06-01", "1"), ("2026-08-01", "1"), ("2026-09-01", "2"), ("2026-10-01", "3")], start=1)],
     "fazendas": [], "fazenda_atividades": [], "centros_custo": [], "lancamentos_financeiros": [],
     "pesagens": [], "manejos": [], "movimentos": [], "saidas_racao": [], "leituras_cocho": [], "pasto": [],
     "producoes_racao": [], "abates": [], "precos_arroba": [], "config_financeiro": [],
@@ -64,14 +72,15 @@ def nova_insem(page, numero):
     page.fill('#f-custoreproducao', '46.30')
 
 def insems(page):
-    return page.evaluate("() => window.__DB__.reproducao_custos.filter(r=>r.id!==900).map(r=>r.numero_vaca)")
+    return page.evaluate("() => window.__DB__.reproducao_custos.filter(r=>r.id<900 || r.id>904).map(r=>r.numero_vaca)")
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
     page = browser.new_page(viewport={"width": 1280, "height": 900})
     erros = []; avisos = []
     page.on("pageerror", lambda e: erros.append(str(e)) if "ServiceWorker" not in str(e) else None)
-    page.on("dialog", lambda d: (avisos.append(d.message), d.accept()))
+    page.recusar = False
+    page.on("dialog", lambda d: (avisos.append(d.message), d.dismiss() if (d.type == "confirm" and page.recusar) else d.accept()))
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.add_init_script(STUB)
     page.add_init_script(f"window.__DB__ = {json.dumps(dict(DB, profiles=[ADMIN]))};"
@@ -100,15 +109,18 @@ with sync_playwright() as pw:
          "Voltar e corrigir: fecha a pergunta e nao grava", str(insems(page)))
     conf(page.locator('#f-numvaca').count() == 1, "a janela da inseminacao continua aberta para corrigir")
 
-    # 57: nao existe, mas existe 057 -> pergunta (057 ou animal novo 57)
+    # 57 = 057 (zero a esquerda nao conta): NAO pergunta, grava na 057 do cadastro
     nova_insem(page, "57")
-    page.locator('[data-save="reproducaoCusto"]').click(); page.wait_for_timeout(300)
-    opcoes = page.locator('[data-escolha-numero]').evaluate_all("els => els.map(e=>e.dataset.escolhaNumero)")
-    conf(sorted(opcoes) == ["057", "57"] and page.locator('[data-escolha-novo]').count() == 1,
-         "57: pergunta se e a 057 ou um animal novo 57", str(opcoes))
-    page.locator('[data-escolha-numero="057"]').click(); page.wait_for_timeout(500)
-    conf(insems(page)[-1] == "057", "escolheu a 057: grava na 057, sem criar a 57", str(insems(page)))
+    page.locator('[data-save="reproducaoCusto"]').click(); page.wait_for_timeout(500)
+    conf(page.locator('[data-escolher-animal]').count() == 0, "57 com a 057 cadastrada: nao pergunta (zero a esquerda nao conta)")
+    conf(insems(page)[-1] == "057", "grava na 057 do cadastro, sem criar a 57", str(insems(page)))
     conf(page.evaluate("() => !state.animais.some(a=>a.numero==='57')"), "nao cadastrou uma vaca 57")
+
+    # digitar 057 vira 57 no campo
+    page.evaluate("() => { state.modal=null; editDraft=null; openNewModal('reproducaoCusto'); render(); }")
+    page.wait_for_timeout(100)
+    page.locator('#f-numvaca').type("0057")
+    conf(page.locator('#f-numvaca').input_value() == "57", "digitar 0057 vira 57 no campo", page.locator('#f-numvaca').input_value())
 
     # 200: sem parecido -> nao pergunta
     nova_insem(page, "200")
@@ -133,6 +145,34 @@ with sync_playwright() as pw:
         page.locator(f'[data-save="{tipo}"]').click(); page.wait_for_timeout(300)
         conf(page.locator('[data-escolher-animal]').count() == 1, f"{tipo}: o numero 11 tambem pergunta qual animal e")
         page.locator('[data-escolha-voltar]').click(); page.wait_for_timeout(150)
+
+    # ===== regra das 3 IATF (contagem zera no parto) =====
+    c = page.evaluate("() => cicloReprodutivoVaca('300', '2026-10-19')")
+    conf(c["crias"] == 2 and c["ultimoParto"]["data"] == "2026-07-01" and len(c["inseminacoesDesdeParto"]) == 3 and c["proxima"] == 4,
+         "vaca 300: 2 crias, ultimo parto 01/07/2026, 3 IA depois dele (a de junho, antes do parto, nao conta) -> proxima e a 4a", str(c))
+    c2 = page.evaluate("() => cicloReprodutivoVaca('300', '2026-08-15')")
+    conf(c2["proxima"] == 2, "na data de 15/08/2026 a proxima seria a 2a", str(c2["proxima"]))
+    c3 = page.evaluate("() => cicloReprodutivoVaca('11', '2026-10-25')")
+    conf(c3["crias"] == 0 and c3["ultimoParto"] is None, "vaca sem parto: 0 crias, conta todas as IA")
+
+    nova_insem(page, "300")
+    conf(page.locator('#f-qualinsem').input_value() == "4", "numero 300: o app preenche '4a (fora da regra)'", page.locator('#f-qualinsem').input_value())
+    texto = page.locator('[data-ciclo-vaca]').inner_text()
+    conf("2 crias" in texto and "descarte" in texto, "a janela mostra crias, IA desde o parto e o aviso de descarte", texto)
+    antes = len(insems(page))
+    avisos.clear(); page.recusar = True
+    page.locator('[data-save="reproducaoCusto"]').click(); page.wait_for_timeout(400)
+    conf(any("descarte" in a for a in avisos) and len(insems(page)) == antes,
+         "4a inseminacao: o app avisa; respondendo Cancelar nao grava", str(avisos)[:200])
+    page.recusar = False; avisos.clear()
+    page.locator('[data-save="reproducaoCusto"]').click(); page.wait_for_timeout(500)
+    conf(len(insems(page)) == antes + 1 and page.evaluate("() => window.__DB__.reproducao_custos.at(-1).qual_inseminacao") == "4",
+         "respondendo OK grava a 4a (so avisa, nao bloqueia)")
+
+    nova_insem(page, "200")
+    conf(page.locator('#f-qualinsem').input_value() == "2", "vaca 200 (ja tem 1 IA hoje, sem parto): o app preenche 2a",
+         page.locator('#f-qualinsem').input_value())
+    page.evaluate("() => { state.modal=null; editDraft=null; render(); }")
 
     if FOTO:
         page.set_viewport_size({"width": 390, "height": 844})

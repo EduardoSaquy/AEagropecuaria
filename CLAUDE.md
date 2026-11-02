@@ -802,11 +802,31 @@ guardam só o número.
 
 Ao salvar inseminação, diagnóstico, parto, pesagem por animal e Manejo,
 `confirmarAnimalDoCampo()` pergunta **qual animal é** quando o número
-digitado tem parecido (`animaisParecidos`: mesmo número sem os zeros à
-esquerda, ou com 099/000 no fim; só do sexo do lançamento): 11 → 11 ou
-11099 · ES; 57 que não existe → 057 ou "animal novo 57". Sem parecido, ou
-editando sem mexer no número, não pergunta. "Voltar e corrigir" não grava.
+digitado tem parecido com 099/000 no fim (`animaisParecidos`; só do sexo do
+lançamento): 11 → 11 ou 11099 · ES. Sem parecido, ou editando sem mexer no
+número, não pergunta. "Voltar e corrigir" não grava.
+
+**Zero à esquerda não conta** (Eduardo, 02/11/2026: "57 e 057 são o mesmo
+animal"): o campo do número tira o zero ao digitar; digitar 57 com a 057
+cadastrada usa a 057 sem perguntar (`mesmoAnimalSemZeros`).
+`pecuaria_numero_sem_zero_a_esquerda.sql` tira o zero do cadastro e de
+partos, inseminações, diagnósticos, pesagens por animal e protocolos; para sem
+mudar nada se dois animais do mesmo sexo virarem o mesmo número.
 `teste_qual_animal.py`.
+
+### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
+
+Regra da fazenda (Eduardo, 02/11/2026): não há touro, só IATF; até **3
+inseminações** por vaca; não emprenhou na 3ª, vai para o descarte. A contagem
+**zera no parto** (qualquer parto lançado, inclusive aborto) e o histórico
+fica: `cicloReprodutivoVaca(numero, data)` devolve as crias da vaca na fazenda
+(nascimentos), o último parto e as inseminações desde ele (qualquer lote, sem
+zeros à esquerda). "Qual inseminação" vem preenchida por ela (1ª/2ª/3ª e
+"4ª (fora da regra)"; dá para mudar), a janela da inseminação mostra crias e
+inseminações desde o parto, e na 4ª o app **avisa** (`avisoQuartaInseminacao`,
+confirm; não bloqueia, decisão dele). O Manejo com inseminação grava a
+qual automática e avisa igual. Detalhe do lote de Cria: "N crias · X/3 IA
+desde o parto".
 
 ### Matriz: Reprodução (Cria) em Resultados > Operacional
 
@@ -964,7 +984,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 | `teste_parto_aborto_lote_numero.py` | 89 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido; resumo do lote sem o bezerro morto nos vivos) |
 | `teste_matriz_reproducao_operacional.py` | 15 | AEMatriz.html (Resultados > Operacional > Reprodução (Cria): custo por bezerro desmamado = inseminação + ração/pasto dos lotes de Cria + fatia do fixo sem a compra de ração; taxa de prenhez; desmamados machos/fêmeas; sem rolar de lado) |
-| `teste_qual_animal.py` | 15 | AEpecuaria.html ("Qual animal é?": número parecido, 11 x 11099 · ES ou 57 x 057, pergunta antes de gravar inseminação/diagnóstico/parto; sem parecido não pergunta; editar sem mexer no número não pergunta; Voltar não grava) |
+| `teste_qual_animal.py` | 24 | AEpecuaria.html ("Qual animal é?": 11 x 11099 · ES pergunta antes de gravar inseminação/diagnóstico/parto; 57 = 057 não pergunta e usa o cadastro; o campo tira zero à esquerda; sem parecido ou editando sem mexer no número não pergunta; Voltar não grava; regra das 3 IATF: crias, IA desde o último parto, 1ª/2ª/3ª automática, aviso na 4ª que não bloqueia) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

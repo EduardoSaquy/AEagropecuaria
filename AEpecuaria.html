@@ -526,17 +526,29 @@ function animaisParecidos(numero, sexo){
     && numeroAnimalSoDigitos(a.numero)
     && [base, base+'099', base+'000'].includes(numeroSemZeros(a.numero)));
 }
+// Zero à esquerda não conta (decisão do Eduardo, 02/11/2026): 57 e 057 são o
+// mesmo animal. Devolve o cadastro com o mesmo número sem os zeros, se houver
+// um só -- o lançamento usa o número como está no cadastro, para ligar certo
+// enquanto o banco ainda tiver número antigo com zero
+// (pecuaria_numero_sem_zero_a_esquerda.sql tira).
+function mesmoAnimalSemZeros(numero, sexo){
+  const base = numeroSemZeros(numero);
+  const iguais = animaisParecidos(numero, sexo).filter(a=>numeroSemZeros(a.numero)===base);
+  return iguais.length===1 ? iguais[0] : null;
+}
 function precisaEscolherAnimal(numero, sexo){
+  const base = numeroSemZeros(numero);
   const c = animaisParecidos(numero, sexo);
-  if(c.length===0) return false;
-  const exato = c.some(a=>a.numero.trim()===String(numero).trim());
-  return !(c.length===1 && exato);
+  const outros = c.filter(a=>numeroSemZeros(a.numero)!==base);   // 11099, 11000
+  const mesmos = c.length - outros.length;                       // 11, 011
+  if(outros.length===0) return mesmos>1;     // só zero à esquerda: é o mesmo animal
+  return true;
 }
 // Abre a pergunta e devolve o número escolhido (ou null se a pessoa voltar).
 function escolherAnimal(numero, sexo){
   const n = String(numero).trim();
   const c = animaisParecidos(n, sexo).sort((a,b)=>a.numero.localeCompare(b.numero, 'pt-BR', {numeric:true}));
-  const exato = c.some(a=>a.numero.trim()===n);
+  const exato = c.some(a=>numeroSemZeros(a.numero)===numeroSemZeros(n));
   const SEXO = {macho:'macho', femea:'fêmea'};
   return new Promise(resolve=>{
     const div = document.createElement('div');
@@ -575,7 +587,11 @@ async function confirmarAnimalDoCampo(idCampo, sexo, numeroOriginal){
   const n = (el.value||'').trim();
   if(!n) return true;
   if(numeroOriginal!=null && n===String(numeroOriginal).trim()) return true;
-  if(!precisaEscolherAnimal(n, sexo)) return true;
+  if(!precisaEscolherAnimal(n, sexo)){
+    const mesmo = mesmoAnimalSemZeros(n, sexo);
+    if(mesmo && mesmo.numero.trim()!==n) el.value = mesmo.numero.trim();
+    return true;
+  }
   const escolhido = await escolherAnimal(n, sexo);
   if(escolhido===null){ el.focus(); return false; }
   el.value = escolhido;
@@ -3009,6 +3025,46 @@ function gmdAnimal(historico){
 // recente dela; se prenha, procura um parto registrado depois desse
 // diagnóstico (a cria já nasceu, mostra sexo e data reais) -- senão mostra
 // a previsão de parto do próprio diagnóstico.
+// Regra da fazenda (Eduardo, 02/11/2026): só IATF, sem touro; no máximo 3
+// inseminações por vaca; não emprenhou na 3ª, vai para o descarte. A contagem
+// zera no parto (qualquer parto lançado, inclusive aborto); o histórico fica:
+// "crias" conta todos os nascimentos da vaca na fazenda. Procura em qualquer
+// lote (a vaca muda de lote) e sem os zeros à esquerda (57 = 057).
+const MAX_INSEMINACOES = 3;
+function cicloReprodutivoVaca(numero, ateData, ignorarInsemId){
+  const base = numeroSemZeros(numero);
+  const mesmo = x => x!=null && String(x).trim()!=='' && numeroSemZeros(x)===base;
+  const ate = ateData || hojeStr();
+  const partos = state.partos.filter(p=>mesmo(p.numeroMae) && p.data<=ate).sort((a,b)=>a.data.localeCompare(b.data));
+  const ultimoParto = partos[partos.length-1] || null;
+  const insems = state.reproducao.filter(r=>mesmo(r.numeroVaca) && r.id!==ignorarInsemId
+      && r.data<=ate && (!ultimoParto || r.data>ultimoParto.data))
+    .sort((a,b)=>a.data.localeCompare(b.data));
+  return {
+    crias: partos.filter(p=>!partoEhAborto(p)).length,
+    ultimoParto,
+    inseminacoesDesdeParto: insems,
+    proxima: insems.length + 1,
+  };
+}
+// Avisa (não bloqueia, decisão do Eduardo) quando a vaca já tem 3
+// inseminações desde o último parto. true = pode gravar.
+function avisoQuartaInseminacao(numero, data, ignorarInsemId){
+  const c = cicloReprodutivoVaca(numero, data, ignorarInsemId);
+  if(c.proxima <= MAX_INSEMINACOES) return true;
+  return confirm(`A vaca ${numero} já tem ${c.inseminacoesDesdeParto.length} inseminações desde ${c.ultimoParto ? 'o último parto ('+c.ultimoParto.data.split('-').reverse().join('/')+')' : 'que chegou à fazenda'}: `
+    + c.inseminacoesDesdeParto.map(r=>r.data.split('-').reverse().join('/')).join(', ')
+    + `.\n\nPela regra da fazenda (no máximo ${MAX_INSEMINACOES} IATF), ela vai para o descarte.\n\nLançar a ${c.proxima}ª inseminação mesmo assim?`);
+}
+function textoCicloVaca(c){
+  const partes = [];
+  partes.push(c.crias===1 ? '1 cria na fazenda' : `${c.crias} crias na fazenda`);
+  if(c.ultimoParto) partes.push(`último parto em ${c.ultimoParto.data.split('-').reverse().join('/')}`);
+  const n = c.inseminacoesDesdeParto.length;
+  partes.push(n===0 ? (c.ultimoParto ? 'nenhuma inseminação desde o parto' : 'nenhuma inseminação ainda')
+    : `${n} inseminação(ões) ${c.ultimoParto?'desde o parto':''} (${c.inseminacoesDesdeParto.map(r=>r.data.split('-').reverse().join('/')).join(', ')})`);
+  return partes.join(' · ');
+}
 function situacaoReprodutivaVaca(loteId, numero){
   const diagnosticos = state.diagnosticos.filter(d=>d.loteId===loteId && String(d.numeroVaca)===String(numero)).sort((a,b)=>a.data.localeCompare(b.data));
   const inseminacoes = state.reproducao.filter(r=>r.loteId===loteId && String(r.numeroVaca)===String(numero)).sort((a,b)=>a.data.localeCompare(b.data));
@@ -3082,7 +3138,7 @@ function PageLoteDetalhe(){
             <td class="mono">${r.ultima ? `${fmt(r.ultima.pesoKg,1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span>` : '—'}</td>
             <td class="mono">${r.gmd!==null ? (r.gmd>=0?'+':'')+fmt(r.gmd,2)+' kg/dia' : '—'}</td>
             ${ehCria ? `
-            <td><span class="${r.reprod ? 'pill '+(r.reprod.status==='vazia'||r.reprod.status==='sem-diagnostico'||r.reprod.status==='abortou'?'pill-cat':'pill-ok') : 'hint'}">${r.reprod ? r.reprod.detalheStatus : '—'}</span></td>
+            <td><span class="${r.reprod ? 'pill '+(r.reprod.status==='vazia'||r.reprod.status==='sem-diagnostico'||r.reprod.status==='abortou'?'pill-cat':'pill-ok') : 'hint'}">${r.reprod ? r.reprod.detalheStatus : '—'}</span>${r.reprod ? (()=>{ const c = cicloReprodutivoVaca(r.a.numero); return `<div class="hint">${c.crias===1?'1 cria':c.crias+' crias'} · ${c.inseminacoesDesdeParto.length}/${MAX_INSEMINACOES} IA desde o parto</div>`; })() : ''}</td>
             <td class="mono">${r.reprod && r.reprod.ultimaInseminacao ? `${QUAL_INSEMINACAO_LABEL[r.reprod.ultimaInseminacao.qualInseminacao]||'—'} em ${r.reprod.ultimaInseminacao.data.split('-').reverse().join('/')}` : '—'}</td>
             ` : ''}
             ${podeEditarAnimal ? `
@@ -3563,7 +3619,7 @@ function PagePasto(){
 /* ===================== PÁGINA: REPRODUÇÃO ===================== */
 function custoReproducao(r){ return Number(r.custo)||0; }
 const RACA_TOURO_LABEL = {angus:'Angus', nelore:'Nelore', outro:'Outro'};
-const QUAL_INSEMINACAO_LABEL = {'1':'1ª','2':'2ª','3':'3ª'};
+const QUAL_INSEMINACAO_LABEL = {'1':'1ª','2':'2ª','3':'3ª','4':'4ª (fora da regra)'};
 const RESULTADO_DG_LABEL = {prenha:'Prenha', vazia:'Vazia'};
 function PageReproducaoGeral(){
   const sub = state.subAbaReproducao || 'inseminacao';
@@ -6349,7 +6405,8 @@ function ModalReproducaoCusto(){
             </select>
           </div>
           <div class="field"><label>Número da vaca</label><input id="f-numvaca" value="${esc(d.numeroVaca)}" placeholder="Ex: 128" inputmode="numeric" autocomplete="off" data-numero-animal="1"/>
-            ${nomeDoAnimal(d.numeroVaca,'femea') ? `<div class="hint">${esc(nomeDoAnimal(d.numeroVaca,'femea'))}</div>` : ''}</div>
+            ${nomeDoAnimal(d.numeroVaca,'femea') ? `<div class="hint">${esc(nomeDoAnimal(d.numeroVaca,'femea'))}</div>` : ''}
+            ${d.numeroVaca && numeroAnimalSoDigitos(d.numeroVaca) ? (()=>{ const c = cicloReprodutivoVaca(d.numeroVaca, d.data||hojeStr(), d._editId); return `<div class="hint" data-ciclo-vaca="1" style="${c.proxima>MAX_INSEMINACOES?'color:var(--alerta); font-weight:600;':''}">${esc(textoCicloVaca(c))}${c.proxima>MAX_INSEMINACOES?` — já fez ${MAX_INSEMINACOES} inseminações: pela regra vai para o descarte`:''}</div>`; })() : ''}</div>
         </div>
         <div class="field-row">
           <div class="field"><label>Raça da vaca${vacaJaCadastrada?'':' (animal novo -- obrigatório)'}</label>
@@ -6376,7 +6433,9 @@ function ModalReproducaoCusto(){
               <option value="1" ${d.qualInseminacao==='1'?'selected':''}>1ª</option>
               <option value="2" ${d.qualInseminacao==='2'?'selected':''}>2ª</option>
               <option value="3" ${d.qualInseminacao==='3'?'selected':''}>3ª</option>
+              <option value="4" ${d.qualInseminacao==='4'?'selected':''}>4ª (fora da regra)</option>
             </select>
+            <div class="hint">Preenchido pelo app: conta as inseminações desde o último parto (máximo ${MAX_INSEMINACOES}).</div>
           </div>
         </div>
         <div class="field-row">
@@ -6927,7 +6986,7 @@ function attachEvents(){
   // celular abre numérico). Na lista de números (Nova entrada de animais)
   // também ficam espaço, vírgula e ponto e vírgula, que separam os números.
   document.querySelectorAll('input[data-numero-animal]').forEach(el=>{
-    el.addEventListener('input', ()=>{ const limpo = el.value.replace(/[^0-9]/g,''); if(limpo!==el.value) el.value = limpo; });
+    el.addEventListener('input', ()=>{ const limpo = el.value.replace(/[^0-9]/g,'').replace(/^0+(?=\d)/,''); if(limpo!==el.value) el.value = limpo; });
   });
   document.querySelectorAll('textarea[data-numeros-animais]').forEach(el=>{
     el.addEventListener('input', ()=>{ const limpo = el.value.replace(/[^0-9\s,;]/g,''); if(limpo!==el.value) el.value = limpo; });
@@ -7785,6 +7844,10 @@ function attachEvents(){
       editDraft.qualInseminacao = document.getElementById('f-qualinsem').value;
       editDraft.custo = document.getElementById('f-custoreproducao').value;
       editDraft.racaVaca = racaConhecida(e.target.value, 'femea');
+      if(numeroAnimalSoDigitos(e.target.value)){
+        const c = cicloReprodutivoVaca(e.target.value, editDraft.data || hojeStr(), editDraft._editId);
+        editDraft.qualInseminacao = String(Math.min(c.proxima, 4));
+      }
       render();
     };
   }
@@ -8045,6 +8108,10 @@ function attachEvents(){
       const m = state.manejoAtivo;
       const acoesAtivas = m.acoes;
       if(!await confirmarAnimalDoCampo('f-numanimalmanejo', sexoFixoDoLote(m.loteDestinoId || m.loteId))) return;
+      if(acoesAtivas.includes('inseminacao')){
+        const numIaManejo = (document.getElementById('f-numanimalmanejo')?.value||'').trim();
+        if(numIaManejo && numeroAnimalSoDigitos(numIaManejo) && !avisoQuartaInseminacao(numIaManejo, m.data)) return;
+      }
       const numEl = document.getElementById('f-numanimalmanejo');
       const numero = (numEl.value||'').trim();
       const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a)) || !!m.loteDestinoId;
@@ -8163,7 +8230,7 @@ function attachEvents(){
         if(resMediaManejo.error){ alert('Não foi possível atualizar a média de peso: ' + resMediaManejo.error.message); await desfazerFeitoNestaLeva(); return; }
       }
       if(acoesAtivas.includes('inseminacao')){
-        const resInsemManejo = await db.from('reproducao_custos').insert(reproducaoCustoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, racaTouro:racaTouroVal, qualInseminacao:'', custo:null, manejoId:m.id})).select().single();
+        const resInsemManejo = await db.from('reproducao_custos').insert(reproducaoCustoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, racaTouro:racaTouroVal, qualInseminacao:String(Math.min(cicloReprodutivoVaca(numero, m.data).proxima, 4)), custo:null, manejoId:m.id})).select().single();
         if(resInsemManejo.error){ alert('Não foi possível salvar a inseminação: ' + resInsemManejo.error.message); await desfazerFeitoNestaLeva(); return; }
         feitoNestaLeva.reproducaoId = resInsemManejo.data.id;
         registro.racaTouro = racaTouroVal;
@@ -8230,6 +8297,13 @@ function attachEvents(){
       // Qual animal é? -- antes de qualquer leitura do número (ver escolherAnimal)
       if(type==='reproducaoCusto' && !await confirmarAnimalDoCampo('f-numvaca', 'femea',
           editDraft._editId ? state.reproducao.find(r=>r.id===editDraft._editId)?.numeroVaca : null)) return;
+      if(type==='reproducaoCusto'){
+        const numIa = (document.getElementById('f-numvaca')?.value||'').trim();
+        const dataIa = document.getElementById('f-data')?.value || hojeStr();
+        const original = editDraft._editId ? state.reproducao.find(r=>r.id===editDraft._editId) : null;
+        const mudou = !original || numeroSemZeros(original.numeroVaca)!==numeroSemZeros(numIa) || original.data!==dataIa;
+        if(numIa && numeroAnimalSoDigitos(numIa) && mudou && !avisoQuartaInseminacao(numIa, dataIa, editDraft._editId)) return;
+      }
       if(type==='diagnosticoGestacional' && !await confirmarAnimalDoCampo('f-numvaca', 'femea',
           editDraft._editId ? state.diagnosticos.find(d=>d.id===editDraft._editId)?.numeroVaca : null)) return;
       if(type==='parto' && !await confirmarAnimalDoCampo('f-numeromae', 'femea',
