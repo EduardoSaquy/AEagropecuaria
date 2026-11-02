@@ -509,6 +509,78 @@ function validarAnimalNovo(numero, sexo, raca){
   if(!sexo || !raca) return `O animal número ${numeroNorm} ainda não está cadastrado. Informe sexo e raça dele antes de lançar.`;
   return null;
 }
+// QUAL ANIMAL É? (pedido do Eduardo em 02/11/2026)
+// O número do animal é único (número + sexo), mas números PARECIDOS podem ser
+// animais diferentes: 57 x 057 (zero à esquerda) e 11 x 11099 (a "11 ES",
+// renumerada com 099 porque o 11 já era de outra vaca; 512000 é o mesmo
+// caso com 000). Ao salvar um lançamento, se o número digitado puder ser de
+// mais de um animal -- ou não existir, mas existir um parecido --, o app
+// pergunta qual é antes de gravar. O nome do animal aparece na escolha.
+function numeroSemZeros(n){ const t = String(n||'').trim().replace(/^0+/,''); return t || '0'; }
+function animaisParecidos(numero, sexo){
+  const n = String(numero||'').trim();
+  if(!numeroAnimalSoDigitos(n)) return [];
+  const base = numeroSemZeros(n);
+  return state.animais.filter(a=>a.status!=='morto'
+    && (!sexo || !a.sexo || a.sexo===sexo)
+    && numeroAnimalSoDigitos(a.numero)
+    && [base, base+'099', base+'000'].includes(numeroSemZeros(a.numero)));
+}
+function precisaEscolherAnimal(numero, sexo){
+  const c = animaisParecidos(numero, sexo);
+  if(c.length===0) return false;
+  const exato = c.some(a=>a.numero.trim()===String(numero).trim());
+  return !(c.length===1 && exato);
+}
+// Abre a pergunta e devolve o número escolhido (ou null se a pessoa voltar).
+function escolherAnimal(numero, sexo){
+  const n = String(numero).trim();
+  const c = animaisParecidos(n, sexo).sort((a,b)=>a.numero.localeCompare(b.numero, 'pt-BR', {numeric:true}));
+  const exato = c.some(a=>a.numero.trim()===n);
+  const SEXO = {macho:'macho', femea:'fêmea'};
+  return new Promise(resolve=>{
+    const div = document.createElement('div');
+    div.className = 'overlay';
+    div.style.zIndex = '70';
+    div.setAttribute('data-escolher-animal', '1');
+    div.innerHTML = `
+      <div class="modal" style="max-width:440px;">
+        <div class="modal-head"><h3>Qual animal é o ${esc(n)}?</h3></div>
+        <div class="modal-body">
+          <p class="hint" style="margin:0;">Há ${exato ? 'mais de um animal' : 'um animal com número parecido'} cadastrado. Escolha o certo para não lançar no animal errado.</p>
+          ${c.map(a=>{
+            const lote = state.lotes.find(l=>l.id===a.loteId);
+            return `<button type="button" class="btn btn-ghost" data-escolha-numero="${esc(a.numero)}" style="justify-content:flex-start; text-align:left; width:100%; padding:12px 14px;">
+              <span><strong>Nº ${esc(a.numero)}</strong>${a.nome ? ' · '+esc(a.nome) : ''}<br><span class="hint">${esc(lote ? lote.nome : 'sem lote')}${a.sexo ? ' · '+SEXO[a.sexo] : ''}</span></span>
+            </button>`;
+          }).join('')}
+          ${exato ? '' : `<button type="button" class="btn btn-ghost" data-escolha-numero="${esc(n)}" data-escolha-novo="1" style="justify-content:flex-start; text-align:left; width:100%; padding:12px 14px;">
+              <span><strong>Nenhum destes: animal novo Nº ${esc(n)}</strong><br><span class="hint">cadastra um animal novo com esse número</span></span>
+            </button>`}
+        </div>
+        <div class="modal-foot"><button type="button" class="btn btn-ghost" data-escolha-voltar="1">Voltar e corrigir</button></div>
+      </div>`;
+    const fechar = valor => { div.remove(); resolve(valor); };
+    div.querySelectorAll('[data-escolha-numero]').forEach(b=>{ b.onclick = ()=> fechar(b.dataset.escolhaNumero); });
+    div.querySelector('[data-escolha-voltar]').onclick = ()=> fechar(null);
+    document.body.appendChild(div);
+  });
+}
+// Usado nos botões de salvar: confere o campo do número e, se precisar,
+// pergunta e troca o valor do campo pelo animal escolhido. false = a pessoa
+// voltou para corrigir (não grava). Editar sem mexer no número não pergunta.
+async function confirmarAnimalDoCampo(idCampo, sexo, numeroOriginal){
+  const el = document.getElementById(idCampo);
+  if(!el) return true;
+  const n = (el.value||'').trim();
+  if(!n) return true;
+  if(numeroOriginal!=null && n===String(numeroOriginal).trim()) return true;
+  if(!precisaEscolherAnimal(n, sexo)) return true;
+  const escolhido = await escolherAnimal(n, sexo);
+  if(escolhido===null){ el.focus(); return false; }
+  el.value = escolhido;
+  return true;
+}
 // Cadastra ou move um animal pro lote informado, por número+sexo -- número
 // sozinho NÃO é único na fazenda (pode repetir entre macho e fêmea), então
 // a identidade do animal é o par número+sexo: se já existir um animal com
@@ -7802,7 +7874,8 @@ function attachEvents(){
       if(racaEl) editDraft.racaPesadoDraft = racaEl.value;
     }
     const addPesagemAnimalBtn = document.querySelector('[data-add-pesagem-animal]');
-    if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = ()=>{
+    if(addPesagemAnimalBtn) addPesagemAnimalBtn.onclick = async ()=>{
+      if(!await confirmarAnimalDoCampo('f-numeropesado', sexoFixoDoLote(Number(document.getElementById('f-lotepesagem').value)))) return;
       const numEl = document.getElementById('f-numeropesado');
       const pesoEl = document.getElementById('f-pesopesado');
       const numero = (numEl.value||'').trim();
@@ -7971,6 +8044,7 @@ function attachEvents(){
     async function salvarAnimalManejo(){
       const m = state.manejoAtivo;
       const acoesAtivas = m.acoes;
+      if(!await confirmarAnimalDoCampo('f-numanimalmanejo', sexoFixoDoLote(m.loteDestinoId || m.loteId))) return;
       const numEl = document.getElementById('f-numanimalmanejo');
       const numero = (numEl.value||'').trim();
       const precisaNumero = acoesAtivas.some(a=>['inseminacao','diagnostico','protocoloIA'].includes(a)) || !!m.loteDestinoId;
@@ -8153,6 +8227,13 @@ function attachEvents(){
     saveBtn.onclick = async ()=>{
       const type = saveBtn.dataset.save;
       let error = null;
+      // Qual animal é? -- antes de qualquer leitura do número (ver escolherAnimal)
+      if(type==='reproducaoCusto' && !await confirmarAnimalDoCampo('f-numvaca', 'femea',
+          editDraft._editId ? state.reproducao.find(r=>r.id===editDraft._editId)?.numeroVaca : null)) return;
+      if(type==='diagnosticoGestacional' && !await confirmarAnimalDoCampo('f-numvaca', 'femea',
+          editDraft._editId ? state.diagnosticos.find(d=>d.id===editDraft._editId)?.numeroVaca : null)) return;
+      if(type==='parto' && !await confirmarAnimalDoCampo('f-numeromae', 'femea',
+          editDraft._editId ? state.partos.find(p=>p.id===editDraft._editId)?.numeroMae : null)) return;
       if(type==='ingrediente'){
         // o campo de preço só existe no formulário pra quem pode ver valores
         // (souAdmin) — sem ele, preserva o preço que já estava salvo.

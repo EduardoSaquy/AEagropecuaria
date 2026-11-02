@@ -790,6 +790,24 @@ Pedidos do mesmo dia:
   "é gêmeo?". Com o histórico ainda carregando, pergunta ao banco (5 s de
   limite, sem travar o lançamento com sinal fraco).
 
+### Pecuária: número único, nome ao lado, e "Qual animal é?"
+
+Decisão do Eduardo em 02/11/2026 (opção A): o número do animal continua
+**único por sexo** (índice `animais_numero_sexo_unique`); dois animais com o
+mesmo brinco (11 e "11 ES") ficam com números diferentes (11 e **11099**, o
+texto no Nome; 19099, 24099... seguem o mesmo padrão; 512000 é o caso antigo
+com 000). O Nome é opcional. Não identificar animal por número + nome: os
+lançamentos (inseminação, diagnóstico, parto, desmama, pesagem, Manejo)
+guardam só o número.
+
+Ao salvar inseminação, diagnóstico, parto, pesagem por animal e Manejo,
+`confirmarAnimalDoCampo()` pergunta **qual animal é** quando o número
+digitado tem parecido (`animaisParecidos`: mesmo número sem os zeros à
+esquerda, ou com 099/000 no fim; só do sexo do lançamento): 11 → 11 ou
+11099 · ES; 57 que não existe → 057 ou "animal novo 57". Sem parecido, ou
+editando sem mexer no número, não pergunta. "Voltar e corrigir" não grava.
+`teste_qual_animal.py`.
+
 ### Matriz: Reprodução (Cria) em Resultados > Operacional
 
 Pedido do Eduardo em 02/11/2026. `CardReproducaoOperacional()` /
@@ -946,6 +964,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 | `teste_parto_aborto_lote_numero.py` | 89 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido; resumo do lote sem o bezerro morto nos vivos) |
 | `teste_matriz_reproducao_operacional.py` | 15 | AEMatriz.html (Resultados > Operacional > Reprodução (Cria): custo por bezerro desmamado = inseminação + ração/pasto dos lotes de Cria + fatia do fixo sem a compra de ração; taxa de prenhez; desmamados machos/fêmeas; sem rolar de lado) |
+| `teste_qual_animal.py` | 15 | AEpecuaria.html ("Qual animal é?": número parecido, 11 x 11099 · ES ou 57 x 057, pergunta antes de gravar inseminação/diagnóstico/parto; sem parecido não pergunta; editar sem mexer no número não pergunta; Voltar não grava) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
