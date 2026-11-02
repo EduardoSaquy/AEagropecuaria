@@ -854,6 +854,18 @@ diagnósticos do período. **Desmamados**: total, machos, fêmeas (sexo do parto
 e peso médio. Leitura certa é na Safra/Ano (num mês, custo e desmama raramente
 coincidem). Só informativo: não entra em despesa nem resultado.
 
+### Matriz: Rebanho estocado (UA/ha e @/ha) em Resultados > Operacional
+
+Pedido do Eduardo em 02/11/2026. `CardEstoquePecuaria()`/`estoquePecuaria()`,
+carga própria em `carregarEstoquePecuaria()`. Retrato de **hoje** (não segue o
+filtro de período): para cada lote ativo com animais, peso vivo = cabeças ×
+peso médio da **última pesagem** do lote; UA = PV ÷ 450 kg; @ = PV × 50% de
+carcaça ÷ 15 kg (premissa do Eduardo, "só para ter noção"); valor = @ × último
+preço da @ de `precos_arroba` (fêmea para lote de fêmeas, macho nos demais);
+por hectare = área de pecuária em Fazendas. Lote sem pesagem conta nas
+cabeças, fica fora de UA/@/valor e a tela diz qual é. Só informativo.
+`teste_matriz_estoque_pecuaria.py`.
+
 ### Revisão geral de 02/11/2026
 
 Pedido do Eduardo ("revisão geral bem minuciosa"). Os 39 `teste_*.py`
@@ -1040,6 +1052,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_qual_animal.py` | 25 | AEpecuaria.html ("Qual animal é?": 11 x 11099 · ES pergunta antes de gravar inseminação/diagnóstico/parto; 57 = 057 não pergunta e usa o cadastro; o campo tira zero à esquerda; sem parecido ou editando sem mexer no número não pergunta; Voltar não grava; regra das 3 IATF: crias, IA desde o último parto, 1ª/2ª/3ª automática, aviso na 4ª que não bloqueia) |
 | `teste_lavoura_texto_escapado.py` | 8 | AECana.html, AECereais.html (nome com aspas, `<` e `&`: aparece inteiro na lista, não vira HTML e volta inteiro no campo de edição) |
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
+| `teste_matriz_estoque_pecuaria.py` | 13 | AEMatriz.html (Rebanho estocado: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

@@ -719,6 +719,7 @@ async function loadAll(){
   if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
   carregarReproducaoPecuaria();
+  carregarEstoquePecuaria();
   if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
   carregarResultadoCana();
   if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
@@ -984,6 +985,126 @@ async function carregarResultadoPecuaria(){
     state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
   render();
+}
+
+// ===== Rebanho estocado — Resultados > Operacional =====
+// Pedido do Eduardo em 02/11/2026: UA por hectare e @ por hectare estocadas
+// na fazenda HOJE (não depende do filtro de período), para ter noção do
+// valor em carne do rebanho. Para cada lote ativo: cabeças × peso médio da
+// última pesagem do lote = peso vivo. UA = peso vivo ÷ 450 kg. @ = peso vivo
+// × 50% (rendimento de carcaça) ÷ 15 kg. Valor = @ × último preço da @
+// cadastrado no AE Pecuária (fêmea para lote de fêmeas, macho nos demais).
+// Lote sem pesagem fica de fora do peso e a tela avisa quantas cabeças são.
+const KG_POR_UA = 450, RENDIMENTO_CARCACA_ESTOQUE = 0.5, KG_POR_ARROBA_ESTOQUE = 15;
+async function carregarEstoquePecuaria(){
+  try{
+    const [lotRes, pesRes, preRes] = await Promise.all([
+      dbPecuaria.from('lotes').select('id, nome, destino, sexo, numero_animais, data_fim'),
+      fetchAllRows(()=>dbPecuaria.from('pesagens').select('id, lote_id, data, peso_medio_kg').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('precos_arroba').select('id, data, valor, sexo').order('id')),
+    ]);
+    for(const r of [lotRes, pesRes, preRes]) if(r.error) throw r.error;
+    state.estoquePec = {erro:'', lotes: lotRes.data||[], pesagens: pesRes.data||[], precos: preRes.data||[]};
+  } catch(e){
+    state.estoquePec = {erro:'Não foi possível carregar o rebanho agora.'};
+  }
+  render();
+}
+function ultimoPrecoArroba(precos, sexo){
+  const lista = precos.filter(p=>p.sexo===sexo && Number(p.valor)>0)
+    .sort((a,b)=> String(a.data).localeCompare(String(b.data)) || (a.id-b.id));
+  return lista.length ? lista[lista.length-1] : null;
+}
+function estoquePecuaria(){
+  const ep = state.estoquePec;
+  if(!ep || ep.erro) return ep ? {erro: ep.erro} : null;
+  const precoMacho = ultimoPrecoArroba(ep.precos, 'macho');
+  const precoFemea = ultimoPrecoArroba(ep.precos, 'femea');
+  const ultimaPesagem = new Map();
+  ep.pesagens.forEach(p=>{
+    if(!p.data || !(Number(p.peso_medio_kg)>0)) return;
+    const atual = ultimaPesagem.get(p.lote_id);
+    if(!atual || p.data>atual.data || (p.data===atual.data && p.id>atual.id)) ultimaPesagem.set(p.lote_id, p);
+  });
+  const linhas = ep.lotes
+    .filter(l=>!l.data_fim && Number(l.numero_animais)>0)
+    .map(l=>{
+      const cabecas = Number(l.numero_animais);
+      const pes = ultimaPesagem.get(l.id) || null;
+      const pesoMedio = pes ? Number(pes.peso_medio_kg) : null;
+      const pesoVivo = pesoMedio!=null ? cabecas*pesoMedio : null;
+      const arrobas = pesoVivo!=null ? pesoVivo*RENDIMENTO_CARCACA_ESTOQUE/KG_POR_ARROBA_ESTOQUE : null;
+      const preco = l.sexo==='femea' ? (precoFemea || precoMacho) : (precoMacho || precoFemea);
+      return {lote:l, cabecas, pesoMedio, dataPesagem: pes ? pes.data : null, pesoVivo,
+        ua: pesoVivo!=null ? pesoVivo/KG_POR_UA : null, arrobas,
+        valor: arrobas!=null && preco ? arrobas*Number(preco.valor) : null};
+    })
+    .sort((a,b)=>String(a.lote.nome).localeCompare(String(b.lote.nome), 'pt-BR', {numeric:true}));
+  const comPeso = linhas.filter(x=>x.pesoVivo!=null);
+  const soma = (lista, k) => lista.reduce((a,x)=>a+(x[k]||0),0);
+  const ha = hectaresPorOperacao('pecuaria');
+  const cabecas = soma(linhas,'cabecas'), cabecasComPeso = soma(comPeso,'cabecas');
+  const pesoVivo = soma(comPeso,'pesoVivo'), ua = soma(comPeso,'ua'), arrobas = soma(comPeso,'arrobas');
+  const valor = comPeso.some(x=>x.valor!=null) ? soma(comPeso,'valor') : null;
+  return {linhas, ha, cabecas, cabecasComPeso, cabecasSemPeso: cabecas-cabecasComPeso,
+    lotesSemPeso: linhas.filter(x=>x.pesoVivo==null).map(x=>x.lote.nome),
+    pesoVivo, ua, arrobas, valor,
+    uaPorHa: ha>0 ? ua/ha : null, arrobasPorHa: ha>0 ? arrobas/ha : null,
+    cabecasPorHa: ha>0 ? cabecas/ha : null, valorPorHa: ha>0 && valor!=null ? valor/ha : null,
+    precoMacho, precoFemea};
+}
+function CardEstoquePecuaria(){
+  if(!state.apps.some(a=>a.slug==='pecuaria')) return '';
+  const r = estoquePecuaria();
+  const cor = OPERACAO_COR.pecuaria;
+  const cab = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <span class="op-chip-ic" style="background:${hexToRgba(cor,0.14)}; color:${cor}; width:34px; height:34px;">${iconOperacao('pecuaria')}</span>
+      <div>
+        <div style="font-family:'Fraunces',serif; font-weight:700; font-size:17px; color:var(--grafite);">Rebanho estocado na fazenda</div>
+        <div class="hint">Hoje (não muda com o filtro de período)${r && !r.erro ? ' · '+fmtInt(r.ha)+' ha de pecuária' : ''}</div>
+      </div>
+    </div>`;
+  if(!r) return `<div class="card card-pad" style="margin-top:18px;">${cab}<p class="hint">Carregando o rebanho...</p></div>`;
+  if(r.erro) return `<div class="card card-pad" style="margin-top:18px;">${cab}${Empty('Sem dados do rebanho', r.erro)}</div>`;
+  const dataBr = d => d ? d.split('-').reverse().join('/') : '';
+  return `
+  <div class="card card-pad" style="margin-top:18px;">
+    ${cab}
+    <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); margin-bottom:14px;">
+      <div class="stat-card">
+        <div class="stat-label">UA por hectare</div>
+        <div class="stat-value" style="font-size:19px;">${r.uaPorHa!=null ? fmt(r.uaPorHa,2)+' UA/ha' : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${fmt(r.ua,1)} UA · ${r.cabecasPorHa!=null ? fmt(r.cabecasPorHa,2)+' cab/ha' : 'sem hectare cadastrado'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">@ estocadas por hectare</div>
+        <div class="stat-value" style="font-size:19px;">${r.arrobasPorHa!=null ? fmt(r.arrobasPorHa,1)+' @/ha' : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${fmtInt(Math.round(r.arrobas))} @ no rebanho · ${fmtInt(Math.round(r.pesoVivo))} kg de peso vivo</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Valor estimado em carne</div>
+        <div class="stat-value" style="font-size:19px;">${r.valor!=null ? 'R$ '+fmt(r.valor,0) : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${r.valorPorHa!=null ? 'R$ '+fmt(r.valorPorHa,0)+'/ha · ' : ''}${r.precoMacho ? '@ macho R$ '+fmt(r.precoMacho.valor)+' ('+dataBr(r.precoMacho.data)+')' : 'sem preço da @ cadastrado'}${r.precoFemea ? ' · fêmea R$ '+fmt(r.precoFemea.valor) : ''}</div>
+      </div>
+    </div>
+    ${r.cabecasSemPeso>0 ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);">${fmtInt(r.cabecasSemPeso)} de ${fmtInt(r.cabecas)} cabeças estão em lote sem pesagem e ficaram fora de UA, @ e valor: ${esc(r.lotesSemPeso.join(', '))}. Pese esses lotes (ou lance a pesagem) para entrarem na conta.</p>` : ''}
+    <table class="tabela-compacta tabela-sem-fixar tabela-blocos-celular">
+      <thead><tr><th>Lote</th><th>Cabeças</th><th>Peso médio</th><th>UA</th><th>@ (50% carcaça)</th></tr></thead>
+      <tbody>
+        ${r.linhas.map(x=>`<tr>
+          <td data-rotulo="Lote">${esc(x.lote.nome)}</td>
+          <td class="mono" data-rotulo="Cabeças">${fmtInt(x.cabecas)}</td>
+          <td class="mono" data-rotulo="Peso médio">${x.pesoMedio!=null ? fmt(x.pesoMedio,0)+' kg <span class="hint">('+dataBr(x.dataPesagem)+')</span>' : '<span class="hint">sem pesagem</span>'}</td>
+          <td class="mono" data-rotulo="UA">${x.ua!=null ? fmt(x.ua,1) : '—'}</td>
+          <td class="mono" data-rotulo="@">${x.arrobas!=null ? fmtInt(Math.round(x.arrobas)) : '—'}</td>
+        </tr>`).join('')}
+        <tr><td style="font-weight:600;" data-rotulo="Lote">Total</td><td class="mono" style="font-weight:600;" data-rotulo="Cabeças">${fmtInt(r.cabecas)}</td><td data-rotulo="Peso vivo" class="mono">${fmtInt(Math.round(r.pesoVivo))} kg</td>
+          <td class="mono" style="font-weight:600;" data-rotulo="UA">${fmt(r.ua,1)}</td><td class="mono" style="font-weight:600;" data-rotulo="@">${fmtInt(Math.round(r.arrobas))}</td></tr>
+      </tbody>
+    </table>
+    <p class="hint" style="margin-top:12px;">Peso vivo = cabeças do lote × peso médio da última pesagem do lote. UA = peso vivo ÷ 450 kg. @ = peso vivo × 50% de rendimento de carcaça ÷ 15 kg. Valor = @ × último preço da @ cadastrado no AE Pecuária (fêmea para lote de fêmeas). Por hectare: área de pecuária cadastrada em Fazendas. Pesagem antiga subestima o peso de hoje: confira a data ao lado do peso.</p>
+  </div>`;
 }
 
 // ===== Reprodução (Cria) — Resultados > Operacional =====
@@ -1347,6 +1468,7 @@ const state = {
   colheitasGraos: [],  // {data, sacas} — sacas/ha
   vendasPec: [],       // {data, quantidade, tipoVenda, pesoMedioKg} — arrobas vendidas/ha
   reproducaoPec: null, // Resultados > Operacional, bloco Reprodução (Cria): ver carregarReproducaoPecuaria()
+  estoquePec: null,    // Resultados > Operacional, bloco Rebanho estocado: ver carregarEstoquePecuaria()
   lancamentosRateados: [], // TODAS as atividades (inclusive 'geral'), pra Balancete/Fluxo de Caixa (aba Relatórios)
   movimentosFinanciamento: [], // entrada de empréstimo / amortização (principal) — NÃO são despesa nem receita; aba Empresa
   movimentosFinanciamentoOk: null, // null = ainda não tentou; false = tabela não existe (script financiamentos_02 não rodou)
@@ -3694,6 +3816,7 @@ function PageResultadosOperacional(){
     ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
   </div>
   <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado: entra nas cabeças vendidas, não em @/ha, avisado no card. Em "Resultado por unidade produzida" a Pecuária aparece como atividade toda: o custo (ração, pasto, mão de obra, fixos) não é dividido entre bezerro e frigorífico porque as despesas não são marcadas por área; custo e receita por cabeça só aparecem quando quase toda a receita do período tem venda com animais registrados.</p>
+  ${CardEstoquePecuaria()}
   ${CardReproducaoOperacional()}
   ${TabelaResultadoPorUnidade()}
   `;
