@@ -715,6 +715,7 @@ async function loadAll(){
   // necessidade (e sem permissão) só pra descartar o resultado depois.
   if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
   carregarResultadoPecuaria();
+  carregarReproducaoPecuaria();
   if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
   carregarResultadoCana();
   if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
@@ -980,6 +981,156 @@ async function carregarResultadoPecuaria(){
   render();
 }
 
+// ===== Reprodução (Cria) — Resultados > Operacional =====
+// Pedido do Eduardo em 02/11/2026: custo de cada bezerro desmamado, taxa de
+// prenhez e bezerros desmamados (machos, fêmeas, total) no período.
+// Carga própria, separada de carregarResultadoPecuaria(): se uma destas
+// tabelas falhar, o resultado financeiro da Pecuária não cai junto.
+async function carregarReproducaoPecuaria(){
+  try{
+    const [ingRes, dietRes, lotRes, srRes, ptRes, rcRes, partRes, desmRes, dgRes] = await Promise.all([
+      dbPecuaria.from('ingredientes').select('id, preco_kg'),
+      dbPecuaria.from('dietas').select('id, itens'),
+      dbPecuaria.from('lotes').select('id, nome, destino, numero_animais, data_fim'),
+      fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg, lote_id').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('pasto').select('data, dieta_id, quantidade, lote_id').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('reproducao_custos').select('data, custo, lote_id').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('partos').select('*').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('desmamas').select('id, parto_id, data, peso_kg').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('diagnosticos_gestacionais').select('data, resultado').order('id')),
+    ]);
+    for(const r of [ingRes, dietRes, lotRes, srRes, ptRes, rcRes, partRes, desmRes, dgRes]) if(r.error) throw r.error;
+    const ingredientes = ingRes.data||[];
+    const custoKgPorDieta = new Map();
+    (dietRes.data||[]).forEach(d=>{
+      let custoKg = 0;
+      (d.itens||[]).forEach(it=>{
+        const ing = ingredientes.find(i=>i.id===it.ingredienteId);
+        if(ing) custoKg += Number(ing.preco_kg||0) * (Number(it.pct||0)/100);
+      });
+      custoKgPorDieta.set(d.id, custoKg);
+    });
+    const lotes = lotRes.data||[];
+    const lotesCria = new Set(lotes.filter(l=>l.destino==='cria').map(l=>l.id));
+    const ativos = lotes.filter(l=>!l.data_fim);
+    const animaisTotal = ativos.reduce((a,l)=>a+Number(l.numero_animais||0),0);
+    const animaisCria = ativos.filter(l=>l.destino==='cria').reduce((a,l)=>a+Number(l.numero_animais||0),0);
+    const partoPorId = new Map((partRes.data||[]).map(p=>[p.id, p]));
+    state.reproducaoPec = {
+      erro:'', animaisTotal, animaisCria,
+      racaoCria: (srRes.data||[]).filter(x=>x.data && lotesCria.has(x.lote_id))
+        .map(x=>({mes:x.data.slice(0,7), valor:(custoKgPorDieta.get(x.dieta_id)||0)*Number(x.quantidade_kg||0)})),
+      pastoCria: (ptRes.data||[]).filter(x=>x.data && lotesCria.has(x.lote_id))
+        .map(x=>({mes:x.data.slice(0,7), valor:(custoKgPorDieta.get(x.dieta_id)||0)*Number(x.quantidade||0)})),
+      inseminacoes: (rcRes.data||[]).filter(x=>x.data).map(x=>({mes:x.data.slice(0,7), valor:Number(x.custo||0)})),
+      desmamas: (desmRes.data||[]).filter(x=>x.data).map(x=>{
+        const p = partoPorId.get(x.parto_id);
+        return {mes:x.data.slice(0,7), sexo: p ? (p.sexo_bezerro||'') : '', pesoKg: Number(x.peso_kg||0)};
+      }),
+      diagnosticos: (dgRes.data||[]).filter(x=>x.data).map(x=>({mes:x.data.slice(0,7), resultado:x.resultado})),
+    };
+  } catch(e){
+    state.reproducaoPec = {erro:'Não foi possível carregar os dados de reprodução agora.'};
+  }
+  render();
+}
+// Compra de ração (centro "Nutrição animal", ou conta lançada à mão com esse
+// nome exato): fica FORA do custo por animal, porque o consumo da ração já
+// entra pelas saídas de ração. Mesma regra de ehCompraDeRacao() no AE
+// Pecuária (decisão do Eduardo, 28/10/2026). Nunca por "contém".
+function semAcentoMinusc(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+function ehCompraDeRacaoLanc(l){
+  const c = state.centrosCusto.find(x=>String(x.id)===String(l.centroCustoId));
+  return semAcentoMinusc(c?.nome)==='nutricao animal' || semAcentoMinusc(l.descricao)==='nutricao animal';
+}
+// Custo de cada bezerro desmamado no período =
+//   (inseminação + ração e pasto dos lotes de Cria + fatia do custo fixo da
+//    Cria) ÷ bezerros desmamados no período.
+// Fatia do fixo: despesa lançada da Pecuária no período, SEM a compra de
+// ração, × (cabeças nos lotes de Cria ÷ cabeças de todos os lotes ativos,
+// hoje) — mesmo rateio por cabeça do AE Pecuária, que vale porque hoje todo
+// lançamento da Pecuária é "Geral" (sem área). É estimativa: o app não
+// guarda quantos animais cada lote tinha em cada mês passado.
+// Taxa de prenhez = prenhas ÷ (prenhas + vazias) dos diagnósticos do período.
+function reproducaoNoPeriodo(periodo){
+  const rp = state.reproducaoPec;
+  if(!rp || rp.erro) return rp ? {erro: rp.erro} : null;
+  const meses = new Set(periodoMeses(periodo));
+  const soma = lista => lista.filter(x=>meses.has(x.mes)).reduce((a,x)=>a+x.valor,0);
+  const inseminacao = soma(rp.inseminacoes);
+  const racaoPasto = soma(rp.racaoCria) + soma(rp.pastoCria);
+  const resPec = state.resultados.pecuaria;
+  const despesas = (resPec && resPec.despesasFinanceiro) || [];
+  let fixoPecuaria = 0;
+  for(const m of meses) fixoPecuaria += vigentesNoMes(despesas, m).filter(l=>!ehCompraDeRacaoLanc(l)).reduce((a,l)=>a+Number(l.valor||0),0);
+  const fatiaCria = rp.animaisTotal>0 ? rp.animaisCria/rp.animaisTotal : 0;
+  const fixoCria = fixoPecuaria*fatiaCria;
+  const desm = rp.desmamas.filter(x=>meses.has(x.mes));
+  const machos = desm.filter(x=>x.sexo==='macho').length;
+  const femeas = desm.filter(x=>x.sexo==='femea').length;
+  const desmamados = desm.length;
+  const pesos = desm.filter(x=>x.pesoKg>0);
+  const dgs = rp.diagnosticos.filter(x=>meses.has(x.mes));
+  const prenhas = dgs.filter(x=>x.resultado==='prenha').length;
+  const vazias = dgs.filter(x=>x.resultado==='vazia').length;
+  const custoTotal = inseminacao + racaoPasto + fixoCria;
+  return {
+    inseminacao, racaoPasto, fixoCria, fixoPecuaria, fatiaCria, custoTotal,
+    desmamados, machos, femeas, semSexo: desmamados-machos-femeas,
+    pesoMedio: pesos.length ? pesos.reduce((a,x)=>a+x.pesoKg,0)/pesos.length : null,
+    custoPorBezerro: desmamados>0 ? custoTotal/desmamados : null,
+    prenhas, vazias, diagnosticadas: prenhas+vazias,
+    taxaPrenhez: (prenhas+vazias)>0 ? prenhas/(prenhas+vazias)*100 : null,
+    inseminacoesQtd: rp.inseminacoes.filter(x=>meses.has(x.mes)).length,
+  };
+}
+function CardReproducaoOperacional(){
+  if(!state.apps.some(a=>a.slug==='pecuaria')) return '';
+  const r = reproducaoNoPeriodo(state.periodo);
+  const cor = OPERACAO_COR.pecuaria;
+  const cab = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <span class="op-chip-ic" style="background:${hexToRgba(cor,0.14)}; color:${cor}; width:34px; height:34px;">${iconOperacao('pecuaria')}</span>
+      <div>
+        <div style="font-family:'Fraunces',serif; font-weight:700; font-size:17px; color:var(--grafite);">Reprodução (Cria)</div>
+        <div class="hint">${labelPeriodo(state.periodo)}</div>
+      </div>
+    </div>`;
+  if(!r) return `<div class="card card-pad" style="margin-top:18px;">${cab}<p class="hint">Carregando os dados de reprodução...</p></div>`;
+  if(r.erro) return `<div class="card card-pad" style="margin-top:18px;">${cab}${Empty('Sem dados de reprodução', r.erro)}</div>`;
+  return `
+  <div class="card card-pad" style="margin-top:18px;">
+    ${cab}
+    <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); margin-bottom:14px;">
+      <div class="stat-card">
+        <div class="stat-label">Custo por bezerro desmamado</div>
+        <div class="stat-value" style="font-size:19px;">${r.custoPorBezerro!=null ? 'R$ '+fmt(r.custoPorBezerro) : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${r.desmamados>0 ? 'R$ '+fmt(r.custoTotal)+' ÷ '+fmtInt(r.desmamados)+' bezerros' : 'Nenhuma desmama no período'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Taxa de prenhez</div>
+        <div class="stat-value ${r.taxaPrenhez==null?'':(r.taxaPrenhez>=80?'bom':(r.taxaPrenhez<60?'alerta':''))}" style="font-size:19px;">${r.taxaPrenhez!=null ? fmt(r.taxaPrenhez,1)+'%' : '—'}</div>
+        <div class="hint" style="margin-top:4px;">${r.diagnosticadas>0 ? fmtInt(r.prenhas)+' prenhas de '+fmtInt(r.diagnosticadas)+' diagnosticadas' : 'Nenhum diagnóstico no período'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Bezerros desmamados</div>
+        <div class="stat-value" style="font-size:19px;">${fmtInt(r.desmamados)}</div>
+        <div class="hint" style="margin-top:4px;">${fmtInt(r.machos)} machos · ${fmtInt(r.femeas)} fêmeas${r.semSexo>0 ? ' · '+fmtInt(r.semSexo)+' sem sexo' : ''}${r.pesoMedio!=null ? ' · '+fmt(r.pesoMedio,0)+' kg médio' : ''}</div>
+      </div>
+    </div>
+    <table class="tabela-compacta tabela-sem-fixar tabela-quebra-celular">
+      <thead><tr><th>Custo da Cria no período</th><th>Total</th><th>Por bezerro</th></tr></thead>
+      <tbody>
+        <tr><td>Inseminação (sêmen + protocolo) <span class="hint">· ${fmtInt(r.inseminacoesQtd)} IA</span></td><td class="mono">R$ ${fmt(r.inseminacao)}</td><td class="mono">${r.desmamados>0?'R$ '+fmt(r.inseminacao/r.desmamados):'—'}</td></tr>
+        <tr><td>Ração e pasto dos lotes de Cria (consumo)</td><td class="mono">R$ ${fmt(r.racaoPasto)}</td><td class="mono">${r.desmamados>0?'R$ '+fmt(r.racaoPasto/r.desmamados):'—'}</td></tr>
+        <tr><td>Fatia do custo fixo <span class="hint">· ${fmt(r.fatiaCria*100,1)}% das cabeças estão na Cria</span></td><td class="mono">R$ ${fmt(r.fixoCria)}</td><td class="mono">${r.desmamados>0?'R$ '+fmt(r.fixoCria/r.desmamados):'—'}</td></tr>
+        <tr><td style="font-weight:600;">Total</td><td class="mono" style="font-weight:600;">R$ ${fmt(r.custoTotal)}</td><td class="mono" style="font-weight:600;">${r.desmamados>0?'R$ '+fmt(r.custoPorBezerro):'—'}</td></tr>
+      </tbody>
+    </table>
+    <p class="hint" style="margin-top:12px;">Custo por bezerro = custo da Cria no período ÷ bezerros desmamados no mesmo período: leia de preferência na Safra ou no Ano (num mês só, o custo e a desmama raramente coincidem). Ração e pasto entram pelo consumo; a compra de ração (Nutrição animal) fica de fora para não contar duas vezes. A fatia do custo fixo é estimada pela proporção de cabeças na Cria hoje, porque as despesas da Pecuária não são lançadas por área. Taxa de prenhez = prenhas ÷ (prenhas + vazias) dos diagnósticos feitos no período.</p>
+  </div>`;
+}
+
 // Resultado da Cana. Fonte única: lancamentos_rateados (a view, não a
 // tabela) — um lançamento "geral" (contador, escritório, os títulos do
 // ERP sem atividade própria) pode ter parte do valor rateada pra cana;
@@ -1190,6 +1341,7 @@ const state = {
   colheitasCana: [],   // {data, toneladas} — pra toneladas/ha no período (aba Operacional)
   colheitasGraos: [],  // {data, sacas} — sacas/ha
   vendasPec: [],       // {data, quantidade, tipoVenda, pesoMedioKg} — arrobas vendidas/ha
+  reproducaoPec: null, // Resultados > Operacional, bloco Reprodução (Cria): ver carregarReproducaoPecuaria()
   lancamentosRateados: [], // TODAS as atividades (inclusive 'geral'), pra Balancete/Fluxo de Caixa (aba Relatórios)
   movimentosFinanciamento: [], // entrada de empréstimo / amortização (principal) — NÃO são despesa nem receita; aba Empresa
   movimentosFinanciamentoOk: null, // null = ainda não tentou; false = tabela não existe (script financiamentos_02 não rodou)
@@ -3537,6 +3689,7 @@ function PageResultadosOperacional(){
     ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
   </div>
   <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado: entra nas cabeças vendidas, não em @/ha, avisado no card. Em "Resultado por unidade produzida" a Pecuária aparece como atividade toda: o custo (ração, pasto, mão de obra, fixos) não é dividido entre bezerro e frigorífico porque as despesas não são marcadas por área; custo e receita por cabeça só aparecem quando quase toda a receita do período tem venda com animais registrados.</p>
+  ${CardReproducaoOperacional()}
   ${TabelaResultadoPorUnidade()}
   `;
 }

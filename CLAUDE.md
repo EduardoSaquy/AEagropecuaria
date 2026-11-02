@@ -790,6 +790,70 @@ Pedidos do mesmo dia:
   "é gêmeo?". Com o histórico ainda carregando, pergunta ao banco (5 s de
   limite, sem travar o lançamento com sinal fraco).
 
+### Pecuária: número único, nome ao lado, e "Qual animal é?"
+
+Decisão do Eduardo em 02/11/2026 (opção A): o número do animal continua
+**único por sexo** (índice `animais_numero_sexo_unique`); dois animais com o
+mesmo brinco (11 e "11 ES") ficam com números diferentes (11 e **11099**, o
+texto no Nome; 19099, 24099... seguem o mesmo padrão; 512000 é o caso antigo
+com 000). O Nome é opcional. Não identificar animal por número + nome: os
+lançamentos (inseminação, diagnóstico, parto, desmama, pesagem, Manejo)
+guardam só o número.
+
+Ao salvar inseminação, diagnóstico, parto, pesagem por animal e Manejo,
+`confirmarAnimalDoCampo()` pergunta **qual animal é** quando o número
+digitado tem parecido com 099/000 no fim (`animaisParecidos`; só do sexo do
+lançamento): 11 → 11 ou 11099 · ES. Sem parecido, ou editando sem mexer no
+número, não pergunta. "Voltar e corrigir" não grava.
+
+**Zero à esquerda não conta** (Eduardo, 02/11/2026: "57 e 057 são o mesmo
+animal"): o campo do número tira o zero ao digitar; digitar 57 com a 057
+cadastrada usa a 057 sem perguntar (`mesmoAnimalSemZeros`).
+`pecuaria_numero_sem_zero_a_esquerda.sql` tira o zero do cadastro e de
+partos, inseminações, diagnósticos, pesagens por animal e protocolos. Se dois
+animais do mesmo sexo virariam o mesmo número, o de **lote encerrado** fica
+com o zero, com o histórico (os bois 001/002/003 dos Currais 1 e 2, vendidos,
+não são os bezerros 1/2/3 "Alice" da Bezerros Invernada); se os dois estão em
+lote ativo, o script para sem mudar nada. Animal de lote encerrado não entra
+na escolha do "Qual animal é?".
+
+**Rodado pelo Eduardo em 02/11/2026**, nesta ordem:
+`pecuaria_bois_001_002_003_viram_1000.sql` (os bois 001/002/003 dos Currais
+1 e 2, encerrados, viraram **1000/2000/3000** com as pesagens; os bezerros
+1/2/3 "Alice" ficaram) e depois `pecuaria_numero_sem_zero_a_esquerda.sql`: 87
+animais, 43 partos, 103 pesagens e 24 inseminações sem o zero, nenhum mantido,
+0 número com zero sobrando no banco.
+`teste_qual_animal.py`.
+
+### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
+
+Regra da fazenda (Eduardo, 02/11/2026): não há touro, só IATF; até **3
+inseminações** por vaca; não emprenhou na 3ª, vai para o descarte. A contagem
+**zera no parto** (qualquer parto lançado, inclusive aborto) e o histórico
+fica: `cicloReprodutivoVaca(numero, data)` devolve as crias da vaca na fazenda
+(nascimentos), o último parto e as inseminações desde ele (qualquer lote, sem
+zeros à esquerda). "Qual inseminação" vem preenchida por ela (1ª/2ª/3ª e
+"4ª (fora da regra)"; dá para mudar), a janela da inseminação mostra crias e
+inseminações desde o parto, e na 4ª o app **avisa** (`avisoQuartaInseminacao`,
+confirm; não bloqueia, decisão dele). O Manejo com inseminação grava a
+qual automática e avisa igual. Detalhe do lote de Cria: "N crias · X/3 IA
+desde o parto".
+
+### Matriz: Reprodução (Cria) em Resultados > Operacional
+
+Pedido do Eduardo em 02/11/2026. `CardReproducaoOperacional()` /
+`reproducaoNoPeriodo()` (AEMatriz.html), carga própria em
+`carregarReproducaoPecuaria()` (falha nela não derruba o resultado da
+Pecuária). No período do filtro: **custo por bezerro desmamado** =
+(inseminação + consumo de ração e pasto dos lotes de Cria + fatia do custo
+fixo) ÷ bezerros desmamados no período; a fatia do fixo é a despesa lançada da
+Pecuária **sem a compra de ração** (`ehCompraDeRacaoLanc`, mesma regra do AE
+Pecuária) × cabeças na Cria ÷ cabeças ativas hoje (estimativa: as despesas não
+são lançadas por área). **Taxa de prenhez** = prenhas ÷ (prenhas + vazias) dos
+diagnósticos do período. **Desmamados**: total, machos, fêmeas (sexo do parto)
+e peso médio. Leitura certa é na Safra/Ano (num mês, custo e desmama raramente
+coincidem). Só informativo: não entra em despesa nem resultado.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -930,6 +994,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 | `teste_parto_aborto_lote_numero.py` | 89 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido; resumo do lote sem o bezerro morto nos vivos) |
+| `teste_matriz_reproducao_operacional.py` | 15 | AEMatriz.html (Resultados > Operacional > Reprodução (Cria): custo por bezerro desmamado = inseminação + ração/pasto dos lotes de Cria + fatia do fixo sem a compra de ração; taxa de prenhez; desmamados machos/fêmeas; sem rolar de lado) |
+| `teste_qual_animal.py` | 25 | AEpecuaria.html ("Qual animal é?": 11 x 11099 · ES pergunta antes de gravar inseminação/diagnóstico/parto; 57 = 057 não pergunta e usa o cadastro; o campo tira zero à esquerda; sem parecido ou editando sem mexer no número não pergunta; Voltar não grava; regra das 3 IATF: crias, IA desde o último parto, 1ª/2ª/3ª automática, aviso na 4ª que não bloqueia) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
