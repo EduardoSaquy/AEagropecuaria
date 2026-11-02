@@ -816,6 +816,13 @@ com o zero, com o histórico (os bois 001/002/003 dos Currais 1 e 2, vendidos,
 não são os bezerros 1/2/3 "Alice" da Bezerros Invernada); se os dois estão em
 lote ativo, o script para sem mudar nada. Animal de lote encerrado não entra
 na escolha do "Qual animal é?".
+
+**Rodado pelo Eduardo em 02/11/2026**, nesta ordem:
+`pecuaria_bois_001_002_003_viram_1000.sql` (os bois 001/002/003 dos Currais
+1 e 2, encerrados, viraram **1000/2000/3000** com as pesagens; os bezerros
+1/2/3 "Alice" ficaram) e depois `pecuaria_numero_sem_zero_a_esquerda.sql`: 87
+animais, 43 partos, 103 pesagens e 24 inseminações sem o zero, nenhum mantido,
+0 número com zero sobrando no banco.
 `teste_qual_animal.py`.
 
 ### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
