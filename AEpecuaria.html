@@ -521,7 +521,11 @@ function animaisParecidos(numero, sexo){
   const n = String(numero||'').trim();
   if(!numeroAnimalSoDigitos(n)) return [];
   const base = numeroSemZeros(n);
-  return state.animais.filter(a=>a.status!=='morto'
+  // Animal de lote encerrado (vendido/abatido, ex. Curral 1 e 2) não recebe
+  // lançamento: fica fora da escolha. Os bois 001/002/003 desses currais e os
+  // bezerros 1/2/3 (Alice) são animais diferentes (Eduardo, 02/11/2026).
+  const loteEncerrado = a => { const l = state.lotes.find(x=>x.id===a.loteId); return !!(l && l.dataFim); };
+  return state.animais.filter(a=>a.status!=='morto' && !loteEncerrado(a)
     && (!sexo || !a.sexo || a.sexo===sexo)
     && numeroAnimalSoDigitos(a.numero)
     && [base, base+'099', base+'000'].includes(numeroSemZeros(a.numero)));

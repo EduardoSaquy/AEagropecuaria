@@ -23,6 +23,7 @@ DB = {
     "lotes": [
         {"id": 6, "nome": "Vacas 07/08", "destino": "cria", "numero_animais": 80, "data_inicio": "2026-01-01", "data_fim": None, "dieta_id": 1},
         {"id": 7, "nome": "Vacas Vazias Santa Alice", "destino": "cria", "numero_animais": 80, "data_inicio": "2026-01-01", "data_fim": None, "dieta_id": 1},
+        {"id": 9, "nome": "Curral 1", "destino": "confinamento", "numero_animais": 0, "data_inicio": "2026-01-01", "data_fim": "2026-10-30", "dieta_id": 1, "sexo": "macho"},
         {"id": 8, "nome": "Curral 2", "destino": "confinamento", "numero_animais": 60, "data_inicio": "2026-01-01", "data_fim": None, "dieta_id": 1, "sexo": "macho"},
     ],
     "dietas": [{"id": 1, "nome": "Dieta Cria", "tipo": "cria", "itens": [], "consumo_direto": True}],
@@ -33,6 +34,8 @@ DB = {
         animal(id=3, numero="057"),
         animal(id=4, numero="200"),
         animal(id=6, numero="300"),
+        animal(id=7, numero="1", sexo="macho", lote_id=8, nome="Alice"),
+        animal(id=8, numero="001", sexo="macho", lote_id=9),   # boi de lote encerrado: outro animal
         animal(id=5, numero="11", sexo="macho", lote_id=8),   # macho 11: nao e opcao numa vaca
     ],
     "partos": [
@@ -145,6 +148,10 @@ with sync_playwright() as pw:
         page.locator(f'[data-save="{tipo}"]').click(); page.wait_for_timeout(300)
         conf(page.locator('[data-escolher-animal]').count() == 1, f"{tipo}: o numero 11 tambem pergunta qual animal e")
         page.locator('[data-escolha-voltar]').click(); page.wait_for_timeout(150)
+
+    # boi 001 de lote encerrado nao entra na escolha do bezerro 1 (Alice)
+    conf(page.evaluate("() => precisaEscolherAnimal('1', 'macho')") is False,
+         "macho 1 (Alice) x boi 001 de lote encerrado: nao pergunta, o boi encerrado fica fora")
 
     # ===== regra das 3 IATF (contagem zera no parto) =====
     c = page.evaluate("() => cicloReprodutivoVaca('300', '2026-10-19')")
