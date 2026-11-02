@@ -1089,21 +1089,7 @@ function CardEstoquePecuaria(){
       </div>
     </div>
     ${r.cabecasSemPeso>0 ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);">${fmtInt(r.cabecasSemPeso)} de ${fmtInt(r.cabecas)} cabeças estão em lote sem pesagem e ficaram fora de UA, @ e valor: ${esc(r.lotesSemPeso.join(', '))}. Pese esses lotes (ou lance a pesagem) para entrarem na conta.</p>` : ''}
-    <table class="tabela-compacta tabela-sem-fixar tabela-blocos-celular">
-      <thead><tr><th>Lote</th><th>Cabeças</th><th>Peso médio</th><th>UA</th><th>@ (50% carcaça)</th></tr></thead>
-      <tbody>
-        ${r.linhas.map(x=>`<tr>
-          <td data-rotulo="Lote">${esc(x.lote.nome)}</td>
-          <td class="mono" data-rotulo="Cabeças">${fmtInt(x.cabecas)}</td>
-          <td class="mono" data-rotulo="Peso médio">${x.pesoMedio!=null ? fmt(x.pesoMedio,0)+' kg <span class="hint">('+dataBr(x.dataPesagem)+')</span>' : '<span class="hint">sem pesagem</span>'}</td>
-          <td class="mono" data-rotulo="UA">${x.ua!=null ? fmt(x.ua,1) : '—'}</td>
-          <td class="mono" data-rotulo="@">${x.arrobas!=null ? fmtInt(Math.round(x.arrobas)) : '—'}</td>
-        </tr>`).join('')}
-        <tr><td style="font-weight:600;" data-rotulo="Lote">Total</td><td class="mono" style="font-weight:600;" data-rotulo="Cabeças">${fmtInt(r.cabecas)}</td><td data-rotulo="Peso vivo" class="mono">${fmtInt(Math.round(r.pesoVivo))} kg</td>
-          <td class="mono" style="font-weight:600;" data-rotulo="UA">${fmt(r.ua,1)}</td><td class="mono" style="font-weight:600;" data-rotulo="@">${fmtInt(Math.round(r.arrobas))}</td></tr>
-      </tbody>
-    </table>
-    <p class="hint" style="margin-top:12px;">Peso vivo = cabeças do lote × peso médio da última pesagem do lote. UA = peso vivo ÷ 450 kg. @ = peso vivo × 50% de rendimento de carcaça ÷ 15 kg. Valor = @ × último preço da @ cadastrado no AE Pecuária (fêmea para lote de fêmeas). Por hectare: área de pecuária cadastrada em Fazendas. Pesagem antiga subestima o peso de hoje: confira a data ao lado do peso.</p>
+    <p class="hint" style="margin-top:12px;">Peso vivo = soma, lote a lote, das cabeças × peso médio da última pesagem do lote. UA = peso vivo ÷ 450 kg. @ = peso vivo × 50% de rendimento de carcaça ÷ 15 kg. Valor = @ × último preço da @ cadastrado no AE Pecuária (fêmea para lote de fêmeas). Por hectare: área de pecuária cadastrada em Fazendas. Pesagem antiga subestima o peso de hoje.</p>
   </div>`;
 }
 
