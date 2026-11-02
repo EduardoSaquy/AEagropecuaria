@@ -84,6 +84,20 @@ with sync_playwright() as pw:
         conf(perto(r["uaPorHa"], pv/450/300) and perto(r["arrobasPorHa"], pv*0.5/15/300) and perto(r["cabecasPorHa"], 363/300),
              f"por hectare (300 ha): {pv/450/300:.2f} UA/ha, {pv*0.5/15/300:.1f} @/ha, 1,21 cab/ha")
 
+    # preco da @ com mais de 7 dias: aviso vermelho; atualizado hoje: some
+    page.evaluate("() => { state.estoquePec.precos.forEach(p => { if (p.id !== 1) p.data = '2026-10-01'; }); }")
+    velho = page.evaluate("() => estoquePecuaria().precoVelho")
+    conf(len(velho) == 2 and all(v["dias"] > 7 for v in velho), "preco da @ de mais de 7 dias aparece como desatualizado (macho e femea)", str(velho))
+    page.evaluate("() => { state.page='resultados'; state.subAbaResultados='operacional'; render(); }"); page.wait_for_timeout(200)
+    conf(page.locator('[data-aviso-preco-arroba]').count() == 1 and "desatualizado" in page.locator('[data-aviso-preco-arroba]').inner_text(),
+         "a tela avisa em vermelho que o preco da @ esta desatualizado")
+    page.evaluate("() => { state.estoquePec.precos.forEach(p => { p.data = hojeStr(); }); render(); }"); page.wait_for_timeout(200)
+    conf(page.evaluate("() => estoquePecuaria().precoVelho.length") == 0 and page.locator('[data-aviso-preco-arroba]').count() == 0,
+         "preco lancado hoje: sem aviso")
+    page.evaluate("() => { state.estoquePec.precos = []; render(); }"); page.wait_for_timeout(200)
+    conf("Nenhum preço da @" in page.locator('[data-aviso-preco-arroba]').inner_text(), "sem preco cadastrado: avisa para lancar")
+    page.evaluate("() => { state.estoquePec.precos = window.__DB__.precos_arroba.map(p => ({...p, data: hojeStr()})); }")
+
     page.evaluate("() => { state.periodo = {tipo:'safra', safra:2025}; state.page='resultados'; state.subAbaResultados='operacional'; render(); }")
     page.wait_for_timeout(400)
     txt = page.evaluate("() => document.body.textContent")
