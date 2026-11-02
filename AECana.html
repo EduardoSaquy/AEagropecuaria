@@ -276,6 +276,10 @@ const ATIVIDADE = 'cana'; // fazenda_atividades.atividade
 /* ===================== HELPERS DE CONVERSÃO ===================== */
 function toSnake(s){ return s.replace(/[A-Z]/g, m => '_'+m.toLowerCase()); }
 function toCamel(s){ return s.replace(/_([a-z0-9])/g, (_,c)=>c.toUpperCase()); }
+// Texto digitado (nome de talhão, insumo, usuário...) entra no HTML
+// escapado: um "<" ou "&" no nome quebrava a tela, e um nome com tag
+// rodaria como código na tela de quem abrisse.
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtData(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
 
@@ -945,11 +949,11 @@ function fkNome(entityKey, id){
 function celulaValor(f, item){
   if(f.type==='computed') return f.compute(item);
   const val = item[f.key];
-  if(f.type==='fk') return fkNome(f.refEntity, val);
-  if(f.type==='select') return (f.options.find(o=>o.value===val)||{}).label || val || '—';
+  if(f.type==='fk') return esc(fkNome(f.refEntity, val));
+  if(f.type==='select') return esc((f.options.find(o=>o.value===val)||{}).label || val || '—');
   if(f.type==='date') return fmtData(val);
   if(f.type==='number') return (val===null||val===undefined||val==='') ? '—' : `${fmt(val, f.dec ?? 2)}${f.suffix||''}`;
-  return val || '—';
+  return esc(val || '—');
 }
 function PageCadastro(key){
   const cfg = CADASTROS[key];
@@ -963,7 +967,7 @@ function PageCadastro(key){
   const colspanTotal = colunas.length + (cfg.semStatus?0:1) + 1;
   return `
   <div class="toolbar">
-    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1" autocomplete="off"/></div>`}
+    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${esc(state.search)}" data-search="1" autocomplete="off"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : ''}
   </div>
@@ -1009,7 +1013,7 @@ function linhaTalhoesDaFazenda(fazenda, podeEditar, colspanTotal){
           <tbody>
             ${talhoes.map(t=>`
               <tr>
-                <td>${t.nome}</td>
+                <td>${esc(t.nome)}</td>
                 <td class="mono">${t.areaHa?fmt(t.areaHa)+' ha':'—'}</td>
                 <td>${t.culturaId!=null ? `<span class="pill ${frenteDoTalhao(t)==='graos'?'pill-graos':'pill-cana'}">${fkNome('culturas', t.culturaId)}</span>` : '—'}</td>
                 <td><span class="status-dot ${t.ativo?'ativo':'inativo'}"></span>${t.ativo?'Ativo':'Inativo'}</td>
@@ -1074,7 +1078,7 @@ function campoHtml(f, d){
     return `<div class="field"><label><input type="checkbox" id="${id}" ${val?'checked':''} style="width:auto; margin-right:6px;"/> ${f.label}</label></div>`;
   }
   if(f.type==='textarea'){
-    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3" autocomplete="off">${val}</textarea></div>`;
+    return `<div class="field"><label>${f.label}</label><textarea id="${id}" rows="3" autocomplete="off">${esc(val)}</textarea></div>`;
   }
   if(f.type==='select'){
     return `<div class="field"><label>${f.label}</label><select id="${id}">${f.options.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></div>`;
@@ -1084,7 +1088,7 @@ function campoHtml(f, d){
     return `<div class="field"><label>${f.label}</label>
       <select id="${id}">
         ${f.required?'':'<option value="">—</option>'}
-        ${lista.map(o=>`<option value="${o.id}" ${String(val)===String(o.id)?'selected':''}>${o.nome}</option>`).join('')}
+        ${lista.map(o=>`<option value="${o.id}" ${String(val)===String(o.id)?'selected':''}>${esc(o.nome)}</option>`).join('')}
       </select>
       ${lista.length===0?`<span class="hint">Cadastre ${CADASTROS[f.refEntity].singular.toLowerCase()} antes.</span>`:''}
     </div>`;
@@ -1095,7 +1099,7 @@ function campoHtml(f, d){
   if(f.type==='number'){
     return `<div class="field"><label>${f.label}</label><input type="number" step="${f.step||'1'}" id="${id}" value="${val}" autocomplete="off"/>${f.hint?`<span class="hint">${f.hint}</span>`:''}</div>`;
   }
-  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${val}" autocomplete="off" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
+  return `<div class="field"><label>${f.label}</label><input type="text" id="${id}" value="${esc(val)}" autocomplete="off" ${f.placeholder?`placeholder="${f.placeholder}"`:''}/></div>`;
 }
 function ModalCadastro(){
   const key = state.modal.key;
@@ -1211,7 +1215,7 @@ function PageEstoqueInsumos(frente){
           return `
           <tr>
             <td><div class="silo-wrap"><div class="silo"><div class="silo-fill ${l.baixo?'alerta':''}" style="height:${pct}%"></div></div></div></td>
-            <td><strong>${l.i.nome}</strong></td>
+            <td><strong>${esc(l.i.nome)}</strong></td>
             <td>${(categoriasOpt.find(o=>o.value===l.i.categoria)||{}).label || '—'}</td>
             <td class="mono">${fmt(l.saldo)} ${l.i.unidade} ${l.i.estoqueMinimo?`<span class="hint">/ mín. ${fmt(l.i.estoqueMinimo)} ${l.i.unidade}</span>`:''}</td>
             <td class="mono">${l.precoMedio==null ? '—' : `R$ ${fmt(l.precoMedio,4)}/${l.i.unidade}`}</td>
@@ -1273,7 +1277,7 @@ function PageAdminUsuarios(){
       <tbody>
         ${state.perfis.map(p=>`
           <tr>
-            <td><strong>${p.nome}</strong></td>
+            <td><strong>${esc(p.nome)}</strong></td>
             <td class="mono">${p.usuario}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
@@ -1292,7 +1296,7 @@ function ModalUsuario(){
       <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${d.nome}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
         <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. A mesma conta vale para todos os apps da AE Agropecuária.</span></div>
         <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
       </div>
@@ -1308,7 +1312,7 @@ function ModalPermissoes(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar acesso — ${d.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar acesso — ${esc(d.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
         <div class="field"><label>Perfil</label>
@@ -1381,7 +1385,7 @@ function ModalHistoricoTalhao(){
     return `
     <div class="overlay" data-close-overlay="1">
       <div class="modal modal-lg" data-stop="1">
-        <div class="modal-head"><h3>Histórico — ${t.nome}</h3><button class="modal-close" data-close="1">&times;</button></div>
+        <div class="modal-head"><h3>Histórico — ${esc(t.nome)}</h3><button class="modal-close" data-close="1">&times;</button></div>
         <div class="modal-body">${Empty('Talhão sem cultura definida','Defina a Cultura deste talhão em Cadastros > Talhões para ver o histórico.')}</div>
         <div class="modal-foot"><button class="btn btn-ghost" data-close="1">Fechar</button></div>
       </div>
@@ -1420,7 +1424,7 @@ function ModalHistoricoTalhao(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal modal-lg" data-stop="1">
-      <div class="modal-head"><h3>Histórico — ${t.nome} <span class="pill ${frenteChave==='Cana'?'pill-cana':'pill-graos'}" style="margin-left:8px;">${frenteChave==='Cana'?'Cana':'Grãos'}</span></h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Histórico — ${esc(t.nome)} <span class="pill ${frenteChave==='Cana'?'pill-cana':'pill-graos'}" style="margin-left:8px;">${frenteChave==='Cana'?'Cana':'Grãos'}</span></h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint">${fkNome('fazendas', t.fazendaId)} · ${t.areaHa ? fmt(t.areaHa)+' ha' : 'área não informada'}</p>
 
@@ -1454,7 +1458,7 @@ function ModalHistoricoTalhao(){
           <tbody>
             ${linhasInsumo.map(l=>`
               <tr>
-                <td><strong>${l.nome}</strong></td>
+                <td><strong>${esc(l.nome)}</strong></td>
                 <td>${l.categoria}</td>
                 <td class="mono">${fmt(l.total)} ${l.unidade}</td>
               </tr>
