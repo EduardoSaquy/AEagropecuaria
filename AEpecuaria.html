@@ -652,7 +652,10 @@ async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
 // "128, 129 130\n131" -> ['128','129','130','131'] -- aceita vírgula, espaço
 // ou linha como separador, pra não exigir um formato rígido de digitação.
 function parseNumerosAnimais(texto){
-  return String(texto||'').split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean);
+  // zero à esquerda não conta (057 = 57): a lista da entrada de animais
+  // também grava sem ele, igual ao campo de número
+  return String(texto||'').split(/[\s,;]+/).map(s=>s.trim()).filter(Boolean)
+    .map(s=>/^[0-9]+$/.test(s) ? (s.replace(/^0+(?=\d)/,'')) : s);
 }
 // Erro de banco que só acontece antes de rodar o SQL novo (coluna que o
 // app já usa e o banco ainda não tem) vira uma instrução, não um texto
@@ -2277,7 +2280,7 @@ function PageIngredientes(){
   <div class="toolbar">
     <div class="search">
       ${iconSearch()}
-      <input type="text" placeholder="Buscar ingrediente..." value="${state.search}" data-search="1"/>
+      <input type="text" placeholder="Buscar ingrediente..." value="${esc(state.search)}" data-search="1"/>
     </div>
     <span class="hint">${list.length} ingrediente(s) cadastrado(s)</span>
   </div>
@@ -5660,7 +5663,7 @@ function PageFinanceiroCustosFixos(){
   <p class="hint" style="margin:-6px 0 14px;">Soma dos custos fixos que valem para o mês atual — cada centro de custo usa o valor cadastrado especificamente para ${mesLabel(mesAtual)} quando existe, senão o valor recorrente.</p>
   <div class="field-row" style="margin-bottom:14px;">
     <div class="field" style="max-width:340px;">
-      <input type="text" placeholder="Buscar por nome, centro de custo ou fornecedor..." value="${state.searchDespesas}" data-search-despesas="1"/>
+      <input type="text" placeholder="Buscar por nome, centro de custo ou fornecedor..." value="${esc(state.searchDespesas)}" data-search-despesas="1"/>
     </div>
     <div class="field" style="max-width:220px;">
       <select data-filtro-mes-despesas="1">
@@ -8857,7 +8860,7 @@ function attachEvents(){
             // venda editada e SEM receita - exatamente o estado que este
             // bloco existe para evitar.
             if(state.centroVendasId == null){
-              alert('Não foi possível recriar a receita desta venda: o centro de custo "Vendas" não foi encontrado. A venda não foi alterada.');
+              alert('A venda foi alterada, mas a receita dela não pôde ser recriada: o centro de custo "Vendas" não foi encontrado. Peça para recriá-lo em Centros de Custo e edite a venda de novo.');
               return;
             }
             ({error} = await db.from('lancamentos_financeiros').insert({

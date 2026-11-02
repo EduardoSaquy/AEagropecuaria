@@ -1040,7 +1040,7 @@ function origemAbastecimento(a){
 function celulaValor(f, item){
   const val = item[f.key];
   if(f.format) return f.format(val, item);
-  if(f.type==='fk') return fkNome(f.refEntity, val);
+  if(f.type==='fk') return esc(fkNome(f.refEntity, val));
   if(f.type==='select') return esc((f.options.find(o=>o.value===val)||{}).label || val) || '—';
   if(f.type==='date') return fmtData(val);
   if(f.type==='number') return (val===null||val===undefined||val==='') ? '—' : `${fmt(val, f.dec ?? 2)}${f.suffix||''}`;
@@ -1059,7 +1059,7 @@ function PageCadastro(key){
   const colunas = cfg.fields.filter(f=>f.list!==false);
   return `
   <div class="toolbar">
-    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${state.search}" data-search="1"/></div>`}
+    ${cfg.semBusca ? '' : `<div class="search">${iconSearch()}<input type="text" placeholder="Buscar..." value="${esc(state.search)}" data-search="1"/></div>`}
     <span class="hint">${list.length} registro(s)</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-cadastro="${key}">+ Novo(a) ${cfg.singular}</button>` : (cfg.readOnly ? `<span class="hint">Cadastro feito no AE Matriz${key==='fazendas'||key==='funcionarios'?'':'/Lavoura'}</span>` : '')}
   </div>
@@ -1648,7 +1648,9 @@ function dataLocalDoTimestamp(iso){
 }
 function primeiroDiaMesISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
 function custoAbastecimento(a){
-  const custoUnit = custoMedioPonderado(a.tanqueId, a.dataHora);
+  // dia LOCAL do abastecimento (dataHora vem em UTC): abastecimento das 22h
+  // pegava o preço médio com as notas do dia seguinte
+  const custoUnit = custoMedioPonderado(a.tanqueId, dataLocalDoTimestamp(a.dataHora));
   return custoUnit!=null ? custoUnit * Number(a.volumeLitros||0) : null;
 }
 function abastecimentosNoPeriodo(){
