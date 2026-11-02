@@ -673,12 +673,12 @@ async function loadAll(){
     // ele precisa saber quantas cabecas o lote tem e se ja foi encerrado.
     temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, sexo, data_fim').order('nome') : Promise.resolve({data:[]}),
     temPermissao('matriz_financiamentos','visualizar') ? db.from('financiamentos').select('*').order('data_contratacao', {ascending:false}) : Promise.resolve({data:[]}),
-    temPermissao('matriz_financiamentos','visualizar') ? fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero')) : Promise.resolve({data:[]}),
+    temPermissao('matriz_financiamentos','visualizar') ? fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero').order('id')) : Promise.resolve({data:[]}),
   ]);
   // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
   // devolve vazio e a consulta e desperdicio de rede.
   const [ents, ctas, tits, rats, bxs] = podeVerContas() ? await Promise.all([
-    db.from('entidades').select('*').order('nome'),
+    fetchAllRows(()=>db.from('entidades').select('*').order('nome').order('id')),
     db.from('contas_bancarias').select('*').order('nome'),
     fetchAllRows(()=>db.from('titulos').select('*').order('vencimento').order('id')),
     fetchAllRows(()=>db.from('titulo_rateios').select('*').order('id')),
@@ -687,7 +687,10 @@ async function loadAll(){
   // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
   // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
   // apresentado com a mesma confiança de um número real.
-  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, fin, parcFin].find(r=>r.error)?.error;
+  // Contas a pagar/receber também: com os títulos sem carregar, a lista
+  // aparecia vazia e a trava de conta repetida (tituloRepetido) não via as
+  // contas já lançadas, deixando lançar de novo em dobro.
+  const erroCarregamento = [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, fin, parcFin, ents, ctas, tits, rats, bxs].find(r=>r.error)?.error;
   if(erroCarregamento){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
@@ -901,15 +904,17 @@ async function carregarResultadoPecuaria(){
       dbPecuaria.from('ingredientes').select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
-      dbPecuaria.from('pasto').select('data, dieta_id, quantidade'),
-      dbPecuaria.from('reproducao_custos').select('data, custo'),
+      // paginado: passa de 1000 linhas e o Supabase corta calado (o consumo
+      // gerencial da Pecuária saía menor sem aviso)
+      fetchAllRows(()=>dbPecuaria.from('pasto').select('data, dieta_id, quantidade').order('id')),
+      fetchAllRows(()=>dbPecuaria.from('reproducao_custos').select('data, custo').order('id')),
       fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
       // abates: só pra calcular arrobas VENDIDAS/ha na aba Operacional dos
       // Resultados — a pedido do Eduardo, é @ de venda (evento de saída),
       // não ganho de peso do rebanho.
       // categoria e sexo entram pra separar a receita da Pecuária por
       // categoria (Resultados > Operacional -- drill-down da rosquinha).
-      fetchAllRows(()=>dbPecuaria.from('abates').select('id, data, quantidade, tipo_venda, peso_medio_kg, categoria, sexo, lote_id').order('data')),
+      fetchAllRows(()=>dbPecuaria.from('abates').select('id, data, quantidade, tipo_venda, peso_medio_kg, categoria, sexo, lote_id').order('data').order('id')),
     ]);
     for(const r of [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, vendasRes]) if(r.error) throw r.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);

@@ -8857,7 +8857,7 @@ function attachEvents(){
             // venda editada e SEM receita - exatamente o estado que este
             // bloco existe para evitar.
             if(state.centroVendasId == null){
-              alert('Não foi possível recriar a receita desta venda: o centro de custo "Vendas" não foi encontrado. A venda não foi alterada.');
+              alert('A venda foi alterada, mas a receita dela não pôde ser recriada: o centro de custo "Vendas" não foi encontrado. Peça para recriá-lo em Centros de Custo e edite a venda de novo.');
               return;
             }
             ({error} = await db.from('lancamentos_financeiros').insert({

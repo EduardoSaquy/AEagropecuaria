@@ -1648,7 +1648,9 @@ function dataLocalDoTimestamp(iso){
 }
 function primeiroDiaMesISO(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
 function custoAbastecimento(a){
-  const custoUnit = custoMedioPonderado(a.tanqueId, a.dataHora);
+  // dia LOCAL do abastecimento (dataHora vem em UTC): abastecimento das 22h
+  // pegava o preço médio com as notas do dia seguinte
+  const custoUnit = custoMedioPonderado(a.tanqueId, dataLocalDoTimestamp(a.dataHora));
   return custoUnit!=null ? custoUnit * Number(a.volumeLitros||0) : null;
 }
 function abastecimentosNoPeriodo(){
