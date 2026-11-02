@@ -790,6 +790,21 @@ Pedidos do mesmo dia:
   "é gêmeo?". Com o histórico ainda carregando, pergunta ao banco (5 s de
   limite, sem travar o lançamento com sinal fraco).
 
+### Matriz: Reprodução (Cria) em Resultados > Operacional
+
+Pedido do Eduardo em 02/11/2026. `CardReproducaoOperacional()` /
+`reproducaoNoPeriodo()` (AEMatriz.html), carga própria em
+`carregarReproducaoPecuaria()` (falha nela não derruba o resultado da
+Pecuária). No período do filtro: **custo por bezerro desmamado** =
+(inseminação + consumo de ração e pasto dos lotes de Cria + fatia do custo
+fixo) ÷ bezerros desmamados no período; a fatia do fixo é a despesa lançada da
+Pecuária **sem a compra de ração** (`ehCompraDeRacaoLanc`, mesma regra do AE
+Pecuária) × cabeças na Cria ÷ cabeças ativas hoje (estimativa: as despesas não
+são lançadas por área). **Taxa de prenhez** = prenhas ÷ (prenhas + vazias) dos
+diagnósticos do período. **Desmamados**: total, machos, fêmeas (sexo do parto)
+e peso médio. Leitura certa é na Safra/Ano (num mês, custo e desmama raramente
+coincidem). Só informativo: não entra em despesa nem resultado.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -930,6 +945,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_campo_moeda.py` | 16 | AEMatriz.html (campos de R$ com ponto de milhar e vírgula ao digitar; o app continua lendo e gravando o número) |
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 | `teste_parto_aborto_lote_numero.py` | 89 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido; resumo do lote sem o bezerro morto nos vivos) |
+| `teste_matriz_reproducao_operacional.py` | 15 | AEMatriz.html (Resultados > Operacional > Reprodução (Cria): custo por bezerro desmamado = inseminação + ração/pasto dos lotes de Cria + fatia do fixo sem a compra de ração; taxa de prenhez; desmamados machos/fêmeas; sem rolar de lado) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
