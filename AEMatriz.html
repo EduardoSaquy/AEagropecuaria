@@ -996,6 +996,15 @@ async function carregarResultadoPecuaria(){
 // cadastrado no AE Pecuária (fêmea para lote de fêmeas, macho nos demais).
 // Lote sem pesagem fica de fora do peso e a tela avisa quantas cabeças são.
 const KG_POR_UA = 450, RENDIMENTO_CARCACA_ESTOQUE = 0.5, KG_POR_ARROBA_ESTOQUE = 15;
+// Preço da @ é lançado à mão no AE Pecuária (decisão do Eduardo, 02/11/2026:
+// manual, na praça dele, em vez de buscar um indicador de fora). Com mais de
+// 7 dias o bloco avisa em vermelho para atualizar.
+const DIAS_PRECO_ARROBA_VELHO = 7;
+function diasDesde(dataStr){
+  if(!dataStr) return null;
+  const [a,m,d] = dataStr.split('-').map(Number), [ha,hm,hd] = hojeStr().split('-').map(Number);
+  return Math.round((Date.UTC(ha,hm-1,hd) - Date.UTC(a,m-1,d)) / 86400000);
+}
 async function carregarEstoquePecuaria(){
   try{
     const [lotRes, pesRes, preRes] = await Promise.all([
@@ -1051,7 +1060,9 @@ function estoquePecuaria(){
     pesoVivo, ua, arrobas, valor,
     uaPorHa: ha>0 ? ua/ha : null, arrobasPorHa: ha>0 ? arrobas/ha : null,
     cabecasPorHa: ha>0 ? cabecas/ha : null, valorPorHa: ha>0 && valor!=null ? valor/ha : null,
-    precoMacho, precoFemea};
+    precoMacho, precoFemea,
+    precoVelho: [precoMacho, precoFemea].filter(Boolean).map(p=>({sexo:p.sexo, data:p.data, dias: diasDesde(p.data)}))
+      .filter(p=>p.dias > DIAS_PRECO_ARROBA_VELHO)};
 }
 function CardEstoquePecuaria(){
   if(!state.apps.some(a=>a.slug==='pecuaria')) return '';
@@ -1088,6 +1099,8 @@ function CardEstoquePecuaria(){
         <div class="hint" style="margin-top:4px;">${r.valorPorHa!=null ? 'R$ '+fmt(r.valorPorHa,0)+'/ha · ' : ''}${r.precoMacho ? '@ macho R$ '+fmt(r.precoMacho.valor)+' ('+dataBr(r.precoMacho.data)+')' : 'sem preço da @ cadastrado'}${r.precoFemea ? ' · fêmea R$ '+fmt(r.precoFemea.valor) : ''}</div>
       </div>
     </div>
+    ${!r.precoMacho && !r.precoFemea ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);" data-aviso-preco-arroba="1">Nenhum preço da @ cadastrado: lance o preço no AE Pecuária para o valor em carne aparecer.</p>` : ''}
+    ${r.precoVelho.length ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);" data-aviso-preco-arroba="1">Preço da @ desatualizado: ${r.precoVelho.map(p=>(p.sexo==='femea'?'fêmea':'macho')+' de '+dataBr(p.data)+' ('+p.dias+' dias)').join(', ')}. Atualize no AE Pecuária para o valor em carne refletir o mercado.</p>` : ''}
     ${r.cabecasSemPeso>0 ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);">${fmtInt(r.cabecasSemPeso)} de ${fmtInt(r.cabecas)} cabeças estão em lote sem pesagem e ficaram fora de UA, @ e valor: ${esc(r.lotesSemPeso.join(', '))}. Pese esses lotes (ou lance a pesagem) para entrarem na conta.</p>` : ''}
     <p class="hint" style="margin-top:12px;">Peso vivo = soma, lote a lote, das cabeças × peso médio da última pesagem do lote. UA = peso vivo ÷ 450 kg. @ = peso vivo × 50% de rendimento de carcaça ÷ 15 kg. Valor = @ × último preço da @ cadastrado no AE Pecuária (fêmea para lote de fêmeas). Por hectare: área de pecuária cadastrada em Fazendas. Pesagem antiga subestima o peso de hoje.</p>
   </div>`;
