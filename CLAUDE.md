@@ -854,6 +854,14 @@ diagnósticos do período. **Desmamados**: total, machos, fêmeas (sexo do parto
 e peso médio. Leitura certa é na Safra/Ano (num mês, custo e desmama raramente
 coincidem). Só informativo: não entra em despesa nem resultado.
 
+### Matriz: Resultados > Operacional agrupado por atividade
+
+Pedido do Eduardo em 03/11/2026 ("a cana estava no meio da pecuária"):
+`PageResultadosOperacional` mostra a **Pecuária inteira primeiro** (cartão do
+resultado, Rebanho estocado e Reprodução) e depois a **Lavoura** (Cana e
+Cereais lado a lado), e por fim o Resultado por unidade produzida. Bloco novo
+de uma atividade entra no grupo dela.
+
 ### Matriz: Rebanho estocado (UA/ha e @/ha) em Resultados > Operacional
 
 Pedido do Eduardo em 02/11/2026. `CardEstoquePecuaria()`/`estoquePecuaria()`,
