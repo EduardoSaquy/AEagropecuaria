@@ -3809,14 +3809,23 @@ function TabelaResultadoPorUnidade(){
   `;
 }
 function PageResultadosOperacional(){
+  // Agrupado por atividade (pedido do Eduardo em 03/11/2026): antes os três
+  // cartões vinham lado a lado e os blocos da Pecuária (rebanho, reprodução)
+  // ficavam embaixo, depois da Cana e dos Cereais, como se fossem de outra
+  // atividade. Agora a Pecuária vem inteira primeiro, depois a lavoura.
+  const tem = slug => OPERACOES_ORDEM.includes(slug);
+  const lavoura = OPERACOES_ORDEM.filter(s=>s!=='pecuaria');
   return `
   <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — resultado operacional por atividade</p>
-  <div class="donuts-row">
-    ${OPERACOES_ORDEM.map(CardResultadoOperacional).join('')}
-  </div>
-  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado: entra nas cabeças vendidas, não em @/ha, avisado no card. Em "Resultado por unidade produzida" a Pecuária aparece como atividade toda: o custo (ração, pasto, mão de obra, fixos) não é dividido entre bezerro e frigorífico porque as despesas não são marcadas por área; custo e receita por cabeça só aparecem quando quase toda a receita do período tem venda com animais registrados.</p>
+  ${tem('pecuaria') ? `
+  <p class="eyebrow" style="margin:6px 0 10px; color:${OPERACAO_COR.pecuaria};">Pecuária</p>
+  <div class="donuts-row" style="margin-bottom:0;">${CardResultadoOperacional('pecuaria')}</div>
   ${CardEstoquePecuaria()}
-  ${CardReproducaoOperacional()}
+  ${CardReproducaoOperacional()}` : ''}
+  ${lavoura.length ? `
+  <p class="eyebrow" style="margin:28px 0 10px;">Lavoura — ${lavoura.map(s=>esc(OPERACOES[s]||s)).join(' e ')}</p>
+  <div class="donuts-row">${lavoura.map(CardResultadoOperacional).join('')}</div>` : ''}
+  <p class="hint" style="margin-top:14px;">Produtividade: toneladas colhidas (Cana) / sacas de 60kg colhidas (Cereais) no período, divididas pela área REALMENTE COLHIDA (talhões com colheita no período — não a área total cadastrada em Fazendas) / arrobas vendidas (Pecuária), divididas pela área cadastrada em Fazendas (pasto/confinamento não "colhe"). Pecuária soma as arrobas de cada venda (abate: peso de carcaça ÷ 15; venda em pé por kg: peso vivo ÷ 30) — venda por cabeça fechada não tem peso registrado: entra nas cabeças vendidas, não em @/ha, avisado no card. Em "Resultado por unidade produzida" a Pecuária aparece como atividade toda: o custo (ração, pasto, mão de obra, fixos) não é dividido entre bezerro e frigorífico porque as despesas não são marcadas por área; custo e receita por cabeça só aparecem quando quase toda a receita do período tem venda com animais registrados.</p>
   ${TabelaResultadoPorUnidade()}
   `;
 }
