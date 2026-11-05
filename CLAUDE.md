@@ -168,12 +168,12 @@ atividade, comece por `lancamentos_rateados`.
   mexido; FGTS, tributos, juros do BB e o resto ficaram em três partes iguais
   (regra dele para conta geral sem destino). Os financiamentos de máquinas
   (Bradesco, Sicoob) e o consórcio ficaram em três partes por decisão **explícita**
-  dele ("rateado entre as 3"). **Combustível, manutenção da frota e seguro de
-  máquinas ficaram em três partes só como padrão provisório**: ele corrigiu em
-  05/11/2026 que NÃO vale assumir que servem às três só porque os
-  financiamentos de máquinas servem; falta ele apontar a atividade de cada
-  fornecedor/apólice (a lista `rateio_09` mostra cada lançamento com o código do
-  documento do ERP).
+  dele ("rateado entre as 3"), e os **seguros de máquinas** (quatro apólices)
+  também ("rateio entre as 3"). Ele corrigiu em 05/11/2026 que NÃO vale assumir
+  que combustível, frota e seguro servem às três só porque os financiamentos de
+  máquinas servem: cada fornecedor foi perguntado (a lista `rateio_09` mostra cada
+  lançamento com o código do documento do ERP) e as respostas viraram os ajustes
+  abaixo.
 - **Ajuste 1, rodado em 05/11/2026** (a lista de contas em três partes mostrou
   contas de uma atividade só): 16 lançamentos passaram de três partes para UMA
   parte com o valor inteiro: adubos, fertilizantes, corretivos de solo, frete de
@@ -190,6 +190,24 @@ atividade, comece por `lancamentos_rateados`.
   R$ 472.779,01 (37,3%); 0 que não fecha; diferença R$ 0,00. Contas de **atividade
   única** assim se resolvem por fornecedor + centro de custo com a atividade
   informada pelo Eduardo, nunca por palpite do nome.
+- **Ajuste 2 (combustível), rodado em 05/11/2026**: 17 lançamentos de combustível
+  de dois fornecedores (R$ 23.796,81) passaram de três partes para **duas, Pecuária
+  e Grãos, metade cada** (ele não indicou outra proporção), com os centavos na
+  primeira parte. Mesmo formato do ajuste 1 (`rateio_10`, nomes na pasta privada;
+  backup `zz_backup_rateio_ajuste2_2026_11_05`; desfazer no fim). Depois: das 604
+  contas, Cana R$ 429.250,88 (33,9%), Grãos R$ 361.672,00 (28,5%), Pecuária
+  R$ 476.745,15 (37,6%); 0 que não fecha; diferença R$ 0,00.
+- **Exclusão de parcelas pessoais, rodada em 05/11/2026**: 24 parcelas de
+  investimento de um fornecedor que é **gasto pessoal, não da empresa**
+  (R$ 136.800,00, de mar/2026 a fev/2028) saíram do Financeiro por decisão dele; uma
+  receita de R$ 9.400,00 de 2023 com o mesmo nome **ficou** (não é o gasto
+  pessoal). Cópia completa dos lançamentos e das partes do rateio em
+  `zz_backup_lanc_pessoais_2026_11_05` e `zz_backup_lanc_pessoais_rateios_2026_11_05`
+  (fechadas), 66 partes saíram junto, `log_alteracoes` guardou cada exclusão;
+  desfazer no fim do script (`rateio_08`, na pasta privada). **Se o ERP for
+  reimportado essas parcelas voltam**: tirar de novo (o Financeiro, a aba Empresa e
+  os resultados perdem esses R$ 136.800 de investimento, inclusive nos meses
+  futuros).
 - **Se reimportar o ERP**: não rode o rateio do importador como está (mesmas
   falhas acima); use as regras do `rateio_05`. Gente nova na folha: cadastre em
   Funcionários (alocação) e acrescente o pareamento ao próximo rateio. Depois
