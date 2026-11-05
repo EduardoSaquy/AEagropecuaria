@@ -168,6 +168,12 @@
   .perm-matrix{width:100%; border-collapse:collapse; font-size:13px;}
   .perm-matrix th, .perm-matrix td{padding:8px 10px; border-bottom:1px solid var(--cinza-claro); text-align:left;}
   .perm-matrix select{width:100%; padding:6px 8px; font-size:12.5px;}
+  /* Celular: campo com menos de 16px faz o iPhone dar zoom ao tocar nele e a tela fica ampliada
+     (05/11/2026). So abaixo de 760px; o desktop segue com 13,5px. Fica depois do .perm-matrix
+     select para ganhar dele (mesma especificidade). Campo grande da Pecuaria ja tem 19px. */
+  @media (max-width:760px){
+    input, select, textarea, .perm-matrix select{font-size:16px;}
+  }
   .status-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
   .status-dot.ativo{background:var(--bom);}
   .status-dot.inativo{background:var(--cinza);}
@@ -206,7 +212,7 @@
 <body>
 <div id="root"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
 <script>
 /* ===================== SUPABASE =====================
  * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/

@@ -55,7 +55,9 @@ const CACHE = 'ae-v5';
 const TEMPO_REDE_MS = 4000;
 
 // Bibliotecas e fontes de fora (o app nao roda sem a do Supabase).
-const CDN_SUPABASE = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+// Versao FIXA (05/11/2026): com @2 o CDN passou a servir a 2.119.0 um dia depois de lancada,
+// sem ninguem testar. Trocar aqui e nos 5 apps (grep supabase-js@) so depois de testar.
+const CDN_SUPABASE = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0';
 const HOSTS_ESTATICOS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 const SHELL = [

@@ -986,6 +986,25 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
   - O histórico do git (commits antigos) ainda guarda o nome em arquivos e
     mensagens; só some recriando o repositório de novo.
 
+- **supabase-js com versão FIXA (2.118.0), nunca `@2`.** Em 05/11/2026 o `@2` do
+  CDN passou a servir a 2.119.0 um dia depois de lançada, sem ninguém testar: a
+  biblioteca cuida do login e de toda leitura/gravação, então uma versão nova
+  pode quebrar os 5 apps da noite para o dia sem nenhum deploy nosso. Fixou-se na
+  2.118.0 (de 15/10/2026, a que serviu o uso diário de 3 semanas). O endereço
+  está nos 5 apps e em `CDN_SUPABASE` do `sw.js` (`grep supabase-js@`): trocar
+  nos seis de uma vez, e só depois de testar o login, uma carga e a fila offline
+  com a versão nova. Os testes trocam a biblioteca por um stub, então não pegam
+  quebra dela.
+- **Campo de formulário com menos de 16px no celular.** O iPhone dá zoom ao tocar
+  num campo com fonte menor que 16px e a tela fica ampliada (o Android não).
+  Os 5 apps têm, logo depois de `.perm-matrix select`, um
+  `@media (max-width:760px){ input, select, textarea, .perm-matrix select{font-size:16px} }`
+  (o desktop segue com 13,5px; `.campo-grande` da Pecuária já tem 19px). Regra
+  de campo nova com `font-size` menor que 16px tem de ficar dentro desse
+  breakpoint ou vir depois dele com seletor mais específico. Conferência: criar
+  um campo de cada tipo dentro de cada contêiner e medir o `font-size` computado
+  a 390px (nenhum abaixo de 16).
+
 - **Offline com login vencido.** O token do Supabase vale 1 h; vencido e
   sem rede, `db.auth.getSession()` fica ~25 s tentando renovar e depois
   devolve "sem sessão" (medido com supabase-js 2.117 em 13/10/2026). Por
@@ -1021,7 +1040,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-37 arquivos `teste_*.py`, 961 checagens (28/10/2026; a tabela abaixo lista os
+42 arquivos `teste_*.py`, 1.023 checagens (05/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
