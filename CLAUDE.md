@@ -277,6 +277,45 @@ regra). Agora, só no `AEMatriz.html`:
 - Teste: `teste_lancamento_atividade.py` (falha no código anterior);
   `teste_contas.py` passou a escolher a atividade antes de salvar a conta.
 
+### Lançamentos repetidos da importação do ERP e do acerto de 21/10: o que sai e o que fica (05/11/2026)
+
+Achado com `rateio_14_pares_por_data.sql` (par = mesmo fornecedor, mesmo valor,
+pagamento a até 7 dias do vencimento, mesmo documento do ERP quando a linha tem
+um; **não** parear por mês: a importação guarda a competência e o vencimento, o
+acerto guarda a data do pagamento, e o par certo cai em meses diferentes).
+Resultado que ele rodou: **A) 32 pares, R$ 93.636,53** (linha do acerto repetida
+da importação, mesmo documento); **B) 18 pares, R$ 43.646,80** (lançada à mão,
+sem autor, vinda do app antigo da Pecuária, repetida de uma importação "geral"
+que a limpeza de agosto não alcançou); **463 linhas do acerto, R$ 1.530.124,65,
+sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
+"o que tiver duplicado, apaga e deixa um lançamento só, corrigido".
+
+`rateio_15_remove_duplicados.sql` (tudo ou nada, traps de 32/R$ 93.636,53 e
+18/R$ 43.646,80, cópia fechada `zz_backup_dup_*_2026_11_05`, desfazer no fim):
+- **A**: fica a **importação** (tem a competência e as regras de rateio dele);
+  sai a linha do acerto.
+- **B**: se a importação já foi refeita pelo `rateio_05_conserto` (está em
+  `zz_backup_rateio_2026_11_05`), ela já segue as regras de hoje (combustível
+  Pecuária/Grãos 50/50, cooperativa de cana = Cana): fica a importação, sai a
+  lançada à mão. Se **não** foi refeita (competência antiga), fica a lançada à
+  mão (regra de agosto: é o registro nativo) e sai a importação. Duas lançadas à
+  mão iguais para uma importação só: fica uma.
+- **Nunca apaga** linha com contrato de financiamento, lote, abate ou áreas da
+  pecuária, nem se algo apontar para ela (chave estrangeira): o par fica inteiro
+  e aparece na lista final para ele decidir.
+- Efeito: o Financeiro perde R$ 137.283,33 que estava contado duas vezes.
+  **Se o ERP for reimportado, as importações apagadas voltam.**
+- Atividade que muda de lado: nos 13 pares de A (R$ 23.311,08) em que o acerto
+  traz a atividade do ERP (segurança patrimonial, plano de saúde, seguro,
+  manutenção de infraestrutura, frete, serviço técnico) e a importação está em
+  três partes (regra padrão dele), vale a importação. A segurança patrimonial é o
+  caso duvidoso: o ERP e a linha que ele mesmo lançou em novembro dizem Cana; a
+  importação está em três partes. Nomes ficam fora do git (a lista com nomes está
+  nesta conversa e na memória, não aqui).
+- Ensaiado num Postgres descartável com os 50 pares (valores e datas reais, nomes
+  trocados por letras) e os casos de recusa e de desfazer. **Depois que ele rodar,
+  anotar aqui o resultado** e apagar os `zz_backup_dup_*` quando ele confirmar.
+
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
 `vigentesNoMes(despesas, mesStr)` no AEMatriz.html. Um recorrente vale no mês
