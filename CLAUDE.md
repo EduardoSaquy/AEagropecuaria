@@ -313,8 +313,22 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   importação está em três partes. Nomes ficam fora do git (a lista com nomes está
   nesta conversa e na memória, não aqui).
 - Ensaiado num Postgres descartável com os 50 pares (valores e datas reais, nomes
-  trocados por letras) e os casos de recusa e de desfazer. **Depois que ele rodar,
-  anotar aqui o resultado** e apagar os `zz_backup_dup_*` quando ele confirmar.
+  trocados por letras) e os casos de recusa e de desfazer.
+- **Rodado por ele em 05/11/2026, igual ao ensaio**: 50 lançamentos apagados,
+  R$ 137.283,33 (A: 32, R$ 93.636,53; B: 18, R$ 43.646,80), 70 partes de rateio
+  saíram junto, 0 pares pulados, 0 que não fecha o valor, visão rateada = Financeiro
+  (diferença R$ 0,00). Dos 18 de B, 9 ficaram com a importação (já refeita) e 9 com
+  a lançada à mão (competência antiga). Cópias fechadas a apagar quando ele
+  confirmar: `zz_backup_dup_2026_11_05`, `zz_backup_dup_rateios_2026_11_05` e
+  `zz_backup_dup_pares_2026_11_05`.
+- **Decisões dele logo depois**: a segurança patrimonial é **Cana**; a cooperativa
+  de cana (as lançadas à mão que ficaram em Pecuária) passa a **Cana**; os outros
+  repetidos (um prestador com pagamentos de mesmo valor, peças e outros) são
+  compras parceladas repetidas de verdade e **ficam como estão**.
+- Os totais de "Estado final do rateio da safra 2026/27" acima mudaram com estas
+  exclusões (as importações que ficaram carregam as regras dele; saíram linhas do
+  acerto que contavam a mesma conta): recalcular com uma consulta nova, não confiar
+  naqueles números.
 
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
