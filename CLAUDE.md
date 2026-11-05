@@ -165,8 +165,25 @@ atividade, comece por `lancamentos_rateados`.
   backup; 0 lançamentos com rateio que não fecha; visão rateada = Financeiro
   (diferença R$ 0,00). Ficou como está por decisão dele: o rateio de 2023 a
   abril/2026 (proporção do gasto: Cana 24%, Grãos 44%, Pecuária 32%) não foi
-  mexido; adubos e corretivos de solo, FGTS, tributos, máquinas/financiamento/
-  consórcio, juros do BB e o resto ficaram em três partes iguais.
+  mexido; FGTS, tributos, financiamento de máquinas e consórcio, juros do BB,
+  combustível, frota, seguro de máquinas e o resto ficaram em três partes
+  iguais (ele disse que as máquinas financiadas servem às três atividades).
+- **Ajuste 1, rodado em 05/11/2026** (a lista de contas em três partes mostrou
+  contas de uma atividade só): 16 lançamentos passaram de três partes para UMA
+  parte com o valor inteiro: adubos, fertilizantes, corretivos de solo, frete de
+  compra de produtos de um fornecedor de grãos, ferramentas de manejo e
+  infraestrutura de um fornecedor de pecuária → **Pecuária** (R$ 48.983,00);
+  análises agrícolas, seguro de safra e uma cooperativa de cana (máquinas) →
+  **Cana** (R$ 2.645,51); aquisição de equipamentos do milho → **Grãos**
+  (R$ 60.000,00). Só mexe em lançamento que o conserto refez e que ainda estava com
+  três partes iguais; recusa se não forem exatamente esses números; backup das
+  partes antigas em `zz_backup_rateio_ajuste1_2026_11_05` (fechada), desfazer no
+  fim do arquivo. O script (`rateio_07`) tem nomes de fornecedores e fica só em
+  `AEagropecuaria_dados_privados\rateio_2026-11\`. Depois dele, das 604 contas:
+  Cana R$ 437.183,13 (34,5%), Grãos R$ 357.705,89 (28,2%), Pecuária
+  R$ 472.779,01 (37,3%); 0 que não fecha; diferença R$ 0,00. Contas de **atividade
+  única** assim se resolvem por fornecedor + centro de custo com a atividade
+  informada pelo Eduardo, nunca por palpite do nome.
 - **Se reimportar o ERP**: não rode o rateio do importador como está (mesmas
   falhas acima); use as regras do `rateio_05`. Gente nova na folha: cadastre em
   Funcionários (alocação) e acrescente o pareamento ao próximo rateio. Depois
