@@ -121,6 +121,59 @@ Cana, por exemplo, saía menor do que o ERP mostrava pra mesma atividade.
 Corrigido nos quatro pontos. Se abrir uma tela nova que soma financeiro por
 atividade, comece por `lancamentos_rateados`.
 
+### Rateio incompleto da safra 2026/27: achado e correção (05/11/2026)
+
+- **O problema** (aparecia desde 14/10/2026 como "R$ 645 mil abaixo" na aba
+  Empresa): 604 lançamentos do ERP (atividade `geral`, competência de mai/2026 a
+  abr/2027, importados em 28/08) tinham em `lancamento_rateios` partes que
+  somavam só ~22,7% do valor. R$ 979.432,02 (R$ 734.937,23 de despesa e
+  R$ 244.494,79 de investimento) não chegavam a atividade nenhuma, e a Cana não
+  tinha parte nenhuma. O Financeiro e a aba Empresa estavam certos; Relatórios,
+  Geral e Operacional por atividade ficavam com custo a menos. **Causa exata não
+  identificada**: o importador sempre fecha o rateio em 100%, `log_alteracoes`
+  não mostra edição em nenhum dos 604 e nenhum script do repositório apaga
+  partes. Duas falhas do importador também ficaram à vista: a base de proporção
+  só contava despesa **com fazenda** (a Pecuária e boa parte da Cana lançadas à
+  mão não têm fazenda e ficavam de fora) e somava receita e investimento.
+- **Regra de rateio decidida pelo Eduardo (05/11/2026)**, da mais forte para a
+  mais fraca, para conta `geral` do ERP sem destino: (1) tem **fazenda**: vai
+  para as atividades daquela fazenda (`fazenda_atividades` com área), em partes
+  iguais; (2) salário de **funcionário cadastrado**: pela alocação da aba
+  Funcionários (`funcionario_atividades`, % por atividade; o cadastro só tem o
+  primeiro nome, por isso há um pareamento nome do ERP → id); (2b) pessoa sem
+  cadastro: pela atividade que ele informou; (3) centro de custo de uma
+  atividade só por natureza (Nutrição animal, Reprodução animal, Compra de
+  animais → Pecuária); (4) o resto: **três partes iguais** entre Pecuária, Cana
+  e Grãos, a mesma regra do juros de capital de giro. Conta específica de duas
+  atividades já nasce com a atividade na hora do lançamento no app e não entra
+  nisso.
+- **Scripts** (rodados por ele no Supabase, nesta ordem): `rateio_02_diagnostico.sql`
+  (acha e classifica, só leitura), `rateio_03_quem_divide_diferente.sql` e
+  `rateio_03b_funcionarios_e_alocacao.sql` (listas para decidir),
+  `rateio_04_previa.sql` (só leitura: como ficaria, conta por conta),
+  `rateio_05_conserto.sql` (tudo ou nada; recusa se não forem exatamente 604
+  lançamentos e R$ 979.432,02; guarda as partes antigas em
+  `zz_backup_rateio_2026_11_05`, fechada a anon e a quem está logado; **desfazer
+  no fim do arquivo**) e `rateio_06_contas_em_tres_partes.sql` (lista as contas que
+  ficaram em três partes). A versão com **nomes de pessoas** das listas
+  (`de_para`, `regras_nome`) fica só em
+  `AEagropecuaria_dados_privados\rateio_2026-11\`: nome de pessoa não entra no
+  git. Ensaiados num Postgres descartável com um caso de cada regra, as recusas e
+  o desfazer (devolve o banco idêntico).
+- **Rodado em 05/11/2026**: das 604 contas, Cana R$ 471.747,11 (37,2%), Grãos
+  R$ 334.915,40 (26,4%), Pecuária R$ 461.005,52 (36,4%); 3.534 partes antigas no
+  backup; 0 lançamentos com rateio que não fecha; visão rateada = Financeiro
+  (diferença R$ 0,00). Ficou como está por decisão dele: o rateio de 2023 a
+  abril/2026 (proporção do gasto: Cana 24%, Grãos 44%, Pecuária 32%) não foi
+  mexido; adubos e corretivos de solo, FGTS, tributos, máquinas/financiamento/
+  consórcio, juros do BB e o resto ficaram em três partes iguais.
+- **Se reimportar o ERP**: não rode o rateio do importador como está (mesmas
+  falhas acima); use as regras do `rateio_05`. Gente nova na folha: cadastre em
+  Funcionários (alocação) e acrescente o pareamento ao próximo rateio. Depois
+  de qualquer carga, `rateio_02_diagnostico.sql` tem de dar 0 que não fecham.
+  `zz_backup_rateio_2026_11_05` pode ser apagada quando ele confirmar que está
+  tudo certo.
+
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
 `vigentesNoMes(despesas, mesStr)` no AEMatriz.html. Um recorrente vale no mês
@@ -402,7 +455,8 @@ custo já existe em Resultados > Relatórios.
   e em 14/10/2026 a visão rateada estava **R$ 645 mil abaixo** do Financeiro em
   2026 (de 2023 a abril/2026 bate centavo por centavo; de maio/2026 em diante
   os custos "geral" chegam às atividades só pela metade, de R$ 38 mil a R$ 170
-  mil por mês). Relatórios, Geral e Operacional leem a visão e herdam o buraco;
+  mil por mês). Relatórios, Geral e Operacional leem a visão e herdavam o buraco
+  (**fechado em 05/11/2026**, ver "Rateio incompleto da safra 2026/27");
   a aba Empresa avisa a diferença do período. Diagnóstico:
   `rateio_confere_soma_das_partes.sql`. Os totais podem diferir de
   Geral/Operacional por esse buraco do rateio (até 28/10/2026 também porque
