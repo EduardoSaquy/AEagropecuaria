@@ -208,6 +208,25 @@ atividade, comece por `lancamentos_rateados`.
   reimportado essas parcelas voltam**: tirar de novo (o Financeiro, a aba Empresa e
   os resultados perdem esses R$ 136.800 de investimento, inclusive nos meses
   futuros).
+- **Ajuste 3 (manutenção da frota), rodado em 05/11/2026**: 22 lançamentos
+  (R$ 20.408,64) de fornecedores de peças e serviços da frota passaram de três
+  partes para UMA, na atividade que ele apontou fornecedor por fornecedor: Cana
+  R$ 15.072,64, Grãos R$ 2.250,00, Pecuária R$ 3.086,00 (`rateio_11`, nomes na pasta
+  privada; backup `zz_backup_rateio_ajuste3_2026_11_05`; desfazer no fim). Ficaram
+  em três partes: um fornecedor sem resposta dele (R$ 4.078, oito lançamentos
+  mensais) e um pequeno por decisão dele.
+- **Estado final do rateio da safra 2026/27 (05/11/2026)**: depois do conserto,
+  dos ajustes 1 a 3 e da exclusão das parcelas pessoais, as contas que o conserto
+  refez somam R$ 1.199.268,03 (592 lançamentos; eram 604 e R$ 1.267.668,03,
+  menos as 12 parcelas pessoais de R$ 68.400,00): **Cana R$ 414.720,60 (34,6%),
+  Grãos R$ 334.319,14 (27,9%), Pecuária R$ 450.228,29 (37,5%)**; 0 lançamentos que
+  não fecham; visão rateada = Financeiro (diferença R$ 0,00). Seguem em três
+  partes iguais por decisão dele: financiamentos de máquinas e consórcio, seguros
+  de máquinas, tributos, FGTS, juros do BB e o resto da administração. As
+  constantes "604 / R$ 979.432,02" do `rateio_05` não valem mais (já rodou; ele
+  recusa). Backups a apagar quando ele confirmar: `zz_backup_rateio_2026_11_05`,
+  `zz_backup_rateio_ajuste1_2026_11_05`, `..._ajuste2_...`, `..._ajuste3_...`,
+  `zz_backup_lanc_pessoais_2026_11_05` e `zz_backup_lanc_pessoais_rateios_2026_11_05`.
 - **Se reimportar o ERP**: não rode o rateio do importador como está (mesmas
   falhas acima); use as regras do `rateio_05`. Gente nova na folha: cadastre em
   Funcionários (alocação) e acrescente o pareamento ao próximo rateio. Depois
