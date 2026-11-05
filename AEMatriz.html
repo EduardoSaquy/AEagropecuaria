@@ -599,6 +599,35 @@ function subgrupoDoCentro(c){
   return i < 0 ? '' : s.slice(i+1).trim();
 }
 const ATIVIDADES_LANC = [['pecuaria','Pecuária'],['cana','Cana-de-açúcar'],['graos','Grãos'],['geral','Geral / administrativo']];
+// O que um lançamento NOVO pode escolher. "Geral" fica de fora de propósito:
+// um lançamento 'geral' sem as partes do ERP não cai em nenhuma das três
+// atividades nos resultados (foi o que deixou R$ 979 mil de fora em
+// 05/11/2026), e a tela de custo por hectare o reparte por outra regra.
+// ATIVIDADES_LANC continua inteira porque filtros e rótulos precisam
+// mostrar os lançamentos antigos que já são 'geral'.
+const ATIVIDADES_NOVO_LANC = ATIVIDADES_LANC.filter(([k])=>k!=='geral');
+// Divisão de um lançamento entre as atividades: começa em partes iguais.
+// Três casas decimais para que 900,00 dê 300,00 + 300,00 + 300,00 (com
+// 33,33 / 33,33 / 33,34 daria 299,97 / 299,97 / 300,06).
+const DIVISAO_PADRAO = {pecuaria:'33,333', cana:'33,333', graos:'33,334'};
+// Cada atividade com percentual vira UM lançamento próprio, o mesmo que a
+// baixa de um título rateado gera. O último leva o resto dos centavos, para
+// a soma das partes fechar exatamente com o valor.
+function partesDaDivisao(valor, divisao){
+  const totalCent = Math.round(Number(valor||0)*100);
+  const ativas = ATIVIDADES_NOVO_LANC
+    .map(([k])=>({atividade:k, percentual:numDecimal((divisao||{})[k])}))
+    .filter(p=>p.percentual>0);
+  let usado = 0;
+  return ativas.map((p,i)=>{
+    const cent = i===ativas.length-1 ? totalCent-usado : Math.round(totalCent*p.percentual/100);
+    usado += cent;
+    return {...p, valor: cent/100};
+  });
+}
+function somaDaDivisao(divisao){
+  return ATIVIDADES_NOVO_LANC.reduce((a,[k])=>a+numDecimal((divisao||{})[k]), 0);
+}
 const TIPO_LABEL = {despesa:'despesa', receita:'receita', investimento:'investimento'};
 // Antes so id e nome, que bastava para vincular uma receita a um lote. A
 // venda de animais precisa de mais: quantas cabecas tem (para nao vender
@@ -6016,7 +6045,7 @@ function ModalTitulo(){
   // o formulario recusa salvar. Dizer "fecha" e "preencha" ao mesmo tempo
   // e pior do que nao dizer nada.
   const rateiosCompletos = (d.rateios||[]).every(r =>
-    r.centroCustoId && r.competencia && Number(r.valor) > 0);
+    r.atividade && r.centroCustoId && r.competencia && Number(r.valor) > 0);
   const somaParcelas = (d.valoresParcela||[]).reduce((a,v)=>a+Number(v||0), 0);
   const faltaParcelas = Math.round((total - somaParcelas) * 100) / 100;
   const nParcelas = Math.max(1, Number(d.parcelas||1));
@@ -6035,7 +6064,7 @@ function ModalTitulo(){
   const tipoEsperado = ehPagar ? 'saida' : 'entrada';
   const centrosPara = (atividade)=> state.centrosCusto
     .filter(c=> c.ativo!==false)
-    .filter(c=> !c.frente || c.frente==='geral' || c.frente===atividade)
+    .filter(c=> !atividade || !c.frente || c.frente==='geral' || c.frente===atividade)
     .filter(c=> !c.tipo || c.tipo===tipoEsperado)
     .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
 
@@ -6141,8 +6170,11 @@ function ModalTitulo(){
           const campos = `
           <div class="field"><label>Atividade</label>
             <select id="f-rat-atividade-${i}" data-recalcula-titulo="1">
-              ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${r.atividade===k?'selected':''}>${l}</option>`).join('')}
-            </select></div>
+              <option value="" ${!r.atividade?'selected':''}>— Escolha a atividade —</option>
+              ${ATIVIDADES_NOVO_LANC.map(([k,l])=>`<option value="${k}" ${r.atividade===k?'selected':''}>${l}</option>`).join('')}
+              ${r.atividade==='geral' ? `<option value="geral" selected>Geral (como está)</option>` : ''}
+            </select>
+            <span class="hint">Para uma conta que serve a mais de uma atividade, divida em partes: uma por atividade.</span></div>
           <div class="field"><label>Fazenda</label>
             <select id="f-rat-fazenda-${i}">
               <option value="" ${!r.fazendaId?'selected':''}>Geral / toda a empresa</option>
@@ -6403,6 +6435,7 @@ async function salvarTitulo(){
     // Com uma parte so, nao ha "parte 1" para citar - o erro fala do
     // formulario, nao de um item numerado que a pessoa nem viu.
     const onde = varias ? ` da parte ${i+1}` : '';
+    if(!r.atividade)     faltando.push(`atividade${onde}`);
     if(!r.centroCustoId) faltando.push(`${d.tipo==='pagar'?'centro de custo':'origem da receita'}${onde}`);
     if(!r.competencia)   faltando.push(`competência${onde}`);
     if(varias && !(Number(r.valor) > 0)) faltando.push(`valor da parte ${i+1}`);
@@ -6585,7 +6618,9 @@ async function salvarBaixa(){
 }
 
 function rateioVazio(){
-  return {fazendaId:'', atividade:'geral', centroCustoId:'', competencia: mesAtualStr(), valor:''};
+  // Sem atividade de partida: "geral" aqui nascia calado e a baixa do
+  // título gerava lançamento fora das três atividades. A pessoa escolhe.
+  return {fazendaId:'', atividade:'', centroCustoId:'', competencia: mesAtualStr(), valor:''};
 }
 
 
@@ -7237,7 +7272,12 @@ function lerLancamentoDoFormulario(base){
   const areas = ['confinamento','pasto','cria'].filter(a=>document.getElementById(`f-arealanc-${a}`)?.checked);
   return {
     ...base,
-    atividade:     v('f-atividadelanc') || base.atividade,
+    // Sem "|| base.atividade": vazio é uma resposta (ainda não escolheu), e
+    // cair na atividade de antes esconderia que o campo está em branco.
+    atividade:     document.getElementById('f-atividadelanc') ? v('f-atividadelanc') : base.atividade,
+    divisao:       document.getElementById('f-divisao-pecuaria')
+                     ? Object.fromEntries(ATIVIDADES_NOVO_LANC.map(([k])=>[k, v(`f-divisao-${k}`)]))
+                     : base.divisao,
     fazendaId:     v('f-fazendalanc'),
     centroCustoId: v('f-centrocustolanc'),
     descricao:     v('f-descricaolanc').trim(),
@@ -7266,6 +7306,70 @@ function lerLancamentoCompleto(base){
   const q = quantidadeDaVenda(d);
   return {...d, valor: Math.round(valorDaVenda(d)*100)/100,
           quantidade: Math.round(q.quantidade*1000)/1000, unidade: q.unidade};
+}
+function textoSomaDivisao(soma){
+  return Math.abs(soma-100) <= 0.0011
+    ? 'Soma 100%.'
+    : `Soma ${fmt(soma,3)}%: tem que fechar em 100%.`;
+}
+// Desenha as três linhas "atividade · percentual · quanto dá em reais".
+// O valor em reais é só conferência: o que se grava é calculado de novo ao
+// salvar, por partesDaDivisao, a mesma função.
+function BlocoDivisaoLancamento(d){
+  const divisao = d.divisao || DIVISAO_PADRAO;
+  const partes = partesDaDivisao(d.valor, divisao);
+  const soma = somaDaDivisao(divisao);
+  const fechou = Math.abs(soma-100) <= 0.0011;
+  return `
+  <div class="field" id="bloco-divisao">
+    <label>Quanto de cada atividade (%)</label>
+    ${ATIVIDADES_NOVO_LANC.map(([k,l])=>{
+      const p = partes.find(x=>x.atividade===k);
+      return `<div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+        <span style="flex:1; min-width:0;">${l}</span>
+        <input id="f-divisao-${k}" data-divisao="1" type="text" inputmode="decimal" style="width:90px;" value="${esc(divisao[k] ?? '')}" autocomplete="off"/>
+        <span id="f-divisao-valor-${k}" class="mono" style="width:120px; text-align:right;">${p ? 'R$ '+fmt(p.valor) : '—'}</span>
+      </div>`;
+    }).join('')}
+    <span id="f-divisao-aviso" class="hint" style="${fechou?'':'color:var(--alerta);'}">${textoSomaDivisao(soma)}</span>
+    <span class="hint">Começa em partes iguais. Para deixar uma atividade de fora, ponha 0 nela. Cada atividade vira um lançamento seu, com a parte do valor dela.</span>
+  </div>`;
+}
+// Atualiza os reais e o aviso enquanto digita, sem redesenhar a tela (que
+// tiraria o foco do campo).
+function atualizarDivisaoNaTela(){
+  const valor = numDecimal(document.getElementById('f-valorlanc')?.value);
+  const divisao = Object.fromEntries(ATIVIDADES_NOVO_LANC.map(([k])=>[k, document.getElementById(`f-divisao-${k}`)?.value ?? '']));
+  const partes = partesDaDivisao(valor, divisao);
+  ATIVIDADES_NOVO_LANC.forEach(([k])=>{
+    const el = document.getElementById(`f-divisao-valor-${k}`);
+    const p = partes.find(x=>x.atividade===k);
+    if(el) el.textContent = p ? 'R$ '+fmt(p.valor) : '—';
+  });
+  const aviso = document.getElementById('f-divisao-aviso');
+  if(aviso){
+    const soma = somaDaDivisao(divisao);
+    aviso.textContent = textoSomaDivisao(soma);
+    aviso.style.color = Math.abs(soma-100) <= 0.0011 ? '' : 'var(--alerta)';
+  }
+}
+// Monta os lançamentos de uma divisão, ou devolve o motivo de não poder.
+function montarDivisaoDoLancamento(campos){
+  const divisao = campos.divisao || DIVISAO_PADRAO;
+  const soma = somaDaDivisao(divisao);
+  if(Math.abs(soma-100) > 0.0011) return {erro: `Os percentuais somam ${fmt(soma,3)}% e têm que fechar em 100%.`};
+  const partes = partesDaDivisao(campos.valor, divisao);
+  if(partes.length < 2) return {erro: 'Dividir pede pelo menos duas atividades. Para uma só, escolha ela na lista.'};
+  if(partes.some(p=>!(p.valor > 0))) return {erro: 'O valor é pequeno demais para dividir assim: alguma parte ficaria sem centavo.'};
+  const total = Number(campos.valor);
+  const linhas = partes.map((p,i)=>{
+    // O rastro fica na observação: quem olhar o Financeiro depois vê que as
+    // linhas são a mesma conta dividida, não uma lançada duas vezes.
+    const marca = `Dividido entre atividades: parte ${i+1} de ${partes.length} (${fmt(p.percentual,3)}% de R$ ${fmt(total)})`;
+    return lancamentoToRow({...campos, atividade: p.atividade, valor: p.valor,
+      observacao: [campos.observacao, marca].filter(Boolean).join('\n')});
+  });
+  return {linhas};
 }
 function ModalLancamento(){
   const d = editDraft;
@@ -7297,9 +7401,13 @@ function ModalLancamento(){
   // Centro ainda sem classificacao aparece nos dois: barrar deixaria a
   // pessoa sem opcao nenhuma.
   const ladoDoCentro = ehReceita ? 'entrada' : 'saida';
+  // Dividindo (ou ainda sem atividade) vale qualquer centro: o filtro por
+  // frente só faz sentido quando há UMA atividade escolhida.
+  const dividindo = d.atividade==='dividir';
+  const geralTravado = !!d._editId && d._atividadeOriginal==='geral';
   const centros = state.centrosCusto
     .filter(c=> c.ativo!==false)
-    .filter(c=> !c.frente || c.frente==='geral' || c.frente===d.atividade)
+    .filter(c=> !d.atividade || dividindo || !c.frente || c.frente==='geral' || c.frente===d.atividade)
     .filter(c=> !c.tipo || c.tipo===ladoDoCentro)
     .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   return `
@@ -7308,11 +7416,17 @@ function ModalLancamento(){
       <div class="modal-head"><h3>${d._editId?'Editar':'Nova'} ${TIPO_LABEL[d.tipo]}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Atividade</label>
-          <select id="f-atividadelanc">
-            ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${d.atividade===k?'selected':''}>${l}</option>`).join('')}
+          <select id="f-atividadelanc" ${geralTravado?'disabled':''}>
+            <option value="" ${!d.atividade?'selected':''}>— Escolha a atividade —</option>
+            ${ATIVIDADES_NOVO_LANC.map(([k,l])=>`<option value="${k}" ${d.atividade===k?'selected':''}>${l}</option>`).join('')}
+            ${!d._editId ? `<option value="dividir" ${dividindo?'selected':''}>Dividir entre as atividades…</option>` : ''}
+            ${d._atividadeOriginal==='geral' ? `<option value="geral" selected>Geral (como está)</option>` : ''}
           </select>
-          <span class="hint">Define a qual operação este valor pertence — é o que permite comparar custo por hectare entre elas.</span>
+          ${geralTravado
+            ? `<span class="hint">Este lançamento é "Geral" (dividido pelo ERP ou antigo) e a atividade não se troca aqui: trocar não desfaz a divisão que já vale nos resultados.</span>`
+            : `<span class="hint">Define a qual operação este valor pertence — é o que permite comparar custo por hectare entre elas. Conta que serve a mais de uma atividade: escolha "Dividir entre as atividades".</span>`}
         </div>
+        ${dividindo ? BlocoDivisaoLancamento(d) : ''}
         <div class="field"><label>Fazenda</label>
           <select id="f-fazendalanc">
             <option value="" ${!d.fazendaId?'selected':''}>Geral / toda a empresa</option>
@@ -8093,7 +8207,11 @@ function attachEvents(){
     const tipo = novoLancBtn.dataset.novoLancamento;
     editDraft = {
       tipo,
-      atividade: state.filtroAtividade || 'pecuaria',
+      // Começa vazio: o "pecuaria" de partida deixava passar, sem ninguém
+      // escolher, lançamento de outra atividade na pecuária. Só herda o
+      // filtro quando ele é uma das três atividades ("Geral" não vale).
+      atividade: ATIVIDADES_NOVO_LANC.some(([k])=>k===state.filtroAtividade) ? state.filtroAtividade : '',
+      divisao: {...DIVISAO_PADRAO},
       fazendaId:'', centroCustoId:'', descricao:'', valor:'',
       // despesa nasce sem data (recorrente); receita e investimento nascem hoje
       // hojeStr() usa componentes locais. toISOString() é UTC: no Brasil,
@@ -8118,10 +8236,16 @@ function attachEvents(){
     editDraft = d;
     render();
   };
+  // Divisão entre atividades: reais e aviso de soma acompanham a digitação.
+  document.querySelectorAll('[data-divisao]').forEach(el=>{ el.addEventListener('input', atualizarDivisaoNaTela); });
+  const campoValorLanc = document.getElementById('f-valorlanc');
+  if(campoValorLanc && document.getElementById('bloco-divisao')) campoValorLanc.addEventListener('input', atualizarDivisaoNaTela);
   document.querySelectorAll('[data-edit-lancamento]').forEach(el=>{
     el.onclick = ()=>{
       const l = state.lancamentos.find(x=>x.id===Number(el.dataset.editLancamento));
-      editDraft = {...l, _editId:l.id};
+      // _atividadeOriginal: quem já é 'geral' (ERP ou antigo) segue 'geral'
+      // e não pode ser trocado aqui; ver geralTravado em ModalLancamento.
+      editDraft = {...l, _editId:l.id, _atividadeOriginal:l.atividade};
       state.erroLancamento = '';
       state.modal = {type:'lancamento'}; render();
     };
@@ -8431,7 +8555,11 @@ function attachEvents(){
         // nenhum relatório depois. Melhor barrar aqui do que descobrir na
         // hora de fechar o custo por hectare.
         const faltando = [];
-        if(!campos.atividade) faltando.push('atividade');
+        // 'geral' só segue valendo para quem já era 'geral' ao abrir (o
+        // campo fica travado). Lançamento novo, ou trocado para 'geral',
+        // não passa: era o que abria o buraco nos resultados por atividade.
+        const geralPermitido = !!editDraft._editId && editDraft._atividadeOriginal==='geral';
+        if(!campos.atividade || (campos.atividade==='geral' && !geralPermitido)) faltando.push('atividade');
         if(!campos.centroCustoId) faltando.push('centro de custo');
         if(!campos.descricao) faltando.push('descrição');
         if(!(Number(campos.valor) > 0)) faltando.push('valor (maior que zero)');
@@ -8455,7 +8583,13 @@ function attachEvents(){
           await loadAll();
           return;
         }
-        if(editDraft._editId){
+        if(campos.atividade==='dividir'){
+          // Um lançamento por atividade, gravados numa chamada só: ou entram
+          // todos ou nenhum. O fechamento da soma é conferido antes.
+          const divisao = montarDivisaoDoLancamento(campos);
+          if(divisao.erro){ state.erroLancamento = divisao.erro; editDraft = campos; render(); return; }
+          ({error} = await db.from('lancamentos_financeiros').insert(divisao.linhas));
+        } else if(editDraft._editId){
           ({error} = await db.from('lancamentos_financeiros').update(row).eq('id', editDraft._editId));
         } else {
           ({error} = await db.from('lancamentos_financeiros').insert(row));

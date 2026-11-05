@@ -234,6 +234,49 @@ atividade, comece por `lancamentos_rateados`.
   `zz_backup_rateio_2026_11_05` pode ser apagada quando ele confirmar que está
   tudo certo.
 
+### Lançamento novo sempre tem atividade; conta de mais de uma atividade é dividida (05/11/2026)
+
+Pedido do Eduardo: "não poder lançar sem atividade; se for para ratear, lança as
+três atividades, para não gerar confusão". A origem do problema acima: um
+lançamento `'geral'` sem as partes do ERP não cai em nenhuma das três atividades
+nos resultados, e a tela de custo por hectare o reparte por hectares (outra
+regra). Agora, só no `AEMatriz.html`:
+
+- **`ATIVIDADES_NOVO_LANC`** (pecuária, cana, grãos) é o que o formulário
+  oferece. `ATIVIDADES_LANC` segue inteira (com "Geral") porque filtros e rótulos
+  precisam mostrar os lançamentos antigos. Quem mexer nos formulários: não
+  devolva "Geral" à lista de lançamento novo.
+- **Nova despesa/receita/investimento** nasce **sem atividade** (antes vinha
+  "pecuária" sozinha, e passava lançamento de outra atividade sem ninguém
+  escolher) e não salva sem escolher. Herda o filtro da tela só quando ele é
+  uma das três.
+- **"Dividir entre as atividades"** (só em lançamento novo): um **lançamento por
+  atividade**, o mesmo modelo que a baixa de um título rateado já gera (não um
+  `'geral'` com partes escondidas em `lancamento_rateios`). Começa em partes iguais
+  (`DIVISAO_PADRAO` 33,333 / 33,333 / 33,334, para 900 dar 300 + 300 + 300; com
+  duas casas daria 299,97 / 299,97 / 300,06), percentuais editáveis, 0 deixa uma
+  atividade de fora, soma tem de ser 100% e são no mínimo duas. O último leva o
+  resto dos centavos (100 → 33,33 + 33,33 + 33,34). Entram numa **chamada só**
+  (todas ou nenhuma). `observacao` ganha "Dividido entre atividades: parte i de n
+  (p% de R$ total)": **as partes iguais entre si aparecem como "repetidos" nas
+  consultas `rateio_12/13/14` (mesmo fornecedor, valor e mês); a observação é o
+  que as distingue de duplicidade.**
+- **Lançamento `'geral'` já existente** (ERP ou antigo) abre com a atividade
+  **travada** em "Geral (como está)": trocar não desfaria as partes do ERP, que a
+  view `lancamentos_rateados` continua usando; os outros campos editam normal.
+  `geral` em lançamento novo (ou trocado para `geral`) é barrado ao salvar.
+- **Contas a pagar/receber**: cada parte do rateio pede a atividade
+  (`rateioVazio()` nasce sem; "Geral" só aparece num título que já era geral). Para
+  uma conta de várias atividades, o título já se divide em partes.
+- **A tabela `lancamento_rateios` continua fechada**: conferido em 05/11/2026,
+  RLS ligado, 0 regras, `anon` sem leitura nem escrita. O app não grava nela (só a
+  importação e os scripts) e lê pela view. Por isso a divisão acima não a usa.
+- **Limites**: a trava é só do app. Não há trava no banco: SQL direto ou o
+  importador ainda criam `'geral'`. A tela de custo por hectare segue repartindo
+  `'geral'` por hectares (decidir se passa a ler as partes/terços é com ele).
+- Teste: `teste_lancamento_atividade.py` (falha no código anterior);
+  `teste_contas.py` passou a escolher a atividade antes de salvar a conta.
+
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
 `vigentesNoMes(despesas, mesStr)` no AEMatriz.html. Um recorrente vale no mês
@@ -1154,7 +1197,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-42 arquivos `teste_*.py`, 1.023 checagens (05/11/2026; a tabela abaixo lista os
+43 arquivos `teste_*.py`, 1.055 checagens (05/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1197,6 +1240,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_lavoura_texto_escapado.py` | 8 | AECana.html, AECereais.html (nome com aspas, `<` e `&`: aparece inteiro na lista, não vira HTML e volta inteiro no campo de edição) |
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
+| `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`

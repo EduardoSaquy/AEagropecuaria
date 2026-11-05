@@ -516,6 +516,8 @@ with sync_playwright() as pw:
     preencher(page, "#f-tit-entidade", "TRANSPORTADORA NUNCA VISTA LTDA")
     preencher(page, "#f-tit-descricao", "Frete do adubo")
     preencher(page, "#f-tit-valor", "1500")
+    # a atividade nao vem mais preenchida: salvar sem escolher e barrado
+    page.select_option("#f-rat-atividade-0", "cana")
     page.select_option("#f-rat-centro-0", "90")
     preencher(page, "#f-rat-comp-0", "2026-12")
     page.click("[data-save='titulo']")
@@ -546,6 +548,7 @@ with sync_playwright() as pw:
     preencher(page, "#f-tit-entidade", "  agrosaquy  ")
     preencher(page, "#f-tit-descricao", "Compra qualquer")
     preencher(page, "#f-tit-valor", "200")
+    page.select_option("#f-rat-atividade-0", "cana")
     page.select_option("#f-rat-centro-0", "90")
     preencher(page, "#f-rat-comp-0", "2026-12")
     page.click("[data-save='titulo']")
