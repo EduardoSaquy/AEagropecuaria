@@ -165,9 +165,15 @@ atividade, comece por `lancamentos_rateados`.
   backup; 0 lançamentos com rateio que não fecha; visão rateada = Financeiro
   (diferença R$ 0,00). Ficou como está por decisão dele: o rateio de 2023 a
   abril/2026 (proporção do gasto: Cana 24%, Grãos 44%, Pecuária 32%) não foi
-  mexido; FGTS, tributos, financiamento de máquinas e consórcio, juros do BB,
-  combustível, frota, seguro de máquinas e o resto ficaram em três partes
-  iguais (ele disse que as máquinas financiadas servem às três atividades).
+  mexido; FGTS, tributos, juros do BB e o resto ficaram em três partes iguais
+  (regra dele para conta geral sem destino). Os financiamentos de máquinas
+  (Bradesco, Sicoob) e o consórcio ficaram em três partes por decisão **explícita**
+  dele ("rateado entre as 3"). **Combustível, manutenção da frota e seguro de
+  máquinas ficaram em três partes só como padrão provisório**: ele corrigiu em
+  05/11/2026 que NÃO vale assumir que servem às três só porque os
+  financiamentos de máquinas servem; falta ele apontar a atividade de cada
+  fornecedor/apólice (a lista `rateio_09` mostra cada lançamento com o código do
+  documento do ERP).
 - **Ajuste 1, rodado em 05/11/2026** (a lista de contas em três partes mostrou
   contas de uma atividade só): 16 lançamentos passaram de três partes para UMA
   parte com o valor inteiro: adubos, fertilizantes, corretivos de solo, frete de
