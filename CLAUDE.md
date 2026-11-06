@@ -303,6 +303,29 @@ regra). Agora, só no `AEMatriz.html`:
   ainda não estão só em Cana, pela proporção do ERP) nem na parcela de R$ 425,33 da
   cooperativa que o conserto pôs em Pecuária. Conferência: 0 lançamentos que não
   fecham o valor.
+- **Regra dele para o que está sem atividade (05/11/2026)**: "da safra 26/27 para
+  trás pode ratear entre as três atividades, mas só o que estiver sem atividade";
+  a safra 26/27 ele decide um a um. Combinado com ele (e ele concordou): **não**
+  ratear o que não é receita de atividade, porque colocaria R$ 638 mil de "receita"
+  dentro de Pecuária, Cana e Grãos: os movimentos de caixa (R$ 620.569,54: ajuste de
+  saldo bancário, resgate de aplicações, estorno, outras movimentações, aporte,
+  rendimentos), os "outros recebimentos não relacionados à atividade rural"
+  (R$ 17.325,23) e os centavos. Esses ficam sem atividade de propósito: a aba
+  Empresa os mostra nos blocos próprios do fluxo, e `rateio_18_sem_atividade.sql`
+  vai continuar listando-os.
+- **Ajuste 6, rodado por ele em 05/11/2026 (`rateio_22`, ids fixos, backup
+  `zz_backup_ajuste6_lanc_2026_11_05`, a apagar quando ele confirmar)**: 10 receitas
+  anteriores a maio/2026 que estavam sem atividade passaram a três partes iguais
+  (R$ 28.865,55: venda física de produção 6 lançamentos R$ 13.810,00, serviços
+  agropecuários R$ 1.350,00, casa-sede R$ 2.000,00, venda de veículos e máquinas
+  2 lançamentos R$ 11.705,55). Conferência: 0 lançamentos que não fecham o valor.
+- **Safra 26/27 sem atividade, decidido por ele (`rateio_23`, ensaiado, ainda por
+  rodar)**: análises agrícolas R$ 704,00 em **Grãos**; serviço do próprio ERP
+  R$ 2.581,99 em **três partes iguais**; uma despesa de R$ 200,00 lançada à mão
+  em **Cana**; venda de veículo ou máquina de R$ 33.000,00 (importação de
+  06/2026) em **Pecuária**. Backup `zz_backup_ajuste7_lanc_2026_11_05`. Substitui a
+  `rateio_21`, que foi removida do repositório (ela pôs as análises em Cana, que
+  não foi a decisão dele).
 
 ### Lançamentos repetidos da importação do ERP e do acerto de 21/10: o que sai e o que fica (05/11/2026)
 
