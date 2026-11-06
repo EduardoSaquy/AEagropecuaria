@@ -418,7 +418,7 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   as duas compras do primeiro vendedor (07/01/2026, R$ 228.150,00 e R$ 232.375,00)
   estavam lançadas duas vezes (a lançada à mão "Compra de matrizes para reprodução" e a
   transferência do ERP): `rateio_26_remove_duplicados_compra_matrizes.sql` apaga a
-  importação e fica a lançada à mão (R$ 460.525,00; ensaiado, **a rodar**; cópias
+  importação e fica a lançada à mão (R$ 460.525,00; **RODADO por ele em 05/11/2026**, tudo OK, 0 que não fecha; cópias
   `zz_backup_dup3_*_2026_11_05`). As do segundo vendedor (13/02/2026, R$ 173.037,50 e
   R$ 6.562,50) e o consórcio (17/03/2026, R$ 22.799,46) ele disse que **não** são o mesmo
   pagamento: **ficam as duas linhas de cada uma**; as transferências estão certas e
