@@ -606,6 +606,13 @@ const ATIVIDADES_LANC = [['pecuaria','Pecuária'],['cana','Cana-de-açúcar'],['
 // ATIVIDADES_LANC continua inteira porque filtros e rótulos precisam
 // mostrar os lançamentos antigos que já são 'geral'.
 const ATIVIDADES_NOVO_LANC = ATIVIDADES_LANC.filter(([k])=>k!=='geral');
+// A lista do Financeiro desenhava as ~21 mil linhas de uma vez (287 mil elementos:
+// 2,6 s no PC, ~23 s num tablet de entrada, medido em 05/11/2026). Agora desenha
+// estas e o resto vem por "Mostrar mais"; o total continua sendo do filtro inteiro.
+const LINHAS_FINANCEIRO_INICIAL = 100;
+const LINHAS_FINANCEIRO_A_MAIS = 200;
+const ESPERA_BUSCA_MS = 250;
+let timerBuscaDespesas = null;
 // Divisão de um lançamento entre as atividades: começa em partes iguais.
 // Três casas decimais para que 900,00 dê 300,00 + 300,00 + 300,00 (com
 // 33,33 / 33,33 / 33,34 daria 299,97 / 299,97 / 300,06).
@@ -1523,6 +1530,7 @@ const state = {
   erroTitulo: '',
   erroLancamento: '',
   searchDespesas: '',
+  limiteListaFinanceiro: 100, // quantas linhas a lista do Financeiro desenha; "Mostrar mais" soma 200
   searchCentros: '',
   filtroMesDespesas: '',
   filtroMesReceitas: '',
@@ -7198,6 +7206,8 @@ function PageFinanceiro(){
   const meses = [...new Set(state.lancamentos.map(l=>l.mes).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
   const lista = lancamentosDoTipo(state.abaFinanceiro);
   const ehDespesa = state.abaFinanceiro==='despesa';
+  const visiveis = lista.slice(0, state.limiteListaFinanceiro);
+  const faltam = lista.length - visiveis.length;
 
   return `
   <div class="toolbar" style="gap:8px;">
@@ -7239,7 +7249,7 @@ function PageFinanceiro(){
         <th>Descrição</th>${ehDespesa?'<th>Rateio</th>':''}<th>Valor</th><th></th>
       </tr></thead>
       <tbody>
-        ${lista.map(l=>`
+        ${visiveis.map(l=>`
           <tr>
             <td class="mono">${l.data ? l.data.split('-').reverse().join('/') : `<span class="pill pill-ok">Recorrente</span>`}</td>
             <td>${rotuloAtividade(l.atividade)}</td>
@@ -7257,12 +7267,17 @@ function PageFinanceiro(){
           </tr>
         `).join('')}
         <tr>
-          <td colspan="${ehDespesa?6:5}" style="text-align:right; font-weight:600;">Total listado</td>
+          <td colspan="${ehDespesa?6:5}" style="text-align:right; font-weight:600;">Total listado${faltam>0?` (${lista.length} lançamentos)`:''}</td>
           <td class="mono" style="font-weight:600;">R$ ${fmt(lista.reduce((a,l)=>a+Number(l.valor||0),0))}</td>
           <td></td>
         </tr>
       </tbody>
-    </table>`}
+    </table>
+    ${faltam>0 ? `
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 4px 4px;">
+      <span class="hint" data-lista-financeiro-resumo="1">Mostrando ${visiveis.length} de ${lista.length} lançamentos. O total acima já é o de todos.</span>
+      <button class="btn btn-primary btn-sm" data-mais-lancamentos="1">Mostrar mais ${Math.min(LINHAS_FINANCEIRO_A_MAIS, faltam)}</button>
+    </div>` : ''}`}
   </div>`;
 }
 // Lê o formulário de lançamento. Usado ao salvar e também ao trocar a
@@ -8187,20 +8202,28 @@ function attachEvents(){
 
   // ---- financeiro ----
   document.querySelectorAll('[data-aba-financeiro]').forEach(el=>{
-    el.onclick = ()=>{ state.abaFinanceiro = el.dataset.abaFinanceiro; render(); };
+    el.onclick = ()=>{ state.abaFinanceiro = el.dataset.abaFinanceiro; state.limiteListaFinanceiro = LINHAS_FINANCEIRO_INICIAL; render(); };
   });
   const filtroAtiv = document.querySelector('[data-filtro-atividade]');
-  if(filtroAtiv) filtroAtiv.onchange = (e)=>{ state.filtroAtividade = e.target.value; render(); };
+  if(filtroAtiv) filtroAtiv.onchange = (e)=>{ state.filtroAtividade = e.target.value; state.limiteListaFinanceiro = LINHAS_FINANCEIRO_INICIAL; render(); };
   const buscaDespesas = document.querySelector('[data-search-despesas]');
   if(buscaDespesas) buscaDespesas.oninput = (e)=>{
+    // O texto vale na hora; o redesenho espera a pessoa parar de digitar. Antes cada
+    // tecla refazia a lista inteira (1 s no PC, 6 s no tablet com 21 mil linhas).
     state.searchDespesas = e.target.value;
-    render();
-    // devolve o foco: render() recria o campo e a digitação se perderia
-    const campo = document.querySelector('[data-search-despesas]');
-    if(campo){ campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
+    clearTimeout(timerBuscaDespesas);
+    timerBuscaDespesas = setTimeout(()=>{
+      state.limiteListaFinanceiro = LINHAS_FINANCEIRO_INICIAL;
+      render();
+      // devolve o foco: render() recria o campo e a digitação se perderia
+      const campo = document.querySelector('[data-search-despesas]');
+      if(campo){ campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
+    }, ESPERA_BUSCA_MS);
   };
   const filtroMesDesp = document.querySelector('[data-filtro-mes-despesas]');
-  if(filtroMesDesp) filtroMesDesp.onchange = (e)=>{ state.filtroMesDespesas = e.target.value; render(); };
+  if(filtroMesDesp) filtroMesDesp.onchange = (e)=>{ state.filtroMesDespesas = e.target.value; state.limiteListaFinanceiro = LINHAS_FINANCEIRO_INICIAL; render(); };
+  const maisLanc = document.querySelector('[data-mais-lancamentos]');
+  if(maisLanc) maisLanc.onclick = ()=>{ state.limiteListaFinanceiro += LINHAS_FINANCEIRO_A_MAIS; render(); };
 
   const novoLancBtn = document.querySelector('[data-novo-lancamento]');
   if(novoLancBtn) novoLancBtn.onclick = ()=>{

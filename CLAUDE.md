@@ -1244,6 +1244,40 @@ Medido com 25.000 lançamentos (volume real) e CPU 4x mais lenta (tablet de entr
 - `saude_do_banco_01.sql` (só leitura, ensaiado com defeitos plantados): 24 checagens de lançamento,
   contas, financiamentos, pecuária e cadastro, com amostras.
 
+### Financeiro paginado, travas do banco e o resultado da saúde do banco (06/11/2026)
+
+Pedido do Eduardo logo depois do check-up: corrigir primeiro o desempenho, o conceito contábil da
+compra de animais e as travas do banco.
+- **Rodou `saude_do_banco_01.sql` em 06/11/2026**: 18 das 24 checagens OK (0 valor zero/negativo, 0 data
+  fora de faixa, 0 despesa sem centro, 0 recorrente, 0 rateio que não fecha, 0 'geral' sem partes, 0
+  `erp_id` repetido, 0 financiamento com defeito, 0 fornecedor duplicado). ATENÇÃO: **A4** 22 lançamentos
+  em centro do lado errado (receita em centro de SAÍDA), R$ 339.094,22, ids recentes (~22969 a 22978);
+  **A8** 515 linhas com mesmo fornecedor, valor e dia (R$ 1.183.392,40 somando as linhas; inclui os
+  pares que ele mandou manter, #497/#20805 e #496/#20806; repetido não quer dizer duplicado);
+  **B2** conta a pagar #107 com partes que não fecham (R$ 1.100,00); **D2** 10 lotes ativos sem pesagem
+  há 60 dias; **D3** 2 pesagens com peso fora de 20 a 1.000 kg (#9 e #10).
+  `saude_do_banco_02_detalhe.sql` (só leitura, ensaiada com 22 casos plantados) abre esses quatro itens:
+  A4 por centro e a lista, A8 separado por origem (importação / acerto / à mão) e por documento do ERP
+  com o que sobraria se ficasse um só de cada, B2 com as partes da conta, D2/D3 com nome do lote e a
+  pesagem de antes e de depois.
+- **Lista do Financeiro paginada** (`AEMatriz.html`): desenha 100 linhas (`LINHAS_FINANCEIRO_INICIAL`),
+  "Mostrar mais" soma 200, o **total é sempre o do filtro inteiro** ("Total listado (N lançamentos)" quando
+  há mais do que aparece); trocar aba, atividade, mês ou busca volta a 100. A busca espera 250 ms
+  (`ESPERA_BUSCA_MS`): o texto vale na hora, o redesenho vem uma vez só e o foco volta ao campo. Medido com
+  25.000 lançamentos: abrir despesas 2,6 s → 0,11 s no PC e ~23 s → 0,8 s com a CPU 4x mais lenta; tecla da
+  busca 1 s → 1 ms; 287.733 → 1.621 elementos. `teste_financeiro_paginado.py` (24 checagens, falha no
+  código anterior). Continuam lentos (PC): Relatórios 0,9 s e Empresa 2,0 s na primeira abertura.
+- **`banco_travas_01_lancamentos.sql`** (ensaiado num Postgres descartável, com o papel `authenticated` e a
+  tabela das partes fechada como em produção): (1) índice único parcial de `erp_id`; (2) lançamento em
+  atividade `geral` (valor de R$ 1,00 ou mais) precisa ter as partes do rateio; (3) se tem partes, elas
+  somam o valor (até 5 centavos). (2) e (3) são **gatilhos deferidos** (conferidos no fim da gravação):
+  lançamento e partes gravados juntos na mesma transação passam (importação, scripts de rateio); gravar só o
+  `geral`, ou mudar o valor sem mudar as partes, é recusado. A função é `security definer`: a tabela das
+  partes é fechada a quem está logado, e sem isso a trava não enxergaria as partes e barraria até a edição
+  normal de um `geral` do ERP. **Recusa instalar** se hoje houver `erp_id` repetido, `geral` sem partes,
+  partes que não fecham, ou conta em aberto com parte em Geral (a baixa dela geraria `geral` sem partes). Desfazer no
+  fim do arquivo. **Se o ERP for reimportado: gravar o lançamento e as partes na mesma transação.**
+
 ### Pecuária: fila offline sem duplicar (client_uuid)
 
 Pedido do Eduardo em 02/11/2026 (achado da revisão). Com sinal fraco, o banco
@@ -1384,7 +1418,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-43 arquivos `teste_*.py`, 1.055 checagens (05/11/2026; a tabela abaixo lista os
+44 arquivos `teste_*.py`, 1.079 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1428,6 +1462,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
