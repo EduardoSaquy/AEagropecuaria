@@ -276,6 +276,33 @@ regra). Agora, só no `AEMatriz.html`:
   `'geral'` por hectares (decidir se passa a ler as partes/terços é com ele).
 - Teste: `teste_lancamento_atividade.py` (falha no código anterior);
   `teste_contas.py` passou a escolher a atividade antes de salvar a conta.
+- **Quanto estava fora das três atividades (medido em 05/11/2026 com
+  `rateio_18_sem_atividade.sql`)**. Os avisos que existiam (aba Empresa "rateio
+  incompleto" e a conferência "visão rateada = Financeiro") NÃO pegam lançamento
+  `'geral'` sem partes: a view o devolve inteiro, então os totais batem e ele cai em
+  nenhuma das três atividades. Resultado em todas as safras: **despesa R$ 3.486,08
+  sem atividade em R$ 39,6 mi** (12 lançamentos: 3 de dinheiro de verdade, R$ 2.581,99
+  serviços profissionais, R$ 704,00 análises agrícolas e R$ 200,00 outras despesas
+  financeiras, todos de 2026/27, e 9 de centavos que somam R$ 0,09); **investimento
+  R$ 0,00**; **receita R$ 699.761,02 em R$ 57,2 mi** (52 lançamentos), dos quais
+  R$ 620.570,23 são movimentos de caixa que não são receita de atividade (ajuste de
+  saldo bancário, resgate de aplicações, estorno, outras movimentações, aporte,
+  rendimentos), R$ 44.705,55 venda de veículos e máquinas, R$ 17.325,23 "não
+  relacionados à atividade rural" e só R$ 17.160,01 de receita de atividade sem
+  atividade. Nenhum lançamento recorrente sem mês. A aba Empresa soma o Financeiro
+  inteiro, então o total da empresa nunca deixou nada de fora. Não foi medido o
+  contrário (lançamento com a atividade errada).
+  `rateio_19_lista_sem_atividade.sql` lista o que sobrou e precisa de atividade.
+- **Ajuste 4, rodado por ele em 05/11/2026 (`rateio_20`, nomes fora do git; backup
+  `zz_backup_ajuste4_lanc_2026_11_05` e `zz_backup_ajuste4_rateios_2026_11_05`,
+  fechadas, a apagar quando ele confirmar)**: a segurança patrimonial passou a
+  **Cana** (4 importações de 2026/27, antes em três partes, R$ 9.291,92) e a
+  cooperativa de cana lançada à mão de 06/2026 passou de Pecuária a **Cana**
+  (R$ 425,96). Por decisão dele; **não** mexeu no histórico (antes de maio/2026:
+  segurança 14 lançamentos R$ 21.965,00 e cooperativa 91 lançamentos R$ 68.013,48
+  ainda não estão só em Cana, pela proporção do ERP) nem na parcela de R$ 425,33 da
+  cooperativa que o conserto pôs em Pecuária. Conferência: 0 lançamentos que não
+  fecham o valor.
 
 ### Lançamentos repetidos da importação do ERP e do acerto de 21/10: o que sai e o que fica (05/11/2026)
 
