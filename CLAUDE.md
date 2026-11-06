@@ -230,7 +230,9 @@ atividade, comece por `lancamentos_rateados`.
 - **Se reimportar o ERP**: não rode o rateio do importador como está (mesmas
   falhas acima); use as regras do `rateio_05`. Gente nova na folha: cadastre em
   Funcionários (alocação) e acrescente o pareamento ao próximo rateio. Depois
-  de qualquer carga, `rateio_02_diagnostico.sql` tem de dar 0 que não fecham.
+  de qualquer carga, `rateio_02_diagnostico.sql` tem de dar 0 que não fecham **e**
+  `rateio_18_sem_atividade.sql` tem de mostrar "SEM ATIVIDADE" só nos centavos e nos
+  movimentos de caixa (o 02 não pega lançamento `'geral'` sem partes; o 18 pega).
   `zz_backup_rateio_2026_11_05` pode ser apagada quando ele confirmar que está
   tudo certo.
 
@@ -319,6 +321,12 @@ regra). Agora, só no `AEMatriz.html`:
   (R$ 28.865,55: venda física de produção 6 lançamentos R$ 13.810,00, serviços
   agropecuários R$ 1.350,00, casa-sede R$ 2.000,00, venda de veículos e máquinas
   2 lançamentos R$ 11.705,55). Conferência: 0 lançamentos que não fecham o valor.
+- **Reconferido por ele no fim de 05/11/2026 com `rateio_18` (depois dos ajustes 4,
+  6 e 7)**: despesa sem atividade R$ 0,09 (centavos de arredondamento do ERP),
+  investimento R$ 0,00, receita R$ 637.895,47 em R$ 57,2 mi (1,1%), que é só o que
+  ficou de fora de propósito (movimentos de caixa R$ 620.570,23, "não relacionados à
+  atividade rural" R$ 17.325,23 e R$ 0,01). Em toda safra e tipo,
+  Pecuária + Cana + Grãos + sem atividade = total da empresa.
 - **Safra 26/27 sem atividade, decidido por ele (`rateio_23`, RODADO por ele em
   05/11/2026, tudo OK e 0 lançamentos que não fecham o valor)**: análises agrícolas R$ 704,00 em **Grãos**; serviço do próprio ERP
   R$ 2.581,99 em **três partes iguais**; uma despesa de R$ 200,00 lançada à mão
