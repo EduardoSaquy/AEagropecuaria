@@ -1222,6 +1222,28 @@ passaram antes e depois. Corrigido:
   à esquerda; mensagem errada na venda editada sem centro "Vendas" (dizia que
   a venda não mudou, mas o abate já tinha sido gravado).
 
+### Revisão geral de 05/11/2026 (noite): o que a medição mostrou
+
+Pedido do Eduardo ("check up geral bem minucioso"). Só leitura; o relatório completo e as notas estão
+na pasta privada (`AEagropecuaria_dados_privados\revisao_geral_2026-11-05\RELATORIO.md`).
+Medido com 25.000 lançamentos (volume real) e CPU 4x mais lenta (tablet de entrada):
+- **Financeiro > Despesas desenha todas as linhas** (21.254 `<tr>`, 287.733 elementos): 2,6 s no PC,
+  ~23 s no tablet; ~1 s (6 s) por tecla na busca. Sem paginação, filtro padrão "todos os meses" e
+  a busca refaz a página inteira a cada tecla.
+- `loadAll()` baixa lançamentos + a visão rateada inteira + 3 cópias por atividade e roda de novo
+  depois de cada gravação; Relatórios 1,2 s e Empresa 2,4 a 3,3 s (O(meses x linhas) em
+  `saldoAnteriorRelatorio`).
+- **O resultado por atividade ignora `investimento`**: a compra de animais não reduz o resultado da
+  Pecuária (Financeiro de 2025/26: receita 3,72 mi, despesa 2,71 mi, investimento 2,14 mi).
+- A venda de animais grava 3 tabelas em sequência pelo navegador (sem transação) e calcula o saldo do
+  lote com a cópia da memória (corrida entre duas pessoas perde uma venda).
+- O banco não tem: índice único de `erp_id` em lançamentos, trava "geral precisa de partes",
+  conferência partes = valor.
+- `attachEvents` tem 880 linhas (Matriz) e 2.343 (Pecuária), religado a cada desenho da tela.
+- Teste de chave pública contra o banco real: nada abre para quem não está logado.
+- `saude_do_banco_01.sql` (só leitura, ensaiado com defeitos plantados): 24 checagens de lançamento,
+  contas, financiamentos, pecuária e cadastro, com amostras.
+
 ### Pecuária: fila offline sem duplicar (client_uuid)
 
 Pedido do Eduardo em 02/11/2026 (achado da revisão). Com sinal fraco, o banco
