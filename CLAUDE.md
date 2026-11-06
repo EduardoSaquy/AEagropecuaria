@@ -399,6 +399,31 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   exclusões (as importações que ficaram carregam as regras dele; saíram linhas do
   acerto que contavam a mesma conta): recalcular com uma consulta nova, não confiar
   naqueles números.
+- **Repetidos de janeiro a abril/2026 (`rateio_17_pares_desde_janeiro.sql`, rodado por
+  ele em 05/11/2026)**: a `rateio_14` e a `rateio_15` começavam em 15/04. Desde 01/01
+  há **56 pares lançada à mão × importação, mesmo dia e mesmo valor, R$ 769.448,59**
+  (todos classe B, sem documento): a limpeza de agosto só tirou a importação de
+  atividade Cana ou Pecuária, não a "geral" com partes, e a importação voltou depois
+  (ids ~20546 a 21300). **O acerto de 21/10 cobre de janeiro a outubro, não só de
+  15/04** (488 linhas do acerto sem par, R$ 2,17 mi: ok, não são duplicata).
+- **`rateio_25`, rodado por ele em 05/11/2026**: 50 pares, R$ 106.279,83 (despesas e as
+  parcelas da cooperativa), 154 partes de rateio saíram junto, 0 pulados, 0 que não
+  fecha, visão rateada = Financeiro. Em todos ficou a **lançada à mão** (inteira em
+  Pecuária, regra de agosto) e saiu a importação; em 17 desses pares a importação
+  estava dividida entre atividades (combustível e cooperativa, R$ 45.451,61): esse
+  valor passou a contar 100% em Pecuária (ele não pediu o contrário). Cópias fechadas,
+  a apagar quando ele confirmar: `zz_backup_dup2_2026_11_05`,
+  `zz_backup_dup2_rateios_2026_11_05` e `zz_backup_dup2_pares_2026_11_05`.
+- **Ficaram de fora, pendentes**: (1) cinco pares de **investimento** (R$ 662.924,46),
+  compra de matrizes (dois pagamentos de um vendedor em 07/01/2026, R$ 228.150,00 e
+  R$ 232.375,00, e dois de outro em 13/02/2026, R$ 173.037,50 e R$ 6.562,50) e um
+  consórcio (R$ 22.799,46 em 17/03/2026): lançada à mão ("Compra de matrizes para
+  reprodução", sem lote) e importação (transferência com documento próprio) de mesmo
+  valor e data; ele respondeu de forma ambígua se são a mesma saída de dinheiro e
+  **precisa dizer, pelo extrato, se cada pagamento saiu uma vez só**; (2) o Auto Posto
+  de R$ 244,30 de 15/04 (duas compras iguais, cada uma lançada à mão e importada; a
+  `rateio_15` tirou a repetição de uma, e as duas linhas que sobraram são as duas
+  compras: **não é duplicata**).
 
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
@@ -555,9 +580,13 @@ fechado em 29/08/2026:
 - **Investimento**: dos 7 títulos do ERP em 2026 (Pecuária, ~R$ 463 mil),
   4 batiam exato (valor e mês) com lançamento manual — duplicidade de
   verdade, fechada com `pecuaria_investimento_remove_duplicidade_2026.sql`
-  (R$ 252.724,71). Os outros 3 (dois de Renato Mendes Camargo em jan, que
-  parecem uma compra parcelada, e um de Alemar Rodrigues em ago) não
+  (R$ 252.724,71). Os outros 3 (dois pagamentos de um vendedor de animais em
+  jan, que pareciam uma compra parcelada, e um de outro em ago) não
   tinham par exato — confirmados como investimento novo, ficaram intocados.
+  **Revisto em 05/11/2026**: aquele pareamento era por MÊS (competência de janeiro
+  no ERP × pagamento em 13/02 no app); pelas DATAS existe lançamento à mão igual
+  aos dois pagamentos. Ver "Repetidos de janeiro a abril/2026" na seção sobre
+  lançamentos repetidos: a decisão sobre eles está pendente com o Eduardo.
 
 **Acerto das despesas de 2026 com o ERP (21/10/2026, rodado pelo Eduardo).**
 Base: 4 relatórios de despesas pagas do ERP (Cana, Pecuária e Soja pagas em

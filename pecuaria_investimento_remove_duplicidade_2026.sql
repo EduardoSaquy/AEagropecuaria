@@ -4,15 +4,16 @@
 -- CONFERIDO: dos 7 titulos de investimento do ERP em 2026, 4 batem
 -- exato (valor e mes) com um lancamento manual - mesmo criterio ja
 -- usado e confirmado pra despesa/receita:
---   jan/2026 - Andre Luiz Abrao - R$ 144.524,71
---   jan/2026 - Winicius Rogerio Messias de Oliveira - R$ 72.000,00
---   mar/2026 - Antonio Martins da Silva - R$ 5.800,00
---   jul/2026 - Alemar Rodrigues - R$ 30.400,00
+--   jan/2026 - um vendedor - R$ 144.524,71
+--   jan/2026 - um vendedor - R$ 72.000,00
+--   mar/2026 - um vendedor - R$ 5.800,00
+--   jul/2026 - um vendedor - R$ 30.400,00
 -- total: R$ 252.724,71
 --
--- Os outros 3 titulos do ERP (Renato Mendes Camargo x2 em jan -
--- parecem uma compra parcelada -, Alemar Rodrigues em ago) NAO tem par
--- exato e ficam intocados - parecem investimento novo, nao duplicidade.
+-- Os outros 3 titulos do ERP (dois pagamentos de um vendedor em jan - pareciam uma
+-- compra parcelada -, e um de outro em ago) NAO tem par exato e ficam intocados -
+-- pareciam investimento novo, nao duplicidade. (Revisto em 05/11/2026: aquele
+-- pareamento era por mes; ver o CLAUDE.md.)
 --
 -- O QUE FAZ: apaga so os titulos do ERP que batem exato com um
 -- lancamento manual (mesmo valor, mesmo mes) - mantem a versao lancada
