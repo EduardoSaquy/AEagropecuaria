@@ -319,8 +319,8 @@ regra). Agora, só no `AEMatriz.html`:
   (R$ 28.865,55: venda física de produção 6 lançamentos R$ 13.810,00, serviços
   agropecuários R$ 1.350,00, casa-sede R$ 2.000,00, venda de veículos e máquinas
   2 lançamentos R$ 11.705,55). Conferência: 0 lançamentos que não fecham o valor.
-- **Safra 26/27 sem atividade, decidido por ele (`rateio_23`, ensaiado, ainda por
-  rodar)**: análises agrícolas R$ 704,00 em **Grãos**; serviço do próprio ERP
+- **Safra 26/27 sem atividade, decidido por ele (`rateio_23`, RODADO por ele em
+  05/11/2026, tudo OK e 0 lançamentos que não fecham o valor)**: análises agrícolas R$ 704,00 em **Grãos**; serviço do próprio ERP
   R$ 2.581,99 em **três partes iguais**; uma despesa de R$ 200,00 lançada à mão
   em **Cana**; venda de veículo ou máquina de R$ 33.000,00 (importação de
   06/2026) em **Pecuária**. Backup `zz_backup_ajuste7_lanc_2026_11_05`. Substitui a
