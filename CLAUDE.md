@@ -327,6 +327,16 @@ regra). Agora, só no `AEMatriz.html`:
   ficou de fora de propósito (movimentos de caixa R$ 620.570,23, "não relacionados à
   atividade rural" R$ 17.325,23 e R$ 0,01). Em toda safra e tipo,
   Pecuária + Cana + Grãos + sem atividade = total da empresa.
+- **Ele mudou a decisão sobre esses R$ 637 mil (05/11/2026, noite) e passou a
+  querê-los rateados também**: movimentos de caixa (32 lançamentos, R$ 620.569,54) e
+  "não relacionados à atividade rural" (7, R$ 17.325,23), todos anteriores a maio/2026,
+  em **três partes iguais**, sabendo que isso põe R$ 637.894,77 de entradas de caixa
+  como "receita" nas telas por atividade (quase tudo de 2022/23 e 2023/24; a aba
+  Empresa não muda). Script `rateio_24_ratear_caixa_e_nao_rural_antigos.sql`
+  (ensaiado, traps 32/7 e os dois valores, backup `zz_backup_ajuste8_lanc_2026_11_05`,
+  desfazer no fim; os centavos, R$ 0,70 de receita e R$ 0,09 de despesa, ficam de fora).
+  Isto SUPERA o "ficam sem atividade de propósito" do item anterior. Depois de
+  rodar, a `rateio_18` deve mostrar receita sem atividade só nos centavos.
 - **Safra 26/27 sem atividade, decidido por ele (`rateio_23`, RODADO por ele em
   05/11/2026, tudo OK e 0 lançamentos que não fecham o valor)**: análises agrícolas R$ 704,00 em **Grãos**; serviço do próprio ERP
   R$ 2.581,99 em **três partes iguais**; uma despesa de R$ 200,00 lançada à mão
