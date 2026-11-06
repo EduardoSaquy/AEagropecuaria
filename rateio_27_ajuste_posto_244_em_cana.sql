@@ -11,7 +11,9 @@
 -- Nao mexe em nenhum outro lancamento do mesmo fornecedor.
 --
 -- O QUE FAZ (tudo ou nada: um bloco so; se qualquer trava falhar, desfaz tudo)
---   1. confere as duas linhas (despesa de combustivel, R$ 244,30, como estao hoje);
+--   1. confere as duas linhas (despesa de combustivel, R$ 244,30, como estao hoje; os dois centros
+--      de custo de combustivel valem: 'COMBUSTIVEIS DA OPERACAO' na lancada a mao e 'COMBUSTIVEL PARA FROTA...'
+--      na importacao);
 --   2. recusa se alguma estiver diferente;
 --   3. guarda copia em zz_backup_ajuste9_lanc_2026_11_05 e zz_backup_ajuste9_rateios_2026_11_05
 --      (fechadas: so o dono do banco le);
@@ -47,7 +49,7 @@ begin
     raise exception 'Esperava 2 lancamentos, achei %. Nao mexo em nada.', v_n;
   end if;
   select count(*) into v_n from tmp_alvo
-   where tipo = 'despesa' and abs(valor - 244.30) < 0.005 and centro_norm like 'COMBUSTIVEIS%'
+   where tipo = 'despesa' and abs(valor - 244.30) < 0.005 and centro_norm like 'COMBUSTIVE%'
      and coalesce(data, vencimento) = date '2026-04-15'
      and ((id = 3018  and atividade = 'pecuaria' and n_partes = 0)
        or (id = 21300 and atividade = 'geral' and n_partes > 0 and abs(soma_partes - valor) < 0.05));
