@@ -429,7 +429,9 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
 - **Auto Posto de R$ 244,30 de 15/04 (duas compras iguais, `#3018` à mão e `#21300`
   importação): não é duplicata** (a `rateio_15` tirou a repetição de uma; as duas que
   sobraram são as duas compras) e ele decidiu que é **Cana**: `rateio_27_ajuste_posto_244_em_cana.sql`
-  (ensaiado, **a rodar**; cópias `zz_backup_ajuste9_*_2026_11_05`).
+  (**RODADO por ele em 05/11/2026**, tudo OK; cópias `zz_backup_ajuste9_*_2026_11_05`). A primeira
+  rodada recusou porque a importação está no centro "COMBUSTÍVEL PARA FROTA…" e a lançada à
+  mão em "COMBUSTÍVEIS DA OPERAÇÃO…"; a trava passou a aceitar os dois.
 
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
