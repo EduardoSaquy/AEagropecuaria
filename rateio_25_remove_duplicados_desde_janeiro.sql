@@ -5,16 +5,21 @@
 -- Depois de ver o resultado da rateio_17_pares_desde_janeiro.sql (a mesma regra de par).
 --
 -- O QUE E: a rateio_14 e a rateio_15 olhavam de 15/04/2026 em diante. A rateio_17 olhou desde
--- 01/01/2026 e achou mais 56 pares: a mesma conta lancada a mao (migrada do app da Pecuaria)
--- e importada do ERP, mesmo fornecedor, mesmo valor, MESMO DIA. Sao R$ 769.448,59, dos quais
--- R$ 662.924,46 sao investimento (compra de animais e consorcio) e R$ 106.524,13 despesa.
--- UM par (o Auto Posto de R$ 244,30 de 15/04: lancada a mao #3018 e importacao #21300) NAO
--- entra: la havia DUAS compras iguais no mesmo dia, cada uma lancada a mao e importada, e a
--- rateio_15 ja tirou a repeticao de uma delas; as duas que sobraram sao as duas compras.
+-- 01/01/2026 e achou 56 pares: a mesma conta lancada a mao (migrada do app da Pecuaria) e
+-- importada do ERP, mesmo fornecedor, mesmo valor, MESMO DIA (R$ 769.448,59).
+--
+-- ESTE SCRIPT TRATA DE 50 PARES, R$ 106.279,83 (despesas e as parcelas da cooperativa).
+-- FICAM DE FORA, de proposito:
+--   . as 5 compras de INVESTIMENTO (compra de matrizes e consorcio, R$ 662.924,46): enquanto o
+--     Eduardo nao confirmar se cada pagamento saiu do banco uma vez so, as duas linhas ficam
+--     (#490/#20585, #491/#20586, #497/#20805, #496/#20806 e #500/#21098);
+--   . o Auto Posto de R$ 244,30 de 15/04 (#3018 e #21300): eram duas compras iguais, cada uma
+--     lancada a mao e importada; a rateio_15 ja tirou a repeticao de uma delas, e as duas que
+--     sobraram sao as duas compras.
 --
 -- O QUE FAZ (tudo ou nada: um bloco so; se qualquer trava falhar, desfaz tudo)
---   1. acha os pares como a rateio_17 (sem o par do Auto Posto de R$ 244,30);
---   2. recusa se nao forem EXATAMENTE 55 pares, R$ 769.204,29, todos da classe B
+--   1. acha os pares como a rateio_17, menos os 6 acima;
+--   2. recusa se nao forem EXATAMENTE 50 pares, R$ 106.279,83, todos da classe B
 --      (lancada a mao x importacao); qualquer par com documento do ERP (classe A) recusa;
 --   3. escolhe qual das duas linhas de cada par fica:
 --        se a importacao ja foi refeita pelo rateio_05_conserto (esta em
@@ -29,15 +34,15 @@
 --   6. apaga (as partes do rateio saem junto) e confere.
 -- Rodar de novo recusa (a copia ja existe). PARA DESFAZER: ver o fim deste arquivo.
 --
--- ATENCAO: nos 18 pares em que a importacao esta DIVIDIDA entre atividades (combustivel,
--- cooperativa, consorcio), a lancada a mao esta inteira em Pecuaria. Ficando a lancada a mao,
--- esses R$ 68.251,07 passam a contar 100% em Pecuaria.
+-- ATENCAO: em 17 dos 50 pares a importacao esta DIVIDIDA entre atividades (combustivel e
+-- cooperativa, R$ 45.451,61) e a lancada a mao esta inteira em Pecuaria. Ficando a lancada a
+-- mao, esses R$ 45.451,61 passam a contar 100% em Pecuaria.
 -- ============================================================
 
 do $dup$
 declare
   v_a_n int := 0;   v_a_valor numeric := 0.00;
-  v_b_n int := 55;  v_b_valor numeric := 769204.29;
+  v_b_n int := 50;  v_b_valor numeric := 106279.83;
   v_n int; v_valor numeric; v_ids bigint[]; v_ref bigint; v_apagados int; r record; t text;
 begin
   if not exists (select 1 from information_schema.tables
@@ -78,7 +83,12 @@ begin
                            and abs(o.quando - i.quando) <= 7
                            and (o.documento is null or o.documento = i.documento)) x
    where rk = 1
-     and not (o_id = 3018 and i_id = 21300);   -- as duas compras iguais de 15/04: nao e repeticao
+     and not (o_id = 3018 and i_id = 21300)    -- as duas compras iguais de 15/04: nao e repeticao
+     and not (o_id = 490 and i_id = 20585)     -- investimento: espera a confirmacao dele
+     and not (o_id = 491 and i_id = 20586)     -- idem
+     and not (o_id = 497 and i_id = 20805)     -- idem
+     and not (o_id = 496 and i_id = 20806)     -- idem
+     and not (o_id = 500 and i_id = 21098);    -- idem (consorcio)
 
   -- 2) trava: exatamente o que foi conferido
   select count(*), coalesce(sum(o.valor), 0) into v_n, v_valor
