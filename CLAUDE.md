@@ -434,7 +434,7 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   mão em "COMBUSTÍVEIS DA OPERAÇÃO…"; a trava passou a aceitar os dois.
 - **Consórcio lançado à mão (`#500`, R$ 22.799,46, 17/03/2026)**: ele confirmou que vai para
   **três partes iguais** (7.599,82 cada; o lançamento passa a `'geral'` com as partes, como
-  as outras divididas): `rateio_28_ajuste_consorcio_tres_partes.sql` (ensaiado, **a rodar**;
+  as outras divididas): `rateio_28_ajuste_consorcio_tres_partes.sql` (**RODADO por ele em 05/11/2026**, tudo OK, 0 que não fecha;
   cópia `zz_backup_ajuste10_lanc_2026_11_05`). A importação do mesmo consórcio (`#21098`)
   continua dividida pela proporção do ERP e **não** é tocada (as duas linhas ficam).
 
