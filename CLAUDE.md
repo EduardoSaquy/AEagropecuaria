@@ -1225,7 +1225,7 @@ passaram antes e depois. Corrigido:
 ### Revisão geral de 05/11/2026 (noite): o que a medição mostrou
 
 Pedido do Eduardo ("check up geral bem minucioso"). Só leitura; o relatório completo e as notas estão
-na pasta privada (`AEagropecuaria_dados_privados\revisao_geral_2026-11-05\RELATORIO.md`).
+na pasta privada (`AEagropecuaria_dados_privadosevisao_geral_2026-11-05\RELATORIO.md`).
 Medido com 25.000 lançamentos (volume real) e CPU 4x mais lenta (tablet de entrada):
 - **Financeiro > Despesas desenha todas as linhas** (21.254 `<tr>`, 287.733 elementos): 2,6 s no PC,
   ~23 s no tablet; ~1 s (6 s) por tecla na busca. Sem paginação, filtro padrão "todos os meses" e
