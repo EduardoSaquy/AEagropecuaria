@@ -414,16 +414,22 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   valor passou a contar 100% em Pecuária (ele não pediu o contrário). Cópias fechadas,
   a apagar quando ele confirmar: `zz_backup_dup2_2026_11_05`,
   `zz_backup_dup2_rateios_2026_11_05` e `zz_backup_dup2_pares_2026_11_05`.
-- **Ficaram de fora, pendentes**: (1) cinco pares de **investimento** (R$ 662.924,46),
-  compra de matrizes (dois pagamentos de um vendedor em 07/01/2026, R$ 228.150,00 e
-  R$ 232.375,00, e dois de outro em 13/02/2026, R$ 173.037,50 e R$ 6.562,50) e um
-  consórcio (R$ 22.799,46 em 17/03/2026): lançada à mão ("Compra de matrizes para
-  reprodução", sem lote) e importação (transferência com documento próprio) de mesmo
-  valor e data; ele respondeu de forma ambígua se são a mesma saída de dinheiro e
-  **precisa dizer, pelo extrato, se cada pagamento saiu uma vez só**; (2) o Auto Posto
-  de R$ 244,30 de 15/04 (duas compras iguais, cada uma lançada à mão e importada; a
-  `rateio_15` tirou a repetição de uma, e as duas linhas que sobraram são as duas
-  compras: **não é duplicata**).
+- **Compras de matrizes e consórcio, esclarecidas por ele pelo extrato (05/11/2026)**:
+  as duas compras do primeiro vendedor (07/01/2026, R$ 228.150,00 e R$ 232.375,00)
+  estavam lançadas duas vezes (a lançada à mão "Compra de matrizes para reprodução" e a
+  transferência do ERP): `rateio_26_remove_duplicados_compra_matrizes.sql` apaga a
+  importação e fica a lançada à mão (R$ 460.525,00; ensaiado, **a rodar**; cópias
+  `zz_backup_dup3_*_2026_11_05`). As do segundo vendedor (13/02/2026, R$ 173.037,50 e
+  R$ 6.562,50) e o consórcio (17/03/2026, R$ 22.799,46) ele disse que **não** são o mesmo
+  pagamento: **ficam as duas linhas de cada uma**; as transferências estão certas e
+  divididas porque pagaram "conforme carregou o gado"; é Pecuária; o consórcio é rateado
+  entre as atividades. Mantidas as duas linhas, o app soma R$ 202.399,46 duas vezes se
+  um dia o extrato mostrar que era a mesma saída: é só refazer a conferência. O
+  financiamento dessas compras será lançado por ele no módulo Financiamentos.
+- **Auto Posto de R$ 244,30 de 15/04 (duas compras iguais, `#3018` à mão e `#21300`
+  importação): não é duplicata** (a `rateio_15` tirou a repetição de uma; as duas que
+  sobraram são as duas compras) e ele decidiu que é **Cana**: `rateio_27_ajuste_posto_244_em_cana.sql`
+  (ensaiado, **a rodar**; cópias `zz_backup_ajuste9_*_2026_11_05`).
 
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
