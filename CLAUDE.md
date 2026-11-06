@@ -333,7 +333,9 @@ regra). Agora, só no `AEMatriz.html`:
   em **três partes iguais**, sabendo que isso põe R$ 637.894,77 de entradas de caixa
   como "receita" nas telas por atividade (quase tudo de 2022/23 e 2023/24; a aba
   Empresa não muda). Script `rateio_24_ratear_caixa_e_nao_rural_antigos.sql`
-  (ensaiado, traps 32/7 e os dois valores, backup `zz_backup_ajuste8_lanc_2026_11_05`,
+  (RODADO por ele em 05/11/2026, tudo OK: 39 receitas, R$ 637.894,77, 0 que não fecha,
+  receita sem atividade agora só R$ 0,70; traps 32/7 e os dois valores, backup
+  `zz_backup_ajuste8_lanc_2026_11_05`,
   desfazer no fim; os centavos, R$ 0,70 de receita e R$ 0,09 de despesa, ficam de fora).
   Isto SUPERA o "ficam sem atividade de propósito" do item anterior. Depois de
   rodar, a `rateio_18` deve mostrar receita sem atividade só nos centavos.
