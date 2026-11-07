@@ -1422,6 +1422,16 @@ compra de animais e as travas do banco.
   Painel: cards de app viram linhas compactas a partir de 900 px. Ícones próprios para Financeiro, Centros de Custo,
   Pagar/Receber e Usuários (antes quatro itens usavam o mesmo desenho de pessoa). Os outros 4 apps (Pecuária, Cana, Cereais,
   Combustível) ainda usam a barra de cima: aplicar o mesmo desenho neles só se ele pedir.
+- **Menu lateral nos outros 4 apps (07/11/2026; `teste_menu_lateral_apps.py` 54 checagens)**. Ele aprovou o desenho do Matriz e pediu
+  nos outros. **AE Pecuária, AE Cana e AE Cereais** têm a mesma estrutura (`.topbar` + `.tabsrow` + `.main`) e ganharam o MESMO bloco
+  de CSS (fim do `<style>`, "MENU LATERAL (tela larga, 07/11/2026)"): de 1280 px, coluna à esquerda de 232 px com o menu grande (os
+  grupos `data-nav-group`; nome comprido quebra em duas linhas, ex.: "Formulação de Dietas") e, no rodapé, usuário, "← Painel" (link
+  para o AE Matriz), Trocar senha e Sair; de 760 a 1279 px a barra de cima com o menu maior; celular como era. A marca desenhada em
+  verde escuro (cabeça de boi, haste da cana) ficava invisível no fundo verde escuro: CSS `.topbar .brand-mark [stroke=...]` troca
+  para cor clara. O link `a.btn-sair` virou `inline-flex` (com o min-height do toque o texto ficava no topo). **AE Combustível** já
+  tinha barra lateral própria (azul, `Sidebar()`): ficou com 244 px, menu grande (16 px, 54 px), usuário e botões embaixo
+  (`order`), barra `sticky` na altura da tela. Nos apps de grade o `.tabsrow` rola por dentro quando há muitos grupos (Pecuária tem
+  12), com o rodapé do usuário fixo. Sem a lista pequena de apps da barra: nesses apps o atalho é o "← Painel" (o hub é o Matriz).
 - **Política de segurança de conteúdo (CSP, 06/11/2026; `teste_csp.py` 43 checagens)**: `<meta http-equiv=Content-Security-Policy>`
   no `<head>` dos cinco apps. Cada app só pode falar com o Supabase do projeto (`connect-src` https e wss
   `kmkystqgpvmzrccxvyaz.supabase.co`), carregar script da `cdn.jsdelivr.net` (a biblioteca fixa em 2.118.0), css do
@@ -1581,7 +1591,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-51 arquivos `teste_*.py`, 1.369 checagens (06/11/2026; a tabela abaixo lista os
+52 arquivos `teste_*.py`, 1.423 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1625,6 +1635,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
 | `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
