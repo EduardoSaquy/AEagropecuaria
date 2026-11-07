@@ -1505,6 +1505,29 @@ dos formulários ficavam vazias. Agora (`AEpecuaria.html`, `loadAll` = `carregar
   recarregar). `teste_offline_lancar.py` (47). `teste_carga_pecuaria.py` passou a abrir "a frio" (sem cópia, tela vazia) nos casos
   de aviso vermelho: com dados na tela a falha de rede agora vira "sem internet".
 
+### Pecuária: planilha de manejo para o curral sem sinal (07/11/2026)
+
+Ideia do Eduardo no lugar de fazer o Manejo (sessão animal a animal, cheia de gravações em cadeia) funcionar sem internet:
+o funcionário preenche **`Planilha_de_Manejo.xlsx`** (modelo na raiz do site, gerado por `gerar_planilha_manejo.py`: listas de
+escolha, colunas cinza nas ações em "Não") no celular, e com internet o app **importa** em Manejo > "Importar planilha de manejo".
+- **Leitura**: SheetJS 0.20.3 em `vendor/xlsx.full.min.js` (servido pelo próprio site, `script-src 'self'` da CSP; só é carregado
+  quando se escolhe um arquivo). A planilha é lida pelos **textos dos rótulos** (`PLANILHA_MANEJO_ROTULOS`/`_COLUNAS`), não pela
+  posição das células: pode inserir linha, **não renomear títulos**. Mudou um rótulo no gerador, mude no app e no teste.
+- **Validação com as mesmas regras do Manejo ao vivo** (`montarPlanoManejo`): número só com algarismos, zero à esquerda não conta
+  (57 usa o cadastro 057), animal novo pede raça (e sexo no lote misto), peso, raça do touro, diagnóstico, desmama (acha o bezerro
+  sem desmama pelo número da mãe; recusa mãe sem bezerro, já desmamado ou repetida), permissão por ação, lote encerrado, destino
+  diferente da origem. 4ª inseminação, número repetido e brinco parecido (11 x 11099) são **aviso**, não impedem.
+- **Prévia antes de gravar**; qualquer erro desliga o botão ("corrija a planilha e carregue de novo", nada foi gravado): não existe
+  importação parcial, para não duplicar ao reimportar a planilha corrigida.
+- **Gravação** com `gravarAnimalDoManejo(m, d)`, a função **extraída de `salvarAnimalManejo`** (cadastro, contagem dos lotes, peso,
+  IATF, diagnóstico, protocolo, desmama) que o Manejo ao vivo também usa: um manejo novo, uma pesagem com a média, finalizado no fim.
+  Rede que cai no meio: para, diz a linha, e **Continuar** retoma sem repetir (o manejo fica aberto até terminar). Sem internet ao
+  importar: avisa, não grava nada.
+- **Mesma planilha duas vezes**: o app lembra o conteúdo escrito (carimbo `aepecuaria_manejos_importados_v1`, por aparelho) e pede
+  confirmação. Não depende do que o app deduz (animal novo muda depois de importar).
+- Fora de escopo: o Manejo ao vivo continua pedindo sinal. `teste_manejo_planilha.py` (64, usa a planilha modelo de verdade e o app
+  servido por http).
+
 ### Matriz: cópia de segurança e curva ABC (07/11/2026)
 
 Pesquisa de mercado (Inttegra, Aegro; relatório na pasta privada, `pesquisa_mercado_2026-11-07`): o que o AE não tinha e os
@@ -1523,7 +1546,7 @@ divergem: conferir no painel). Por isso:
   da maior para a menor, com % e % acumulado; **A = até 80% do gasto** (um item é A se o acumulado ANTES dele ainda é menor que
   80%), **B até 95%, C o resto**. Só despesa (investimento e receita ficam de fora); segue o período e os filtros da aba;
   fornecedores com nome igual (maiúscula, acento, espaço) somam juntos. `teste_curva_abc.py` (18).
-- Ainda sem os concorrentes: módulo **Máquinas** (custo por hora, manutenção; hoje só combustível), Manejo sem internet, livro
+- Ainda sem os concorrentes: módulo **Máquinas** (custo por hora, manutenção; hoje só combustível), Manejo ao vivo sem internet (hoje: planilha de manejo), livro
   caixa/LCDPR (depende do escritório dele) e backup automático (GitHub Actions para repositório PRIVADO: artefato de repositório
   público é baixável por qualquer um).
 
@@ -1648,7 +1671,7 @@ divergem: conferir no painel). Por isso:
 
 ## Testes
 
-56 arquivos `teste_*.py`, 1.545 checagens (07/11/2026; a tabela abaixo lista os
+57 arquivos `teste_*.py`, 1.609 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1706,6 +1729,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_offline_lancar.py` | 47 | AEpecuaria.html (lançar sem internet: cópia dos cadastros no aparelho por usuário, abrir sem sinal e com rede que não responde, fila, sobe uma vez só, janela aberta não é redesenhada, Sair apaga a cópia, aparelho sem espaço) |
 | `teste_copia_seguranca.py` | 32 | AEMatriz.html (cópia de segurança em Usuários: JSON paginado com todas as linhas, tabela sem permissão fica de fora, CSV para o contador com BOM, vírgula decimal e fórmula neutralizada, só admin, sem violar a CSP) |
 | `teste_curva_abc.py` | 18 | AEMatriz.html (Curva ABC das despesas em Relatórios: classes A/B/C por centro e por fornecedor, só despesa, filtros de período e atividade, sem rolar de lado) |
+| `teste_manejo_planilha.py` | 64 | AEpecuaria.html (importar a planilha de manejo preenchida no curral: previa, validação com as regras do Manejo, nada gravado com erro, desmama, mudança de lote, mesma planilha duas vezes, rede que cai e Continuar, sem rolar de lado) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
