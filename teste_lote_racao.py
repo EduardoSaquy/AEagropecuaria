@@ -109,6 +109,7 @@ with sync_playwright() as pw:
     print("\n  -- sem dieta visivel --")
     avisos = []
     page.on("dialog", lambda d: (avisos.append(d.message), d.accept()))
+    page.on("console", lambda m: avisos.append(m.text[len("[aviso] "):]) if m.text.startswith("[aviso] ") else None)  # o alert() virou aviso na pagina (07/11/2026)
     for tipo_modal in ("saidaRacao", "saidaRacaoCria", "pasto"):
         avisos.clear()
         r = page.evaluate("(t) => { const guard = state.dietas; state.dietas = [];"

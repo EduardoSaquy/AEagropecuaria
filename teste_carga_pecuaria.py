@@ -72,6 +72,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: erros.append(str(e)) if "ServiceWorker" not in str(e) else None)
     avisos = []
     page.on("dialog", lambda d: (avisos.append(d.message), d.accept()))
+    page.on("console", lambda m: avisos.append(m.text[len("[aviso] "):]) if m.text.startswith("[aviso] ") else None)  # o alert() virou aviso na pagina (07/11/2026)
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.clock.install()
     page.add_init_script(STUB)
@@ -105,7 +106,7 @@ with sync_playwright() as pw:
     page.locator('[data-recarregar-dados]').click()
     page.wait_for_timeout(500)
     conf(page.evaluate("() => !state.erroCarga && state.lotes.length === 1"), "'tente de novo' carrega quando a consulta volta")
-    conf("Os dados não carregaram" not in page.inner_text("body"), "e o aviso some")
+    conf("Os dados não carregaram" not in page.inner_text("#root"), "e o aviso vermelho da tela some (o aviso de erro do alert() de antes fica ate fechar)")
 
     # ---- login vencido: renova e carrega sozinho ----
     page.evaluate("async () => { window.__FALHA__ = {lotes: 'JWT expired'}; window.__RENOVA_OK__ = true; window.__RENOVOU__ = 0; await loadAll(); }")

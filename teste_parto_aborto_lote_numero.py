@@ -101,6 +101,7 @@ def abrir(pw, db, toque=False):
     page.avisos = []; page.erros = []; page.recusar = False
     # confirm() e aceito, a menos que page.recusar esteja ligado
     page.on("dialog", lambda d: (page.avisos.append(d.message), d.dismiss() if (d.type == "confirm" and page.recusar) else d.accept()))
+    page.on("console", lambda m: page.avisos.append(m.text[len("[aviso] "):]) if m.text.startswith("[aviso] ") else None)  # o alert() virou aviso na pagina (07/11/2026)
     page.on("pageerror", lambda e: page.erros.append(str(e)) if "ServiceWorker" not in str(e) else None)
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.add_init_script(STUB)

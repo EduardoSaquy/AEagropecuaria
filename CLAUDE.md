@@ -1404,8 +1404,17 @@ compra de animais e as travas do banco.
   - contraste de texto: `--bom` #007A2B (5,5:1; era 4,4:1), `--alerta` #B03A24 (6,0:1; era 4,4:1 no fundo de alerta) e
     `--ambar-texto` #7A4F08 (7,1:1; o âmbar #C98A2B dava 2,9:1) para TEXTO em âmbar; o âmbar continua para fundos.
   - `orientation` dos 6 manifestos virou `any` (o tablet gira). O AE Combustível não tem esses tokens (não trocados).
-  - Falta no campo: os 137 `alert()` da Pecuária (bloqueiam a tela e os testes dependem do evento `dialog`; trocar
-    por aviso na página pede ajustar os testes junto).
+  - **Avisos na tela no lugar do `alert()` (07/11/2026; `teste_avisos_pecuaria.py` 25 checagens)**: `window.alert = avisar` no AE Pecuária
+    (um bloco no começo do `<script>`, antes do cliente do Supabase). Os 137 `alert()` continuam no código e viram um aviso no TOPO
+    da tela (não cobre o Salvar nem o botão +): não trava, botão ×, Esc fecha, até 4 ao mesmo tempo, some sozinho (9 s, mais para
+    texto longo; `let TEMPO_AVISO_MS`) **menos o de erro** (texto começa com "Não foi possível", "Erro", "Falha", "Ocorreu um erro" ou
+    "Os dados não carregaram": fica até fechar). Texto entra como TEXTO (HTML digitado aparece escrito), quebra de linha mantida,
+    `role=alert` no erro e `role=status` no resto, botão de fechar de 44 px no toque, fica fora do `#root` (redesenhar não apaga).
+    Cada aviso vai para `window.__AVISOS__` e para `console.info('[aviso] ...')`: **é por aí que os testes leem** (`teste_carga_pecuaria`,
+    `teste_lote_racao`, `teste_parto_aborto_lote_numero` e `teste_qual_animal` ganharam um `page.on("console")`; o `page.on("dialog")`
+    segue valendo para os `confirm()`, que continuam nativos: 21, pergunta que precisa de resposta). Pecuária nova com `alert()`
+    novo já funciona sozinha. Matriz, Cana, Cereais e Combustível ainda usam o `alert()` nativo (Matriz: muitos testes leem o
+    evento `dialog`).
 - **Menu lateral do AE Matriz (06/11/2026; `teste_menu_lateral.py` 37 checagens)**. Pedido do Eduardo ("não gosto muito deste
   formato; quero as opções da barra maiores e as dos apps menores na barra"; ele viu as imagens e disse "ficou ótimo"). Três modos,
   só CSS + o bloco `AppsNaBarra()` dentro do `.tabsrow`:
@@ -1591,7 +1600,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-52 arquivos `teste_*.py`, 1.423 checagens (06/11/2026; a tabela abaixo lista os
+53 arquivos `teste_*.py`, 1.448 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1635,6 +1644,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_avisos_pecuaria.py` | 25 | AEpecuaria.html (alert() vira aviso na tela: não trava, erro fica até fechar, texto seguro, Esc/×, no topo e acima de janelas, confirm() nativo) |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |

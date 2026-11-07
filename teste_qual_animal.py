@@ -84,6 +84,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: erros.append(str(e)) if "ServiceWorker" not in str(e) else None)
     page.recusar = False
     page.on("dialog", lambda d: (avisos.append(d.message), d.dismiss() if (d.type == "confirm" and page.recusar) else d.accept()))
+    page.on("console", lambda m: avisos.append(m.text[len("[aviso] "):]) if m.text.startswith("[aviso] ") else None)  # o alert() virou aviso na pagina (07/11/2026)
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.add_init_script(STUB)
     page.add_init_script(f"window.__DB__ = {json.dumps(dict(DB, profiles=[ADMIN]))};"
