@@ -1357,6 +1357,21 @@ compra de animais e as travas do banco.
   resultado − investimentos**, e Resultados > Geral ganha o aviso. O resultado (receita − despesa) NÃO muda.
   Falta o **resultado econômico** (custo do lote casado com a venda, por cabeça; matriz só no descarte): pede
   lote e nº de cabeças em cada compra (formulário + preenchimento do histórico).
+- **Gravação atômica (06/11/2026; achado 4/5 da revisão geral)**: duas funções do banco, `security invoker` (as
+  permissões de quem chama continuam valendo), que gravam tudo numa transação ou nada. Os dois SQL estão no repo,
+  ensaiados num Postgres descartável, e **ele ainda não rodou**; o app novo chama a função e, se ela não existir
+  (`funcaoDoBancoNaoExiste`: PGRST202 / 42883), cai no caminho antigo, então nada quebra antes do SQL.
+  - `venda_animais_atomica_01.sql`: `registrar_venda_animais(p_abate, p_lancamento)` grava abate + receita + baixa do
+    lote, trava a linha do lote (`for update`) e confere o saldo DENTRO do banco (duas vendas ao mesmo tempo: só uma
+    passa, a outra vê o saldo novo; testado com duas conexões). `teste_venda_atomica.py` (19) cobre o lado do app.
+  - `titulos_atomico_01.sql`: `salvar_titulos(p_itens)` grava todas as parcelas de uma conta com as partes do rateio
+    (ou edita uma conta trocando as partes) numa chamada só; e a trava `trg_titulo_valor_fecha` (deferida): mudar o
+    VALOR da conta sem as partes fecharem é recusado (a `trg_rateio_fecha` antiga só olhava mudança nas partes: foi
+    assim, provavelmente, que a conta #107 ficou com as partes em dobro). Recusa instalar se alguma conta já não fecha.
+    `teste_titulo_atomico.py` (23).
+  - O stub de teste ganhou `rpc` (`window.__RPC__[nome]` registra um tratador; sem ele responde PGRST202).
+  - A baixa de conta já é um insert só com gatilho no banco (uma transação). Os fluxos de várias gravações do AE
+    Pecuária (lote, pesagem) ainda não foram revisados nesse ponto.
 - **Compra de animais (decisões dele, 06/11/2026)**: matriz só é reconhecida no DESCARTE (sem depreciar: "ela vale o
   valor dela em carne"); o formulário de compra ganha lote e nº de cabeças (colunas `lote_id` e `quantidade` já
   existem); ele pediu a LISTA das compras para separar matriz de giro: `compra_animais_01_lista.sql` (só leitura,
@@ -1503,7 +1518,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-46 arquivos `teste_*.py`, 1.143 checagens (06/11/2026; a tabela abaixo lista os
+48 arquivos `teste_*.py`, 1.185 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1547,6 +1562,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_venda_atomica.py` | 19 | AEMatriz.html (venda de animais por uma função do banco: uma chamada, sem gravações soltas, saldo novo na tela, recusa do banco mostrada, caminho antigo se a função não existe) |
+| `teste_titulo_atomico.py` | 23 | AEMatriz.html (conta a pagar/receber por uma função do banco: parcelas e partes juntas, editar com id, recusa mostrada, caminho antigo) |
 | `teste_pecuaria_compra_animais.py` | 23 | AEMatriz.html (bloco "Investimentos da Pecuária" e resultado de caixa por classe de centro, aviso no Geral, só Pecuária, filtros mês/ano/safra, resultado de antes intacto) |
 | `teste_carga_leve.py` | 41 | AEMatriz.html (carga por grupo, visão rateada lida uma vez, `atualizarLancamentos` igual ao recarregamento completo, `vigentesNoMes` igual à versão antiga, voltar à aba depois de 10 min) |
 | `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |

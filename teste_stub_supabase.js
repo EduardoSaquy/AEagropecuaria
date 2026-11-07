@@ -89,6 +89,14 @@ window.supabase = {
     }
     return {
       from: tabela,
+      // Funcao do banco (rpc): so existe se o teste registrar um tratador em window.__RPC__[nome];
+      // sem ele responde como o PostgREST quando a funcao nao existe (PGRST202), que e o que os apps
+      // tratam como "use o caminho antigo".
+      rpc: (nome, args) => {
+        const h = window.__RPC__ && window.__RPC__[nome];
+        if (h) { window.__CHAMADAS_RPC__.push({ nome, args }); return Promise.resolve(h(args)); }
+        return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + nome + ' in the schema cache' } });
+      },
       functions: { invoke: () => Promise.resolve({ data: {}, error: null }) },
       auth: {
         getSession: () => Promise.resolve({ data: { session: window.__SESSAO__ } }),
@@ -101,3 +109,4 @@ window.supabase = {
   },
 };
 window.__ESCRITAS__ = [];
+window.__CHAMADAS_RPC__ = [];
