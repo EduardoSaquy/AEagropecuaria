@@ -60,7 +60,10 @@ const TEMPO_REDE_MS = 4000;
 const CDN_SUPABASE = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0';
 const HOSTS_ESTATICOS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
+// (07/11/2026, sem trocar a versao do cache) core.js e core_lavoura.js: as funcoes que os apps tinham copiadas passaram
+// para esses arquivos. Entram aqui para o app abrir offline; o ?v= que os HTML usam e ignorado ao achar a copia guardada.
 const SHELL = [
+  './core.js', './core_lavoura.js',
   './AEMatriz.html',      './manifest_matriz.json',
   './AEpecuaria.html',    './manifest.json',
   './AECana.html',        './manifest_cana.json',

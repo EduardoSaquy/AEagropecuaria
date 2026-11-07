@@ -472,47 +472,8 @@
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
+<script src="core.js?v=092d6ef7df"></script>
 <script>
-/* ===================== AVISOS NA PÁGINA (07/11/2026) =====================
- * O alert() do navegador trava a tela até a pessoa tocar em OK, tem a cara do navegador e, no tablet e no celular do
- * campo, some atrás do teclado. Os alert() deste app agora viram um aviso na própria tela (no topo, para não cobrir o
- * botão Salvar nem o botão +): não trava, tem botão de fechar, Esc fecha, e some sozinho, MENOS o de erro
- * ("Não foi possível...", "Erro...", "Falha..."), que fica até a pessoa fechar. O texto entra como texto (nunca como
- * HTML) e a quebra de linha da mensagem é mantida. confirm() continua nativo: pergunta que precisa de resposta.
- * Cada aviso também vai para window.__AVISOS__ e para o console ("[aviso] ...") — é por onde os testes leem. */
-let TEMPO_AVISO_MS = 9000;
-window.__AVISOS__ = [];
-function avisar(msg){
-  const texto = String(msg == null ? '' : msg);
-  const erro = /^(n[aã]o foi poss[ií]vel|erro|falha|ocorreu um erro|os dados n[aã]o carregaram)/i.test(texto.trim());
-  window.__AVISOS__.push({texto, erro, quando: Date.now()});
-  try{ console.info('[aviso] ' + texto); }catch(e){ /* console indisponível */ }
-  let caixa = document.getElementById('avisos');
-  if(!caixa){
-    caixa = document.createElement('div');
-    caixa.id = 'avisos'; caixa.className = 'avisos';
-    caixa.setAttribute('role', 'region'); caixa.setAttribute('aria-label', 'Avisos');
-    document.body.appendChild(caixa);
-  }
-  const el = document.createElement('div');
-  el.className = 'aviso ' + (erro ? 'aviso-erro' : 'aviso-info');
-  el.setAttribute('role', erro ? 'alert' : 'status');
-  const corpo = document.createElement('div'); corpo.className = 'aviso-texto'; corpo.textContent = texto;
-  const fechaBtn = document.createElement('button');
-  fechaBtn.type = 'button'; fechaBtn.className = 'aviso-fechar'; fechaBtn.setAttribute('aria-label', 'Fechar aviso'); fechaBtn.textContent = '×';
-  const fechar = ()=>{ if(el.parentNode) el.parentNode.removeChild(el); };
-  fechaBtn.onclick = fechar;
-  el.appendChild(corpo); el.appendChild(fechaBtn);
-  while(caixa.children.length >= 4) caixa.removeChild(caixa.firstChild);
-  caixa.appendChild(el);
-  if(!erro) setTimeout(fechar, Math.max(TEMPO_AVISO_MS, Math.min(20000, texto.length * 60)));
-  return el;
-}
-document.addEventListener('keydown', e=>{
-  if(e.key === 'Escape'){ const c = document.getElementById('avisos'); if(c && c.lastChild) c.removeChild(c.lastChild); }
-});
-window.alert = avisar;
-
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
 // esgotado) — reaproveita o projeto real do AE Lavoura, que já tem
@@ -639,21 +600,7 @@ function mesLabel(mesStr){
   const [ano, m] = mesStr.split('-');
   return `${NOMES_MES[Number(m)-1]}/${ano}`;
 }
-function mesAtualStr(){
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-}
-// Data de hoje pelos componentes LOCAIS. toISOString() é UTC e, no Brasil,
-// das 21h à meia-noite devolve a data de amanhã.
-function hojeStr(){
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
 const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
-function areasLabel(areas){
-  if(!areas || areas.length===0) return `<span class="pill pill-ok">Geral · rateado</span>`;
-  return `<span class="pill pill-cat">${areas.map(a=>AREA_LABEL[a]).join(' + ')}</span>`;
-}
 function rowToLancamento(r){
   return {id:r.id, tipo:r.tipo, atividade:r.atividade, fazendaId:r.fazenda_id, centroCustoId:r.centro_custo_id,
           descricao:r.descricao||'', valor:r.valor, data:r.data||null, mes:r.mes||null,
@@ -1985,15 +1932,6 @@ let editDraft = null;
 // se mexer. Ver o restauro de scrollMainAntes dentro de render().
 let paginaAnteriorRender = null;
 
-function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
-function fmtInt(n){ return Number(n||0).toLocaleString('pt-BR'); }
-// Toda tela é montada com innerHTML a partir de texto livre do usuário
-// (nome de fazenda, descrição, observação — e até dado vindo do banco do
-// AE Pecuária, outro limite de confiança) — sem escapar, um <script> ou
-// onerror= digitado num campo executaria na sessão de quem visualizar.
-function esc(s){
-  return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
 function hexToRgba(hex, alpha){
   let h = String(hex||'').replace('#','');
   if(/^[0-9a-fA-F]{3}$/.test(h)) h = h.split('').map(c=>c+c).join('');
@@ -2204,11 +2142,7 @@ const PAGES = [
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
 
-function normalizeUsuario(s){ return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,''); }
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
-// Administrador e Proprietário enxergam tudo; os demais papéis dependem da
-// matriz de módulos. Mesma regra que Lavoura e Pecuária usam.
-function acessoTotal(){ return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario'; }
 function temPermissao(modulo, nivel){
   if(acessoTotal()) return true;
   const atual = state.perfil?.permissoes?.[modulo];
@@ -2224,16 +2158,6 @@ function pareceErroDeRede(error){
 }
 
 const PERFIL_CACHE_KEY = 'aematriz_perfil_cache_v1';
-function lerPerfilCache(uid){
-  try{
-    const cache = JSON.parse(localStorage.getItem(PERFIL_CACHE_KEY)||'null');
-    return (cache && cache.uid===uid) ? cache.perfil : null;
-  }catch(e){ return null; }
-}
-function salvarPerfilCache(uid, perfil){
-  try{ localStorage.setItem(PERFIL_CACHE_KEY, JSON.stringify({uid, perfil})); }
-  catch(e){ /* localStorage indisponível (modo privado etc.) */ }
-}
 async function loadPerfil(){
   const uid = state.session?.user?.id;
   if(!uid){ state.perfil = null; state.perfilErroRede = false; return; }
@@ -2268,31 +2192,6 @@ async function loadPerfil(){
 // biblioteca apaga a sessao guardada e o app volta pro login normalmente.
 const CHAVE_SESSAO_SUPABASE = 'sb-kmkystqgpvmzrccxvyaz-auth-token';
 const LIMITE_ESPERA_LOGIN_MS = 3000;
-function aparelhoSemRede(){ return typeof navigator!=='undefined' && navigator.onLine===false; }
-function sessaoGuardadaNoAparelho(){
-  try{
-    const s = JSON.parse(localStorage.getItem(CHAVE_SESSAO_SUPABASE)||'null');
-    return (s && s.user && s.access_token) ? s : null;
-  }catch(e){ return null; }
-}
-async function sessaoInicial(){
-  const daBiblioteca = db.auth.getSession().then(r=>r.data.session).catch(()=>null);
-  if(!sessaoGuardadaNoAparelho()) return daBiblioteca;
-  const limite = new Promise(res=>setTimeout(()=>res(undefined), aparelhoSemRede() ? 0 : LIMITE_ESPERA_LOGIN_MS));
-  const s = await Promise.race([daBiblioteca, limite]);
-  // null = a biblioteca respondeu "sem sessao": se foi por login revogado
-  // ela ja apagou a guardada (volta pro login); se foi por falta de rede,
-  // a guardada continua la e o app abre com ela.
-  return s || sessaoGuardadaNoAparelho();
-}
-// Perfil: sem rede nem tenta (cairia na mesma espera de ~25 s); com rede
-// lenta, desiste no limite e usa o ultimo perfil guardado.
-function buscarPerfilDoBanco(uid){
-  if(aparelhoSemRede()) return Promise.resolve({data:null, error:{message:'Failed to fetch (aparelho sem rede)'}});
-  const busca = db.from('profiles').select('*').eq('id', uid).single();
-  const limite = new Promise(res=>setTimeout(()=>res({data:null, error:{message:'Failed to fetch (demorou demais)'}}), LIMITE_ESPERA_LOGIN_MS + 1000));
-  return Promise.race([busca, limite]);
-}
 async function initAuth(){
   state.session = await sessaoInicial();
   if(state.session) await loadPerfil();
@@ -2396,15 +2295,12 @@ function brandMark(){
 function iconPainel(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`; }
 function iconMenu(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>`; }
 function iconChevronDown(){ return `<svg class="mobile-nav-toggle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`; }
-function iconFazenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>`; }
-function iconAdmin(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>`; }
 function iconFuncionarios(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`; }
 function iconFinanceiroNav(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>`; }
 function iconCentros(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`; }
 function iconContas(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`; }
 function iconUsuarios(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`; }
 function iconAbrir(){ return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>`; }
-function iconResultados(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="m4 15 5-5 4 4 7-8"/></svg>`; }
 function iconEstabulo(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>`; }
 function iconGota(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c4.2 5 7 8.6 7 12a7 7 0 0 1-14 0c0-3.4 2.8-7 7-12Z"/></svg>`; }
 function iconCana(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c2-6 4-6 4-11"/><path d="M10 20c2-8 4-8 4-14"/><path d="M16 20c2-5 4-5 4-9"/></svg>`; }
@@ -3483,15 +3379,6 @@ function StatCard(label, valor, tipo){
 // aparecem lado a lado (chips e os donuts abaixo).
 const OPERACAO_COR = {pecuaria:'#2a78d6', cana:'#eb6834', cereais:'#1baf7a'};
 
-function polarXY(cx, cy, r, ang){ return [cx + r*Math.sin(ang), cy - r*Math.cos(ang)]; }
-function donutSlicePath(cx, cy, rOut, rIn, a0, a1){
-  const largeArc = (a1-a0) > Math.PI ? 1 : 0;
-  const [x0,y0] = polarXY(cx,cy,rOut,a0);
-  const [x1,y1] = polarXY(cx,cy,rOut,a1);
-  const [x2,y2] = polarXY(cx,cy,rIn,a1);
-  const [x3,y3] = polarXY(cx,cy,rIn,a0);
-  return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x3} ${y3} Z`;
-}
 // fatias: [{nome, valor, cor}]. panelId identifica o gráfico (usado só pra
 // não colidir os data-attributes de hover entre os dois donuts da tela).
 // fatias podem ter valor negativo (ex: operação no prejuízo) — um donut não
@@ -4635,8 +4522,6 @@ function ModalFazenda(){
  * estão os 56 do plano de contas do ERP: contas organizadas por natureza
  * (receita, despesa, investimento, financeiro), não por fazenda nem por
  * frente. Um centro por fazenda existe para o que é mesmo só dali. */
-// O Matriz nao tinha busca em tela nenhuma, entao nao tinha o icone.
-function iconSearch(){ return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`; }
 function centroCustoToRow(c){
   return {nome:c.nome, frente:c.frente || null,
           tipo:c.tipo || null, subcategoria:c.subcategoria || null,
@@ -7696,13 +7581,6 @@ const TIPO_VENDA_LABEL = {
 // pra separar a receita da Pecuária por categoria.
 const CATEGORIA_VENDA_LABEL = {bezerro:'Venda de bezerro', abate:'Abate', venda_viva:'Venda viva (não abate)'};
 
-// Aceita virgula: no celular o teclado numerico brasileiro entrega "12,5" e
-// Number("12,5") e NaN.
-function numDecimal(v){
-  if(typeof v === 'number') return v;
-  if(v==null || v==='') return 0;
-  return Number(String(v).replace(',','.')) || 0;
-}
 /* qtdAnimais, nao quantidade.
  *
  * As duas coisas moravam no mesmo campo: numero de animais vendidos e
@@ -8390,34 +8268,6 @@ function ModalPapelUsuario(){
         <button class="btn btn-primary" data-save="papelUsuario">Salvar</button>
       </div>
     </div>
-  </div>`;
-}
-
-function ModalTrocarSenha(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Trocar senha</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        <div class="field"><label>Senha atual</label><input id="f-senhaatual" type="password" autocomplete="current-password" value="${d.senhaAtual}"/></div>
-        <div class="field"><label>Nova senha</label><input id="f-novasenha" type="password" autocomplete="new-password" value="${d.novaSenha}"/></div>
-        <div class="field"><label>Confirmar nova senha</label><input id="f-confirmarsenha" type="password" autocomplete="new-password" value="${d.confirmarSenha}"/></div>
-        <p class="hint">A nova senha precisa ter pelo menos 6 caracteres.</p>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-save="trocarSenha">Salvar nova senha</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function Empty(title, sub){
-  return `<div class="empty">
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#6E756C" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
-    <h4>${title}</h4>
-    <div class="page-desc" style="margin:0 auto;">${sub}</div>
   </div>`;
 }
 
