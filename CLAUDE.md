@@ -1282,8 +1282,10 @@ manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
   idênticas e **53 que divergiram**; nenhum CI no momento da medição (instalado no mesmo dia, ver "Testes automáticos no GitHub"); 201 SQL no repo sem índice do que já rodou; 5 `sw_*.js`
   aposentados ainda lá; dinheiro em ponto flutuante (97 `reduce` no Matriz).
 - **Segurança**: chave pública não lê nenhum objeto (inclui as cópias `zz_backup_dup4_*`); os apps chamam só 2 funções de criar usuário
-  (`criar-usuario-cana`, `criar-usuario-combustivel`); `contas_bancarias` ainda tem as colunas `agencia` e `conta` (vazias na tela; apagar depois de
-  ver que estão vazias); backup automático e plano do Supabase não confirmados.
+  (`criar-usuario-cana`, `criar-usuario-combustivel`); `contas_bancarias` ainda tem as colunas `agencia` e `conta` (vazias na tela) → **`seguranca_03_apaga_agencia_e_conta.sql`**
+  (ensaiado: só apaga se estiverem vazias, recusa dizendo quantas linhas têm dado, sem CASCADE; desfazer no fim do arquivo; ele ainda vai rodar). A consulta
+  dele (07/11/2026) achou só mais três colunas de documento: `fornecedores.cnpj`, `lancamentos_financeiros.cnpj_nota` e a visão `lancamentos_rateados` — CNPJ de
+  fornecedor (dado de registro público, usado para casar com o ERP): ficam; backup automático e plano do Supabase não confirmados.
 - **`saude_do_banco_01.sql` rodada de novo por ele em 07/11/2026 (depois de todas as limpezas): 21 das 24 checagens OK** (eram 18). Agora
   OK: conta #107 (B2), pesagens com 0 kg (D3), `erp_id` repetido, geral sem partes, rateio que não fecha, financiamentos e cadastros. Seguem em
   ATENÇÃO, todas esperadas: **A4** 22 receitas em centro de saída, R$ 339.094,22 (ele decidiu deixar como está; o tipo do centro é só etiqueta);
