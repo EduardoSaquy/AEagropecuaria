@@ -2987,6 +2987,16 @@ function BlocoInvestimentosPecuaria(r){
   if(!inv || inv.total <= 0) return '';
   const linha = (rotulo, valor)=> valor > 0 ? `<tr><td>${rotulo}</td><td class="mono" style="text-align:right;">R$ ${fmt(valor)}</td></tr>` : '';
   const caixa = r.resultado - inv.total;
+  const comCustoAnimais = r.resultado - inv.giro;
+  // Sem lote nem nº de cabeças nas compras (as de 2023 a 2025 foram feitas antes do app), o custo do
+  // animal de giro entra no período em que foi PAGO. A variação do rebanho (animais que ficaram na
+  // fazenda) ainda não entra: pede inventário. Matriz fica de fora até o descarte.
+  const cartaoCusto = inv.giro > 0 ? `
+      <div class="stat-card">
+        <div class="stat-label">Resultado com o custo dos animais</div>
+        <div class="stat-value ${comCustoAnimais>=0?'bom':'alerta'}" style="font-size:19px;" data-resultado-custo-animais-pecuaria="1">R$ ${fmt(comCustoAnimais)}</div>
+        <div class="hint" style="margin-top:4px;">Resultado − compra de animais de giro, no período em que foi paga. Ainda não considera os animais que ficaram na fazenda (variação do rebanho); a matriz só entra no descarte.</div>
+      </div>` : '';
   return `
   <div data-bloco-investimentos-pecuaria="1" style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cinza-claro);">
     <p class="hint" style="margin-bottom:6px;"><strong>Investimentos da Pecuária</strong> (ficam fora do resultado acima)</p>
@@ -2999,10 +3009,12 @@ function BlocoInvestimentosPecuaria(r){
         <tr><td style="font-weight:600;">Total investido</td><td class="mono" style="text-align:right; font-weight:600;" data-total-investido-pecuaria="1">R$ ${fmt(inv.total)}</td></tr>
       </tbody>
     </table>
-    <div class="stat-card" style="margin-top:12px;">
-      <div class="stat-label">Resultado de caixa</div>
-      <div class="stat-value ${caixa>=0?'bom':'alerta'}" style="font-size:19px;" data-resultado-caixa-pecuaria="1">R$ ${fmt(caixa)}</div>
-      <div class="hint" style="margin-top:4px;">Resultado − investimentos: quanto sobrou ou faltou no caixa. O custo dos animais só vira resultado quando o lote é vendido, e a matriz só no descarte.</div>
+    <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); margin-top:12px;">${cartaoCusto}
+      <div class="stat-card">
+        <div class="stat-label">Resultado de caixa</div>
+        <div class="stat-value ${caixa>=0?'bom':'alerta'}" style="font-size:19px;" data-resultado-caixa-pecuaria="1">R$ ${fmt(caixa)}</div>
+        <div class="hint" style="margin-top:4px;">Resultado − todos os investimentos: quanto sobrou ou faltou no caixa.</div>
+      </div>
     </div>
   </div>`;
 }
@@ -3010,7 +3022,7 @@ function BlocoInvestimentosPecuaria(r){
 function AvisoInvestimentoPecuaria(){
   const inv = investimentosPecuariaNoPeriodo(), r = resultadoOperacaoNoPeriodo('pecuaria');
   if(!inv || inv.total <= 0 || !r || r.erro) return '';
-  return `<p class="hint" style="margin-top:10px;" data-aviso-investimento-pecuaria="1"><strong>A Pecuária investiu R$ ${fmt(inv.total)}</strong> no período (compra de animais e outros), fora do resultado acima. Em caixa, o resultado da Pecuária foi <strong>R$ ${fmt(r.resultado - inv.total)}</strong>. Detalhe em Resultados &gt; Operacional.</p>`;
+  return `<p class="hint" style="margin-top:10px;" data-aviso-investimento-pecuaria="1"><strong>A Pecuária investiu R$ ${fmt(inv.total)}</strong> no período (compra de animais e outros), fora do resultado acima.${inv.giro > 0 ? ` Com o custo dos animais de giro (R$ ${fmt(inv.giro)}), o resultado da Pecuária foi <strong>R$ ${fmt(r.resultado - inv.giro)}</strong>.` : ''} Em caixa, <strong>R$ ${fmt(r.resultado - inv.total)}</strong>. Detalhe em Resultados &gt; Operacional.</p>`;
 }
 function algumResultadoCarregando(){
   return state.resultados.pecuaria.loading || state.resultados.cana.loading || state.resultados.cereais.loading || state.resultados.combustivelPorFrente.loading;

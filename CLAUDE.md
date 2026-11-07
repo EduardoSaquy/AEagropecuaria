@@ -1336,6 +1336,20 @@ compra de animais e as travas do banco.
   2025/2026 que formam esses lotes; o histórico anterior fica só em caixa.
 - **`apaga_pesagens_zero.sql`**: apaga as pesagens #9 (lote #3) e #10 (lote #33), 0 kg de 11/08/2026, a pedido dele
   (guardas, cópia em `zz_backup_pesagens_zero_2026_11_06`, recusa se houver peso individual real; ensaiado).
+  **RODADO por ele em 06/11/2026**: 0 pesagens restantes, 0 com peso fora de 20 a 1000 kg.
+- **Classificação das compras (decisões dele, 06/11/2026)**: #494 e #508 são matrizes; #502 é bezerro macho de corte
+  (giro); #490/#491, #496/#497 e #492 (a descrição diz matriz) também vão para matriz.
+  `compra_animais_03_classifica.sql` (ensaiado, **ainda não rodado**) passa as 8 lançadas à mão do centro ambíguo
+  INVESTIMENTO EM ANIMAIS para COMPRA DE MATRIZES PARA REPRODUÇÃO (7) ou COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE (1);
+  só muda o centro, com guardas, cópia e desfazer. O R$ 30.400 repetido (#508 × #22173): ele acha que é a mesma compra
+  lançada duas vezes, **mas precisa ver se não são parcelas**; `confere_compra_repetida.sql` (só leitura) mostra os
+  lançamentos desse vendedor com a observação do ERP. Se for a mesma compra, o ERP lançou #22173/#22307 como giro e
+  ele diz que as compras desse vendedor são matriz: conferir a classe delas também.
+- **Resultado com o custo dos animais (06/11/2026)**: como ele não consegue ligar as compras a lote/cabeças agora ("o
+  histórico se acha depois, a criação do app foi depois da compra") e quer a implicação financeira no app, o bloco da
+  Pecuária passou a mostrar também o **resultado com o custo dos animais de giro** = resultado − compra de giro do
+  período (pago no período). Ainda não considera a variação do rebanho (precisa de inventário) e a matriz só entra
+  no descarte. Quem vendeu ("de quem") já está em `fornecedor`; lote e cabeças ficam para depois.
 - **Resultado de caixa da Pecuária (06/11/2026, `teste_pecuaria_compra_animais.py` 19 checagens, falha no anterior)**:
   `state.resultados.pecuaria.investimentosFinanceiro`; `classeInvestimentoPecuaria(centro)` (giro / matriz /
   "animais" a classificar / outro, pelo NOME do centro); `investimentosPecuariaNoPeriodo()`;
@@ -1489,7 +1503,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-46 arquivos `teste_*.py`, 1.139 checagens (06/11/2026; a tabela abaixo lista os
+46 arquivos `teste_*.py`, 1.143 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1533,7 +1547,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
-| `teste_pecuaria_compra_animais.py` | 19 | AEMatriz.html (bloco "Investimentos da Pecuária" e resultado de caixa por classe de centro, aviso no Geral, só Pecuária, filtros mês/ano/safra, resultado de antes intacto) |
+| `teste_pecuaria_compra_animais.py` | 23 | AEMatriz.html (bloco "Investimentos da Pecuária" e resultado de caixa por classe de centro, aviso no Geral, só Pecuária, filtros mês/ano/safra, resultado de antes intacto) |
 | `teste_carga_leve.py` | 41 | AEMatriz.html (carga por grupo, visão rateada lida uma vez, `atualizarLancamentos` igual ao recarregamento completo, `vigentesNoMes` igual à versão antiga, voltar à aba depois de 10 min) |
 | `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |

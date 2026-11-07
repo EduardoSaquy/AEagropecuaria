@@ -106,6 +106,10 @@ with sync_playwright() as pw:
     conf(txt(page, "[data-resultado-caixa-pecuaria]") == "R$ -13.000,00" or txt(page, "[data-resultado-caixa-pecuaria]") == "-R$ 13.000,00",
          "resultado de caixa = resultado (R$ 400.000,00) - investimentos = -13.000,00", str(txt(page, "[data-resultado-caixa-pecuaria]")))
     conf(page.evaluate("() => document.querySelector('[data-resultado-caixa-pecuaria]').className.includes('alerta')"), "caixa negativo fica em alerta")
+    # resultado com o custo dos animais de giro = 400.000 - 250.000 = 150.000
+    conf(txt(page, "[data-resultado-custo-animais-pecuaria]") == "R$ 150.000,00", "resultado com o custo dos animais de giro = R$ 150.000,00",
+         str(txt(page, "[data-resultado-custo-animais-pecuaria]")))
+    conf(page.evaluate("() => document.querySelector('[data-resultado-custo-animais-pecuaria]').className.includes('bom')"), "e fica em bom (positivo)")
     r = page.evaluate("() => { const x = resultadoOperacaoNoPeriodo('pecuaria'); return {receita: x.receita, despesa: x.despesa, resultado: x.resultado}; }")
     conf(r["receita"] == 500000 and r["despesa"] == 100000 and r["resultado"] == 400000, "o resultado (receita - despesa) continua o de antes", str(r))
     conf(page.evaluate("() => document.querySelectorAll('[data-bloco-investimentos-pecuaria]').length") == 1, "so um bloco (Cana e Cereais nao ganham)")
@@ -115,6 +119,7 @@ with sync_playwright() as pw:
     aviso = txt(page, "[data-aviso-investimento-pecuaria]")
     conf(aviso is not None and "R$ 413.000,00" in aviso, "aviso com o total investido", str(aviso))
     conf(aviso is not None and ("R$ -13.000,00" in aviso or "-R$ 13.000,00" in aviso), "aviso com o resultado de caixa da Pecuaria", str(aviso))
+    conf(aviso is not None and "R$ 150.000,00" in aviso and "custo dos animais de giro" in aviso, "aviso com o resultado com o custo dos animais de giro", str(aviso))
 
     print("== outros periodos")
     ir({"tipo": "mes", "ano": 2025, "mes": "2025-06", "safra": 2025}, "operacional")
@@ -122,6 +127,7 @@ with sync_playwright() as pw:
     conf(txt(page, "[data-total-investido-pecuaria]") == "R$ 163.000,00", "mes 2025-06: total R$ 163.000,00", str(txt(page, "[data-total-investido-pecuaria]")))
     conf(txt(page, "[data-resultado-caixa-pecuaria]") == "R$ 237.000,00", "mes 2025-06: caixa R$ 237.000,00", str(txt(page, "[data-resultado-caixa-pecuaria]")))
     conf(page.evaluate("() => document.querySelector('[data-resultado-caixa-pecuaria]').className.includes('bom')"), "caixa positivo fica em bom")
+    conf(txt(page, "[data-resultado-custo-animais-pecuaria]") is None, "mes sem compra de giro: sem o cartao do custo dos animais")
     ir({"tipo": "mes", "ano": 2025, "mes": "2025-01", "safra": 2024}, "operacional")
     conf(txt(page, "[data-bloco-investimentos-pecuaria]") is None, "mes sem investimento: sem bloco")
     ir({"tipo": "mes", "ano": 2025, "mes": "2025-01", "safra": 2024}, "geral")
