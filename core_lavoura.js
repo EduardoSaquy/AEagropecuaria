@@ -134,10 +134,6 @@ function iconGrao(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fil
 function iconPlantio(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 13C12 9 9 6 5 6c0 4 3 7 7 7Z"/></svg>`; }
 function iconResultado(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 9 11 13 15 21 7"/><path d="M15 7h6v6"/></svg>`; }
 
-/* ---------- Funções iguais nos dois apps (Cana e Cereais), na ordem em que estavam no AE Cana ----------
- * Login, sessão, carga de dados, telas de usuários e permissões, cadastros. O que é diferente entre os dois apps
- * (nomes de tabelas, textos, campos) vem de constantes que cada app define. */
-function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, ativo:r.ativo}; }
 function salvarCacheLocal(){
   try{
     const snapshot = {};
@@ -226,52 +222,6 @@ function render(){
 // banco aplica em pode_excluir(); aqui e so para nao mostrar um botao que
 // vai falhar - e falhar calado, porque a RLS nega delete sem dar erro.
 function podeExcluir(){ return acessoTotal(); }
-async function loadPerfil(){
-  const uid = state.session?.user?.id;
-  if(!uid){ state.perfil = null; return; }
-  const { data, error } = await buscarPerfilDoBanco(uid);
-  if(data){
-    state.perfil = rowToPerfil(data);
-    salvarPerfilCache(uid, state.perfil);
-  } else {
-    // sem rede: ultimo perfil conhecido deste usuario (null se nunca abriu online)
-    const msg = String(error?.message||'').toLowerCase();
-    const deRede = aparelhoSemRede() || msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
-    state.perfil = deRede ? lerPerfilCache(uid) : null;
-  }
-  if(state.perfil?.ativo && !paginaAcessivel(state.page)){
-    const primeira = primeiraPaginaVisivel();
-    if(primeira) state.page = primeira;
-  }
-}
-async function initAuth(){
-  carregarCacheLocal();
-  state.session = await sessaoInicial();
-  if(state.session) await loadPerfil();
-  state.authChecked = true;
-  render();
-  if(state.session && state.perfil?.ativo) loadAll();
-
-  let primeiroEvento = true;
-  db.auth.onAuthStateChange(async (event, newSession)=>{
-    if(primeiroEvento){ primeiroEvento = false; return; }
-    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
-    state.session = newSession;
-    if(newSession){
-      await loadPerfil();
-      render();
-      if(state.perfil?.ativo) loadAll();
-    } else {
-      state.perfil = null;
-      render();
-    }
-  });
-}
-async function fazerLogout(){
-  await db.auth.signOut();
-  state.session = null; state.perfil = null; state.page = 'talhoes';
-  render();
-}
 function primeiraPaginaVisivel(){
   for(const [,g] of gruposVisiveis()){
     if(g.pages[0]) return g.pages[0].key;
@@ -421,3 +371,13 @@ function Modal(){
   if(state.modal.type==='historicoTalhao') return ModalHistoricoTalhao();
   return '';
 }
+
+/* ---------- Ganchos do login para o Cana e o Cereais (as funções de login estão no core.js) ---------- */
+function corrigirPaginaDoPerfil(){
+  if(!paginaAcessivel(state.page)){
+    const primeira = primeiraPaginaVisivel();
+    if(primeira) state.page = primeira;
+  }
+}
+function aoIniciarApp(){ carregarCacheLocal(); }
+function aoSair(){ state.page = 'talhoes'; }

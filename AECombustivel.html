@@ -270,7 +270,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=1c0da5dac9"></script>
+<script src="core.js?v=1cd2697221"></script>
 <script>
 /* ===================== SUPABASE =====================
  * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
@@ -521,7 +521,6 @@ const CADASTROS = {
 };
 const CADASTRO_KEYS = Object.keys(CADASTROS);
 
-function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, frentes:r.frentes||[], ativo:r.ativo}; }
 function rowToAlerta(r){
   return {
     id:r.id, fazendaId:r.fazenda_id, tipo:r.tipo, severidade:r.severidade, titulo:r.titulo, descricao:r.descricao,
@@ -740,9 +739,21 @@ function render(){
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
-const DOMINIO_LOGIN = 'aeagropecuaria.local';
 
 const PERFIL_CACHE_KEY = 'aecombustivel_perfil_cache_v1';
+const NOME_DO_APP = 'AE Combustível';
+function corrigirPaginaDoPerfil(){
+  if(!paginaAcessivel(state.page)){
+    const primeira = primeiraPaginaVisivel();
+    if(primeira) state.page = primeira;
+  }
+}
+function aoIniciarApp(){
+  carregarCacheLocal(); // mostra os últimos cadastros conhecidos mesmo antes de falar com o servidor (ou offline)
+  window.addEventListener('online', sincronizarFila);
+}
+function aoRetomarSessao(){ atualizarFilaNaTela().then(sincronizarFila); }
+function aoSair(){ state.page = 'painel'; }
 // ---- Abertura sem internet (login e perfil guardados no aparelho) ----
 // O token de acesso do Supabase vale 1 h. Vencido e sem internet, o
 // getSession() da biblioteca tenta renovar e repete por ~25 s antes de
@@ -757,90 +768,7 @@ const PERFIL_CACHE_KEY = 'aecombustivel_perfil_cache_v1';
 // biblioteca apaga a sessao guardada e o app volta pro login normalmente.
 const CHAVE_SESSAO_SUPABASE = 'sb-kmkystqgpvmzrccxvyaz-auth-token';
 const LIMITE_ESPERA_LOGIN_MS = 3000;
-async function loadPerfil(){
-  const uid = state.session?.user?.id;
-  if(!uid){ state.perfil = null; return; }
-  const { data, error } = await buscarPerfilDoBanco(uid);
-  if(data){
-    state.perfil = rowToPerfil(data);
-    salvarPerfilCache(uid, state.perfil);
-  } else {
-    // sem rede: ultimo perfil conhecido deste usuario (null se nunca abriu online)
-    const msg = String(error?.message||'').toLowerCase();
-    const deRede = aparelhoSemRede() || msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
-    state.perfil = deRede ? lerPerfilCache(uid) : null;
-  }
-  if(state.perfil?.ativo && !paginaAcessivel(state.page)){
-    const primeira = primeiraPaginaVisivel();
-    if(primeira) state.page = primeira;
-  }
-}
 
-async function initAuth(){
-  carregarCacheLocal(); // mostra os últimos cadastros conhecidos mesmo antes de falar com o servidor (ou offline)
-  state.session = await sessaoInicial();
-  if(state.session) await loadPerfil();
-  state.authChecked = true;
-  render();
-  if(state.session && state.perfil?.ativo){
-    loadAll().then(detectarAlertas);
-    atualizarFilaNaTela().then(sincronizarFila);
-  }
-
-  let primeiroEvento = true;
-  db.auth.onAuthStateChange(async (event, newSession)=>{
-    if(primeiroEvento){ primeiroEvento = false; return; }
-    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
-    state.session = newSession;
-    if(newSession){
-      await loadPerfil();
-      render();
-      if(state.perfil?.ativo){
-        loadAll().then(detectarAlertas);
-        atualizarFilaNaTela().then(sincronizarFila);
-      }
-    } else {
-      state.perfil = null;
-      render();
-    }
-  });
-
-  window.addEventListener('online', sincronizarFila);
-}
-
-async function fazerLogout(){
-  await db.auth.signOut();
-  state.session = null; state.perfil = null; state.page = 'painel';
-  render();
-}
-
-function LoginPage(){
-  return `
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Combustível</div></div>
-      ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
-      <form data-login-form="1">
-        <div class="login-field"><label>Usuário</label><input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus /></div>
-        <div class="login-field"><label>Senha</label><input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" /></div>
-        <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
-      </form>
-    </div>
-  </div>`;
-}
-function AguardandoLiberacao(){
-  return `
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Combustível</div></div>
-      <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
-        Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta.
-        Fale com o administrador do sistema.
-      </p>
-      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
-    </div>
-  </div>`;
-}
 
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
 const GROUPS = {

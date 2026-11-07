@@ -1695,9 +1695,24 @@ ficou **vazia**). O que não era igual foi decidido assim (só o que não muda o
   nome (27 chamadas renomeadas) e o Cana/Cereais passa a consulta montada, com o `.order('id')` de desempate que já tinham.
 - **`fazerLogin`**: igual nos 5; o passo extra do Combustível (conferir alertas depois da carga) agora é a função `aoEntrarDepoisDaCarga`, que o app define se
   precisar.
-**Ainda diferentes de verdade** (cada app tem a sua, nada decidido): `initAuth`, `loadPerfil`, `loadAll`, `Header`, `Topbar`, `LoginPage`, `AguardandoLiberacao`,
-`brandMark`, `attachEvents`, `pareceErroDeRede` (a da Pecuária também reconhece `navigator.onLine === false`, `TypeError` e "load failed" do Safari; a do Matriz só
-olha três palavras), `PageCadastro`/`salvarCadastro` (Cana, Cereais, Combustível), `mesLabel`. São a próxima camada do núcleo: cada uma pede comparar e decidir.
+**Fase 3 (07/11/2026): abertura do app, login e sessão no núcleo.** `initAuth`, `loadPerfil`, `fazerLogout`, `LoginPage`, `AguardandoLiberacao`,
+`pareceErroDeRede`, `rowToPerfil` e `DOMINIO_LOGIN` agora são os mesmos nos 5 apps (`core.js`). O que é de cada app vem por constantes e ganchos opcionais
+(`typeof` antes de chamar): `NOME_DO_APP`, `SLOGAN_DO_APP` (só o Matriz), `corrigirPaginaDoPerfil()`, `aoIniciarApp()`, `aoEntrarDepoisDaCarga()`,
+`aoRetomarSessao()` (fila do Combustível), `aoSair()` (Pecuária apaga a cópia offline; Combustível e Cana/Cereais voltam à 1ª tela). Achados e corrigidos,
+**os dois mexem no campo**:
+- **`TOKEN_REFRESHED`**: só o Matriz ignorava o evento. Nos outros quatro, a cada hora (renovação do token do supabase-js) o app recarregava o perfil, redesenhava
+  a tela e baixava os dados de novo: **um formulário aberto com texto digitado e não salvo perdia o texto** (na Pecuária, um lançamento no meio). Agora só guarda
+  a sessão nova.
+- **Primeira abertura sem sinal** (login guardado, perfil nunca guardado neste aparelho): só Matriz e Pecuária diziam "sem conexão" com o botão "Tentar
+  novamente"; **Cana, Cereais e Combustível diziam "ainda não há acesso liberado para esta conta"** (falso, sem botão). Agora os cinco dizem a verdade; o botão
+  tem um ouvinte só (delegado, em `core.js`; o Matriz e a Pecuária perderam o próprio no `attachEvents`).
+- `pareceErroDeRede` é a da Pecuária (aparelho sem rede, `TypeError`, "Failed to fetch"/"Load failed"/"NetworkError"): a do Matriz olhava só três palavras e a do
+  Cana/Cereais/Combustível aceitava qualquer "failed" (por exemplo "authentication failed" virava "sem sinal" e usava o perfil guardado).
+- Login: o texto digitado e a mensagem de erro entram escapados nos 5 (antes só na Pecuária). Visual: o texto da tela "aguardando liberação" é o da Pecuária em todos
+  (o Matriz tinha outro tamanho/cor e dizia "administrador da matriz"). O `rowToPerfil` do Matriz e da Pecuária passou a guardar `frentes` (só o Combustível usa).
+- O stub dos testes (`teste_stub_supabase.js`) guarda os ouvintes de `onAuthStateChange` em `window.__authCallbacks` para o teste disparar `TOKEN_REFRESHED`.
+**Ainda diferentes de verdade** (cada app tem a sua, nada decidido): `loadAll`, `Header`, `Topbar`, `brandMark`, `Modal`, `attachEvents`, `PageCadastro`/`salvarCadastro`
+(Cana, Cereais, Combustível), `mensagemErroSupabase`, `mesLabel`. `loadAll` e o menu são o desenho de cada app; o resto pede comparar e decidir.
 
 **Falta** (próximas etapas): as "ainda diferentes" acima; o CSS dos avisos ainda está copiado nos 5
 apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por tela); apagar os `sw_*.js` aposentados. `Adubacao.html` não usa o núcleo (sem login,
@@ -1824,7 +1839,7 @@ apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por te
 
 ## Testes
 
-65 arquivos `teste_*.py`, 1.880 checagens (07/11/2026; a tabela abaixo lista os
+66 arquivos `teste_*.py`, 1.945 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1874,6 +1889,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_nucleo_offline.py` | 6 | `sw.js` + `core.js?v=` com service worker de verdade: versão nova publicada, offline abre com o núcleo NOVO (provado que o `sw.js` antigo devolvia o velho) e o cache não guarda a cópia antiga |
 | `teste_combustivel_proprietario.py` | 13 | AECombustivel.html (proprietário tem acesso total sem matriz e a tela de Usuários segue só do admin; gestor sem matriz não vê nada; "Proprietário" na lista de usuários; editar e salvar proprietário/colaborador/gestor não muda o perfil da pessoa) |
 | `teste_perfis_acesso.py` | 66 | os 5 apps (tela de acesso: abrir e salvar quem é de qualquer dos 7 perfis não troca o perfil; lista com cor e texto certos; formulário de novo usuário escapa o que se digita) |
+| `teste_sessao_abertura.py` | 65 | os 5 apps (tela de login com o nome do app e texto escapado; aparelho sem sinal na 1ª abertura diz "sem conexão" e o "Tentar novamente" abre o app; `TOKEN_REFRESHED` não redesenha nem recarrega; sair; `pareceErroDeRede` nos 3 navegadores) |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |

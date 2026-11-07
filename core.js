@@ -355,3 +355,127 @@ async function fetchAllRows(consulta){
   }
   return { data: todas, error: null };
 }
+
+/* ---------- Abertura do app, sessão e perfil (iguais nos cinco apps desde 07/11/2026) ----------
+ * Cada app só define o que é dele, por funções e constantes que estas usam na hora da chamada:
+ *   NOME_DO_APP (texto da marca), SLOGAN_DO_APP (opcional, linha embaixo da marca na tela de login), PERFIL_CACHE_KEY,
+ *   corrigirPaginaDoPerfil() (volta para uma tela que a pessoa pode ver), aoIniciarApp() (antes de abrir a sessão),
+ *   aoEntrarDepoisDaCarga() (depois da carga que o login dispara), aoRetomarSessao() (ao abrir o app já com sessão) e aoSair().
+ * Todas são opcionais (typeof antes de chamar). */
+const DOMINIO_LOGIN = 'aeagropecuaria.local';
+// Erro de falta de sinal (e não de permissão ou de dado)? Aparelho sem rede, TypeError do fetch, ou texto de rede dos navegadores
+// ("Failed to fetch" do Chrome, "Load failed" do Safari, "NetworkError..." do Firefox).
+function pareceErroDeRede(err){
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return true;
+  if(err && err.name==='TypeError') return true;
+  const msg = String((err && err.message) || err || '').toLowerCase();
+  return msg.includes('failed to fetch') || msg.includes('network') || msg.includes('load failed') || msg.includes('conexão');
+}
+function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, frentes:r.frentes||[], ativo:r.ativo}; }
+async function loadPerfil(){
+  const uid = state.session?.user?.id;
+  if(!uid){ state.perfil = null; state.perfilErroRede = false; return; }
+  const { data, error } = await buscarPerfilDoBanco(uid);
+  state.perfilErroRede = false;
+  if(data){
+    state.perfil = rowToPerfil(data);
+    salvarPerfilCache(uid, state.perfil);
+  } else if(error && pareceErroDeRede(error)){
+    // sem rede: o último perfil conhecido deste usuário; se nunca abriu online neste aparelho, avisa "sem conexão" (não "sem acesso")
+    const cache = lerPerfilCache(uid);
+    if(cache){ state.perfil = cache; }
+    else { state.perfil = null; state.perfilErroRede = true; }
+  } else {
+    state.perfil = null;
+  }
+  if(state.perfil && state.perfil.ativo && typeof corrigirPaginaDoPerfil === 'function') corrigirPaginaDoPerfil();
+}
+async function initAuth(){
+  if(typeof aoIniciarApp === 'function') aoIniciarApp();
+  state.session = await sessaoInicial();
+  if(state.session) await loadPerfil();
+  state.authChecked = true;
+  render();
+  if(state.session && state.perfil?.ativo) carregarDepoisDeAbrir();
+
+  let primeiroEvento = true;
+  db.auth.onAuthStateChange(async (event, newSession)=>{
+    if(primeiroEvento){ primeiroEvento = false; return; }
+    // token renovado automaticamente (a cada ~1h) não é troca de sessão de
+    // verdade — o cliente supabase-js já usa o token novo sozinho; só
+    // guardamos a referência, sem re-renderizar (senão um modal aberto com
+    // campo digitado e ainda não salvo perderia o texto no meio da digitação).
+    if(event==='TOKEN_REFRESHED'){ state.session = newSession; return; }
+    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
+    state.session = newSession;
+    if(newSession){
+      await loadPerfil();
+      render();
+      if(state.perfil?.ativo) carregarDepoisDeAbrir();
+    } else {
+      state.perfil = null;
+      render();
+    }
+  });
+}
+// A carga de dados que vem depois de abrir o app com sessão (ou de a sessão trocar).
+function carregarDepoisDeAbrir(){
+  const carga = loadAll();
+  if(typeof aoEntrarDepoisDaCarga === 'function') Promise.resolve(carga).then(aoEntrarDepoisDaCarga);
+  if(typeof aoRetomarSessao === 'function') aoRetomarSessao();
+}
+async function fazerLogout(){
+  if(typeof aoSair === 'function') aoSair();
+  await db.auth.signOut();
+  state.session = null;
+  state.perfil = null;
+  render();
+}
+// "Tentar novamente" da tela sem conexão: um ouvinte só para os cinco apps (o botão é desenhado por AguardandoLiberacao).
+document.addEventListener('click', e=>{
+  if(!(e.target && e.target.closest && e.target.closest('[data-retry-perfil]'))) return;
+  (async ()=>{ await loadPerfil(); render(); if(state.perfil?.ativo) loadAll(); })();
+});
+function LoginPage(){
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        ${brandMark()}
+        <div class="brand-name">${esc(NOME_DO_APP)}</div>
+      </div>
+      ${typeof SLOGAN_DO_APP !== 'undefined' ? `<p class="login-tagline">${esc(SLOGAN_DO_APP)}</p>` : ''}
+      ${state.loginError ? `<div class="login-error">${esc(state.loginError)}</div>` : ''}
+      <form data-login-form="1">
+        <div class="login-field">
+          <label>Usuário</label>
+          <input type="text" autocomplete="username" data-login-usuario="1" value="${esc(state.loginDraft.usuario)}" autofocus />
+        </div>
+        <div class="login-field">
+          <label>Senha</label>
+          <input type="password" autocomplete="current-password" data-login-senha="1" value="${esc(state.loginDraft.senha)}" />
+        </div>
+        <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
+      </form>
+    </div>
+  </div>`;
+}
+function AguardandoLiberacao(){
+  const semRede = state.perfilErroRede;
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        ${brandMark()}
+        <div class="brand-name">${esc(NOME_DO_APP)}</div>
+      </div>
+      <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
+        ${semRede
+          ? 'Não foi possível confirmar seu perfil de acesso porque este aparelho está sem conexão com a internet, e ele ainda não tem um perfil salvo de um acesso anterior. Conecte-se à internet e tente de novo.'
+          : 'Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta. Fale com o administrador do sistema.'}
+      </p>
+      ${semRede ? `<button class="btn btn-primary login-btn" data-retry-perfil="1" style="margin-bottom:10px;">Tentar novamente</button>` : ''}
+      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
+    </div>
+  </div>`;
+}

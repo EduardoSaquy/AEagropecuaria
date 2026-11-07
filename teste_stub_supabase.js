@@ -114,7 +114,8 @@ window.supabase = {
       functions: { invoke: () => Promise.resolve({ data: {}, error: null }) },
       auth: {
         getSession: () => Promise.resolve({ data: { session: window.__SESSAO__ } }),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+        // guarda os ouvintes para o teste poder disparar eventos de sessao (window.__authCallbacks[i]('TOKEN_REFRESHED', sessao))
+        onAuthStateChange: (cb) => { (window.__authCallbacks = window.__authCallbacks || []).push(cb); return { data: { subscription: { unsubscribe() {} } } }; },
         signInWithPassword: () => Promise.resolve({ data: { session: window.__SESSAO__ }, error: null }),
         signOut: () => Promise.resolve({}),
         updateUser: () => Promise.resolve({ error: null }),

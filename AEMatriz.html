@@ -472,7 +472,7 @@
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=1c0da5dac9"></script>
+<script src="core.js?v=1cd2697221"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -739,7 +739,6 @@ function rowToLotePec(r){
 }
 
 function rowToTalhao(r){ return {id:r.id, fazendaId:r.fazenda_id, areaHa:r.area_ha, culturaId:r.cultura_id, ativo:r.ativo}; }
-function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, ativo:r.ativo, permissoes:r.permissoes||{}}; }
 
 // Registro dos apps do Painel — hardcoded no JS (não precisa de tabela
 // própria: nunca muda em runtime, só quando um app novo entra no ar).
@@ -2085,7 +2084,6 @@ function render(){
 }
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
-const DOMINIO_LOGIN = 'aeagropecuaria.local';
 // Cada página do Matriz responde a um módulo de permissão, igual Lavoura e
 // Pecuária já faziam. Antes daqui só existia adminOnly, o que deixava
 // QUALQUER pessoa logada ver o Painel e os Resultados consolidados.
@@ -2119,31 +2117,11 @@ const PAGES = [
 function paginasVisiveis(){
   return PAGES.filter(p => p.adminOnly ? souAdmin() : p.moduloAny ? p.moduloAny.some(m=>temPermissao(m,'visualizar')) : temPermissao(p.modulo, 'visualizar'));
 }
-function pareceErroDeRede(error){
-  const msg = String(error?.message||'').toLowerCase();
-  return msg.includes('fetch') || msg.includes('network') || msg.includes('failed');
-}
 
 const PERFIL_CACHE_KEY = 'aematriz_perfil_cache_v1';
-async function loadPerfil(){
-  const uid = state.session?.user?.id;
-  if(!uid){ state.perfil = null; state.perfilErroRede = false; return; }
-  const { data, error } = await buscarPerfilDoBanco(uid);
-  state.perfilErroRede = false;
-  if(data){
-    state.perfil = rowToPerfil(data);
-    salvarPerfilCache(uid, state.perfil);
-  } else if(error && pareceErroDeRede(error)){
-    const cache = lerPerfilCache(uid);
-    if(cache){ state.perfil = cache; }
-    else { state.perfil = null; state.perfilErroRede = true; }
-  } else {
-    state.perfil = null;
-  }
-  if(state.perfil && state.perfil.ativo && !paginasVisiveis().some(p=>p.key===state.page)){
-    state.page = 'painel';
-  }
-}
+const NOME_DO_APP = 'AE Matriz';
+const SLOGAN_DO_APP = 'Painel único da AE Agropecuária — Pecuária, Cana e Grãos num só lugar.';
+function corrigirPaginaDoPerfil(){ if(!paginasVisiveis().some(p=>p.key===state.page)) state.page = 'painel'; }
 
 // ---- Abertura sem internet (login e perfil guardados no aparelho) ----
 // O token de acesso do Supabase vale 1 h. Vencido e sem internet, o
@@ -2159,77 +2137,6 @@ async function loadPerfil(){
 // biblioteca apaga a sessao guardada e o app volta pro login normalmente.
 const CHAVE_SESSAO_SUPABASE = 'sb-kmkystqgpvmzrccxvyaz-auth-token';
 const LIMITE_ESPERA_LOGIN_MS = 3000;
-async function initAuth(){
-  state.session = await sessaoInicial();
-  if(state.session) await loadPerfil();
-  state.authChecked = true;
-  render();
-  if(state.session && state.perfil?.ativo) loadAll();
-
-  let primeiroEvento = true;
-  db.auth.onAuthStateChange(async (event, newSession)=>{
-    if(primeiroEvento){ primeiroEvento = false; return; }
-    // token renovado automaticamente (a cada ~1h) não é troca de sessão de
-    // verdade — o cliente supabase-js já usa o token novo sozinho; só
-    // guardamos a referência, sem re-renderizar (senão um modal aberto com
-    // campo digitado e ainda não salvo perderia o texto no meio da digitação).
-    if(event==='TOKEN_REFRESHED'){ state.session = newSession; return; }
-    if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
-    state.session = newSession;
-    if(newSession){
-      await loadPerfil();
-      render();
-      if(state.perfil?.ativo) loadAll();
-    } else {
-      state.perfil = null;
-      render();
-    }
-  });
-}
-
-async function fazerLogout(){
-  await db.auth.signOut();
-  state.session = null;
-  state.perfil = null;
-  render();
-}
-
-function LoginPage(){
-  return `
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Matriz</div></div>
-      <p class="login-tagline">Painel único da AE Agropecuária — Pecuária, Cana e Grãos num só lugar.</p>
-      ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
-      <form data-login-form="1">
-        <div class="login-field">
-          <label>Usuário</label>
-          <input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus />
-        </div>
-        <div class="login-field">
-          <label>Senha</label>
-          <input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" />
-        </div>
-        <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
-      </form>
-    </div>
-  </div>`;
-}
-
-function AguardandoLiberacao(){
-  const semRede = state.perfilErroRede;
-  return `
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Matriz</div></div>
-      <p class="hint" style="font-size:13px; margin-bottom:16px;">${semRede
-        ? 'Sem conexão para verificar seu acesso agora. Tente novamente.'
-        : 'Seu login foi reconhecido, mas ainda não há um perfil de acesso liberado para esta conta. Fale com o administrador da matriz.'}</p>
-      ${semRede ? `<button class="btn btn-primary login-btn" data-retry-perfil="1" style="margin-bottom:10px;">Tentar novamente</button>` : ''}
-      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
-    </div>
-  </div>`;
-}
 
 /* ===================== SIDEBAR / HEADER ===================== */
 function brandMark(){
@@ -8542,9 +8449,6 @@ function attachEvents(){
     if(sEl) sEl.oninput = (e)=>{ state.loginDraft.senha = e.target.value; };
   }
   document.querySelectorAll('[data-logout]').forEach(el=>{ el.onclick = ()=> fazerLogout(); });
-  document.querySelectorAll('[data-retry-perfil]').forEach(el=>{
-    el.onclick = async ()=>{ await loadPerfil(); render(); if(state.perfil?.ativo) loadAll(); };
-  });
   document.querySelectorAll('[data-nav]').forEach(el=>{
     el.onclick = ()=>{ state.page = el.dataset.nav; state.financiamentoDetalheId = null; state.mobileNavAberto = false; render(); };
   });

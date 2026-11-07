@@ -322,8 +322,8 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=1c0da5dac9"></script>
-<script src="core_lavoura.js?v=867c35bf1c"></script>
+<script src="core.js?v=1cd2697221"></script>
+<script src="core_lavoura.js?v=a03ed619b0"></script>
 <script>
 /* ===================== SUPABASE =====================
  * AE Lavoura reaproveita o MESMO projeto Supabase que hoje é o do AE
@@ -584,9 +584,9 @@ function paginaCustom(page){
  * AECana.html antigo, e vice-versa, porque é a mesma tabela profiles.
  * O AE Pecuária e o AE Combustível continuam com login próprio, em
  * projetos separados. */
-const DOMINIO_LOGIN = 'aeagropecuaria.local';
 
 const PERFIL_CACHE_KEY = 'aecereais_perfil_cache_v1';
+const NOME_DO_APP = 'AE Cereais';
 // ---- Abertura sem internet (login e perfil guardados no aparelho) ----
 // O token de acesso do Supabase vale 1 h. Vencido e sem internet, o
 // getSession() da biblioteca tenta renovar e repete por ~25 s antes de
@@ -603,33 +603,6 @@ const CHAVE_SESSAO_SUPABASE = 'sb-kmkystqgpvmzrccxvyaz-auth-token';
 const LIMITE_ESPERA_LOGIN_MS = 3000;
 
 
-function LoginPage(){
-  return `
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cereais</div></div>
-      ${state.loginError ? `<div class="login-error">${state.loginError}</div>` : ''}
-      <form data-login-form="1">
-        <div class="login-field"><label>Usuário</label><input type="text" autocomplete="username" data-login-usuario="1" value="${state.loginDraft.usuario}" autofocus /></div>
-        <div class="login-field"><label>Senha</label><input type="password" autocomplete="current-password" data-login-senha="1" value="${state.loginDraft.senha}" /></div>
-        <button type="submit" class="btn btn-primary login-btn" ${state.loginLoading?'disabled':''}>${state.loginLoading ? 'Entrando...' : 'Entrar'}</button>
-      </form>
-    </div>
-  </div>`;
-}
-function AguardandoLiberacao(){
-  return `
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-brand">${brandMark()}<div class="brand-name">AE Cereais</div></div>
-      <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:20px;">
-        Seu login foi reconhecido, mas ainda não há acesso liberado para esta conta no AE Cereais.
-        Fale com o administrador do sistema.
-      </p>
-      <button class="btn btn-ghost login-btn" data-logout="1">Sair</button>
-    </div>
-  </div>`;
-}
 
 /* ===================== NAVEGAÇÃO (grupos + sub-abas) ===================== */
 /* ===================== MENU POR CULTURA =====================
