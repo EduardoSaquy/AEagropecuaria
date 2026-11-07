@@ -12,6 +12,13 @@
 // do bundle de 26/08: teste_contas.py so confere window.__ESCRITAS__, que
 // as duas versoes gravam igual, entao nada quebrou ao ficar com a que
 // persiste de verdade.
+// REDE CAIDA (07/11/2026): com window.__SEM_REDE__ ou localStorage.__sem_rede = '1' toda consulta e gravacao falha como o navegador
+// falha sem internet (TypeError "Failed to fetch"). O localStorage sobrevive a recarregar a pagina, para testar o app abrindo sem sinal.
+function semRede() {
+  try { return !!window.__SEM_REDE__ || localStorage.getItem('__sem_rede') === '1'; } catch (e) { return !!window.__SEM_REDE__; }
+}
+const ERRO_REDE = { name: 'TypeError', message: 'Failed to fetch' };
+const SEM_RESPOSTA = () => Promise.resolve({ data: null, error: ERRO_REDE });
 window.supabase = {
   createClient() {
     function tabela(nome) {
@@ -35,10 +42,12 @@ window.supabase = {
         order() { return this; },
         limit(n) { this._limit = n; return this; },
         range(de, ate) {
+          if (semRede()) return SEM_RESPOSTA();
           const r = this._aplicar();
           return Promise.resolve({ data: r.slice(de, ate + 1), error: null });
         },
         single() {
+          if (semRede()) return SEM_RESPOSTA();
           const r = this._aplicar();
           return Promise.resolve({ data: r[0] || null, error: null });
         },
@@ -51,6 +60,7 @@ window.supabase = {
           return r;
         },
         then(res, rej) {
+          if (semRede()) return SEM_RESPOSTA().then(res, rej);
           if (this._pendingUpdate !== undefined) {
             const alvo = this._aplicar();
             alvo.forEach(r => Object.assign(r, this._pendingUpdate));
@@ -64,6 +74,9 @@ window.supabase = {
           return Promise.resolve({ data: this._aplicar(), error: null }).then(res, rej);
         },
         insert(v) {
+          if (semRede()) {
+            return { select() { return { single: SEM_RESPOSTA, then: (res, rej) => SEM_RESPOSTA().then(res, rej) }; }, then: (res, rej) => SEM_RESPOSTA().then(res, rej) };
+          }
           window.__ESCRITAS__.push({ tabela: nome, op: 'insert', v });
           if (!window.__DB__[nome]) window.__DB__[nome] = [];
           let proximoId = window.__DB__[nome].reduce((m, r) => Math.max(m, Number(r.id) || 0), 0) + 1;
@@ -93,6 +106,7 @@ window.supabase = {
       // sem ele responde como o PostgREST quando a funcao nao existe (PGRST202), que e o que os apps
       // tratam como "use o caminho antigo".
       rpc: (nome, args) => {
+        if (semRede()) return SEM_RESPOSTA();
         const h = window.__RPC__ && window.__RPC__[nome];
         if (h) { window.__CHAMADAS_RPC__.push({ nome, args }); return Promise.resolve(h(args)); }
         return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + nome + ' in the schema cache' } });

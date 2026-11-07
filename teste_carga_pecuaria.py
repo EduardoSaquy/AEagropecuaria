@@ -36,6 +36,11 @@ DB = {
 ADMIN = {"id": "u1", "nome": "Eduardo", "usuario": "eduardo", "papel": "admin", "permissoes": {}, "ativo": True}
 
 # envolve db.from: a tabela pedida responde com erro enquanto window.__FALHA__ disser
+# Abertura "a frio": nada na tela e nenhuma copia no aparelho (o caso do Joilson). Com dados na tela ou com a copia do
+# aparelho (07/11/2026) a falha de rede vira "sem internet" e nada se apaga; isso e coberto em teste_offline_lancar.py.
+A_FRIO = ("localStorage.removeItem('aepecuaria_dados_offline_v1'); state.lotes = []; state.dietas = []; state.ingredientes = []; "
+          "state.animais = []; state.semSinal = false; state.dadosDoAparelho = null;")
+
 FALHAR = """(() => {
   const orig = db.from.bind(db);
   db.from = (t) => {
@@ -93,7 +98,7 @@ with sync_playwright() as pw:
 
     # ---- lotes com erro (rede/permissao), sem ser login vencido ----
     avisos.clear()
-    page.evaluate("async () => { window.__FALHA__ = {lotes: 'Failed to fetch'}; await loadAll(); state.page='lotesReproducao'; render(); }")
+    page.evaluate("async () => { " + A_FRIO + " window.__FALHA__ = {lotes: 'Failed to fetch'}; await loadAll(); state.page='lotesReproducao'; render(); }")
     page.wait_for_timeout(200)
     corpo = page.inner_text("body")
     conf("Os dados não carregaram" in corpo and "lotes" in corpo, "consulta de lotes com erro: aviso vermelho na tela", corpo[:300])
@@ -142,7 +147,7 @@ with sync_playwright() as pw:
     page.evaluate("() => { state.modal = null; render(); }")
 
     # ---- carga essencial parada: depois do limite vira aviso, nao trava ----
-    page.evaluate("() => { window.__TRAVAR__ = {lotes: true}; state.carregouDados = false; loadAll(); }")
+    page.evaluate("() => { " + A_FRIO + " window.__TRAVAR__ = {lotes: true}; state.carregouDados = false; loadAll(); }")
     page.clock.fast_forward(30000)
     page.wait_for_timeout(300)
     estado = page.evaluate("() => ({c: state.carregouDados, e: state.erroCarga})")

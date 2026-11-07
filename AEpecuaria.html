@@ -786,7 +786,10 @@ function mensagemColunaFaltando(error){
   const coluna = m[1]||m[2]||m[3];
   return `O banco ainda não tem o campo "${coluna}". Rode no Supabase o SQL pecuaria_parto_aborto_obito_nome_animal.sql (o Eduardo tem o texto) e tente de novo.`;
 }
-function textoErroBanco(error){ return mensagemColunaFaltando(error) || error?.message || 'erro desconhecido'; }
+function textoErroBanco(error){
+  if(pareceErroDeRede(error)) return 'sem internet neste momento (este tipo de lançamento só se faz com sinal)';
+  return mensagemColunaFaltando(error) || error?.message || 'erro desconhecido';
+}
 function rowToPesagem(r){ return {id:r.id, data:r.data, loteId:r.lote_id, pesoMedioKg:r.peso_medio_kg, observacao:r.observacao||'', criadoPor:r.criado_por||'', manejoId:r.manejo_id||null}; }
 function pesagemToRow(p){ return {data:p.data, lote_id:p.loteId, peso_medio_kg:p.pesoMedioKg, observacao:p.observacao||'', manejo_id:manter(p.manejoId)}; }
 function rowToPesagemAnimal(r){ return {id:r.id, pesagemId:r.pesagem_id, numeroAnimal:r.numero_animal, pesoKg:r.peso_kg}; }
@@ -869,6 +872,58 @@ async function buscarTudo(consulta){
   return { data: todas, error: null };
 }
 
+// DADOS GUARDADOS NO APARELHO (Eduardo, 07/11/2026: "preciso que os funcionários consigam lançar com o app
+// off-line"). A fila de lançamentos já existia (o que se lança sem sinal fica no aparelho e sobe sozinho), mas o
+// app só abria com os lotes, dietas, ingredientes e animais se a internet respondesse: sem sinal logo na
+// abertura, as listas dos formulários ficavam vazias e não dava para lançar nada. Agora cada carga que
+// termina bem guarda uma cópia desses cadastros (e do histórico pequeno de reprodução) neste aparelho,
+// separada por usuário. Na abertura o app mostra a cópia NA HORA (não espera a rede) e atualiza por cima
+// quando a internet responde; sem rede, fica com a cópia e avisa. Estoque, custos e resultados dependem do
+// histórico pesado e só aparecem completos com internet. A cópia sai ao tocar em Sair.
+const DADOS_OFFLINE_KEY = 'aepecuaria_dados_offline_v1';
+function lerDadosOffline(uid){
+  try{
+    const d = JSON.parse(localStorage.getItem(DADOS_OFFLINE_KEY)||'null');
+    return (d && d.uid===uid && d.essenciais) ? d : null;
+  }catch(e){ return null; }
+}
+function guardarDadosOffline(uid, parte){
+  if(!uid) return;
+  const atual = lerDadosOffline(uid) || {uid, salvoEm:null, essenciais:null, historico:null};
+  const novo = {...atual, ...parte, uid};
+  try{ localStorage.setItem(DADOS_OFFLINE_KEY, JSON.stringify(novo)); }
+  catch(e){
+    // aparelho sem espaço: guarda só o que os lançamentos precisam
+    try{ localStorage.setItem(DADOS_OFFLINE_KEY, JSON.stringify({...novo, historico:null})); }
+    catch(e2){ /* sem o que fazer: o app segue como era, só não abre sem sinal */ }
+  }
+}
+function apagarDadosOffline(){ try{ localStorage.removeItem(DADOS_OFFLINE_KEY); }catch(e){} }
+function temDadosNaTela(){ return state.lotes.length>0 || state.dietas.length>0 || state.ingredientes.length>0 || state.animais.length>0; }
+function aplicarDadosOffline(d){
+  const e = d.essenciais;
+  state.ingredientes = (e.ing||[]).map(rowToIngrediente);
+  state.dietas = (e.diet||[]).map(rowToDieta);
+  state.lotes = (e.lot||[]).map(rowToLote);
+  state.animais = (e.anim||[]).map(rowToAnimal);
+  state.perfis = e.perfis||[];
+  const h = d.historico;
+  if(h){
+    state.partos = (h.prt||[]).map(rowToParto);
+    state.desmamas = (h.desm||[]).map(rowToDesmama);
+    state.diagnosticos = (h.dg||[]).map(rowToDiagnostico);
+    state.reproducao = (h.rc||[]).map(rowToReproducaoCusto);
+    state.pesagens = (h.pesag||[]).map(rowToPesagem);
+    state.precosArroba = (h.pa||[]).map(rowToPrecoArroba);
+  }
+  state.dadosDoAparelho = {salvoEm: d.salvoEm};
+}
+function quandoSalvou(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+
 // Carga em duas etapas (Joilson, 23/10/2026: com sinal fraco no campo nada
 // podia ser lançado). 1ª: o que os lançamentos precisam (lotes, dietas,
 // insumos, animais, perfis), pequeno; libera a tela. 2ª: o histórico pesado
@@ -877,7 +932,13 @@ async function buscarTudo(consulta){
 // aviso com "tente de novo" em vez de tela vazia para sempre.
 const LIMITE_CARGA_ESSENCIAL_MS = 25000;
 let cargaAtual = 0;
+let cargasEmCurso = 0;
 async function loadAll(jaRenovouSessao){
+  cargasEmCurso++;
+  try{ return await carregarTudo(jaRenovouSessao); }
+  finally{ cargasEmCurso--; }
+}
+async function carregarTudo(jaRenovouSessao){
   // .range() é obrigatório em toda consulta -- sem ele, o Supabase corta a
   // resposta em 1000 linhas por padrão (a API nem avisa, só devolve as 1000
   // primeiras pela ordenação pedida). Numa tabela como "movimentos", que
@@ -885,6 +946,30 @@ async function loadAll(jaRenovouSessao){
   // id mais alto) somem simplesmente por ficarem de fora desse corte --
   // pareciam "não salvar", mas na verdade só não voltavam na consulta.
   const minhaCarga = ++cargaAtual;
+  const uid = state.session?.user?.id;
+  // Cópia deste aparelho: se a tela está vazia, mostra a cópia já, sem esperar a rede.
+  const copia = uid ? lerDadosOffline(uid) : null;
+  const tinhaDados = temDadosNaTela();
+  const temOndeVoltar = tinhaDados || !!copia;
+  let usouCopia = false;
+  if(!tinhaDados && copia){
+    aplicarDadosOffline(copia);
+    state.erroCarga = '';
+    state.carregouDados = true;
+    usouCopia = true;
+    render();
+  }
+  // Uma janela de lançamento aberta não pode ser redesenhada por baixo de quem digita: o formulário voltaria do
+  // rascunho e o que não é salvo ao vivo se perderia. Só vale quando a tela já estava usável (cópia ou sem sinal).
+  const modoCopia = usouCopia || (tinhaDados && (state.semSinal || !!state.dadosDoAparelho));
+  const redesenhar = ()=>{ if(!(modoCopia && state.modal)) render(); };
+  // Aparelho sem rede e com o que mostrar: nem tenta (com o login vencido a biblioteca esperaria ~25 s à toa).
+  if(aparelhoSemRede() && temOndeVoltar){
+    const mudou = !state.semSinal || !!state.erroCarga || !state.carregouDados || state.carregandoHistorico;
+    state.semSinal = true; state.erroCarga = ''; state.carregouDados = true; state.carregandoHistorico = false;
+    if(mudou || usouCopia) redesenhar();
+    return;
+  }
   const demorou = new Promise(res=>setTimeout(()=>res('demorou'), LIMITE_CARGA_ESSENCIAL_MS));
   const essenciais = Promise.all([
     buscarTudo(()=>db.from('ingredientes').select('*').order('id')),
@@ -895,7 +980,14 @@ async function loadAll(jaRenovouSessao){
   ]);
   const r1 = await Promise.race([essenciais, demorou]);
   if(minhaCarga !== cargaAtual) return;          // outra carga começou depois
+  // Rede que não respondeu, com a cópia (ou o que já estava na tela) para continuar: fica sem sinal, sem apagar nada.
+  const ficarSemSinal = ()=>{
+    const mudou = !state.semSinal || !!state.erroCarga || !state.carregouDados || state.carregandoHistorico;
+    state.semSinal = true; state.erroCarga = ''; state.carregouDados = true; state.carregandoHistorico = false;
+    if(mudou) redesenhar();
+  };
   if(r1 === 'demorou'){
+    if(temOndeVoltar){ ficarSemSinal(); return; }
     state.erroCarga = 'a internet não respondeu em ' + Math.round(LIMITE_CARGA_ESSENCIAL_MS/1000) + ' segundos';
     state.carregouDados = true;
     render();
@@ -911,15 +1003,28 @@ async function loadAll(jaRenovouSessao){
     const renovada = await db.auth.refreshSession().catch(()=>null);
     if(renovada?.data?.session){ state.session = renovada.data.session; return loadAll(true); }
   }
+  if(falhas.length && temOndeVoltar && falhas.some(([, r])=>pareceErroDeRede(r.error))){ ficarSemSinal(); return; }
+  // Falha que não é de rede com algo na tela: mantém o que está (a cópia) em vez de esvaziar as listas.
+  if(falhas.length && temOndeVoltar){
+    state.erroCarga = `${falhas.map(([n])=>n).join(', ')} (${falhas[0][1].error.message||'erro'})`;
+    state.carregouDados = true; state.carregandoHistorico = false;
+    redesenhar();
+    return;
+  }
   state.erroCarga = falhas.length ? `${falhas.map(([n])=>n).join(', ')} (${falhas[0][1].error.message||'erro'})` : '';
   state.carregouDados = true;
+  state.semSinal = false;
+  state.dadosDoAparelho = null;
   state.ingredientes = (ing.data||[]).map(rowToIngrediente);
   state.dietas = (diet.data||[]).map(rowToDieta);
   state.lotes = (lot.data||[]).map(rowToLote);
   state.animais = (anim.data||[]).map(rowToAnimal);
   state.perfis = (perfis.data||[]).map(rowToPerfil);
+  if(!falhas.length && !perfis.error){
+    guardarDadosOffline(uid, {salvoEm: new Date().toISOString(), essenciais: {ing: ing.data||[], diet: diet.data||[], lot: lot.data||[], anim: anim.data||[], perfis: state.perfis}});
+  }
   state.carregandoHistorico = true;
-  render();
+  redesenhar();
 
   const [mov, sr, lc, pt, rc, lanc, cCusto, pa, cfg, faz, prt, pesag, prod, abt, dg, desm, pesagAnim, manj, protIA] = await Promise.all([
     buscarTudo(()=>db.from('movimentos').select('*').order('id')),
@@ -954,6 +1059,14 @@ async function loadAll(jaRenovouSessao){
   ]);
   if(minhaCarga !== cargaAtual) return;
   state.carregandoHistorico = false;
+  // A rede caiu no meio do histórico: mantém o que já estava (histórico de antes ou da cópia do aparelho) em vez
+  // de zerar as listas com o que não chegou.
+  const historicos = [mov, sr, lc, pt, rc, lanc, cCusto, pa, faz, prt, pesag, prod, abt, dg, desm, pesagAnim, manj, protIA];
+  if(historicos.some(r=>r?.error && pareceErroDeRede(r.error)) && temOndeVoltar){
+    state.semSinal = true;
+    redesenhar();
+    return;
+  }
   state.movimentos = (mov.data||[]).map(rowToMovimento);
   state.saidasRacao = (sr.data||[]).map(rowToSaidaRacao);
   state.leiturasCocho = (lc.data||[]).map(rowToLeituraCocho);
@@ -995,12 +1108,19 @@ async function loadAll(jaRenovouSessao){
   state.pesagensAnimais = (pesagAnim.data||[]).map(rowToPesagemAnimal);
   state.manejos = (manj.data||[]).map(rowToManejo);
   state.protocolosInseminacao = (protIA.data||[]).map(rowToProtocoloInseminacao);
-  render();
+  // Cópia do histórico pequeno que os lançamentos de reprodução e pesagem consultam (inseminações desde o último
+  // parto, partos da vaca, últimas pesagens); o pesado (estoque, financeiro) fica só no servidor.
+  if(!historicos.some(r=>r?.error)){
+    guardarDadosOffline(uid, {historico: {prt: prt.data||[], desm: desm.data||[], dg: dg.data||[], rc: rc.data||[], pesag: pesag.data||[], pa: pa.data||[]}});
+  }
+  redesenhar();
 }
 
 /* ===================== ESTADO ===================== */
 const state = {
   page: 'resultadosResumo',
+  semSinal: false,          // sem internet: o app usa a cópia dos cadastros guardada no aparelho (07/11/2026)
+  dadosDoAparelho: null,    // {salvoEm}: a tela mostra a cópia enquanto a internet não responde
   ingredientes: [],
   movimentos: [],
   dietas: [],
@@ -1456,6 +1576,8 @@ async function fazerLogin(){
 }
 
 async function fazerLogout(){
+  apagarDadosOffline();
+  state.semSinal = false; state.dadosDoAparelho = null;
   await db.auth.signOut();
   state.session = null;
   state.perfil = null;
@@ -1957,6 +2079,15 @@ async function tentarSincronizarFila(){
   }
 }
 
+// Sinal voltou (ou o relógio de 30 s bateu): sobe a fila e, se o app estava com a cópia do aparelho, atualiza os dados.
+// Não redesenha por baixo de uma janela aberta nem empilha carga sobre carga (sinal fraco).
+async function aoVoltarSinal(){
+  await tentarSincronizarFila();
+  if(!state.semSinal && !state.dadosDoAparelho) return;
+  if(state.modal || aparelhoSemRede() || cargasEmCurso>0 || !state.session || !state.perfil?.ativo) return;
+  loadAll();
+}
+
 // Traduz o destino explícito do lote (aba Lotes) para a chave interna usada nas páginas ('reproducao' = Cria).
 function loteTipo(lote){
   return lote.destino==='cria' ? 'reproducao' : (lote.destino||'pasto');
@@ -2209,7 +2340,23 @@ function iconVenda(){ return `<svg width="16" height="16" viewBox="0 0 24 24" fi
 /* ===================== HEADER ===================== */
 // Dados ainda chegando (rede lenta no campo) ou que não carregaram: a tela
 // vazia parecia "nenhum lote cadastrado".
+function AvisoSemSinal(){
+  const pendentes = lerFilaOffline().length;
+  const de = state.dadosDoAparelho ? quandoSalvou(state.dadosDoAparelho.salvoEm) : '';
+  if(state.semSinal){
+    return `<div class="card aviso-sem-sinal" role="status" style="padding:10px 14px; margin-bottom:12px; border-left:4px solid #C98A2B;">
+      <strong>Sem internet.</strong> Pode lançar normalmente: o que você lançar fica guardado neste aparelho${pendentes>0 ? ` (${pendentes} pendente${pendentes>1?'s':''})` : ''} e sobe sozinho quando o sinal voltar.
+      ${de ? `Lotes, dietas e animais são os de ${esc(de)}.` : ''}
+      Estoque, custos e resultados só aparecem completos com internet.
+      <button class="btn-ghost btn-sm" data-recarregar-dados="1">Tentar agora</button></div>`;
+  }
+  if(state.dadosDoAparelho && !state.erroCarga){
+    return `<div class="hint" style="margin:0 0 10px;">Mostrando os dados guardados neste aparelho${de ? ` (de ${esc(de)})` : ''}; atualizando pela internet…</div>`;
+  }
+  return '';
+}
 function AvisoCarga(){
+  if(state.semSinal || state.dadosDoAparelho) return AvisoSemSinal();
   if(!state.carregouDados) return `<div class="card" style="padding:10px 14px; margin-bottom:12px;">Carregando os dados… com sinal fraco pode levar alguns segundos.</div>`;
   if(state.erroCarga) return `<div class="card" style="padding:10px 14px; margin-bottom:12px; border-color:#C0432B; color:#C0432B;">
       Os dados não carregaram: ${esc(state.erroCarga)}. Confira a internet e
@@ -7193,7 +7340,12 @@ function attachEvents(){
     el.addEventListener('input', ()=>{ const limpo = el.value.replace(/[^0-9\s,;]/g,''); if(limpo!==el.value) el.value = limpo; });
   });
   document.querySelectorAll('[data-recarregar-dados]').forEach(el=>{
-    el.onclick = async ()=>{ state.carregouDados = false; state.erroCarga = ''; render(); await loadAll(); };
+    el.onclick = async ()=>{
+      const estavaSemSinal = state.semSinal;
+      state.carregouDados = false; state.erroCarga = ''; render();
+      await loadAll();
+      if(estavaSemSinal && state.semSinal) alert('Ainda sem internet. O que você lançar continua guardado neste aparelho e sobe sozinho quando o sinal voltar.');
+    };
   });
   const loginForm = document.querySelector('[data-login-form]');
   if(loginForm){
@@ -9476,8 +9628,8 @@ if('serviceWorker' in navigator){
 // tenta sincronizar a fila offline assim que o navegador avisar que voltou
 // a conexão, e periodicamente como reforço (o evento 'online' nem sempre
 // dispara de forma confiável em todo dispositivo/navegador).
-window.addEventListener('online', tentarSincronizarFila);
-setInterval(tentarSincronizarFila, 30000);
+window.addEventListener('online', aoVoltarSinal);
+setInterval(aoVoltarSinal, 30000);
 
 // Toque perdido no botão (27/10/2026, parto que "não salvava"). Digitar num
 // campo e tocar direto em "Salvar": o toque tira o foco do campo, o campo
@@ -9520,7 +9672,7 @@ setInterval(tentarSincronizarFila, 30000);
 })();
 // se sobrou algo pendente de uma sessão anterior (app fechado antes de
 // sincronizar), tenta assim que o app abre de novo.
-setTimeout(tentarSincronizarFila, 3000);
+setTimeout(aoVoltarSinal, 3000);
 </script>
 <script>
 // Rotulo solto (sem "for") ao lado de UM campo com id: liga os dois (clicar no nome abre o campo; o leitor de
