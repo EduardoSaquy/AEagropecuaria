@@ -4,7 +4,8 @@
 --
 -- O QUE FAZ, nesta ordem:
 --   1. Passa as 8 compras de animais lancadas a mao do centro "INVESTIMENTO EM ANIMAIS" para matriz (7) ou
---      giro (1), como o Eduardo decidiu. So muda o centro de custo. Guarda o antigo em
+--      giro (1), como o Eduardo decidiu. So muda o centro de custo. O centro de destino e o de nome EXATO
+--      (se houver dois com o mesmo nome, o mais usado; se empatar, recusa e lista). Guarda o antigo em
 --      zz_backup_classifica_animais_2026_11_06.
 --   2. Cria a funcao registrar_venda_animais(): a venda de animais passa a gravar abate + receita + baixa
 --      do lote numa transacao so, com o lote travado.
@@ -37,6 +38,7 @@ declare
   achados int;
   soma numeric;
   atualizadas int;
+  d record;
 begin
   if not exists (select 1 from information_schema.tables
                  where table_schema = 'public' and table_name = 'talhoes_areas') then
@@ -46,16 +48,31 @@ begin
     raise exception 'Este script ja rodou (a copia zz_backup_classifica_animais_2026_11_06 existe). Nao mexo em nada.';
   end if;
 
-  select count(*), min(id) into n, c_matriz from centros_custo
-   where translate(upper(nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE MATRIZES%';
-  if n <> 1 then
-    raise exception 'Achei % centro(s) COMPRA DE MATRIZES (esperava 1). Nao mexo em nada.', n;
-  end if;
-  select count(*), min(id) into n, c_giro from centros_custo
-   where translate(upper(nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE ANIMAIS%';
-  if n <> 1 then
-    raise exception 'Achei % centro(s) COMPRA DE ANIMAIS (esperava 1). Nao mexo em nada.', n;
-  end if;
+  -- Centro de destino: o de nome EXATO (COMPRA DE MATRIZES PARA REPRODUCAO / COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E
+  -- ABATE). Se houver mais de um com o mesmo nome, vale o mais usado; empate: recusa e lista os candidatos.
+  create temp table cand_destino on commit drop as
+    select c.id, c.nome, c.ativo,
+           (select count(*) from lancamentos_financeiros l where l.centro_custo_id = c.id) as usos,
+           case translate(upper(btrim(c.nome)), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC')
+             when 'COMPRA DE MATRIZES PARA REPRODUCAO' then 'matriz'
+             when 'COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE' then 'giro'
+           end as destino
+      from centros_custo c;
+  for d in select unnest(array['matriz', 'giro']) as destino loop
+    select count(*) into n from cand_destino
+     where destino = d.destino and usos = (select max(usos) from cand_destino where destino = d.destino);
+    if n <> 1 then
+      raise exception 'Nao achei UM centro de destino "%". Candidatos de nome exato: %. Centros parecidos: %. Nao mexo em nada.',
+        d.destino,
+        coalesce((select string_agg('#' || id || ' "' || nome || '" (' || usos || ' lancamentos' || case when ativo then '' else ', inativo' end || ')', '; ' order by id)
+                    from cand_destino where destino = d.destino), 'nenhum'),
+        coalesce((select string_agg('#' || c.id || ' "' || c.nome || '"', '; ' order by c.id) from centros_custo c
+                   where translate(upper(c.nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE ANIMAIS%'
+                      or translate(upper(c.nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE MATRIZES%'), 'nenhum');
+    end if;
+  end loop;
+  select id into c_matriz from cand_destino where destino = 'matriz' order by usos desc, id limit 1;
+  select id into c_giro from cand_destino where destino = 'giro' order by usos desc, id limit 1;
 
   create temp table alvo (ids bigint[], soma numeric, destino text) on commit drop;
   insert into alvo values
@@ -281,13 +298,13 @@ create constraint trigger trg_titulo_valor_fecha
 -- CONFERENCIA FINAL (uma tabela so)
 -- ------------------------------------------------------------
 select item, valor, situacao from (
-  select 1 as o1, 0::bigint as o2, 'COMPRA CLASSIFICADA | ' || c.nome as item,
+  select 1 as o1, 0::bigint as o2, 'COMPRA CLASSIFICADA | #' || c.id || ' ' || c.nome as item,
          count(*)::text || ' lancamento(s)' as valor,
          'R$ ' || round(sum(l.valor), 2)::text || ' | ids ' || string_agg(l.id::text, ',' order by l.id) as situacao
     from lancamentos_financeiros l
     join centros_custo c on c.id = l.centro_custo_id
    where l.id in (select id from zz_backup_classifica_animais_2026_11_06)
-   group by c.nome
+   group by c.id, c.nome
   union all
   select 2, 0, 'FUNCAO registrar_venda_animais',
          (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace

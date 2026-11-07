@@ -1341,7 +1341,9 @@ compra de animais e as travas do banco.
   (giro); #490/#491, #496/#497 e #492 (a descrição diz matriz) também vão para matriz.
   `compra_animais_03_classifica.sql` (ensaiado, **ainda não rodado**) passa as 8 lançadas à mão do centro ambíguo
   INVESTIMENTO EM ANIMAIS para COMPRA DE MATRIZES PARA REPRODUÇÃO (7) ou COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE (1);
-  só muda o centro, com guardas, cópia e desfazer. O R$ 30.400 repetido (#508 × #22173): ele acha que é a mesma compra
+  só muda o centro, com guardas, cópia e desfazer. **Rodada 1 dele (06/11/2026) recusou: o banco tem 2 centros "COMPRA DE ANIMAIS%"**
+  (nada foi aplicado). O script passou a escolher o destino pelo **nome exato** (e, havendo nomes iguais, o mais usado;
+  empate: recusa listando os candidatos); `sql_2026_11_06_juntos.sql` regerado. O R$ 30.400 repetido (#508 × #22173): ele acha que é a mesma compra
   lançada duas vezes, **mas precisa ver se não são parcelas**; `confere_compra_repetida.sql` (só leitura) mostra os
   lançamentos desse vendedor com a observação do ERP. Se for a mesma compra, o ERP lançou #22173/#22307 como giro e
   ele diz que as compras desse vendedor são matriz: conferir a classe delas também.

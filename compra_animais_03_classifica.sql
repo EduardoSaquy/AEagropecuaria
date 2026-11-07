@@ -11,6 +11,7 @@
 --             #508 (R$ 30.400,00)
 --   giro   -> COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE:  #502 (R$ 5.800,00, bezerro macho de corte)
 -- So muda o centro de custo: valor, data, fornecedor e atividade ficam como estao.
+-- O centro de destino e o de nome EXATO; se houver dois com o mesmo nome, o mais usado; se empatar, recusa e lista.
 --
 -- TUDO OU NADA: para e diz o que viu se algum lancamento nao estiver como esperado (outro centro, outro
 -- valor, outro tipo), ou se nao houver exatamente 1 centro de cada destino. Guarda o centro antigo em
@@ -29,6 +30,7 @@ declare
   achados int;
   soma numeric;
   atualizadas int;
+  d record;
 begin
   if not exists (select 1 from information_schema.tables
                  where table_schema = 'public' and table_name = 'talhoes_areas') then
@@ -38,16 +40,31 @@ begin
     raise exception 'Este script ja rodou (a copia zz_backup_classifica_animais_2026_11_06 existe). Nao mexo em nada.';
   end if;
 
-  select count(*), min(id) into n, c_matriz from centros_custo
-   where translate(upper(nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE MATRIZES%';
-  if n <> 1 then
-    raise exception 'Achei % centro(s) COMPRA DE MATRIZES (esperava 1). Nao mexo em nada.', n;
-  end if;
-  select count(*), min(id) into n, c_giro from centros_custo
-   where translate(upper(nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE ANIMAIS%';
-  if n <> 1 then
-    raise exception 'Achei % centro(s) COMPRA DE ANIMAIS (esperava 1). Nao mexo em nada.', n;
-  end if;
+  -- Centro de destino: o de nome EXATO (COMPRA DE MATRIZES PARA REPRODUCAO / COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E
+  -- ABATE). Se houver mais de um com o mesmo nome, vale o mais usado; empate: recusa e lista os candidatos.
+  create temp table cand_destino on commit drop as
+    select c.id, c.nome, c.ativo,
+           (select count(*) from lancamentos_financeiros l where l.centro_custo_id = c.id) as usos,
+           case translate(upper(btrim(c.nome)), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC')
+             when 'COMPRA DE MATRIZES PARA REPRODUCAO' then 'matriz'
+             when 'COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE' then 'giro'
+           end as destino
+      from centros_custo c;
+  for d in select unnest(array['matriz', 'giro']) as destino loop
+    select count(*) into n from cand_destino
+     where destino = d.destino and usos = (select max(usos) from cand_destino where destino = d.destino);
+    if n <> 1 then
+      raise exception 'Nao achei UM centro de destino "%". Candidatos de nome exato: %. Centros parecidos: %. Nao mexo em nada.',
+        d.destino,
+        coalesce((select string_agg('#' || id || ' "' || nome || '" (' || usos || ' lancamentos' || case when ativo then '' else ', inativo' end || ')', '; ' order by id)
+                    from cand_destino where destino = d.destino), 'nenhum'),
+        coalesce((select string_agg('#' || c.id || ' "' || c.nome || '"', '; ' order by c.id) from centros_custo c
+                   where translate(upper(c.nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE ANIMAIS%'
+                      or translate(upper(c.nome), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') like 'COMPRA DE MATRIZES%'), 'nenhum');
+    end if;
+  end loop;
+  select id into c_matriz from cand_destino where destino = 'matriz' order by usos desc, id limit 1;
+  select id into c_giro from cand_destino where destino = 'giro' order by usos desc, id limit 1;
 
   create temp table alvo (ids bigint[], soma numeric, destino text) on commit drop;
   insert into alvo values
@@ -86,7 +103,7 @@ begin
 end
 $classifica$;
 
-select c.nome as item,
+select '#' || c.id || ' ' || c.nome as item,
        count(*)::text || ' lancamento(s)' as valor,
        'R$ ' || round(sum(l.valor), 2)::text || ' | ids ' || string_agg(l.id::text, ',' order by l.id) as situacao
   from lancamentos_financeiros l
