@@ -1264,6 +1264,25 @@ Medido com 25.000 lançamentos (volume real) e CPU 4x mais lenta (tablet de entr
 - `saude_do_banco_01.sql` (só leitura, ensaiado com defeitos plantados): 24 checagens de lançamento,
   contas, financiamentos, pecuária e cadastro, com amostras.
 
+### Segundo check-up (07/11/2026): a nota depois das correções
+
+Pedido do Eduardo ("seguir na sequência"): medir de novo, meta **8 ou mais em todos os quesitos**. Relatório completo na pasta privada
+(`revisao_geral_2026-11-07\RELATORIO.md`). Só leitura. Notas (julgamento do Claude): funcionalidade 8,5 → **9,0**; corretude 7 → **7,5**;
+integridade 6 → **8** (falta reconferir no banco real com `saude_do_banco_01.sql`); segurança 7,5 → **7,5**; desempenho 4 → **7,5**;
+manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
+- **Tempos medidos** (Matriz, 25.000 lançamentos, sem rede; `medir_orcamento.py` no scratchpad, não versionado): Financeiro > Despesas 97 ms no
+  PC e 550 ms com CPU 4x mais lenta (eram 2,6 s e ~23 s); Relatórios 130/666 ms; Empresa 283/1.097 ms; abrir o app até os dados 1,6 s/5,6 s
+  (o ponto fraco: a carga completa ainda baixa tudo). A Pecuária não foi medida em volume.
+- **Código** (medido pelo navegador): `attachEvents` com 909 linhas (Matriz) e 2.206 (Pecuária); 95 funções com o mesmo nome em 2+ apps, 42
+  idênticas e **53 que divergiram**; nenhum CI (nada roda os testes sozinho a cada envio); 201 SQL no repo sem índice do que já rodou; 5 `sw_*.js`
+  aposentados ainda lá; dinheiro em ponto flutuante (97 `reduce` no Matriz).
+- **Segurança**: chave pública não lê nenhum objeto (inclui as cópias `zz_backup_dup4_*`); os apps chamam só 2 funções de criar usuário
+  (`criar-usuario-cana`, `criar-usuario-combustivel`); `contas_bancarias` ainda tem as colunas `agencia` e `conta` (vazias na tela; apagar depois de
+  ver que estão vazias); backup automático e plano do Supabase não confirmados.
+- **Para chegar a 8**: a manutenibilidade é o maior buraco (CI primeiro, depois núcleo comum `core.js` para as cópias, quebrar `attachEvents`);
+  corretude pede recorrência explícita e dinheiro em centavos; segurança pede 2º fator para administradores, supabase-js no próprio site ou SRI e
+  apagar as colunas de conta; campo pede letras de 12 px ou mais (ainda há 21 regras com 9 a 11 px no Matriz) e teste dele no tablet real.
+
 ### Financeiro paginado, travas do banco e o resultado da saúde do banco (06/11/2026)
 
 Pedido do Eduardo logo depois do check-up: corrigir primeiro o desempenho, o conceito contábil da
