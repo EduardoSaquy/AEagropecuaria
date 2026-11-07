@@ -1349,6 +1349,9 @@ compra de animais e as travas do banco.
   18/08/2026) e #22307 (ERP 6304, R$ 25.900, vence 10/09/2026; os dois do ERP são "recria, engorda e abate" = giro). Ele disse
   (06/11, depois) que **cada compra já diz no próprio texto o que é (matriz ou recria/engorda)**: pelo texto, #508 seria giro,
   mas eu o movi para matriz porque ele tinha dito matriz; **a conferir com ele** (e o extrato: parcelas ou duplicata?).
+  **Resposta dele (06/11)**: os R$ 30.400 (#508 e #22173) "provavelmente são parcelas, valor igual e pagamento muito próximo":
+  ficam os três lançamentos (#508, #22173, #22307); nada a apagar. Ele disse que rodou `confere_textos_das_compras.sql` mas não colou o
+  resultado ainda. **Senha: fica com mínimo 6; ele conversa com o pessoal e depois muda para 10** (não mexer antes).
   **Rodada 1 dele (06/11/2026) recusou: o banco tem 2 centros "COMPRA DE ANIMAIS%"**
   (nada foi aplicado). O script passou a escolher o destino pelo **nome exato** (e, havendo nomes iguais, o mais usado;
   empate: recusa listando os candidatos); `sql_2026_11_06_juntos.sql` regerado. O R$ 30.400 repetido (#508 × #22173): ele acha que é a mesma compra

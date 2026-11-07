@@ -213,19 +213,19 @@
   }
 /* ---------- USO NO CAMPO: ALVOS DE TOQUE (06/11/2026) ----------
    Em tela de toque (tablet/celular) botao e campo tem pelo menos 44 px de altura (Apple 44, Material 48; o
-   minimo da WCAG 2.2 AA e 24). Os botoes mediam 26 a 34 px. O mouse do desktop segue como era. */
+   minimo da WCAG 2.2 AA e 24). Os botoes mediam 26 a 34 px. O mouse do desktop segue como era.
+   NAO definir display aqui: uma classe que o CSS esconde em tela larga (menu de celular) voltaria a aparecer. */
 @media (pointer: coarse){
   .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel{
-    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+    min-height:44px;
   }
-  .nav-item{justify-content:flex-start;}
   input:not([type=checkbox]):not([type=radio]):not([type=color]), select{min-height:44px;}
   textarea{min-height:88px;}
   input[type=checkbox], input[type=radio]{width:24px; height:24px; min-width:24px; accent-color:var(--bom); flex:none;}
   label:has(> input[type=checkbox]), label:has(> input[type=radio]){min-height:44px; display:flex; align-items:center; gap:8px;}
   td.acoes .btn-sm{margin:4px 8px 4px 0;}
   .btn-sair, .modal-close{min-width:44px;}
-  .modal-close, .valor-clicavel{min-height:44px; display:inline-flex; align-items:center; justify-content:center;}
+  .modal-close, .valor-clicavel{min-height:44px;}
 }
 </style>
 </head>

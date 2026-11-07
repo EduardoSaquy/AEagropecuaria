@@ -96,6 +96,21 @@ with sync_playwright() as pw:
         conf(not r["pequenos"], "formulario de lancamento sem alvo menor que 44 px", str(r["pequenos"][:3]))
         page.context.close()
 
+    print("== o botao do menu de celular so aparece no celular (regressao de 06/11/2026: o ajuste de toque o mostrava em tela larga)")
+    for rotulo, larg, alt, esperado in (("tablet deitado 1180", 1180, 820, False), ("tablet em pe 820", 820, 1180, False), ("celular 390", 390, 800, True)):
+        pg = novo_contexto(browser, larg, alt, True)
+        vis = pg.evaluate("() => { const b = document.querySelector('.mobile-nav-toggle'); return !!b && getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().height > 0; }")
+        conf(vis == esperado, f"{rotulo}: botao do menu de celular {'visivel' if esperado else 'escondido'}", str(vis))
+        # e o menu completo continua inteiro na tela larga
+        if not esperado:
+            itens = pg.evaluate("() => [...document.querySelectorAll('.nav-item')].filter(e => e.getBoundingClientRect().height > 0).length")
+            conf(itens >= 5, f"{rotulo}: o menu completo aparece ({itens} itens)")
+        pg.context.close()
+    pg = novo_contexto(browser, 1280, 800, False)
+    conf(not pg.evaluate("() => { const b = document.querySelector('.mobile-nav-toggle'); return !!b && getComputedStyle(b).display !== 'none'; }"),
+         "desktop com mouse: botao do menu de celular escondido")
+    pg.context.close()
+
     print("== rotulos")
     page = novo_contexto(browser, 1100, 800, False)
     page.evaluate("() => { state.page = 'financeiro'; state.modal = {type:'lancamento'}; editDraft = {tipo:'despesa'}; render(); }")
