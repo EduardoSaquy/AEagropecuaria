@@ -87,6 +87,10 @@ def main():
     falhas = [r for r in resultados if r[1] != 0]
     total_s = round(time.time() - inicio)
     print(f"\n{len(resultados) - len(falhas)} de {len(resultados)} testes passaram em {total_s} s")
+    if os.environ.get("GITHUB_ACTIONS"):
+        # resumo visivel na pagina da rodada (e na API), para conferir que os testes rodaram de verdade
+        lista = "; ".join(f"{n} {'ok' if rc == 0 else 'FALHOU'} {s}s" for n, rc, s, _ in resultados)
+        print(f"::notice title=Parte {args.parte} de {args.de}: {len(resultados) - len(falhas)} de {len(resultados)} testes passaram em {total_s} s::{lista}")
     resumo = os.environ.get("GITHUB_STEP_SUMMARY")
     if resumo:
         with open(resumo, "a", encoding="utf-8") as fh:
