@@ -437,6 +437,22 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   as outras divididas): `rateio_28_ajuste_consorcio_tres_partes.sql` (**RODADO por ele em 05/11/2026**, tudo OK, 0 que não fecha;
   cópia `zz_backup_ajuste10_lanc_2026_11_05`). A importação do mesmo consórcio (`#21098`)
   continua dividida pela proporção do ERP e **não** é tocada (as duas linhas ficam).
+- **Três pares de valores iguais, confirmados por ele como lançados em dobro (07/11/2026)**: o
+  `saude_do_banco_02_detalhe.sql` (item A8) deixou três pares para conferir no ERP. Ele respondeu: o
+  adubo (R$ 194.320,00 ×2, jun/2023, #14296/#14298) é da **Cana** e foi lançado duas vezes; a nutrição
+  animal (R$ 50.000,00 ×2, ago/2024, #17113/#17115) é da **Pecuária** e também; o combustível
+  (R$ 11.100,00 ×2, 15/03/2026, lançados à mão, #2570/#2571) é da **Cana** e também. Os dois primeiros
+  pares têm códigos do ERP diferentes: o ERP também tem os dois, e **se o ERP for reimportado a linha
+  apagada volta**. Uma consulta nas cópias `zz_backup_dup_pares` e `zz_backup_dup2_pares` não achou
+  importação gêmea para o combustível (nenhuma linha). `rateio_29_remove_tres_pares_repetidos.sql`:
+  fica o de MENOR número de cada par, sai o outro (R$ 255.420,00 a menos no Financeiro), e a linha que
+  fica passa à atividade decidida (dividida entre atividades vira UMA parte da atividade, como na
+  `rateio_27`; inteira em outra atividade troca a atividade). Um par só é tratado se as duas linhas
+  forem idênticas, sem contrato/lote/abate/áreas e sem nada apontando para a que sai; senão o par
+  não é tocado e a conferência diz por quê (os outros seguem). Cópias fechadas
+  `zz_backup_dup4_*_2026_11_07`, desfazer no fim do arquivo. Ensaiado num Postgres descartável com o
+  adubo dividido, a nutrição e o combustível inteiros, os mesmos já na atividade certa, as travas de
+  06/11 instaladas, as recusas e o desfazer (37 checagens). **A rodar por ele.**
 
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
