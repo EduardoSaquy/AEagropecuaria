@@ -1326,6 +1326,16 @@ compra de animais e as travas do banco.
   Candidato a duplicata: R$ 30.400 do mesmo vendedor à mão em 13/07/2026 (#508) e importado em 18/08/2026 (#22173).
   Matrizes de 2026: R$ 964.249,71 (inclui as 2 duplas dele, #490/#491 e #496/#497 + #20805/#20806). Fechar a
   classificação = mover as 8 lançadas à mão para um dos dois centros (a classe sai do centro, sem coluna nova).
+- **Lotes (ele rodou `compra_animais_02_lotes.sql`, 06/11/2026)**: 15 lotes, **todos com início em 25/07/2026 ou depois**
+  (os lotes foram recadastrados nessa data) e **não existe venda registrada (abates) antes de 26/07/2026**. Logo a
+  compra de 2023 a 2025 não casa por data com lote nenhum, e o custo dos animais vendidos antes de julho/2026 não
+  tem lote nem cabeças para ser casado. Vendidos: #32 Curral 1 (91 cab, R$ 568.818,12), #31 Curral 2 (106 cab,
+  R$ 799.705,47), #37 Bezerros venda (131 cab, R$ 386.395,30), #8 Vacas de Descarte 2026 (67 cab, R$ 310.526,50).
+  Em andamento: cria (#3 281, #33 89, #42 211, #44 101, #45 70, #43 65 cab), pasto (#9 234, #6 64), confinamento
+  (#36 203, #39 163, #46 2). Plano do resultado econômico: ligar (lote + cabeças + classe) só as compras de
+  2025/2026 que formam esses lotes; o histórico anterior fica só em caixa.
+- **`apaga_pesagens_zero.sql`**: apaga as pesagens #9 (lote #3) e #10 (lote #33), 0 kg de 11/08/2026, a pedido dele
+  (guardas, cópia em `zz_backup_pesagens_zero_2026_11_06`, recusa se houver peso individual real; ensaiado).
 - **Resultado de caixa da Pecuária (06/11/2026, `teste_pecuaria_compra_animais.py` 19 checagens, falha no anterior)**:
   `state.resultados.pecuaria.investimentosFinanceiro`; `classeInvestimentoPecuaria(centro)` (giro / matriz /
   "animais" a classificar / outro, pelo NOME do centro); `investimentosPecuariaNoPeriodo()`;
