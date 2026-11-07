@@ -3281,6 +3281,97 @@ function BlocoInvestimentosPecuaria(r){
     </div>
   </div>`;
 }
+// ===== Pecuária: custo dos animais por lote (resultado econômico, 07/11/2026) =====
+// Com lote e nº de cabeças em cada compra de animais (campos novos na compra, em Financeiro), dá para casar o custo do animal com a
+// venda do lote: R$ por cabeça = custo das compras ligadas ÷ cabeças compradas; custo dos vendidos = R$ por cabeça × cabeças vendidas;
+// margem sobre o animal = receita das vendas do lote − custo dos vendidos. Só compra de GIRO (e a "a classificar"): matriz é ativo e só
+// vira resultado no descarte (decisão do Eduardo, 06/11/2026), então só aparece à parte. Vale para a vida inteira do lote (não segue o
+// filtro de período) e é ANTES de ração, custo fixo e juros: o custo completo do lote está no Painel de Resultado dos Lotes do AE
+// Pecuária. Animal vendido além do que foi comprado (cria da própria fazenda) entra sem custo de compra e a tela avisa. As compras
+// antigas, sem lote, ficam numa lista para ligar depois (Editar).
+function ehCompraDeAnimais(centroCustoId){
+  const c = classeInvestimentoPecuaria(Number(centroCustoId));
+  return c==='giro' || c==='matriz' || c==='animais';
+}
+function mostraCamposCompra(d){ return d.tipo==='investimento' && ehCompraDeAnimais(d.centroCustoId); }
+function custoAnimaisPorLote(){
+  if(state.lancamentos.length===0) return null;
+  const invest = state.lancamentos.filter(l=>l.tipo==='investimento');
+  const ligada = l=>!!l.loteId && Number(l.quantidade)>0;
+  const giro = invest.filter(l=>['giro','animais'].includes(classeInvestimentoPecuaria(l.centroCustoId)));
+  const matrizes = invest.filter(l=>classeInvestimentoPecuaria(l.centroCustoId)==='matriz' && ligada(l));
+  const porLote = new Map();
+  giro.filter(ligada).forEach(l=>{
+    const id = Number(l.loteId);   // o formulário devolve texto ("5") e o banco número (5): mesma chave
+    const x = porLote.get(id) || {loteId:id, comprados:0, custo:0, ultimaCompra:''};
+    x.comprados += Number(l.quantidade);
+    x.custo += Number(l.valor||0);
+    const dia = l.data || l.mes || '';
+    if(dia > x.ultimaCompra) x.ultimaCompra = dia;
+    porLote.set(id, x);
+  });
+  const nomeLote = id=>state.lotesPec.find(x=>String(x.id)===String(id))?.nome || `Lote ${id}`;
+  const lotes = [...porLote.values()].map(x=>{
+    const vendidos = state.vendasPec.filter(v=>String(v.loteId)===String(x.loteId)).reduce((a,v)=>a+v.quantidade, 0);
+    const receita = state.lancamentos.filter(l=>l.tipo==='receita' && String(l.loteId)===String(x.loteId)).reduce((a,l)=>a+Number(l.valor||0), 0);
+    const custoPorCabeca = x.custo / x.comprados;
+    const custoVendidos = custoPorCabeca * Math.min(vendidos, x.comprados);
+    const emEstoque = Math.max(0, x.comprados - vendidos);
+    return {...x, nome: nomeLote(x.loteId), custoPorCabeca, vendidos, receita, proprios: Math.max(0, vendidos - x.comprados),
+      custoVendidos, margem: vendidos > 0 ? receita - custoVendidos : null, emEstoque, valorEstoque: custoPorCabeca * emEstoque};
+  }).sort((a, b)=>String(b.ultimaCompra).localeCompare(String(a.ultimaCompra)));
+  const soltas = giro.filter(l=>!ligada(l)).sort((a, b)=>String(b.data||b.mes||'').localeCompare(String(a.data||a.mes||'')));
+  return {lotes, soltas, soltasValor: soltas.reduce((a, l)=>a+Number(l.valor||0), 0),
+    matrizes: {n: matrizes.reduce((a, l)=>a+Number(l.quantidade), 0), valor: matrizes.reduce((a, l)=>a+Number(l.valor||0), 0), compras: matrizes.length}};
+}
+function BlocoCustoAnimaisPorLote(){
+  const c = custoAnimaisPorLote();
+  if(!c || (c.lotes.length===0 && c.soltas.length===0 && c.matrizes.compras===0)) return '';
+  const dia = l=>l.data ? l.data.split('-').reverse().join('/') : (l.mes ? l.mes.split('-').reverse().join('/') : '—');
+  const cor = v=>v==null ? '' : (v >= 0 ? 'color:var(--bom);' : 'color:var(--alerta);');
+  const tot = c.lotes.reduce((a, x)=>({custo: a.custo+x.custo, vendidos: a.vendidos+x.vendidos, receita: a.receita+x.receita, custoVendidos: a.custoVendidos+x.custoVendidos,
+    margem: a.margem + (x.margem ?? 0), valorEstoque: a.valorEstoque+x.valorEstoque}), {custo:0, vendidos:0, receita:0, custoVendidos:0, margem:0, valorEstoque:0});
+  const comProprios = c.lotes.filter(x=>x.proprios > 0);
+  return `
+  <div data-bloco-custo-animais-lote="1" style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cinza-claro);">
+    <p class="hint" style="margin-bottom:6px;"><strong>Custo dos animais por lote</strong> (compras de animais de giro ligadas a um lote; vale para a vida inteira do lote, não segue o período)</p>
+    ${c.lotes.length===0 ? `<p class="hint" style="margin:0 0 8px;">Nenhuma compra está ligada a um lote ainda. Em Financeiro, edite a compra de animais e preencha o lote e o nº de cabeças.</p>` : `
+    <div style="overflow-x:auto;">
+    <table style="font-size:12.5px;" data-tabela-custo-animais-lote="1">
+      <thead><tr><th>Lote</th><th>Margem sobre o animal</th><th>Comprados</th><th>R$ por cabeça</th><th>Custo da compra</th><th>Vendidos</th><th>Receita das vendas</th><th>Custo dos vendidos</th><th>Em estoque (a custo)</th></tr></thead>
+      <tbody>
+        ${c.lotes.map(x=>`<tr data-lote-custo="${x.loteId}">
+          <td><strong>${esc(x.nome)}</strong></td>
+          <td class="mono" style="font-weight:600; ${cor(x.margem)}">${x.margem==null ? '—' : 'R$ '+fmt(x.margem)}</td>
+          <td class="mono">${fmtInt(x.comprados)}</td>
+          <td class="mono">R$ ${fmt(x.custoPorCabeca)}</td>
+          <td class="mono">R$ ${fmt(x.custo)}</td>
+          <td class="mono">${fmtInt(x.vendidos)}</td>
+          <td class="mono">${x.vendidos > 0 ? 'R$ '+fmt(x.receita) : '—'}</td>
+          <td class="mono">${x.vendidos > 0 ? 'R$ '+fmt(x.custoVendidos) : '—'}</td>
+          <td class="mono">${x.emEstoque > 0 ? `${fmtInt(x.emEstoque)} cab · R$ ${fmt(x.valorEstoque)}` : '—'}</td>
+        </tr>`).join('')}
+        <tr data-lote-custo-total="1"><td style="font-weight:700;">Total</td><td class="mono" style="font-weight:700; ${cor(tot.margem)}">R$ ${fmt(tot.margem)}</td><td></td><td></td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(tot.custo)}</td><td class="mono" style="font-weight:700;">${fmtInt(tot.vendidos)}</td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(tot.receita)}</td><td class="mono" style="font-weight:700;">R$ ${fmt(tot.custoVendidos)}</td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(tot.valorEstoque)}</td></tr>
+      </tbody>
+    </table></div>
+    <p class="hint" style="margin:8px 0 0;"><strong>Margem sobre o animal</strong> = receita das vendas do lote − o que custaram os animais vendidos (R$ por cabeça × cabeças vendidas). É <strong>antes</strong> de ração, custo fixo e juros: o custo completo do lote está no Painel de Resultado dos Lotes do AE Pecuária.</p>`}
+    ${comProprios.length ? `<p class="hint" style="margin:6px 0 0; color:var(--ambar-texto);" data-aviso-animais-proprios="1">${comProprios.map(x=>`${esc(x.nome)}: ${fmtInt(x.proprios)} animal(is) vendido(s) sem compra ligada (cria da fazenda?) entram na receita sem custo de compra.`).join('<br>')}</p>` : ''}
+    ${c.matrizes.compras > 0 ? `<p class="hint" style="margin:6px 0 0;" data-aviso-matrizes-ligadas="1">Matrizes compradas e ligadas a lote: ${fmtInt(c.matrizes.n)} cabeça(s), R$ ${fmt(c.matrizes.valor)}. Matriz é ativo: só vira resultado no descarte, por isso não entra na margem acima.</p>` : ''}
+    ${c.soltas.length ? `
+    <details style="margin-top:10px;" data-compras-sem-lote="1">
+      <summary class="hint" style="cursor:pointer;"><strong>${c.soltas.length} compra(s) de animais sem lote ou sem nº de cabeças</strong> (R$ ${fmt(c.soltasValor)}): as mais recentes abaixo; toque em Editar para ligar a um lote</summary>
+      <div style="overflow-x:auto; margin-top:6px;"><table style="font-size:12.5px;">
+        <thead><tr><th>Data</th><th>Descrição</th><th>Fornecedor</th><th>Valor</th><th></th></tr></thead>
+        <tbody>${c.soltas.slice(0, 15).map(l=>`<tr><td class="mono">${dia(l)}</td><td>${esc(l.descricao)}</td><td>${esc(l.fornecedor||'—')}</td><td class="mono">R$ ${fmt(l.valor)}</td>
+          <td>${podeEditarFinanceiro() ? `<button class="btn-ghost btn-sm" data-edit-lancamento="${l.id}">Editar</button>` : ''}</td></tr>`).join('')}</tbody>
+      </table></div>
+      ${c.soltas.length > 15 ? `<p class="hint" style="margin:6px 0 0;">Mostrando 15 de ${c.soltas.length}. Na lista de Financeiro > Investimentos estão todas.</p>` : ''}
+    </details>` : ''}
+  </div>`;
+}
 // Aviso na primeira aba dos Resultados: o resultado ali não conta a compra de animais.
 function AvisoInvestimentoPecuaria(){
   const inv = investimentosPecuariaNoPeriodo(), r = resultadoOperacaoNoPeriodo('pecuaria');
@@ -3614,7 +3705,7 @@ function CardResultadoOperacional(slug){
         ${r.despesaDetalhe.map(d=>`<tr><td>${esc(d.label)}</td><td class="mono" style="text-align:right;">R$ ${fmt(d.valor)}</td></tr>`).join('')}
       </tbody>
     </table>` : ''}
-    ${slug==='pecuaria' ? BlocoInvestimentosPecuaria(r) : ''}
+    ${slug==='pecuaria' ? BlocoInvestimentosPecuaria(r) + BlocoCustoAnimaisPorLote() : ''}
     `}
   </div>`;
 }
@@ -8084,6 +8175,19 @@ function ModalLancamento(){
           </select>
           <span class="hint">Peça, serviço ou reparo de uma máquina específica: o AE Combustível soma ao combustível e à manutenção para mostrar o custo por hora dela. Não muda nenhum resultado.</span>
         </div>` : ''}
+        ${mostraCamposCompra(d) ? `
+        <div class="field-row" data-campos-compra-animais="1">
+          <div class="field"><label>Lote (opcional)</label>
+            <select id="f-lotelanc">
+              <option value="" ${!d.loteId?'selected':''}>— Sem lote —</option>
+              ${state.lotesPec.map(l=>`<option value="${l.id}" ${String(d.loteId)===String(l.id)?'selected':''}>${esc(l.nome)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Nº de cabeças (opcional)</label>
+            <input id="f-qtdlanc" type="number" min="1" step="1" inputmode="numeric" value="${d.quantidade ?? ''}" autocomplete="off"/>
+          </div>
+        </div>
+        <span class="hint" style="display:block; margin:-6px 0 12px;">Compra de animais: informe o lote que ela formou e quantas cabeças vieram (juntos). É o que permite casar o custo dos animais com a venda do lote, em Resultados &gt; Operacional &gt; Pecuária.</span>` : ''}
         ${ehDespesa && ehPecuaria ? `
         <div class="field"><label>Rateio entre as áreas da pecuária</label>
           <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;">
@@ -8884,6 +8988,12 @@ function attachEvents(){
     editDraft = d;
     render();
   };
+  // Trocar o centro de custo para (ou de) uma compra de animais mostra (ou esconde) o lote e as cabeças.
+  const selCentroLanc = document.getElementById('f-centrocustolanc');
+  if(selCentroLanc) selCentroLanc.onchange = ()=>{
+    const novo = lerLancamentoCompleto(editDraft);
+    if(mostraCamposCompra(novo) !== mostraCamposCompra(editDraft)){ editDraft = novo; render(); }
+  };
   // Divisão entre atividades: reais e aviso de soma acompanham a digitação.
   document.querySelectorAll('[data-divisao]').forEach(el=>{ el.addEventListener('input', atualizarDivisaoNaTela); });
   const campoValorLanc = document.getElementById('f-valorlanc');
@@ -9221,6 +9331,20 @@ function attachEvents(){
           editDraft = campos;
           render();
           return;
+        }
+        if(mostraCamposCompra(campos)){
+          // compra de animais: lote e cabeças andam juntos (sem as duas, não há R$ por cabeça); cabeça é número inteiro
+          const qtdTxt = String(campos.quantidade ?? '').trim();
+          const temQtd = qtdTxt !== '';
+          if(!!campos.loteId !== temQtd){
+            state.erroLancamento = 'Compra de animais: preencha o lote e o nº de cabeças juntos (ou deixe os dois em branco).';
+            editDraft = campos; render(); return;
+          }
+          if(temQtd && !(Number(qtdTxt) >= 1 && Number.isInteger(Number(qtdTxt)))){
+            state.erroLancamento = 'O nº de cabeças precisa ser um número inteiro maior que zero.';
+            editDraft = campos; render(); return;
+          }
+          if(temQtd) campos.unidade = 'cab';
         }
         state.erroLancamento = '';
         const row = lancamentoToRow(campos);

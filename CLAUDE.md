@@ -1451,7 +1451,7 @@ compra de animais e as travas do banco.
   política deixa passar fetch/imagem/script/eval de outra origem, e o app barra os quatro com a violação registrada pelo
   navegador; os cinco apps percorrem as telas sem violar a própria política; e, com a biblioteca REAL do supabase-js 2.118.0
   (baixada só para esse teste, fora do repo), `createClient`, `auth.getSession`, consulta e `rpc` funcionam dentro da política.
-  Falta (decisão dele, afeta o dia a dia dos peões): senha de 10 caracteres; hoje o mínimo é 6 em 4 telas por app, e o mínimo
+  **Decidido por ele em 07/11/2026: a senha fica com mínimo de 6 caracteres** (não mudar para 10); o mínimo é 6 em 4 telas por app, e o mínimo
   do Auth do Supabase é uma configuração do painel dele (Authentication > Policies). SRI/auto-hospedar o supabase-js: não
   feito (mexeria no cache offline do service worker e nos ~50 testes).
 - **Compra de animais (decisões dele, 06/11/2026)**: matriz só é reconhecida no DESCARTE (sem depreciar: "ela vale o
@@ -1504,6 +1504,26 @@ dos formulários ficavam vazias. Agora (`AEpecuaria.html`, `loadAll` = `carregar
 - `teste_stub_supabase.js` ganhou rede caída (`window.__SEM_REDE__` ou `localStorage.__sem_rede = '1'`, que sobrevive a
   recarregar). `teste_offline_lancar.py` (47). `teste_carga_pecuaria.py` passou a abrir "a frio" (sem cópia, tela vazia) nos casos
   de aviso vermelho: com dados na tela a falha de rede agora vira "sem internet".
+
+### Matriz: custo dos animais por lote, o resultado econômico da Pecuária (07/11/2026)
+
+Continuação das decisões de 06/11 (matriz só no descarte; lote e nº de cabeças na compra). **Sem SQL novo**: usa `lote_id` e `quantidade`
+de `lancamentos_financeiros`, que já existiam (e a visão `lancamentos_rateados` já as expõe).
+- **Compra de animais ganhou lote e nº de cabeças** (`mostraCamposCompra`: lançamento do tipo investimento cujo centro é compra de
+  animais/matrizes/"a classificar", `ehCompraDeAnimais`). Escolher o centro mostra ou esconde os campos (a tela redesenha só quando muda).
+  **Lote e cabeças andam juntos** (um sem o outro é barrado), cabeça é número **inteiro** ≥ 1, a unidade grava `'cab'`. Compra sem os campos
+  segue valendo (as antigas ficam como estão); editar a antiga mostra os campos para ligar a um lote.
+- **Bloco "Custo dos animais por lote"** (Resultados > Operacional > Pecuária, `custoAnimaisPorLote`, `BlocoCustoAnimaisPorLote`): por
+  lote com compra ligada, **R$ por cabeça = custo das compras ÷ cabeças compradas; custo dos vendidos = R$ por cabeça × vendidos (no máximo
+  as compradas); margem sobre o animal = receita das vendas do lote − custo dos vendidos**; mais cabeças e valor a custo em estoque. Vale a
+  **vida inteira do lote** (não segue o filtro de período) e é **antes** de ração, custo fixo e juros (o custo completo do lote está no
+  Painel de Resultado dos Lotes do AE Pecuária). Animal vendido além do comprado (cria da fazenda) entra na receita sem custo e a tela
+  avisa. **Matriz ligada a lote fica à parte** (ativo; só vira resultado no descarte). Compras de giro sem lote ou sem cabeças ficam numa
+  lista recolhível com Editar (as 15 mais recentes). Lê `state.lancamentos` (precisa do Financeiro), `state.vendasPec` e `state.lotesPec`.
+- Não está nem estará nesta conta: variação do rebanho sem inventário, depreciação, o custo da matriz no descarte (a compra de matriz não
+  é por animal). `teste_custo_animais_lote.py` (27): contas à mão com dois lotes, matriz, compras sem lote, formulário e ligar uma compra antiga.
+- **Decisão dele (07/11/2026): custo por MÁQUINA só daqui para a frente**; o histórico (despesas antigas, ERP) não será ligado a
+  equipamento ("o que passou dá para ver como um todo").
 
 ### Combustível: custo por hora (ou km) de cada equipamento (07/11/2026)
 
@@ -1699,7 +1719,7 @@ divergem: conferir no painel). Por isso:
 
 ## Testes
 
-59 arquivos `teste_*.py`, 1.646 checagens (07/11/2026; a tabela abaixo lista os
+60 arquivos `teste_*.py`, 1.673 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1760,6 +1780,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_manejo_planilha.py` | 64 | AEpecuaria.html (importar a planilha de manejo preenchida no curral: previa, validação com as regras do Manejo, nada gravado com erro, desmama, mudança de lote, mesma planilha duas vezes, rede que cai e Continuar, sem rolar de lado) |
 | `teste_custo_hora_equipamento.py` | 21 | AECombustivel.html (Rateio > Por Equipamento: horas/km, combustível, manutenção com custo, custo total e R$ por hora/km; período; custo da manutenção opcional que só vai ao banco com valor; sem rolar de lado) |
 | `teste_lancamento_equipamento.py` | 16 | AEMatriz.html (despesa com o campo Equipamento: lista, só despesa, coluna só enviada com valor (ou null ao tirar), editar sem perder, dividir leva para cada parte, sem equipamentos não aparece) |
+| `teste_custo_animais_lote.py` | 27 | AEMatriz.html (compra de animais com lote e nº de cabeças: campos que aparecem e somem com o centro, lote e cabeças juntos, inteiro, unidade cab; bloco Custo dos animais por lote: R$ por cabeça, custo dos vendidos, margem sobre o animal, estoque a custo, animais próprios, matriz à parte, compras sem lote com Editar, sem seguir o período) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
