@@ -1479,6 +1479,54 @@ gravada, conta como terminada (a baixa do lote vem logo depois; se só ela
 faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 **SQL rodado pelo Eduardo em 02/11/2026**: as 10 tabelas com coluna e índice.
 
+### Pecuária sem internet (07/11/2026)
+
+Pedido do Eduardo: "preciso que os funcionários consigam lançar com o app off-line". A fila de lançamentos (abaixo) já
+existia, mas o app só abria com lotes, dietas, ingredientes e animais se a internet respondesse; sem sinal na abertura as listas
+dos formulários ficavam vazias. Agora (`AEpecuaria.html`, `loadAll` = `carregarTudo`):
+- **Cópia no aparelho** (`DADOS_OFFLINE_KEY`, `lerDadosOffline`/`guardarDadosOffline`): toda carga que termina bem guarda os
+  cadastros crus (ingredientes, dietas, lotes, animais, perfis já mapeados: sem e-mail nem telefone) e o histórico pequeno de
+  reprodução (partos, desmamas, diagnósticos, inseminações, pesagens, preços da @), **por usuário** (`uid`). Aparelho sem espaço
+  guarda só os cadastros. **Sair apaga a cópia.** Estoque, custo e resultado dependem do histórico pesado e só aparecem completos
+  com internet (o aviso diz isso).
+- **Abertura**: com a tela vazia e uma cópia do mesmo usuário, mostra a cópia NA HORA e atualiza por cima quando a rede responde
+  (`state.dadosDoAparelho`). Aparelho sem rede (`navigator.onLine` falso) nem tenta (com login vencido a biblioteca esperaria
+  ~25 s). Rede que não responde em 25 s, ou consulta que falha por rede, com algo na tela: fica em **`state.semSinal`**, sem
+  apagar as listas e sem o aviso vermelho. Falha que não é de rede com algo na tela mantém as listas e mostra o aviso vermelho.
+  Sem cópia e sem nada na tela, tudo como era (aviso vermelho com "tente de novo"). Cópia de outro usuário não é usada.
+- **Janela aberta não é redesenhada** por baixo de quem digita quando a carga termina (só no modo cópia/sem sinal).
+- **Volta o sinal**: `aoVoltarSinal()` (evento `online`, a cada 30 s e 3 s depois de abrir) sobe a fila e, se estava na cópia,
+  recarrega, **sem janela aberta e sem empilhar cargas** (`cargasEmCurso`). "Tentar agora" avisa se ainda não tem sinal.
+- **Entram na fila** (e portanto funcionam sem sinal): saída de ração (confinamento, cria, pasto), leitura de cocho, produção de
+  ração, inseminação, diagnóstico, parto, desmama, pesagem e venda. **Não funcionam sem sinal: Manejo (sessão animal a animal),
+  cadastro de lote/animal, edições e exclusões** (a mensagem diz "sem internet", `textoErroBanco`).
+- Quem usa o app tem de ter aberto **com internet pelo menos uma vez** depois desta versão para existir a cópia.
+- `teste_stub_supabase.js` ganhou rede caída (`window.__SEM_REDE__` ou `localStorage.__sem_rede = '1'`, que sobrevive a
+  recarregar). `teste_offline_lancar.py` (47). `teste_carga_pecuaria.py` passou a abrir "a frio" (sem cópia, tela vazia) nos casos
+  de aviso vermelho: com dados na tela a falha de rede agora vira "sem internet".
+
+### Matriz: cópia de segurança e curva ABC (07/11/2026)
+
+Pesquisa de mercado (Inttegra, Aegro; relatório na pasta privada, `pesquisa_mercado_2026-11-07`): o que o AE não tinha e os
+concorrentes têm era **backup** e **curva ABC**. O plano gratuito do Supabase provavelmente não guarda cópia automática (as fontes
+divergem: conferir no painel). Por isso:
+- **Cópia de segurança** (AEMatriz.html, Usuários, **só admin**; `TABELAS_COPIA`, `baixarCopiaDeSeguranca`): baixa UM arquivo
+  `AE_copia_AAAA-MM-DD.json` com as tabelas que os cinco apps leem (financeiro, contas, financiamentos, fazendas, funcionários,
+  pecuária, cana, cereais, combustível), paginadas de 1000 em 1000, e o resumo com a contagem de cada uma. Tabela que não existe
+  ou que a permissão não deixa ler fica de fora e aparece no aviso (não derruba a cópia). **Não entram** `lancamento_rateios`
+  (fechada a quem está logado; a visão `lancamentos_rateados` leva o resultado do rateio), `contas_bancarias` e `log_alteracoes`.
+  O segundo botão baixa os lançamentos carregados em **CSV** (BOM, ponto e vírgula, vírgula decimal, data dd/mm/aaaa, recorrente
+  marcado, texto que o Excel leria como fórmula neutralizado) para o contador. A tela guarda a data da última cópia deste aparelho
+  (`ae_matriz_ultima_copia_v1`). O arquivo tem valores e nomes: guardar em lugar seguro, nunca no repositório. Tabela nova que o
+  app passe a ler entra em `TABELAS_COPIA`. Restaurar é por script (não há botão de restaurar). `teste_copia_seguranca.py` (27).
+- **Curva ABC das despesas** (Resultados > Relatórios, `curvaAbcDespesas`): por centro de custo e por fornecedor (os 25 maiores),
+  da maior para a menor, com % e % acumulado; **A = até 80% do gasto** (um item é A se o acumulado ANTES dele ainda é menor que
+  80%), **B até 95%, C o resto**. Só despesa (investimento e receita ficam de fora); segue o período e os filtros da aba;
+  fornecedores com nome igual (maiúscula, acento, espaço) somam juntos. `teste_curva_abc.py` (18).
+- Ainda sem os concorrentes: módulo **Máquinas** (custo por hora, manutenção; hoje só combustível), Manejo sem internet, livro
+  caixa/LCDPR (depende do escritório dele) e backup automático (GitHub Actions para repositório PRIVADO: artefato de repositório
+  público é baixável por qualquer um).
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -1600,7 +1648,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-53 arquivos `teste_*.py`, 1.448 checagens (06/11/2026; a tabela abaixo lista os
+56 arquivos `teste_*.py`, 1.540 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1655,6 +1703,9 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_carga_leve.py` | 41 | AEMatriz.html (carga por grupo, visão rateada lida uma vez, `atualizarLancamentos` igual ao recarregamento completo, `vigentesNoMes` igual à versão antiga, voltar à aba depois de 10 min) |
 | `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
+| `teste_offline_lancar.py` | 47 | AEpecuaria.html (lançar sem internet: cópia dos cadastros no aparelho por usuário, abrir sem sinal e com rede que não responde, fila, sobe uma vez só, janela aberta não é redesenhada, Sair apaga a cópia, aparelho sem espaço) |
+| `teste_copia_seguranca.py` | 27 | AEMatriz.html (cópia de segurança em Usuários: JSON paginado com todas as linhas, tabela sem permissão fica de fora, CSV para o contador com BOM, vírgula decimal e fórmula neutralizada, só admin, sem violar a CSP) |
+| `teste_curva_abc.py` | 18 | AEMatriz.html (Curva ABC das despesas em Relatórios: classes A/B/C por centro e por fornecedor, só despesa, filtros de período e atividade, sem rolar de lado) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

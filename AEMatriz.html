@@ -777,6 +777,115 @@ async function fetchAllRows(consulta){
   return { data: todas, error: null };
 }
 
+// COPIA DE SEGURANCA (Eduardo, 07/11/2026: "o app tem que ser o melhor do segmento"; o Inttegra vende "backup das informações").
+// O plano gratuito do Supabase não guarda cópia automática (as fontes divergem; tratar como sem backup até conferir no
+// painel). Este botão (só admin, em Usuários) baixa neste aparelho UM arquivo com as tabelas que as telas e os apps leem, página a
+// página (de 1000 em 1000, mesma regra de fetchAllRows), e um segundo botão baixa os lançamentos em planilha (CSV, ponto e vírgula,
+// vírgula decimal, abre direto no Excel) para o contador. Tabela que não existe ou que a permissão não deixa ler NÃO derruba a
+// cópia: fica de fora e aparece no resumo. `lancamento_rateios` não entra de propósito (fechada a quem está logado); a visão
+// `lancamentos_rateados` leva o resultado do rateio. `contas_bancarias` e `log_alteracoes` ficam de fora (conta bancária não
+// vai ao app; o registro de alterações é grande e só o gatilho do banco o grava).
+const TABELAS_COPIA = [
+  ['lancamentos_financeiros'], ['lancamentos_rateados', ['lancamento_id','rateio_id']], ['centros_custo'], ['entidades'],
+  ['titulos'], ['titulo_rateios'], ['titulo_baixas'], ['financiamentos'], ['parcelas_financiamento'], ['movimentos_financiamento'],
+  ['fazendas'], ['fazenda_atividades', ['fazenda_id','atividade']], ['talhoes_areas'], ['culturas'], ['safras'],
+  ['funcionarios'], ['funcionario_atividades', ['funcionario_id','atividade']], ['profiles'],
+  ['plantios_cana'], ['colheitas_cana'], ['aplicacoes_cana'], ['entradas_insumo_cana'], ['insumos_cana'],
+  ['plantios_graos'], ['colheitas_graos'], ['aplicacoes_graos'], ['entradas_insumo_graos'], ['insumos_graos'], ['operacoes_graos'],
+  ['lotes'], ['animais'], ['abates'], ['pesagens'], ['pesagens_animais'], ['partos'], ['desmamas'], ['diagnosticos_gestacionais'],
+  ['reproducao_custos'], ['protocolos_inseminacao'], ['manejos'], ['ingredientes'], ['dietas'], ['movimentos'], ['saidas_racao'],
+  ['producoes_racao'], ['leituras_cocho'], ['pasto'], ['precos_arroba'], ['config_financeiro'], ['abastecimentos'],
+];
+const COPIA_ULTIMA_KEY = 'ae_matriz_ultima_copia_v1';
+function quandoUltimaCopia(){
+  try{
+    const iso = localStorage.getItem(COPIA_ULTIMA_KEY);
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d) ? d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+  }catch(e){ return ''; }
+}
+function baixarArquivo(nome, partes, tipo){
+  const blob = new Blob(partes, {type: tipo + ';charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+async function lerTabelaParaCopia(nome, ordens){
+  const ordenar = (q, cols)=>cols.reduce((acc, c)=>acc.order(c), q);
+  let r = await fetchAllRows(()=>ordenar(db.from(nome).select('*'), ordens || ['id']));
+  // tabela sem a coluna de ordem (42703): uma página só, sem ordem, serve para tabela pequena
+  if(r.error && /42703|does not exist|column/i.test(String(r.error.code||'') + ' ' + String(r.error.message||''))){
+    r = await fetchAllRows(()=>db.from(nome).select('*'));
+  }
+  return r;
+}
+function mostrarStatusCopia(texto){
+  state.copiaMsg = texto;
+  const el = document.querySelector('[data-copia-status]');
+  if(el) el.textContent = texto;
+}
+async function baixarCopiaDeSeguranca(){
+  if(!souAdmin() || state.copiaFazendo) return;
+  state.copiaFazendo = true;
+  const botoes = [...document.querySelectorAll('[data-baixar-copia], [data-baixar-csv]')];
+  botoes.forEach(b=>{ b.disabled = true; });
+  const partes = ['{"app":"AE Agropecuária","geradoEm":' + JSON.stringify(new Date().toISOString())
+    + ',"geradoPor":' + JSON.stringify(state.perfil?.nome || '') + ',"tabelas":{'];
+  const resumo = {};
+  let primeira = true, linhas = 0;
+  try{
+    for(let i = 0; i < TABELAS_COPIA.length; i++){
+      const [nome, ordens] = TABELAS_COPIA[i];
+      mostrarStatusCopia(`Baixando ${i + 1} de ${TABELAS_COPIA.length}: ${nome}…`);
+      let r;
+      try{ r = await lerTabelaParaCopia(nome, ordens); }
+      catch(e){ r = {data: [], error: e}; }
+      if(r.error){ resumo[nome] = {erro: String(r.error.message || r.error)}; continue; }
+      resumo[nome] = {linhas: r.data.length};
+      linhas += r.data.length;
+      partes.push((primeira ? '' : ',') + JSON.stringify(nome) + ':' + JSON.stringify(r.data));
+      primeira = false;
+    }
+    partes.push('},"resumo":' + JSON.stringify(resumo) + '}');
+    baixarArquivo(`AE_copia_${hojeStr()}.json`, partes, 'application/json');
+    try{ localStorage.setItem(COPIA_ULTIMA_KEY, new Date().toISOString()); }catch(e){ /* sem o que fazer */ }
+    const fora = Object.entries(resumo).filter(([, v])=>v.erro).map(([n])=>n);
+    mostrarStatusCopia(`Cópia pronta: ${TABELAS_COPIA.length - fora.length} tabelas, ${linhas.toLocaleString('pt-BR')} linhas.`
+      + (fora.length ? ` Não baixou: ${fora.join(', ')} (a tabela não existe ou a permissão não deixa ler).` : '')
+      + ' Guarde o arquivo em lugar seguro.');
+  }catch(e){
+    mostrarStatusCopia('Não foi possível gerar a cópia: ' + (e?.message || e));
+  }finally{
+    state.copiaFazendo = false;
+    botoes.forEach(b=>{ b.disabled = false; });
+  }
+}
+function celulaCsv(v){
+  let s = String(v ?? '');
+  if(/^[=+\-@\t\r]/.test(s)) s = "'" + s;           // texto que o Excel leria como fórmula
+  return /[";\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function dataParaCsv(iso){ return iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : ''; }
+function csvDosLancamentos(){
+  const fazenda = id=>state.fazendasLavoura.find(f=>f.id===id)?.nome || '';
+  const centro = id=>state.centrosCusto.find(c=>c.id===id);
+  const linhas = state.lancamentos.slice().sort((a, b)=>String(a.data || a.mes || '').localeCompare(String(b.data || b.mes || '')) || a.id - b.id).map(l=>{
+    const c = centro(l.centroCustoId);
+    const mes = l.mes ? String(l.mes).slice(0, 7).split('-').reverse().join('/') : (l.data ? '' : 'Recorrente');
+    return [dataParaCsv(l.data), mes, l.tipo, l.atividade, fazenda(l.fazendaId), c?.nome || '', c ? grupoDoCentro(c) : '', l.descricao, l.fornecedor,
+      null, l.observacao, l.anoSafra ?? '', l.id].map((v, i)=>i === 9 ? String(Number(l.valor).toFixed(2)).replace('.', ',') : celulaCsv(v)).join(';');
+  });
+  const cab = ['Data', 'Mês', 'Tipo', 'Atividade', 'Fazenda', 'Centro de custo', 'Grupo', 'Descrição', 'Fornecedor', 'Valor', 'Observação', 'Ano da safra', 'Número'].join(';');
+  return '\ufeff' + [cab, ...linhas].join('\r\n') + '\r\n';
+}
+function baixarCsvLancamentos(){
+  if(!souAdmin()) return;
+  baixarArquivo(`AE_lancamentos_${hojeStr()}.csv`, [csvDosLancamentos()], 'text/csv');
+  mostrarStatusCopia(`Planilha pronta: ${state.lancamentos.length.toLocaleString('pt-BR')} lançamentos (os que estão carregados na tela).`);
+}
+
 // Grupos de dados que o loadAll() sabe recarregar. Sem argumento recarrega tudo, como
 // sempre foi (entrar no app, trocar de usuário). Quem sabe exatamente o que gravou passa
 // só o grupo: salvar uma conta, um contrato ou um funcionário não precisa baixar de novo
@@ -3504,6 +3613,76 @@ function FiltrosRelatorio(){
     </div>
   </div>`;
 }
+// Curva ABC das despesas (Eduardo, 07/11/2026; o Inttegra tem "curva ABC / perfil ABC de desembolso"). Despesa do período e dos
+// filtros da própria aba Relatórios (atividade e fazenda), por centro de custo ou por fornecedor, da maior para a menor, com o %
+// acumulado. Classe A = os itens que, somados, chegam a 80% do gasto (um item é A se o acumulado ANTES dele ainda é menor que 80%),
+// B = até 95%, C = o resto. Só despesa: investimento (compra de animal, máquina) e receita não entram.
+const ABC_LIMITE_A = 80, ABC_LIMITE_B = 95, ABC_LINHAS_FORNECEDOR = 25;
+function curvaAbcDespesas(periodo, por){
+  const itens = itensRelatorioNoPeriodo(periodo).despesa;
+  const grupos = new Map();
+  itens.forEach(l=>{
+    let chave, nome;
+    if(por === 'fornecedor'){
+      nome = String(l.fornecedor || '').trim() || 'Sem fornecedor';
+      chave = maiusculoSemAcento(nome);
+    } else {
+      const c = state.centrosCusto.find(x=>String(x.id)===String(l.centroCustoId));
+      nome = c ? c.nome : 'Sem centro de custo';
+      chave = String(l.centroCustoId ?? '');
+    }
+    if(!grupos.has(chave)) grupos.set(chave, {nome, valor:0});
+    grupos.get(chave).valor += Number(l.valor || 0);
+  });
+  const lista = [...grupos.values()].filter(g=>g.valor > 0).sort((a, b)=>b.valor - a.valor);
+  const total = lista.reduce((a, g)=>a + g.valor, 0);
+  let acum = 0;
+  const linhas = lista.map(g=>{
+    const antes = total > 0 ? acum / total * 100 : 0;
+    acum += g.valor;
+    return {nome:g.nome, valor:g.valor, pct: total > 0 ? g.valor / total * 100 : 0, acum: total > 0 ? acum / total * 100 : 0,
+            classe: antes < ABC_LIMITE_A ? 'A' : antes < ABC_LIMITE_B ? 'B' : 'C'};
+  });
+  const resumo = {A:{n:0, pct:0}, B:{n:0, pct:0}, C:{n:0, pct:0}};
+  linhas.forEach(l=>{ resumo[l.classe].n++; resumo[l.classe].pct += l.pct; });
+  return {total, linhas, resumo};
+}
+function TabelaCurvaAbc(abc, limite){
+  if(abc.linhas.length === 0) return Empty('Sem despesa neste filtro', 'Nenhuma despesa no período/atividade/fazenda selecionados.');
+  const cor = {A:'var(--bom)', B:'var(--ambar-texto)', C:'var(--cinza)'};
+  const mostradas = limite ? abc.linhas.slice(0, limite) : abc.linhas;
+  return `
+    <p class="hint" style="margin:0 0 10px;">
+      ${['A', 'B', 'C'].map(k=>`<strong style="color:${cor[k]};">Classe ${k}</strong>: ${abc.resumo[k].n} ${abc.resumo[k].n === 1 ? 'item' : 'itens'}, ${fmt(abc.resumo[k].pct, 1)}% do gasto`).join(' &nbsp;·&nbsp; ')}
+    </p>
+    <table class="tabela-blocos-celular tabela-sem-fixar">
+      <thead><tr><th>#</th><th>Nome</th><th>Valor</th><th>%</th><th>% acumulado</th><th>Classe</th></tr></thead>
+      <tbody>
+        ${mostradas.map((l, i)=>`<tr data-abc-classe="${l.classe}">
+          <td class="mono" data-rotulo="#">${i + 1}</td>
+          <td data-rotulo="Nome">${esc(l.nome)}</td>
+          <td class="mono" data-rotulo="Valor">R$ ${fmt(l.valor)}</td>
+          <td class="mono" data-rotulo="%">${fmt(l.pct, 1)}%</td>
+          <td data-rotulo="% acumulado"><span class="mono">${fmt(l.acum, 1)}%</span>
+            <div style="height:5px; margin-top:4px; background:var(--cinza-claro); border-radius:3px; min-width:70px;"><div style="height:5px; width:${Math.min(100, l.acum).toFixed(1)}%; background:${cor[l.classe]}; border-radius:3px;"></div></div></td>
+          <td data-rotulo="Classe"><strong style="color:${cor[l.classe]};">${l.classe}</strong></td>
+        </tr>`).join('')}
+        <tr><td></td><td style="font-weight:700;">Total${limite && abc.linhas.length > limite ? ` (${abc.linhas.length} itens; mostrando os ${limite} maiores)` : ''}</td>
+          <td class="mono" style="font-weight:700;">R$ ${fmt(abc.total)}</td><td class="mono" style="font-weight:700;">100%</td><td></td><td></td></tr>
+      </tbody>
+    </table>`;
+}
+function BlocoCurvaAbc(){
+  const centro = curvaAbcDespesas(state.periodo, 'centro');
+  const forn = curvaAbcDespesas(state.periodo, 'fornecedor');
+  return `
+  <p class="eyebrow" style="margin:18px 0 10px;">${labelPeriodo(state.periodo)} — Curva ABC das despesas por centro de custo</p>
+  <div class="card card-pad" style="overflow-x:auto; margin-bottom:18px;" data-abc="centro">${TabelaCurvaAbc(centro)}</div>
+  <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — Curva ABC das despesas por fornecedor</p>
+  <div class="card card-pad" style="overflow-x:auto;" data-abc="fornecedor">${TabelaCurvaAbc(forn, ABC_LINHAS_FORNECEDOR)}</div>
+  <p class="hint" style="margin-top:12px;">A curva ABC mostra onde está o dinheiro: a classe A é o pequeno grupo de contas que sozinho responde por 80% do gasto, e é onde uma negociação ou um corte muda o resultado. Só despesa; investimento (compra de animais, máquinas) e receita ficam de fora. Segue o período e os filtros de atividade e fazenda desta aba.</p>`;
+}
+
 function PageResultadosRelatorios(){
   const bal = balanceteRelatorio(state.periodo);
   const fc = fluxoCaixaRelatorio(state.periodo);
@@ -3554,6 +3733,7 @@ function PageResultadosRelatorios(){
       </tbody>
     </table>
   </div>
+  ${BlocoCurvaAbc()}
   <p class="hint" style="margin-top:12px;">Saldo anterior soma o que está carregado (últimos ~4 anos) antes do período — não é necessariamente o saldo desde a fundação da empresa, se houver lançamento mais antigo não carregado aqui. Grupos seguem o plano de contas do ERP (mesma classificação da tela de Centros de Custo).</p>
   `;
 }
@@ -7940,7 +8120,18 @@ function papelPill(papel){
 }
 
 function PageUsuarios(){
+  const ultimaCopia = quandoUltimaCopia();
   return `
+  ${souAdmin() ? `<div class="card" style="padding:16px 18px; margin-bottom:14px;">
+    <h3 style="margin:0 0 6px; font-size:15px;">Cópia de segurança dos dados</h3>
+    <p class="hint" style="margin:0 0 12px;">Baixa neste aparelho um arquivo com todos os dados do sistema (financeiro, contas, financiamentos, fazendas, funcionários, pecuária, cana, cereais e combustível). O plano gratuito do banco de dados não guarda cópia automática: baixe uma vez por semana e guarde o arquivo em lugar seguro (ele tem valores e nomes).
+      ${ultimaCopia ? `Última cópia baixada neste aparelho: ${esc(ultimaCopia)}.` : 'Nenhuma cópia foi baixada neste aparelho ainda.'}</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-primary" data-baixar-copia="1" ${state.copiaFazendo ? 'disabled' : ''}>Baixar cópia dos dados</button>
+      <button class="btn btn-ghost" data-baixar-csv="1">Baixar lançamentos em planilha (para o contador)</button>
+    </div>
+    <div class="hint" data-copia-status role="status" style="margin-top:10px;">${esc(state.copiaMsg || '')}</div>
+  </div>` : ''}
   <div class="card" style="overflow-x:auto;">
     ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para quem vai usar a matriz.') : `
     <table class="tabela-blocos-celular tabela-sem-fixar">
@@ -8803,6 +8994,8 @@ function attachEvents(){
     state.usuarioError = '';
     state.modal = {type:'usuario'}; render();
   };
+  document.querySelectorAll('[data-baixar-copia]').forEach(el=>{ el.onclick = ()=>baixarCopiaDeSeguranca(); });
+  document.querySelectorAll('[data-baixar-csv]').forEach(el=>{ el.onclick = ()=>baixarCsvLancamentos(); });
   document.querySelectorAll('[data-editar-usuario]').forEach(el=>{
     el.onclick = ()=>{
       const perfil = state.perfis.find(p=>p.id===el.dataset.editarUsuario);
