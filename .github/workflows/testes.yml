@@ -28,9 +28,9 @@ jobs:
       TZ: America/Sao_Paulo          # os apps assumem o fuso do Brasil para "hoje"
       PYTHONUTF8: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -44,7 +44,8 @@ jobs:
       - name: Monta o ambiente que os testes esperam
         run: |
           # os testes foram escritos num sandbox com estes tres caminhos fixos
-          sudo mkdir -p /opt/pw-browsers /home/claude /tmp/lav_test
+          sudo mkdir -p /opt/pw-browsers /home/claude
+          mkdir -p /tmp/lav_test
           sudo ln -sfn "$GITHUB_WORKSPACE" /home/claude/AEagropecuaria
           cp teste_stub_supabase.js /tmp/lav_test/stub.js
           CHROME=$(python -c "from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()")
