@@ -375,7 +375,7 @@
    minimo da WCAG 2.2 AA e 24). Os botoes mediam 26 a 34 px. O mouse do desktop segue como era.
    NAO definir display aqui: uma classe que o CSS esconde em tela larga (menu de celular) voltaria a aparecer. */
 @media (pointer: coarse){
-  .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel, .side-app{
+  .aviso-fechar, .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel, .side-app{
     min-height:44px;
   }
   input:not([type=checkbox]):not([type=radio]):not([type=color]), select{min-height:44px;}
@@ -383,7 +383,7 @@
   input[type=checkbox], input[type=radio]{width:24px; height:24px; min-width:24px; accent-color:var(--bom); flex:none;}
   label:has(> input[type=checkbox]), label:has(> input[type=radio]){min-height:44px; display:flex; align-items:center; gap:8px;}
   td.acoes .btn-sm{margin:4px 8px 4px 0;}
-  .btn-sair, .modal-close{min-width:44px;}
+  .btn-sair, .modal-close, .aviso-fechar{min-width:44px;}
   .modal-close, .valor-clicavel{min-height:44px;}
 }
 
@@ -455,6 +455,17 @@
   .side-apps{padding-top:10px;}
   .topbar-user{padding:10px 14px 14px;}
 }
+/* ---------- AVISOS NA PAGINA (07/11/2026): no lugar do alert() que travava a tela ---------- */
+.avisos{position:fixed; z-index:10050; left:50%; top:12px; transform:translateX(-50%); width:min(600px, calc(100vw - 24px));
+        display:flex; flex-direction:column; gap:10px; pointer-events:none;}
+.aviso{pointer-events:auto; display:flex; align-items:flex-start; gap:10px; background:var(--branco); color:var(--grafite);
+       border:1px solid var(--cinza-claro); border-left:6px solid var(--ambar); border-radius:12px; padding:14px 8px 14px 16px;
+       box-shadow:0 10px 24px rgba(15,42,74,0.12), 0 2px 6px rgba(15,42,74,0.08); font-size:14px; line-height:1.45;}
+.aviso-erro{border-left-color:var(--alerta); background:var(--alerta-bg);}
+.aviso-texto{flex:1; min-width:0; white-space:pre-line; overflow-wrap:anywhere; max-height:50vh; overflow-y:auto;}
+.aviso-fechar{flex-shrink:0; width:36px; height:36px; border:none; background:transparent; color:var(--cinza); font-size:26px; line-height:1; cursor:pointer; border-radius:8px;}
+.aviso-fechar:hover{background:rgba(0,0,0,0.07);}
+@media print{ .avisos{display:none;} }
 </style>
 </head>
 <body>
@@ -462,6 +473,46 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
 <script>
+/* ===================== AVISOS NA PÁGINA (07/11/2026) =====================
+ * O alert() do navegador trava a tela até a pessoa tocar em OK, tem a cara do navegador e, no tablet e no celular do
+ * campo, some atrás do teclado. Os alert() deste app agora viram um aviso na própria tela (no topo, para não cobrir o
+ * botão Salvar nem o botão +): não trava, tem botão de fechar, Esc fecha, e some sozinho, MENOS o de erro
+ * ("Não foi possível...", "Erro...", "Falha..."), que fica até a pessoa fechar. O texto entra como texto (nunca como
+ * HTML) e a quebra de linha da mensagem é mantida. confirm() continua nativo: pergunta que precisa de resposta.
+ * Cada aviso também vai para window.__AVISOS__ e para o console ("[aviso] ...") — é por onde os testes leem. */
+let TEMPO_AVISO_MS = 9000;
+window.__AVISOS__ = [];
+function avisar(msg){
+  const texto = String(msg == null ? '' : msg);
+  const erro = /^(n[aã]o foi poss[ií]vel|erro|falha|ocorreu um erro|os dados n[aã]o carregaram)/i.test(texto.trim());
+  window.__AVISOS__.push({texto, erro, quando: Date.now()});
+  try{ console.info('[aviso] ' + texto); }catch(e){ /* console indisponível */ }
+  let caixa = document.getElementById('avisos');
+  if(!caixa){
+    caixa = document.createElement('div');
+    caixa.id = 'avisos'; caixa.className = 'avisos';
+    caixa.setAttribute('role', 'region'); caixa.setAttribute('aria-label', 'Avisos');
+    document.body.appendChild(caixa);
+  }
+  const el = document.createElement('div');
+  el.className = 'aviso ' + (erro ? 'aviso-erro' : 'aviso-info');
+  el.setAttribute('role', erro ? 'alert' : 'status');
+  const corpo = document.createElement('div'); corpo.className = 'aviso-texto'; corpo.textContent = texto;
+  const fechaBtn = document.createElement('button');
+  fechaBtn.type = 'button'; fechaBtn.className = 'aviso-fechar'; fechaBtn.setAttribute('aria-label', 'Fechar aviso'); fechaBtn.textContent = '×';
+  const fechar = ()=>{ if(el.parentNode) el.parentNode.removeChild(el); };
+  fechaBtn.onclick = fechar;
+  el.appendChild(corpo); el.appendChild(fechaBtn);
+  while(caixa.children.length >= 4) caixa.removeChild(caixa.firstChild);
+  caixa.appendChild(el);
+  if(!erro) setTimeout(fechar, Math.max(TEMPO_AVISO_MS, Math.min(20000, texto.length * 60)));
+  return el;
+}
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){ const c = document.getElementById('avisos'); if(c && c.lastChild) c.removeChild(c.lastChild); }
+});
+window.alert = avisar;
+
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
 // esgotado) — reaproveita o projeto real do AE Lavoura, que já tem

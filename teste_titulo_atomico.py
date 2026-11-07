@@ -89,6 +89,7 @@ with sync_playwright() as pw:
     dialogos = []
     page.on("pageerror", lambda e: erros.append(str(e)) if "ServiceWorker" not in str(e) else None)
     page.on("dialog", lambda d: (dialogos.append(d.message), d.accept()))
+    page.on("console", lambda m: dialogos.append(m.text[len("[aviso] "):]) if m.text.startswith("[aviso] ") else None)   # o alert() virou aviso na tela (07/11/2026)
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.add_init_script(STUB)
     page.add_init_script(f"window.__DB__ = {json.dumps(dict(DB, profiles=[ADMIN]))}; window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};")

@@ -1433,8 +1433,14 @@ compra de animais e as travas do banco.
     Cada aviso vai para `window.__AVISOS__` e para `console.info('[aviso] ...')`: **é por aí que os testes leem** (`teste_carga_pecuaria`,
     `teste_lote_racao`, `teste_parto_aborto_lote_numero` e `teste_qual_animal` ganharam um `page.on("console")`; o `page.on("dialog")`
     segue valendo para os `confirm()`, que continuam nativos: 21, pergunta que precisa de resposta). Pecuária nova com `alert()`
-    novo já funciona sozinha. Matriz, Cana, Cereais e Combustível ainda usam o `alert()` nativo (Matriz: muitos testes leem o
-    evento `dialog`).
+    novo já funciona sozinha. **Nos outros quatro apps também (07/11/2026, `teste_avisos_apps.py` 88 checagens, 22 por app)**: o MESMO
+    bloco de JavaScript (`avisar`, logo depois da biblioteca do Supabase) e de CSS (`.avisos`, `.aviso`, antes do `</style>`; usa os
+    tokens `--branco`, `--grafite`, `--cinza-claro`, `--ambar`, `--alerta`, `--alerta-bg`, que os cinco apps têm) em Matriz, Cana,
+    Cereais e Combustível; `.aviso-fechar` entrou no bloco do toque (44 px). Quem mexer num bloco, mexa nos cinco. Os testes que
+    liam o texto do `alert()` pela janela nativa (`teste_financiamentos_editar`, `_erp`, `teste_saldo_banco`, `teste_titulo_atomico`,
+    `teste_venda_atomica`) ganharam um `page.on("console")` que lê o `[aviso] ...`; teste novo que precise do texto de um aviso lê
+    por ali (ou por `window.__AVISOS__`), nunca pelo evento `dialog`. Nenhum `alert()` dos quatro apps é seguido de redirecionamento
+    ou logout (conferido), então a faixa não some antes de ser lida.
 - **Menu lateral do AE Matriz (06/11/2026; `teste_menu_lateral.py` 37 checagens)**. Pedido do Eduardo ("não gosto muito deste
   formato; quero as opções da barra maiores e as dos apps menores na barra"; ele viu as imagens e disse "ficou ótimo"). Três modos,
   só CSS + o bloco `AppsNaBarra()` dentro do `.tabsrow`:
@@ -1739,7 +1745,7 @@ divergem: conferir no painel). Por isso:
 
 ## Testes
 
-60 arquivos `teste_*.py`, 1.673 checagens (07/11/2026; a tabela abaixo lista os
+61 arquivos `teste_*.py`, 1.761 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1784,6 +1790,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
 | `teste_avisos_pecuaria.py` | 25 | AEpecuaria.html (alert() vira aviso na tela: não trava, erro fica até fechar, texto seguro, Esc/×, no topo e acima de janelas, confirm() nativo) |
+| `teste_avisos_apps.py` | 88 | AEMatriz.html, AECana.html, AECereais.html, AECombustivel.html (o mesmo aviso na tela, 22 checagens por app: não trava, console e `__AVISOS__`, no topo, comum some e erro fica, texto seguro, ×/Esc, no máximo 4, sobrevive ao redesenho, confirm() nativo, 44 px no toque, cabe em 360 px) |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |

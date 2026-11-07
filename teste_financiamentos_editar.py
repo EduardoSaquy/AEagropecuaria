@@ -113,6 +113,7 @@ with sync_playwright() as pw:
     erros, dialogos = [], []
     page.on("pageerror", lambda e: erros.append(str(e)))
     page.on("dialog", lambda d: (dialogos.append(d.message), d.accept()))
+    page.on("console", lambda m: dialogos.append(m.text[len("[aviso] "):]) if m.text.startswith("[aviso] ") else None)   # o alert() virou aviso na tela (07/11/2026)
     page.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
     page.add_init_script(RELOGIO)
     page.add_init_script(STUB)
