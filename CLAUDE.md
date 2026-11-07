@@ -16,10 +16,15 @@ aberto direto no navegador ou instalado como PWA.
 | `Adubacao.html` | calculadora de calagem/gessagem/adubação, sem Supabase e sem login (sessão única) |
 | `AELavoura.html` | página de redirecionamento para Cana/Cereais (o app antigo foi dividido) |
 | `sw.js` | service worker único de todos os apps (cache `ae-v5`). Página do site: rede primeiro (revalida sempre, cai pro cache após 4 s sem resposta **ou se o site responder erro, 404/5xx**: com o GitHub Pages fora do ar quem já usa o app continua abrindo) e atualiza o cache a cada abertura online; CDN do Supabase e fontes: cache primeiro. Sem a biblioteca do Supabase no cache o app não abre offline — foi o bug até a v4 |
+| `core.js` | **núcleo comum** dos cinco apps (Matriz, Pecuária, Cana, Cereais, Combustível): avisos na tela, sessão e perfil guardado no aparelho, ícones, datas e números, `esc`/`fmt`, telas comuns. Carregado por `<script src="core.js?v=...">` antes do script do app. Ver "Núcleo comum dos apps" |
+| `core_lavoura.js` | núcleo só do **AE Cana e do AE Cereais** (as funções que os dois tinham idênticas: login, carga de dados, telas de usuários e permissões, cadastros, estoque de insumos) |
+| `atualiza_nucleo.py` | troca o `?v=` (impressão digital) das tags `core*.js` nos apps; rodar depois de mexer em `core.js`/`core_lavoura.js`. `--confere` só confere |
 | `gerar_apps_lavoura.py` | gera AECana e AECereais a partir de `AELavoura_app_completo.html.bak` |
 
 Cana e Cereais são propositalmente separados: ficam em estados diferentes do
 país e a operação é independente. Não voltar a unificá-los.
+O que os dois têm de código idêntico mora em `core_lavoura.js` (uma vez só); o que é diferente (tabelas, textos, campos) vem de
+constantes que cada app define. Separar a operação não pede código duplicado.
 
 ## Banco
 
@@ -1650,6 +1655,40 @@ divergem: conferir no painel). Por isso:
   caixa/LCDPR (depende do escritório dele) e backup automático (GitHub Actions para repositório PRIVADO: artefato de repositório
   público é baixável por qualquer um).
 
+### Núcleo comum dos apps (`core.js`, 07/11/2026)
+
+**O problema**: cada app era um HTML com tudo dentro, e o que era igual entre eles estava **copiado** (mais de 90 nomes de função em 2 ou mais apps;
+53 já tinham divergido). Um conserto entrava num app e ficava de fora dos outros — o mesmo tipo de erro que o `acessoTotal` e o `pareceErroDeRede` mostram.
+
+**O que mudou** (nada na tela: 184 telas dos 5 apps, em 1280 e 390 px, comparadas byte a byte antes e depois — todas iguais):
+- `core.js` (todos os 5 apps) e `core_lavoura.js` (só Cana e Cereais), classic scripts com as funções **globais**, como sempre foram. Tags logo depois da
+  biblioteca do Supabase e antes do script do app: `<script src="core.js?v=...">`. A política de segurança (CSP) já aceitava (`script-src 'self'`).
+- Saíram dos apps 1.793 linhas (Cana e Cereais ficaram com ~1.100 linhas cada, 38% menos); entraram 753 nos dois núcleos.
+- Dentro do núcleo só se usa o que é do app **no momento da chamada** (`state`, `db`, `PERFIL_CACHE_KEY`, `CADASTROS`...): essas constantes e o estado
+  continuam no script de cada app. Função nova que for **igual em 2 ou mais apps vai direto para o núcleo**, não para um app.
+
+**O `?v=`** é a impressão digital (10 primeiros caracteres do SHA-256, fim de linha CRLF/LF não conta). Sem ele o navegador pode juntar HTML novo com
+`core.js` velho do cache (GitHub Pages guarda 10 min) e o app quebra até vencer. **Depois de mexer em `core.js`/`core_lavoura.js` rode
+`python atualiza_nucleo.py`** (troca o `?v=` nos apps); o `teste_nucleo.py` falha se esquecer. Quem carrega o quê está em `NUCLEOS` dentro desse script.
+
+**Offline** (`sw.js`): `./core.js` e `./core_lavoura.js` estão na lista `SHELL`. O `sw.js` guarda cada arquivo com o `?v=` no endereço; a busca no
+cache procura **primeiro o endereço exato** e só depois qualquer versão do mesmo arquivo, e ao guardar uma versão nova **apaga as velhas** do mesmo
+arquivo (`limpaVersoesAntigas`). Isso foi achado pelo `teste_nucleo_offline.py`: o `sw.js` antigo (`ignoreSearch` direto) devolvia a cópia mais
+ANTIGA, e depois da primeira atualização do núcleo o app offline rodaria HTML novo com núcleo velho. Versão do cache (`ae-v5`) não foi trocada.
+
+**Divergências que o trabalho mostrou e que NÃO foram decididas** (o núcleo só recebeu o que era igual; estas ficam como estão em `DIVIDA_CONHECIDA`
+no `teste_nucleo.py`, até alguém decidir o comportamento certo):
+- `souAdmin`: na Pecuária conta `admin` **e** `proprietario`; nos outros é só `admin`. `podeExcluir`: Pecuária admin/proprietário, Matriz/Cana/Cereais
+  `acessoTotal()` (admin/proprietário).
+- **AE Combustível não conhece o papel `proprietario`** (não está em `PAPEL_LABELS` e `temPermissao` usa `souAdmin()` = só admin): quem é proprietário
+  cai na matriz de módulos como um colaborador, a mesma divergência que o comentário de `acessoTotal` conta da lavoura. Decisão do Eduardo.
+- `pareceErroDeRede`: a da Pecuária também reconhece `navigator.onLine === false`, `TypeError` e "load failed" (Safari); a do Matriz só olha três palavras.
+- `currentGroupKey`/`gruposVisiveis`: iguais em Pecuária, Cana e Combustível; o Cereais tem outra. `fazerLogin`: o Combustível tem outra.
+
+**Falta** (próximas etapas): reconciliar essas divergências (decidir e passar para o núcleo, tirando da lista); o CSS dos avisos ainda está copiado nos 5
+apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por tela); apagar os `sw_*.js` aposentados. `Adubacao.html` não usa o núcleo (sem login,
+`esc`/`fmt` próprios e diferentes).
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -1771,7 +1810,7 @@ divergem: conferir no painel). Por isso:
 
 ## Testes
 
-61 arquivos `teste_*.py`, 1.761 checagens (07/11/2026; a tabela abaixo lista os
+63 arquivos `teste_*.py`, 1.801 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1817,6 +1856,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
 | `teste_avisos_pecuaria.py` | 25 | AEpecuaria.html (alert() vira aviso na tela: não trava, erro fica até fechar, texto seguro, Esc/×, no topo e acima de janelas, confirm() nativo) |
 | `teste_avisos_apps.py` | 88 | AEMatriz.html, AECana.html, AECereais.html, AECombustivel.html (o mesmo aviso na tela, 22 checagens por app: não trava, console e `__AVISOS__`, no topo, comum some e erro fica, texto seguro, ×/Esc, no máximo 4, sobrevive ao redesenho, confirm() nativo, 44 px no toque, cabe em 360 px) |
+| `teste_nucleo.py` | 34 | os cinco apps + `core*.js` (tags e `?v=` em dia e na ordem certa, app não repete o que o núcleo declara, **nenhuma função nova copiada entre apps** — lista `DIVIDA_CONHECIDA` só pode encolher —, `sw.js` guarda os núcleos, cada app enxerga as funções do núcleo) |
+| `teste_nucleo_offline.py` | 6 | `sw.js` + `core.js?v=` com service worker de verdade: versão nova publicada, offline abre com o núcleo NOVO (provado que o `sw.js` antigo devolvia o velho) e o cache não guarda a cópia antiga |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |

@@ -103,6 +103,16 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Arquivo com ?v= (core.js?v=...): ao guardar a versao nova, as antigas do mesmo arquivo saem do cache. Sem isso, a busca
+// que ignora o ?v= devolveria a MAIS ANTIGA e o app offline juntaria o HTML novo com o nucleo velho.
+function limpaVersoesAntigas(c, req) {
+  const u = new URL(req.url);
+  if (!u.search) return Promise.resolve();
+  return c.keys().then((ks) => Promise.all(ks
+    .filter((k) => { const ku = new URL(k.url); return ku.pathname === u.pathname && ku.search !== u.search; })
+    .map((k) => c.delete(k))));
+}
+
 // Paginas e arquivos do proprio site: rede primeiro, cache como reserva.
 // O contrario entregaria tela velha a quem tem sinal - e foi por isso que
 // a v1 chegou a servir uma copia apontando para o banco antigo.
@@ -110,11 +120,12 @@ function redePrimeiro(req) {
   const daRede = fetch(req, { cache: 'no-cache' }).then((resp) => {
     if (resp && resp.ok) {
       const copia = resp.clone();
-      caches.open(CACHE).then((c) => c.put(req, copia));
+      caches.open(CACHE).then((c) => c.put(req, copia).then(() => limpaVersoesAntigas(c, req)));
     }
     return resp;
   });
-  const doCache = () => caches.match(req, { ignoreSearch: true });
+  // Primeiro a copia do endereco EXATO (com o ?v= do nucleo); so se nao houver, qualquer versao do mesmo arquivo.
+  const doCache = () => caches.match(req).then((exata) => exata || caches.match(req, { ignoreSearch: true }));
   const limite = new Promise((resolve) => setTimeout(resolve, TEMPO_REDE_MS));
   return Promise.race([daRede.catch(() => null), limite]).then((resp) => {
     if (resp && resp.ok) return resp;
