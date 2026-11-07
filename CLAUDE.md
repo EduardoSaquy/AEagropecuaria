@@ -1268,7 +1268,7 @@ Medido com 25.000 lançamentos (volume real) e CPU 4x mais lenta (tablet de entr
 
 Pedido do Eduardo ("seguir na sequência"): medir de novo, meta **8 ou mais em todos os quesitos**. Relatório completo na pasta privada
 (`revisao_geral_2026-11-07\RELATORIO.md`). Só leitura. Notas (julgamento do Claude): funcionalidade 8,5 → **9,0**; corretude 7 → **7,5**;
-integridade 6 → **8** (falta reconferir no banco real com `saude_do_banco_01.sql`); segurança 7,5 → **7,5**; desempenho 4 → **7,5**;
+integridade 6 → **8** (reconferida por ele no banco real em 07/11/2026, abaixo); segurança 7,5 → **7,5**; desempenho 4 → **7,5**;
 manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
 - **Tempos medidos** (Matriz, 25.000 lançamentos, sem rede; `medir_orcamento.py` no scratchpad, não versionado): Financeiro > Despesas 97 ms no
   PC e 550 ms com CPU 4x mais lenta (eram 2,6 s e ~23 s); Relatórios 130/666 ms; Empresa 283/1.097 ms; abrir o app até os dados 1,6 s/5,6 s
@@ -1279,6 +1279,13 @@ manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
 - **Segurança**: chave pública não lê nenhum objeto (inclui as cópias `zz_backup_dup4_*`); os apps chamam só 2 funções de criar usuário
   (`criar-usuario-cana`, `criar-usuario-combustivel`); `contas_bancarias` ainda tem as colunas `agencia` e `conta` (vazias na tela; apagar depois de
   ver que estão vazias); backup automático e plano do Supabase não confirmados.
+- **`saude_do_banco_01.sql` rodada de novo por ele em 07/11/2026 (depois de todas as limpezas): 21 das 24 checagens OK** (eram 18). Agora
+  OK: conta #107 (B2), pesagens com 0 kg (D3), `erp_id` repetido, geral sem partes, rateio que não fecha, financiamentos e cadastros. Seguem em
+  ATENÇÃO, todas esperadas: **A4** 22 receitas em centro de saída, R$ 339.094,22 (ele decidiu deixar como está; o tipo do centro é só etiqueta);
+  **D2** 10 lotes ativos sem pesagem há 60 dias (matrizes e cria não são pesados de rotina: a checagem poderia olhar só engorda); **A8** 509 linhas,
+  R$ 672.552,40 (eram 515 e R$ 1.183.392,40; os 3 pares de 07/11 saíram, R$ 510.840,00). Desse A8, R$ 405.287,52 são as 8 linhas das 4 duplas que ele
+  mandou manter (#497/#20805, #496/#20806, #500/#21098, #3018/#21300); sobram ~501 linhas e ~R$ 267 mil de valores repetidos pequenos (tarifas, salários
+  e parcelas que se repetem; o maior item solto é #17328, R$ 11.340,00, ainda não classificado).
 - **Para chegar a 8**: a manutenibilidade é o maior buraco (CI primeiro, depois núcleo comum `core.js` para as cópias, quebrar `attachEvents`);
   corretude pede recorrência explícita e dinheiro em centavos; segurança pede 2º fator para administradores, supabase-js no próprio site ou SRI e
   apagar as colunas de conta; campo pede letras de 12 px ou mais (ainda há 21 regras com 9 a 11 px no Matriz) e teste dele no tablet real.
