@@ -250,6 +250,9 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 @media (min-width:761px) and (max-height:900px){
   .nav-item{min-height:48px; font-size:15.5px;}
 }
+  /* Tabela larga não pode esticar a página: o .main é item flex e crescia junto com ela (07/11/2026) */
+  .main{min-width:0;}
+  [data-rateio-equipamento] th, [data-rateio-equipamento] td{padding-left:10px; padding-right:10px;}
 </style>
 </head>
 <body>
@@ -505,6 +508,9 @@ const CADASTROS = {
       {key:'data', label:'Data', type:'date', required:true},
       {key:'leitura', label:'Leitura do horímetro/hodômetro nesta manutenção', type:'number', step:'0.01', required:true},
       {key:'intervalo', label:'Intervalo até a próxima (horas ou km)', type:'number', step:'0.01', required:true},
+      // Custo da manutenção (07/11/2026): entra no custo por hora do equipamento (Rateio > Por Equipamento). Opcional; só vai ao
+      // banco quando tem valor (soSeTiverValor), então o app segue funcionando antes de combustivel_manutencao_02_custo.sql.
+      {key:'custo', label:'Custo da manutenção (R$, opcional)', type:'number', step:'0.01', list:false, soSeTiverValor:true},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
@@ -1336,7 +1342,7 @@ function PageManutencoes(){
   <div class="card" style="overflow-x:auto;">
     ${historico.length===0 ? Empty('Nenhuma manutenção lançada', 'Registre a primeira troca de óleo ou filtro.') : `
     <table>
-      <thead><tr><th>Data</th><th>Equipamento</th><th>Tipo</th><th>Leitura</th><th>Intervalo</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Equipamento</th><th>Tipo</th><th>Leitura</th><th>Intervalo</th><th>Custo</th><th></th></tr></thead>
       <tbody>
         ${historico.map(m=>{
           const equip = state.equipamentos.find(e=>e.id===m.equipamentoId);
@@ -1348,6 +1354,7 @@ function PageManutencoes(){
             <td>${tipoLabel}</td>
             <td class="mono">${fmt(m.leitura,2)} ${unidadeMedidor(equip)}</td>
             <td class="mono">${fmt(m.intervalo,2)} ${unidadeMedidor(equip)}</td>
+            <td class="mono">${m.custo!=null && m.custo!=='' ? 'R$ '+fmt(m.custo) : '—'}</td>
             <td style="display:flex; gap:6px;">
               ${podeEditar ? `
               <button class="btn-ghost btn-sm" data-edit-cadastro="manutencoes:${m.id}">Editar</button>
@@ -1766,29 +1773,49 @@ function agruparPorTalhao(lista){
     };
   }).sort((a,b)=>b.custo-a.custo);
 }
+// Custo da manutenção do equipamento no período do filtro (só o que tem custo preenchido).
+function custoManutencaoDoEquipamento(equipamentoId){
+  const { dataInicio, dataFim } = state.rateioFiltro;
+  return state.manutencoes
+    .filter(m=>m.equipamentoId===equipamentoId && m.custo!=null && m.custo!=='' && (!dataInicio || m.data>=dataInicio) && (!dataFim || m.data<=dataFim))
+    .reduce((a,m)=>a+Number(m.custo||0), 0);
+}
+// Por equipamento, no período: combustível (litros e R$ do custo médio do tanque), consumo e horas/km (maior menos menor leitura do
+// medidor nos abastecimentos do período), manutenção com custo preenchido e o CUSTO POR HORA (ou km) = (combustível + manutenção) ÷
+// horas (ou km). Equipamento com manutenção no período e sem abastecimento também aparece.
 function agruparPorEquipamento(lista){
   const porEquip = {};
   lista.forEach(a=>{
     (porEquip[a.equipamentoId] = porEquip[a.equipamentoId] || []).push(a);
   });
-  return Object.entries(porEquip).map(([idStr, registros])=>{
-    const equipamentoId = Number(idStr);
+  const montar = (equipamentoId, registros)=>{
     const equipamento = state.equipamentos.find(e=>e.id===equipamentoId);
     const volume = registros.reduce((a,r)=>a+Number(r.volumeLitros||0),0);
     const custo = registros.reduce((a,r)=>{ const c = custoAbastecimento(r); return a+(c||0); }, 0);
-    let consumo = null, unidade = '';
+    let consumo = null, unidade = '', percorrido = null, unidadeMedida = '';
     if(equipamento && equipamento.tipoMedidor!=='nenhum'){
       const leituras = registros.map(r=>Number(r.leituraMedidor)).filter(n=>!isNaN(n));
       if(leituras.length>=2){
-        const percorrido = Math.max(...leituras) - Math.min(...leituras);
-        if(percorrido>0){
-          consumo = volume/percorrido;
+        const dif = Math.max(...leituras) - Math.min(...leituras);
+        if(dif>0){
+          percorrido = dif;
+          unidadeMedida = equipamento.tipoMedidor==='horimetro' ? 'h' : 'km';
+          consumo = volume/dif;
           unidade = equipamento.tipoMedidor==='horimetro' ? 'L/h' : 'L/km';
         }
       }
     }
-    return { equipamentoId, nome: equipamento?.nome||'—', tipo: equipamento?.tipo||'', volume, custo, consumo, unidade, qtd: registros.length };
-  }).sort((a,b)=>b.custo-a.custo);
+    const custoManutencao = custoManutencaoDoEquipamento(equipamentoId);
+    const custoTotal = custo + custoManutencao;
+    return { equipamentoId, nome: equipamento?.nome||'—', tipo: equipamento?.tipo||'', volume, custo, consumo, unidade, percorrido, unidadeMedida,
+      custoManutencao, custoTotal, custoPorUnidade: percorrido ? custoTotal/percorrido : null, qtd: registros.length };
+  };
+  const grupos = Object.entries(porEquip).map(([idStr, registros])=>montar(Number(idStr), registros));
+  state.equipamentos.forEach(e=>{
+    if(porEquip[e.id]) return;
+    if(custoManutencaoDoEquipamento(e.id)>0) grupos.push(montar(e.id, []));
+  });
+  return grupos.sort((a,b)=>b.custoTotal-a.custoTotal);
 }
 function FiltroPeriodoRateio(){
   const lista = abastecimentosNoPeriodo();
@@ -1857,32 +1884,38 @@ function PageRateioTalhao(){
 function PageRateioEquipamento(){
   const lista = abastecimentosNoPeriodo();
   const grupos = agruparPorEquipamento(lista);
+  const totalComb = grupos.reduce((a,g)=>a+g.custo,0), totalManut = grupos.reduce((a,g)=>a+g.custoManutencao,0);
   return `
   ${FiltroPeriodoRateio()}
   <div class="card" style="overflow-x:auto;">
     ${grupos.length===0 ? Empty('Nenhum abastecimento no período','Ajuste o período ou registre abastecimentos na aba Abastecimento.') : `
-    <table>
-      <thead><tr><th>Equipamento</th><th>Tipo</th><th>Abastecimentos</th><th>Volume</th><th>Consumo</th><th>Custo</th></tr></thead>
+    <table data-rateio-equipamento="1">
+      <thead><tr><th>Equipamento</th><th>Volume</th><th>Consumo</th><th>Horas / km</th><th>Combustível (R$)</th><th>Manutenção (R$)</th><th>Custo total (R$)</th><th>R$ por hora / km</th></tr></thead>
       <tbody>
         ${grupos.map(g=>`
-          <tr>
-            <td><strong>${esc(g.nome)}</strong></td>
-            <td>${(OPCOES.TIPOS_EQUIPAMENTO.find(t=>t.value===g.tipo)||{}).label || g.tipo || '—'}</td>
-            <td class="mono">${g.qtd}</td>
+          <tr data-equipamento-linha="${g.equipamentoId}">
+            <td><strong>${esc(g.nome)}</strong><br><span class="hint">${(OPCOES.TIPOS_EQUIPAMENTO.find(t=>t.value===g.tipo)||{}).label || g.tipo || '—'}</span></td>
             <td class="mono">${fmtInt(g.volume)} L</td>
             <td class="mono">${g.consumo!=null ? `${fmt(g.consumo,2)} ${g.unidade}` : '—'}</td>
-            <td class="mono">R$ ${fmt(g.custo)}</td>
+            <td class="mono">${g.percorrido!=null ? `${fmt(g.percorrido,1)} ${g.unidadeMedida}` : '—'}</td>
+            <td class="mono">${fmt(g.custo)}</td>
+            <td class="mono">${g.custoManutencao>0 ? fmt(g.custoManutencao) : '—'}</td>
+            <td class="mono"><strong>${fmt(g.custoTotal)}</strong></td>
+            <td class="mono"><strong>${g.custoPorUnidade!=null ? `R$ ${fmt(g.custoPorUnidade)} /${g.unidadeMedida}` : '—'}</strong></td>
           </tr>
         `).join('')}
+        <tr><td style="font-weight:700;">Total</td><td></td><td></td><td></td>
+          <td class="mono" style="font-weight:700;">${fmt(totalComb)}</td><td class="mono" style="font-weight:700;">${totalManut>0 ? fmt(totalManut) : '—'}</td>
+          <td class="mono" style="font-weight:700;">${fmt(totalComb+totalManut)}</td><td></td></tr>
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin-top:10px;">Ranking por custo total no período. Consumo (L/h ou L/km) usa a diferença entre a maior e a menor leitura de medidor registrada no período — precisa de pelo menos 2 abastecimentos com leitura para aparecer.</p>`;
+  <p class="hint" style="margin-top:10px;">Ranking por custo total no período. <strong>Custo por hora (ou km)</strong> = (combustível + manutenção do período) ÷ horas (ou km) rodados: a diferença entre a maior e a menor leitura do medidor nos abastecimentos do período, então precisa de pelo menos 2 abastecimentos com leitura. A manutenção só entra quando o custo foi preenchido na aba Manutenção. Não inclui depreciação, mão de obra nem peças lançadas fora do app.</p>`;
 }
 const RATEIO_PAGES = {
   rateioFrente: {label:'Por Frente', desc:'Custo e volume de combustível por frente de negócio (cana, grãos, pecuária) no período selecionado.', render:PageRateioFrente},
   rateioTalhao: {label:'Por Talhão / Área', desc:'Custo e volume por talhão/área, com litros e custo por hectare quando a área é conhecida.', render:PageRateioTalhao},
-  rateioEquipamento: {label:'Por Equipamento', desc:'Consumo (L/h ou L/km) e custo por equipamento no período, para comparar eficiência e ranquear os maiores consumidores.', render:PageRateioEquipamento},
+  rateioEquipamento: {label:'Por Equipamento', desc:'Consumo (L/h ou L/km), custo e custo por hora (ou km) de cada equipamento no período, para comparar eficiência e ranquear os maiores custos.', render:PageRateioEquipamento},
 };
 
 /* ===================== ALERTAS (detecção automática) =====================
@@ -2371,6 +2404,7 @@ async function excluirCadastro(key, id){
   await loadAll();
 }
 function mensagemErroSupabase(error){
+  if(/custo/i.test(String(error?.message||'')) && /schema cache|column/i.test(String(error?.message||''))) return 'Rode combustivel_manutencao_02_custo.sql no Supabase para guardar o custo da manutenção.';
   if(error?.code==='23505') return 'Já existe um registro com esse nome (talvez nesta fazenda). Use outro nome ou edite o existente.';
   if(error?.code==='23503') return 'Não é possível excluir: existem outros cadastros vinculados a este registro.';
   if(error?.code==='23514') return 'Verifique os valores informados (ex: volume precisa ser maior que zero, ajuste não pode ser zero).';
@@ -2443,6 +2477,11 @@ async function salvarCadastro(key){
     if(f.type==='fk') val = raw ? Number(raw) : null;
     if(f.type==='date') val = raw || null;
     if(f.type==='checkbox') val = !!raw;
+    if(f.soSeTiverValor && (val===null || val==='')){
+      // campo que pode nem existir no banco ainda: não manda o null, a menos que o registro editado já tinha valor (limpar)
+      const anterior = editDraft._editId ? (state[key]||[]).find(x=>x.id===editDraft._editId) : null;
+      if(!anterior || anterior[f.key]==null) return;
+    }
     row[toSnake(f.key)] = (val===''? null : val);
   });
   if(erro){ state.cadastroError = erro; render(); return; }
