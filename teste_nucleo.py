@@ -123,7 +123,7 @@ DIVIDA_CONHECIDA = {
     ("fetchAllRows", ("AEMatriz.html", "AECombustivel.html")),
     ("gruposVisiveis", ("AEpecuaria.html", "AECana.html", "AECombustivel.html")),
     ("souAdmin", ("AEMatriz.html", "AECombustivel.html")),
-    ("temPermissao", ("AEpecuaria.html", "AECombustivel.html")),
+    ("papelPill", ("AEMatriz.html", "AECombustivel.html")),
 }
 
 

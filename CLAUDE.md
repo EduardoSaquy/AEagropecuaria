@@ -1680,8 +1680,14 @@ ANTIGA, e depois da primeira atualização do núcleo o app offline rodaria HTML
 no `teste_nucleo.py`, até alguém decidir o comportamento certo):
 - `souAdmin`: na Pecuária conta `admin` **e** `proprietario`; nos outros é só `admin`. `podeExcluir`: Pecuária admin/proprietário, Matriz/Cana/Cereais
   `acessoTotal()` (admin/proprietário).
-- **AE Combustível não conhece o papel `proprietario`** (não está em `PAPEL_LABELS` e `temPermissao` usa `souAdmin()` = só admin): quem é proprietário
-  cai na matriz de módulos como um colaborador, a mesma divergência que o comentário de `acessoTotal` conta da lavoura. Decisão do Eduardo.
+- ~~AE Combustível não conhece o papel `proprietario`~~ **RESOLVIDO (07/11/2026, ele disse "Sim")**: `temPermissao` virou uma só (em `core.js`, usa
+  `acessoTotal()`, igual Cana/Cereais; Matriz e Pecuária já davam o mesmo resultado escrito de outro jeito) e o Combustível passou a mostrar
+  "Proprietário", destacar o papel e oferecê-lo na tela de acesso. A mesma tela rebaixava a Operador quem tinha perfil que ela não listava
+  (proprietário, colaborador, consultor), sem ninguém ver: agora o seletor mantém o perfil atual (`PAPEIS_DESTA_TELA`). A tela de Usuários
+  continua só do admin (`souAdmin`). **No BANCO nada mudou**: `is_admin()` é só `papel='admin'` e `tem_permissao()` vai pela matriz do perfil
+  quando não é admin (versão dos schemas do repositório; a definição ao vivo precisa ser conferida). Se a matriz de um proprietário não tiver
+  `editar` nos módulos `combustivel_*`, o app mostra o botão e o banco recusa ao salvar. A mesma tela de acesso da **Pecuária** só lista
+  colaborador/consultor/proprietário/admin, então editar ali um gestor/operador/encarregado o rebaixa a Colaborador (não corrigido: não foi pedido).
 - `pareceErroDeRede`: a da Pecuária também reconhece `navigator.onLine === false`, `TypeError` e "load failed" (Safari); a do Matriz só olha três palavras.
 - `currentGroupKey`/`gruposVisiveis`: iguais em Pecuária, Cana e Combustível; o Cereais tem outra. `fazerLogin`: o Combustível tem outra.
 
@@ -1810,7 +1816,7 @@ apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por te
 
 ## Testes
 
-63 arquivos `teste_*.py`, 1.801 checagens (07/11/2026; a tabela abaixo lista os
+64 arquivos `teste_*.py`, 1.814 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1858,6 +1864,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_avisos_apps.py` | 88 | AEMatriz.html, AECana.html, AECereais.html, AECombustivel.html (o mesmo aviso na tela, 22 checagens por app: não trava, console e `__AVISOS__`, no topo, comum some e erro fica, texto seguro, ×/Esc, no máximo 4, sobrevive ao redesenho, confirm() nativo, 44 px no toque, cabe em 360 px) |
 | `teste_nucleo.py` | 34 | os cinco apps + `core*.js` (tags e `?v=` em dia e na ordem certa, app não repete o que o núcleo declara, **nenhuma função nova copiada entre apps** — lista `DIVIDA_CONHECIDA` só pode encolher —, `sw.js` guarda os núcleos, cada app enxerga as funções do núcleo) |
 | `teste_nucleo_offline.py` | 6 | `sw.js` + `core.js?v=` com service worker de verdade: versão nova publicada, offline abre com o núcleo NOVO (provado que o `sw.js` antigo devolvia o velho) e o cache não guarda a cópia antiga |
+| `teste_combustivel_proprietario.py` | 13 | AECombustivel.html (proprietário tem acesso total sem matriz e a tela de Usuários segue só do admin; gestor sem matriz não vê nada; "Proprietário" na lista de usuários; editar e salvar proprietário/colaborador/gestor não muda o perfil da pessoa) |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |

@@ -451,7 +451,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=092d6ef7df"></script>
+<script src="core.js?v=379f5e3060"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // Projeto único: Pecuária, Lavoura e Matriz dividem o mesmo banco desde a
@@ -1362,13 +1362,6 @@ function podeCriarLote(){ return souAdmin() || state.perfil?.papel === 'consulto
 // financeiro geral da fazenda (custo por curral, receitas/despesas,
 // investimentos etc.), que continua só admin/proprietário via souAdmin().
 function podeVerPrecoInsumo(){ return souAdmin() || state.perfil?.papel === 'consultor'; }
-function temPermissao(modulo, nivel){
-  if(!state.perfil) return false;
-  if(souAdmin()) return true;
-  const atual = state.perfil.permissoes?.[modulo];
-  if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
-  return atual==='editar';
-}
 function podeEditarAcao(type){
   // "Manejo: Editar" libera as ações de manejo (ver MANEJO_ACAO_TYPES)
   // sozinho -- não as de Insumos/Dietas/Financeiro, que continuam exigindo

@@ -270,7 +270,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=092d6ef7df"></script>
+<script src="core.js?v=379f5e3060"></script>
 <script>
 /* ===================== SUPABASE =====================
  * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
@@ -759,13 +759,6 @@ function render(){
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
 function souAdmin(){ return state.perfil?.papel === 'admin'; }
-function temPermissao(modulo, nivel){
-  if(!state.perfil) return false;
-  if(souAdmin()) return true;
-  const atual = state.perfil.permissoes?.[modulo];
-  if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
-  return atual==='editar';
-}
 
 const PERFIL_CACHE_KEY = 'aecombustivel_perfil_cache_v1';
 // ---- Abertura sem internet (login e perfil guardados no aparelho) ----
@@ -2458,10 +2451,13 @@ const MODULOS_PERMISSAO = [
   ['combustivel_auditoria','Trilha de Auditoria'],
   ['combustivel_manutencao','Manutenção'],
 ];
-const PAPEL_LABELS = {admin:'Administrador', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
+const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
+// Perfis que a lista da tela de acesso oferece. Quem tem outro perfil (colaborador, consultor...) aparece com o dele
+// marcado: sem isso o seletor cairia no primeiro item (Operador) e Salvar rebaixaria a pessoa sem ninguem ver.
+const PAPEIS_DESTA_TELA = ['operador', 'encarregado', 'gestor', 'proprietario', 'admin'];
 function papelPill(papel){
   const label = PAPEL_LABELS[papel] || papel;
-  const classe = papel==='admin' ? 'pill-cat' : (papel==='gestor' ? 'pill-warn' : 'pill-ok');
+  const classe = (papel==='admin' || papel==='proprietario') ? 'pill-cat' : (papel==='gestor' ? 'pill-warn' : 'pill-ok');
   return `<span class="pill ${classe}">${label}</span>`;
 }
 function PageAdminUsuarios(){
@@ -2520,11 +2516,13 @@ function ModalPermissoes(){
             <option value="operador" ${d.papel==='operador'?'selected':''}>Operador</option>
             <option value="encarregado" ${d.papel==='encarregado'?'selected':''}>Encarregado</option>
             <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
+            <option value="proprietario" ${d.papel==='proprietario'?'selected':''}>Proprietário</option>
             <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
+            ${PAPEIS_DESTA_TELA.includes(d.papel) || !d.papel ? '' : `<option value="${esc(d.papel)}" selected>${esc(PAPEL_LABELS[d.papel] || d.papel)}</option>`}
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>
-        <p class="hint">Administrador tem acesso total a todos os módulos — a tabela abaixo vale para os demais perfis.</p>
+        <p class="hint">Administrador e Proprietário têm acesso total a todos os módulos — a tabela abaixo vale para os demais perfis.</p>
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>

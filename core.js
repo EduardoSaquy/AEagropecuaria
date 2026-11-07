@@ -98,6 +98,16 @@ function aparelhoSemRede(){ return typeof navigator!=='undefined' && navigator.o
 function acessoTotal(){
   return state.perfil?.papel === 'admin' || state.perfil?.papel === 'proprietario';
 }
+// Pode ver/editar o modulo? Administrador e Proprietario sempre; os demais pela matriz de modulos do perfil.
+// Uma so para os cinco apps (07/11/2026): o Combustivel usava souAdmin() e por isso tratava o proprietario como
+// colaborador comum; a Pecuaria e o Matriz tinham o mesmo resultado escrito de outro jeito.
+function temPermissao(modulo, nivel){
+  if(!state.perfil) return false;
+  if(acessoTotal()) return true;
+  const atual = state.perfil.permissoes?.[modulo];
+  if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
+  return atual==='editar';
+}
 // Operador pode editar (quando tiver permissão do módulo), mas nunca pode
 // excluir nada já registrado -- o botão Excluir some pra esse papel, mesmo
 // onde antes aparecia junto com o Editar. Não afeta "Remover da fila"

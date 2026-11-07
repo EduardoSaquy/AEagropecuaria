@@ -249,13 +249,6 @@ function souAdmin(){ return state.perfil?.papel === 'admin'; }
 // banco aplica em pode_excluir(); aqui e so para nao mostrar um botao que
 // vai falhar - e falhar calado, porque a RLS nega delete sem dar erro.
 function podeExcluir(){ return acessoTotal(); }
-function temPermissao(modulo, nivel){
-  if(!state.perfil) return false;
-  if(acessoTotal()) return true;
-  const atual = state.perfil.permissoes?.[modulo];
-  if(nivel==='visualizar') return atual==='visualizar' || atual==='editar';
-  return atual==='editar';
-}
 async function loadPerfil(){
   const uid = state.session?.user?.id;
   if(!uid){ state.perfil = null; return; }
