@@ -1134,6 +1134,9 @@ async function carregarResultadoPecuaria(){
 
     state.resultados.pecuaria = {loading:false, erro:'', mensal,
       despesasFinanceiro: despesas, receitasFinanceiro: receitasPec,
+      // compra de animais e outros investimentos: ficam FORA do resultado acima (despesa/receita)
+      // e aparecem à parte, no resultado de caixa (ver investimentosPecuariaNoPeriodo)
+      investimentosFinanceiro: lanc.filter(l=>l.tipo==='investimento'),
       categoriaSafra: 'fixa', receitaLabelPadrao: 'Receita'};
   } catch(e){
     state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
@@ -2954,6 +2957,61 @@ function resultadoTotal(campo){
     return soma + (r && !r.erro && r[campo]!=null ? r[campo] : 0);
   }, 0);
 }
+// ===== Pecuária: compra de animais fora do resultado (06/11/2026) =====
+// O resultado (receita − despesa) NÃO conta investimento, e a compra de animais é investimento: a
+// Pecuária de 2025/26 aparecia com lucro de +R$ 1,0 mi quando, em caixa, foi −R$ 1,1 mi. Aqui a
+// compra aparece à parte e o resultado de caixa = resultado − investimentos. O resultado
+// econômico (custo do lote casado com a venda, por cabeça) entra quando cada compra tiver lote e
+// nº de cabeças.
+// A classe vem do centro de custo: "COMPRA DE MATRIZES..." = matriz (ativo; só vira resultado no
+// descarte, sem depreciar: decisão do Eduardo, 06/11/2026); "COMPRA DE ANIMAIS..." = animal de giro
+// (recria, engorda, abate); "INVESTIMENTO EM ANIMAIS" (centro lançado à mão) ainda não diz qual
+// das duas; o resto é outro investimento (equinos, consórcio...).
+function classeInvestimentoPecuaria(centroCustoId){
+  const nome = maiusculoSemAcento(nomeCentroCusto(centroCustoId));
+  if(nome.startsWith('COMPRA DE MATRIZES')) return 'matriz';
+  if(nome.startsWith('COMPRA DE ANIMAIS')) return 'giro';
+  if(nome === 'INVESTIMENTO EM ANIMAIS') return 'animais';
+  return 'outro';
+}
+function investimentosPecuariaNoPeriodo(periodo=state.periodo){
+  const raw = state.resultados.pecuaria;
+  if(!raw || raw.loading || raw.erro || !raw.investimentosFinanceiro) return null;
+  const itens = itensInvestimentoNoPeriodo(raw.investimentosFinanceiro, periodo);
+  const porClasse = {giro:0, matriz:0, animais:0, outro:0};
+  itens.forEach(l=>{ porClasse[classeInvestimentoPecuaria(l.centroCustoId)] += Number(l.valor||0); });
+  return {...porClasse, total: porClasse.giro+porClasse.matriz+porClasse.animais+porClasse.outro, n: itens.length};
+}
+function BlocoInvestimentosPecuaria(r){
+  const inv = investimentosPecuariaNoPeriodo();
+  if(!inv || inv.total <= 0) return '';
+  const linha = (rotulo, valor)=> valor > 0 ? `<tr><td>${rotulo}</td><td class="mono" style="text-align:right;">R$ ${fmt(valor)}</td></tr>` : '';
+  const caixa = r.resultado - inv.total;
+  return `
+  <div data-bloco-investimentos-pecuaria="1" style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cinza-claro);">
+    <p class="hint" style="margin-bottom:6px;"><strong>Investimentos da Pecuária</strong> (ficam fora do resultado acima)</p>
+    <table style="font-size:12.5px;">
+      <tbody>
+        ${linha('Compra de animais de giro (recria, engorda, abate)', inv.giro)}
+        ${linha('Compra de matrizes', inv.matriz)}
+        ${linha('Compra de animais — falta dizer se é matriz ou giro', inv.animais)}
+        ${linha('Outros investimentos (equinos, consórcio...)', inv.outro)}
+        <tr><td style="font-weight:600;">Total investido</td><td class="mono" style="text-align:right; font-weight:600;" data-total-investido-pecuaria="1">R$ ${fmt(inv.total)}</td></tr>
+      </tbody>
+    </table>
+    <div class="stat-card" style="margin-top:12px;">
+      <div class="stat-label">Resultado de caixa</div>
+      <div class="stat-value ${caixa>=0?'bom':'alerta'}" style="font-size:19px;" data-resultado-caixa-pecuaria="1">R$ ${fmt(caixa)}</div>
+      <div class="hint" style="margin-top:4px;">Resultado − investimentos: quanto sobrou ou faltou no caixa. O custo dos animais só vira resultado quando o lote é vendido, e a matriz só no descarte.</div>
+    </div>
+  </div>`;
+}
+// Aviso na primeira aba dos Resultados: o resultado ali não conta a compra de animais.
+function AvisoInvestimentoPecuaria(){
+  const inv = investimentosPecuariaNoPeriodo(), r = resultadoOperacaoNoPeriodo('pecuaria');
+  if(!inv || inv.total <= 0 || !r || r.erro) return '';
+  return `<p class="hint" style="margin-top:10px;" data-aviso-investimento-pecuaria="1"><strong>A Pecuária investiu R$ ${fmt(inv.total)}</strong> no período (compra de animais e outros), fora do resultado acima. Em caixa, o resultado da Pecuária foi <strong>R$ ${fmt(r.resultado - inv.total)}</strong>. Detalhe em Resultados &gt; Operacional.</p>`;
+}
 function algumResultadoCarregando(){
   return state.resultados.pecuaria.loading || state.resultados.cana.loading || state.resultados.cereais.loading || state.resultados.combustivelPorFrente.loading;
 }
@@ -3192,6 +3250,7 @@ function PageResultadosGeral(){
       </tbody>
     </table>
   </div>
+  ${AvisoInvestimentoPecuaria()}
   <p class="hint" style="margin-top:14px;">Números de Pecuária, Cana e Cereais/Grãos calculados a partir da receita e despesa própria lançada em cada app. O custo de Combustível fica de propósito fora daqui — é controle de estoque/consumo, não uma despesa lançada no Financeiro. Não inclui investimentos (compra de animais, máquinas etc.) nem outro rateio por área — pra esse detalhe, use a aba Resultados de cada app.</p>
   <div class="card card-pad" style="margin-top:18px;">
     <p class="stat-label" style="margin-bottom:2px;">Histórico da empresa — ano a ano</p>
@@ -3280,6 +3339,7 @@ function CardResultadoOperacional(slug){
         ${r.despesaDetalhe.map(d=>`<tr><td>${esc(d.label)}</td><td class="mono" style="text-align:right;">R$ ${fmt(d.valor)}</td></tr>`).join('')}
       </tbody>
     </table>` : ''}
+    ${slug==='pecuaria' ? BlocoInvestimentosPecuaria(r) : ''}
     `}
   </div>`;
 }
