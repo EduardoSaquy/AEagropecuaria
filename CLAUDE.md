@@ -1266,7 +1266,7 @@ compra de animais e as travas do banco.
   (`ESPERA_BUSCA_MS`): o texto vale na hora, o redesenho vem uma vez só e o foco volta ao campo. Medido com
   25.000 lançamentos: abrir despesas 2,6 s → 0,11 s no PC e ~23 s → 0,8 s com a CPU 4x mais lenta; tecla da
   busca 1 s → 1 ms; 287.733 → 1.621 elementos. `teste_financeiro_paginado.py` (24 checagens, falha no
-  código anterior). Continuam lentos (PC): Relatórios 0,9 s e Empresa 2,0 s na primeira abertura.
+  código anterior). Relatórios e Empresa foram resolvidos na "carga leve" abaixo.
 - **`banco_travas_01_lancamentos.sql`** (ensaiado num Postgres descartável, com o papel `authenticated` e a
   tabela das partes fechada como em produção): (1) índice único parcial de `erp_id`; (2) lançamento em
   atividade `geral` (valor de R$ 1,00 ou mais) precisa ter as partes do rateio; (3) se tem partes, elas
@@ -1277,6 +1277,50 @@ compra de animais e as travas do banco.
   normal de um `geral` do ERP. **Recusa instalar** se hoje houver `erp_id` repetido, `geral` sem partes,
   partes que não fecham, ou conta em aberto com parte em Geral (a baixa dela geraria `geral` sem partes). Desfazer no
   fim do arquivo. **Se o ERP for reimportado: gravar o lançamento e as partes na mesma transação.**
+  **INSTALADAS no banco real em 06/11/2026** (ele rodou: os 7 itens da conferência final deram OK).
+- **Resultado da `saude_do_banco_02_detalhe.sql` (ele rodou em 06/11/2026)**:
+  - **A4** (receita em centro de saída, 22 lançamentos, R$ 339.094,22): todos do ERP, `geral`, de abril/2023
+    (alguns de 2023/2024), em nome de familiares e da empresa dele: 18 "AJUSTE DE SALDO BANCÁRIO" (R$ 299.890,29),
+    3 "OUTRAS MOVIMENTAÇÕES DE CAIXA" (R$ 37.203,93) e 1 manutenção da casa-sede (R$ 2.000,00). Parece acerto
+    de conta no ERP, não venda. **Aguarda ele dizer se contam como receita; não mexer.**
+  - **A8** ("sobraria R$ 615 mil se ficasse um só de cada" é teto, não duplicata): R$ 202.643,76 são exatamente
+    as 4 duplas que ele mandou manter (#497/#20805, #496/#20806, #500/#21098, #3018/#21300); as tarifas do BB
+    (R$ 1.500 ×3 e R$ 1.140 ×3, ids 24797 a 24802) são as 3 partes iguais que ele decidiu; salários repetidos
+    (R$ 389,71 ×5, ids 836/848/860/872; R$ 2.241,90 ×2, ids 701/702) provavelmente são alocação por fazenda (a
+    consulta não separa fazenda). **Só ele confere no ERP**: R$ 194.320 ×2 (30/06/2023, #14296/#14298), R$ 50.000
+    ×2 (12/08/2024, #17113/#17115) e combustível R$ 11.100 ×2 à mão (15/03/2026, #2570/#2571). Nomes: só na pasta
+    privada.
+  - **B2** conta #107 (bateria do trator BH180, R$ 1.100): duas partes idênticas somando R$ 2.200.
+    `corrige_conta_107.sql` apaga a de maior id (com guardas e cópia); ensaiado. A trava `trg_rateio_fecha` só
+    olha mudança nas partes: editar o VALOR do título sem tocar nas partes passa. Fechar isso pede uma gravação
+    atômica do título (hoje apaga e regrava as partes em chamadas separadas).
+  - **D2** 10 lotes sem pesagem há 60 dias: os de matrizes/cria não são pesados de rotina (a checagem deveria
+    olhar só engorda). **D3** pesagens #9 (lote #3) e #10 (lote #33) de 11/08/2026 com 0 kg: aguardam ele.
+- **Carga leve (06/11/2026, `AEMatriz.html`, `teste_carga_leve.py` 41 checagens, falha no código anterior)**. Medido
+  com 25.000 lançamentos: um `loadAll()` fazia 120 consultas, baixava 75 mil linhas e redesenhava 18 vezes, e
+  rodava depois de TODA gravação.
+  - `loadAll(grupos)`: sem argumento recarrega tudo (entrar no app); com `['cadastros']`, `['lancamentos']`,
+    `['financiamentos']` e/ou `['contas']` só o que mudou (`GRUPOS_AO_SALVAR` para o salvar genérico). Baixa de conta,
+    juros de parcela e exclusão de contrato passam `'lancamentos'` junto (criam ou apagam lançamento).
+  - A visão rateada é lida UMA vez por carga (`lerRateadosUmaVez`, `rateadosDaAtividade`): Relatórios e os
+    resultados de Pecuária/Cana/Cereais filtram na memória (eram 4 leituras). Completa: 120 → 93 consultas,
+    75 mil → 50 mil linhas, 18 → 2 desenhos. Salvar conta/contrato/funcionário: 3 a 8 consultas, quase 0 linhas.
+  - `atualizarLancamentos(ids)` (salvar, dividir e excluir lançamento): busca só os ids no banco e deixa a memória
+    igual à de um recarregamento completo (o banco manda; o que ele não devolve sai; exclusão que a permissão
+    barrou continua na tela). Efeito colateral aceito: gravação de OUTRA pessoa só aparece na próxima carga completa;
+    por isso voltar à aba depois de 10 min (`MINUTOS_ATE_RECARREGAR`, sem formulário aberto) recarrega tudo.
+    A venda de animais continua com `loadAll(['lancamentos'])` (mexe em lote e abate).
+  - `renderCarga()`: os carregamentos de fundo pedem desenho e os pedidos juntos viram um (60 ms).
+  - `vigentesNoMes` agrupa as despesas uma vez por lista (`gruposDeVigentes`, WeakMap) e `doTipo` filtra por tipo
+    uma vez por lista; `lancamentosFiltradosRelatorio` é guardada. Mesma resposta e mesma ordem (fuzz de 2.800
+    comparações no teste). Listas do state são TROCADAS, nunca alteradas no lugar: não mutar `state.lancamentos`.
+  - Ordenar a lista do Financeiro por data com `localeCompare` custava 160 ms: virou comparação direta (ISO).
+  - Medido (PC, 25 mil): Relatórios 942 → 59 ms; Empresa (1ª vez) 2.045 → 176 ms; Operacional 232 → 20 ms.
+- **Compra de animais (decisões dele, 06/11/2026)**: matriz só é reconhecida no DESCARTE (sem depreciar: "ela vale o
+  valor dela em carne"); o formulário de compra ganha lote e nº de cabeças (colunas `lote_id` e `quantidade` já
+  existem); ele pediu a LISTA das compras para separar matriz de giro: `compra_animais_01_lista.sql` (só leitura,
+  ensaiado), a sugestão vem do centro (COMPRA DE MATRIZES = matriz; COMPRA DE ANIMAIS = giro). Custeio que pagou os
+  animais é dívida em Financiamentos (juros é a despesa).
 
 ### Pecuária: fila offline sem duplicar (client_uuid)
 
@@ -1418,7 +1462,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-44 arquivos `teste_*.py`, 1.079 checagens (06/11/2026; a tabela abaixo lista os
+45 arquivos `teste_*.py`, 1.120 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1462,6 +1506,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_carga_leve.py` | 41 | AEMatriz.html (carga por grupo, visão rateada lida uma vez, `atualizarLancamentos` igual ao recarregamento completo, `vigentesNoMes` igual à versão antiga, voltar à aba depois de 10 min) |
 | `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 

@@ -687,7 +687,51 @@ async function fetchAllRows(consulta){
   return { data: todas, error: null };
 }
 
-async function loadAll(){
+// Grupos de dados que o loadAll() sabe recarregar. Sem argumento recarrega tudo, como
+// sempre foi (entrar no app, trocar de usuário). Quem sabe exatamente o que gravou passa
+// só o grupo: salvar uma conta, um contrato ou um funcionário não precisa baixar de novo
+// os 25 mil lançamentos e as três cópias da visão rateada (eram ~75 mil linhas, 120
+// consultas e 18 redesenhos por gravação — medido em 06/11/2026).
+//   cadastros       fazendas, atividades, talhões, culturas, perfis, funcionários, centros de custo
+//   lancamentos     lançamentos, lotes e tudo que se calcula deles (resultados, rebanho, relatórios)
+//   financiamentos  contratos, parcelas e movimentos do ERP
+//   contas          entidades, contas bancárias, títulos, rateios e baixas
+// Baixa de conta, juros de parcela e exclusão de contrato criam ou apagam lançamento (pelo
+// banco ou pelo app): esses passam 'lancamentos' junto.
+const GRUPOS_AO_SALVAR = {fazenda:['cadastros'], centro:['cadastros'], funcionario:['cadastros'],
+  papelUsuario:['cadastros'], lancamento:['lancamentos'], financiamento:['financiamentos']};
+
+// A visão rateada tem uma linha por parte de cada lançamento. Relatórios e os resultados de
+// Pecuária, Cana e Cereais usam as MESMAS linhas (cada um só filtra a sua atividade), então
+// cada carga lê a visão uma vez só. Antes eram quatro leituras: a inteira e uma por atividade.
+// A ordem (lancamento_id, rateio_id) é a mesma de antes, e filtrar na memória preserva ela.
+let leituraRateados = null;
+function lerRateadosUmaVez(){
+  if(!leituraRateados) leituraRateados = fetchAllRows(()=>
+    db.from('lancamentos_rateados').select('*').order('lancamento_id').order('rateio_id'));
+  return leituraRateados;
+}
+async function rateadosDaAtividade(atividade){
+  const r = await lerRateadosUmaVez();
+  if(r.error) return r;
+  return {data: (r.data||[]).filter(l=>l.atividade===atividade), error: null};
+}
+
+// Os carregamentos de fundo (resultados, indicadores, rebanho...) pediam um desenho cada um,
+// no começo e no fim: 18 por loadAll(), e nas telas pesadas (Relatórios, Empresa) cada
+// desenho custa de 1 a 2 segundos. Pedidos que chegam juntos viram um desenho só.
+const ESPERA_RENDER_CARGA_MS = 60;
+let timerRenderCarga = null;
+function renderCarga(){
+  if(timerRenderCarga) return;
+  timerRenderCarga = setTimeout(()=>{ timerRenderCarga = null; render(); }, ESPERA_RENDER_CARGA_MS);
+}
+
+async function loadAll(grupos){
+  const quer = g => !grupos || grupos.includes(g);
+  const nada = Promise.resolve({data:null, error:null});   // grupo que não foi pedido: não consulta e não mexe no estado
+  const vazio = Promise.resolve({data:[], error:null});    // grupo pedido, mas sem permissão
+  const buscar = (grupo, pode, consulta) => !quer(grupo) ? nada : (pode ? consulta() : vazio);
   state.apps = APPS_REGISTRO;
   // Centro de custo também carrega pra quem só tem Financiamentos (sem
   // Financeiro): marcar parcela como paga precisa achar o centro "Juros e
@@ -698,34 +742,38 @@ async function loadAll(){
   // recebimentos) pra quem só devia mexer em boleto -- decisão do Eduardo
   // em 01/09/2026.
   const vePecuniaOuFinanciamentos = temPermissao('matriz_financeiro','visualizar') || temPermissao('matriz_financiamentos','visualizar') || temPermissao('contas','visualizar');
+  const veFinanceiro = temPermissao('matriz_financeiro','visualizar');
+  const veFuncionarios = temPermissao('matriz_funcionarios','visualizar');
+  const veFinanciamentos = temPermissao('matriz_financiamentos','visualizar');
   const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec, fin, parcFin] = await Promise.all([
-    db.from('fazendas').select('*').order('nome'),
-    db.from('fazenda_atividades').select('*'),
-    fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id')),
-    db.from('culturas').select('id, nome, frente, ativo'),
-    souAdmin() ? db.from('profiles').select('*').order('nome') : Promise.resolve({data:[]}),
-    temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionarios').select('*').order('nome') : Promise.resolve({data:[]}),
-    temPermissao('matriz_funcionarios','visualizar') ? db.from('funcionario_atividades').select('*') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financeiro','visualizar') ? fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').order('data', {ascending:false, nullsFirst:true}).order('id')) : Promise.resolve({data:[]}),
+    buscar('cadastros', true, ()=>db.from('fazendas').select('*').order('nome')),
+    buscar('cadastros', true, ()=>db.from('fazenda_atividades').select('*')),
+    buscar('cadastros', true, ()=>fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id'))),
+    buscar('cadastros', true, ()=>db.from('culturas').select('id, nome, frente, ativo')),
+    buscar('cadastros', souAdmin(), ()=>db.from('profiles').select('*').order('nome')),
+    buscar('cadastros', veFuncionarios, ()=>db.from('funcionarios').select('*').order('nome')),
+    buscar('cadastros', veFuncionarios, ()=>db.from('funcionario_atividades').select('*')),
+    buscar('lancamentos', veFinanceiro, ()=>fetchAllRows(()=>db.from('lancamentos_financeiros').select('*').order('data', {ascending:false, nullsFirst:true}).order('id'))),
     // Carrega inclusive os inativos: sem eles a tela de Centros de Custo
     // nao teria como mostrar nem reativar o que foi desativado. Quem filtra
     // por ativo e o seletor do lancamento, logo abaixo.
-    vePecuniaOuFinanciamentos ? db.from('centros_custo').select('*').order('nome') : Promise.resolve({data:[]}),
+    buscar('cadastros', vePecuniaOuFinanciamentos, ()=>db.from('centros_custo').select('*').order('nome')),
     // numero_animais, destino e data_fim sao do lancamento de venda de animais:
     // ele precisa saber quantas cabecas o lote tem e se ja foi encerrado.
-    temPermissao('matriz_financeiro','visualizar') ? db.from('lotes').select('id, nome, numero_animais, destino, sexo, data_fim').order('nome') : Promise.resolve({data:[]}),
-    temPermissao('matriz_financiamentos','visualizar') ? db.from('financiamentos').select('*').order('data_contratacao', {ascending:false}) : Promise.resolve({data:[]}),
-    temPermissao('matriz_financiamentos','visualizar') ? fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero').order('id')) : Promise.resolve({data:[]}),
+    buscar('lancamentos', veFinanceiro, ()=>db.from('lotes').select('id, nome, numero_animais, destino, sexo, data_fim').order('nome')),
+    buscar('financiamentos', veFinanciamentos, ()=>db.from('financiamentos').select('*').order('data_contratacao', {ascending:false})),
+    buscar('financiamentos', veFinanciamentos, ()=>fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero').order('id'))),
   ]);
   // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
   // devolve vazio e a consulta e desperdicio de rede.
-  const [ents, ctas, tits, rats, bxs] = podeVerContas() ? await Promise.all([
-    fetchAllRows(()=>db.from('entidades').select('*').order('nome').order('id')),
-    db.from('contas_bancarias').select('*').order('nome'),
-    fetchAllRows(()=>db.from('titulos').select('*').order('vencimento').order('id')),
-    fetchAllRows(()=>db.from('titulo_rateios').select('*').order('id')),
-    fetchAllRows(()=>db.from('titulo_baixas').select('*').order('id')),
-  ]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]}];
+  const [ents, ctas, tits, rats, bxs] = !quer('contas') ? [nada, nada, nada, nada, nada]
+    : podeVerContas() ? await Promise.all([
+      fetchAllRows(()=>db.from('entidades').select('*').order('nome').order('id')),
+      db.from('contas_bancarias').select('*').order('nome'),
+      fetchAllRows(()=>db.from('titulos').select('*').order('vencimento').order('id')),
+      fetchAllRows(()=>db.from('titulo_rateios').select('*').order('id')),
+      fetchAllRows(()=>db.from('titulo_baixas').select('*').order('id')),
+    ]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]}];
   // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
   // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
   // apresentado com a mesma confiança de um número real.
@@ -737,39 +785,104 @@ async function loadAll(){
     console.error('Erro ao carregar dados da matriz:', erroCarregamento);
     alert('Não foi possível carregar os dados agora. Verifique a conexão e recarregue a página.');
   }
-  state.fazendasLavoura = (faz.data||[]).map(rowToFazendaLavoura);
-  state.fazendaAtividades = (fazAtiv.data||[]).map(rowToFazendaAtividade);
-  state.talhoes = (tal.data||[]).map(rowToTalhao);
-  state.culturas = cul.data||[];
-  state.perfis = (perfis.data||[]).map(rowToPerfil);
-  state.funcionarios = (func.data||[]).map(rowToFuncionario);
-  state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
-  state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
-  state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
-  state.lotesPec     = (lotPec.data||[]).map(rowToLotePec);
-  state.entidades       = (ents.data||[]).map(rowToEntidade);
-  state.contasBancarias = (ctas.data||[]).map(rowToContaBancaria);
-  state.titulos         = (tits.data||[]).map(rowToTitulo);
-  state.rateios         = (rats.data||[]).map(rowToRateio);
-  state.baixas          = (bxs.data||[]).map(rowToBaixa);
-  state.financiamentos = (fin.data||[]).map(rowToFinanciamento);
-  state.parcelasFinanciamento = (parcFin.data||[]).map(rowToParcela);
+  if(quer('cadastros')){
+    state.fazendasLavoura = (faz.data||[]).map(rowToFazendaLavoura);
+    state.fazendaAtividades = (fazAtiv.data||[]).map(rowToFazendaAtividade);
+    state.talhoes = (tal.data||[]).map(rowToTalhao);
+    state.culturas = cul.data||[];
+    state.perfis = (perfis.data||[]).map(rowToPerfil);
+    state.funcionarios = (func.data||[]).map(rowToFuncionario);
+    state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
+    state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
+  }
+  if(quer('lancamentos')){
+    state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
+    state.lotesPec     = (lotPec.data||[]).map(rowToLotePec);
+  }
+  if(quer('contas')){
+    state.entidades       = (ents.data||[]).map(rowToEntidade);
+    state.contasBancarias = (ctas.data||[]).map(rowToContaBancaria);
+    state.titulos         = (tits.data||[]).map(rowToTitulo);
+    state.rateios         = (rats.data||[]).map(rowToRateio);
+    state.baixas          = (bxs.data||[]).map(rowToBaixa);
+  }
+  if(quer('financiamentos')){
+    state.financiamentos = (fin.data||[]).map(rowToFinanciamento);
+    state.parcelasFinanciamento = (parcFin.data||[]).map(rowToParcela);
+  }
   render();
-  // Indicadores do Painel só buscam o app se a pessoa tiver a permissão
-  // daquele app específico — evita chamar o banco de outro app sem
-  // necessidade (e sem permissão) só pra descartar o resultado depois.
-  if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
-  carregarResultadoPecuaria();
-  carregarReproducaoPecuaria();
-  carregarEstoquePecuaria();
-  if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
-  carregarResultadoCana();
-  if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
-  carregarResultadoCereais();
-  carregarCombustivel();
-  carregarLancamentosRateados();
-  carregarMovimentosFinanciamento();
+  if(quer('lancamentos')){
+    leituraRateados = null;   // cada carga lê a visão rateada de novo, uma vez
+    // Indicadores do Painel só buscam o app se a pessoa tiver a permissão
+    // daquele app específico — evita chamar o banco de outro app sem
+    // necessidade (e sem permissão) só pra descartar o resultado depois.
+    if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
+    carregarResultadoPecuaria();
+    carregarReproducaoPecuaria();
+    carregarEstoquePecuaria();
+    if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
+    carregarResultadoCana();
+    if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
+    carregarResultadoCereais();
+    carregarCombustivel();
+    carregarLancamentosRateados();
+  }
+  if(quer('financiamentos')) carregarMovimentosFinanciamento();
+  if(!grupos) ultimaCargaCompleta = Date.now();
 }
+
+// Gravou, editou ou apagou lançamentos: busca só eles (e as partes rateadas deles) e acerta a
+// memória, em vez de baixar de novo os 25 mil (50 mil linhas com a visão rateada). O banco
+// manda: o que ele devolve vira o estado e o que não devolve sai (inclusive uma exclusão que a
+// permissão não deixou fazer). Qualquer dúvida cai no recarregamento completo.
+// A ordem é a mesma das consultas de loadAll(): data mais nova primeiro com os sem data (recorrentes)
+// no começo, e na visão rateada lancamento_id, rateio_id (sem rateio por último).
+function ordemDosLancamentos(a, b){
+  if(!a.data !== !b.data) return !a.data ? -1 : 1;
+  if(a.data !== b.data) return a.data < b.data ? 1 : -1;
+  return a.id - b.id;
+}
+function ordemDaVisaoRateada(a, b){
+  if(a.lancamento_id !== b.lancamento_id) return a.lancamento_id - b.lancamento_id;
+  const ra = a.rateio_id ?? Infinity, rb = b.rateio_id ?? Infinity;
+  return ra === rb ? 0 : (ra < rb ? -1 : 1);
+}
+async function atualizarLancamentos(ids){
+  ids = [...new Set((ids||[]).map(Number).filter(Boolean))];
+  if(!ids.length || !leituraRateados || !temPermissao('matriz_financeiro','visualizar')) return loadAll(['lancamentos']);
+  let lRes, rRes, antes;
+  try{
+    [lRes, rRes, antes] = await Promise.all([
+      db.from('lancamentos_financeiros').select('*').in('id', ids),
+      fetchAllRows(()=>db.from('lancamentos_rateados').select('*').in('lancamento_id', ids).order('lancamento_id').order('rateio_id')),
+      leituraRateados,
+    ]);
+  } catch(e){
+    return loadAll(['lancamentos']);
+  }
+  if(lRes.error || rRes.error || antes.error) return loadAll(['lancamentos']);
+  const sai = new Set(ids);
+  state.lancamentos = state.lancamentos.filter(l=>!sai.has(l.id))
+    .concat((lRes.data||[]).map(rowToLancamento)).sort(ordemDosLancamentos);
+  const visao = (antes.data||[]).filter(r=>!sai.has(r.lancamento_id))
+    .concat(rRes.data||[]).sort(ordemDaVisaoRateada);
+  leituraRateados = Promise.resolve({data: visao, error: null});
+  if(temPermissao('matriz_resultados','visualizar')) state.lancamentosRateados = visao.map(rowToLancamento);
+  render();
+  carregarResultadoPecuaria();
+  carregarResultadoCana();
+  carregarResultadoCereais();
+}
+
+// Outra pessoa pode ter gravado enquanto esta aba ficava aberta: como gravar aqui já não baixa
+// tudo de novo, quem volta para a aba depois de um tempo recebe uma carga completa.
+const MINUTOS_ATE_RECARREGAR = 10;
+let ultimaCargaCompleta = Date.now();
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState !== 'visible') return;
+  if(!state.session || !state.perfil?.ativo || state.modal) return;
+  if(Date.now() - ultimaCargaCompleta > MINUTOS_ATE_RECARREGAR * 60000) loadAll();
+});
 
 // Entrada de empréstimo e amortização do principal (aba Resultados > Empresa).
 // Ficam fora de lancamentos_financeiros de propósito (ver CLAUDE.md: só o
@@ -787,7 +900,7 @@ async function carregarMovimentosFinanciamento(){
     state.movimentosFinanciamento = [];
     state.movimentosFinanciamentoOk = false;
   }
-  render();
+  renderCarga();
 }
 
 // Todas as atividades (inclusive 'geral' — administrativo, nunca rateado
@@ -799,14 +912,13 @@ async function carregarMovimentosFinanciamento(){
 async function carregarLancamentosRateados(){
   if(!temPermissao('matriz_resultados','visualizar')) return;
   try{
-    const { data, error } = await fetchAllRows(()=>
-      db.from('lancamentos_rateados').select('*').order('lancamento_id').order('rateio_id'));
+    const { data, error } = await lerRateadosUmaVez();
     if(error) throw error;
     state.lancamentosRateados = (data||[]).map(rowToLancamento);
   } catch(e){
     console.error('Erro ao carregar lancamentos_rateados (Relatórios):', e);
   }
-  render();
+  renderCarga();
 }
 
 // frente de uma cultura ('cana' | 'graos' | 'pecuaria' | null) — mesma
@@ -822,7 +934,7 @@ function talhoesPorFrente(frente){
 
 async function carregarIndicadoresPecuaria(){
   state.indicadores.pecuaria = {...state.indicadores.pecuaria, loading:true, erro:''};
-  render();
+  renderCarga();
   try{
     const [lotesRes, dietasRes] = await Promise.all([
       dbPecuaria.from('lotes').select('numero_animais, data_fim'),
@@ -840,7 +952,7 @@ async function carregarIndicadoresPecuaria(){
   } catch(e){
     state.indicadores.pecuaria = {loading:false, erro:'Não foi possível carregar agora.', lotesAtivos:null, totalAnimais:null, dietas:null};
   }
-  render();
+  renderCarga();
 }
 
 // Mesmo padrão de carregarIndicadoresPecuaria(), lendo do banco do Lavoura
@@ -849,7 +961,7 @@ async function carregarIndicadoresPecuaria(){
 // + state.culturas) filtrado por frente, em vez de bater no banco de novo.
 async function carregarIndicadoresCana(){
   state.indicadores.cana = {...state.indicadores.cana, loading:true, erro:''};
-  render();
+  renderCarga();
   try{
     const [planRes, colRes] = await Promise.all([
       db.from('plantios_cana').select('id, ativo'),
@@ -879,7 +991,7 @@ async function carregarIndicadoresCana(){
   } catch(e){
     state.indicadores.cana = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, toneladasMes:null};
   }
-  render();
+  renderCarga();
 }
 
 // Mesmo padrão de carregarIndicadoresCana(), lendo as tabelas de grãos do
@@ -889,7 +1001,7 @@ async function carregarIndicadoresCana(){
 // AELavoura.html usa internamente pra essa frente).
 async function carregarIndicadoresCereais(){
   state.indicadores.cereais = {...state.indicadores.cereais, loading:true, erro:''};
-  render();
+  renderCarga();
   try{
     const [planRes, colRes] = await Promise.all([
       db.from('plantios_graos').select('id, ativo'),
@@ -913,7 +1025,7 @@ async function carregarIndicadoresCereais(){
   } catch(e){
     state.indicadores.cereais = {loading:false, erro:'Não foi possível carregar agora.', talhoes:null, plantiosAtivos:null, sacasMes:null};
   }
-  render();
+  renderCarga();
 }
 
 // Resultado (receita x despesa) da pecuária, lido direto do banco dela —
@@ -941,7 +1053,7 @@ function mesesJanela(){
 }
 async function carregarResultadoPecuaria(){
   state.resultados.pecuaria = {...state.resultados.pecuaria, loading:true, erro:''};
-  render();
+  renderCarga();
   try{
     const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, vendasRes] = await Promise.all([
       dbPecuaria.from('ingredientes').select('id, preco_kg'),
@@ -951,7 +1063,7 @@ async function carregarResultadoPecuaria(){
       // gerencial da Pecuária saía menor sem aviso)
       fetchAllRows(()=>dbPecuaria.from('pasto').select('data, dieta_id, quantidade').order('id')),
       fetchAllRows(()=>dbPecuaria.from('reproducao_custos').select('data, custo').order('id')),
-      fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','pecuaria').order('lancamento_id').order('rateio_id')),
+      rateadosDaAtividade('pecuaria'),
       // abates: só pra calcular arrobas VENDIDAS/ha na aba Operacional dos
       // Resultados — a pedido do Eduardo, é @ de venda (evento de saída),
       // não ganho de peso do rebanho.
@@ -1026,7 +1138,7 @@ async function carregarResultadoPecuaria(){
   } catch(e){
     state.resultados.pecuaria = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
-  render();
+  renderCarga();
 }
 
 // ===== Rebanho estocado — Resultados > Operacional =====
@@ -1059,7 +1171,7 @@ async function carregarEstoquePecuaria(){
   } catch(e){
     state.estoquePec = {erro:'Não foi possível carregar o rebanho agora.'};
   }
-  render();
+  renderCarga();
 }
 function ultimoPrecoArroba(precos, sexo){
   const lista = precos.filter(p=>p.sexo===sexo && Number(p.valor)>0)
@@ -1199,7 +1311,7 @@ async function carregarReproducaoPecuaria(){
   } catch(e){
     state.reproducaoPec = {erro:'Não foi possível carregar os dados de reprodução agora.'};
   }
-  render();
+  renderCarga();
 }
 // Compra de ração (centro "Nutrição animal", ou conta lançada à mão com esse
 // nome exato): fica FORA do custo por animal, porque o consumo da ração já
@@ -1315,9 +1427,9 @@ function CardReproducaoOperacional(){
 // só apareceu com volume real de dado, o teste não pegou.
 async function carregarResultadoCana(){
   state.resultados.cana = {...state.resultados.cana, loading:true, erro:''};
-  render();
+  renderCarga();
   try{
-    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','cana').order('lancamento_id').order('rateio_id'));
+    const lancRes = await rateadosDaAtividade('cana');
     if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
@@ -1367,7 +1479,7 @@ async function carregarResultadoCana(){
   } catch(e){
     state.resultados.cana = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
-  render();
+  renderCarga();
 }
 
 // Resultado dos Cereais/Grãos, lido do banco do Lavoura (db) — mesma
@@ -1377,9 +1489,9 @@ async function carregarResultadoCana(){
 // despesa — ver histórico do arquivo).
 async function carregarResultadoCereais(){
   state.resultados.cereais = {...state.resultados.cereais, loading:true, erro:''};
-  render();
+  renderCarga();
   try{
-    const lancRes = await fetchAllRows(()=>db.from('lancamentos_rateados').select('*').eq('atividade','graos').order('lancamento_id').order('rateio_id'));
+    const lancRes = await rateadosDaAtividade('graos');
     if(lancRes.error) throw lancRes.error;
     const lanc = (lancRes.data||[]).map(rowToLancamento);
 
@@ -1414,7 +1526,7 @@ async function carregarResultadoCereais(){
   } catch(e){
     state.resultados.cereais = {loading:false, erro:'Não foi possível carregar os resultados agora.', mensal:[]};
   }
-  render();
+  renderCarga();
 }
 const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', despesaGeral:'Despesas gerais (Cana/Cereais)'};
 // Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
@@ -1460,7 +1572,7 @@ function agregarPeriodo(resultado, meses){
 async function carregarCombustivel(){
   state.indicadores.combustivel = {loading:false, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
   state.resultados.combustivelPorFrente = {loading:false, erro:'', mensal:[]};
-  render();
+  renderCarga();
 }
 // Junta o custo mensal de combustível (por operação) com o resultado
 // próprio da operação (receita/despesa lançadas no app dela) — hoje as
@@ -2394,13 +2506,22 @@ function despesaPorCentroCustoConsolidada(){
 // nunca foi rateado pra uma atividade específica (administrativo puro)
 // só existe nessa fonte, e o filtro de Atividade/Fazenda da tela precisa
 // dele.
+// Guardada enquanto a fonte e os filtros forem os mesmos: o Balancete, o Fluxo de Caixa e o saldo
+// anterior pedem esta lista várias vezes por desenho, e uma lista nova a cada pedido refazia o
+// agrupamento das despesas (ver gruposDeVigentes).
+let _cacheRelatorio = {fonte:null, ativs:null, faz:null, lista:null};
 function lancamentosFiltradosRelatorio(){
   const ativs = state.filtroAtividadesRelatorio;
   const faz = state.filtroFazendaRelatorio;
-  return state.lancamentosRateados.filter(l =>
+  const ativsChave = ativs.join(',');
+  const c = _cacheRelatorio;
+  if(c.lista && c.fonte === state.lancamentosRateados && c.ativs === ativsChave && c.faz === faz) return c.lista;
+  const lista = state.lancamentosRateados.filter(l =>
     (ativs.length===0 || ativs.includes(l.atividade)) &&
     (!faz || String(l.fazendaId)===String(faz))
   );
+  _cacheRelatorio = {fonte: state.lancamentosRateados, ativs: ativsChave, faz, lista};
+  return lista;
 }
 // Receita e investimento não têm recorrente (só despesa tem) — entram no
 // período pelo mês, ou pelo ano_safra na receita (mesma regra de
@@ -2420,9 +2541,9 @@ function itensInvestimentoNoPeriodo(investimentos, periodo){
 function itensRelatorioNoPeriodo(periodo){
   const base = lancamentosFiltradosRelatorio();
   return {
-    despesa: itensDespesaComCentroNoPeriodo(base.filter(l=>l.tipo==='despesa'), periodo),
-    receita: itensReceitaNoPeriodo(base.filter(l=>l.tipo==='receita'), periodo),
-    investimento: itensInvestimentoNoPeriodo(base.filter(l=>l.tipo==='investimento'), periodo),
+    despesa: itensDespesaComCentroNoPeriodo(doTipo(base, 'despesa'), periodo),
+    receita: itensReceitaNoPeriodo(doTipo(base, 'receita'), periodo),
+    investimento: itensInvestimentoNoPeriodo(doTipo(base, 'investimento'), periodo),
   };
 }
 // Balancete: cada centro de custo usado no período (despesa, receita e
@@ -2466,9 +2587,9 @@ function saldoAnteriorRelatorio(periodo){
   const mesesAntes = mesesJanela().filter(m=>m<inicioPeriodo);
   if(mesesAntes.length===0) return {saldo:0, desde:null};
   const base = lancamentosFiltradosRelatorio();
-  const despesasBase = base.filter(l=>l.tipo==='despesa');
-  const receitasBase = base.filter(l=>l.tipo==='receita');
-  const investBase = base.filter(l=>l.tipo==='investimento');
+  const despesasBase = doTipo(base, 'despesa');
+  const receitasBase = doTipo(base, 'receita');
+  const investBase = doTipo(base, 'investimento');
   let saldo = 0;
   mesesAntes.forEach(mesStr=>{
     saldo -= vigentesNoMes(despesasBase, mesStr).reduce((a,l)=>a+Number(l.valor||0), 0);
@@ -3326,7 +3447,7 @@ function memoEmpresa(tipo, periodo, calcula){
 function diferencaVisaoRateada(periodo){
   if(state.lancamentosRateados.length===0) return null;
   return memoEmpresa('rateio', periodo, ()=>{
-    const soma = lista => itensDespesaComCentroNoPeriodo(lista.filter(l=>l.tipo==='despesa'), periodo)
+    const soma = lista => itensDespesaComCentroNoPeriodo(doTipo(lista, 'despesa'), periodo)
       .reduce((a,l)=>a+Number(l.valor||0), 0);
     const financeiro = soma(state.lancamentos), rateada = soma(state.lancamentosRateados);
     return {financeiro, rateada, diferenca: financeiro - rateada};
@@ -3335,9 +3456,9 @@ function diferencaVisaoRateada(periodo){
 function calcularFluxoEmpresa(periodo){
   const base = state.lancamentos;
   const centros = new Map(state.centrosCusto.map(c=>[String(c.id), c]));
-  const despesas = itensDespesaComCentroNoPeriodo(base.filter(l=>l.tipo==='despesa'), periodo);
-  const receitas = itensReceitaNoPeriodo(base.filter(l=>l.tipo==='receita'), periodo);
-  const investimentos = itensInvestimentoNoPeriodo(base.filter(l=>l.tipo==='investimento'), periodo);
+  const despesas = itensDespesaComCentroNoPeriodo(doTipo(base, 'despesa'), periodo);
+  const receitas = itensReceitaNoPeriodo(doTipo(base, 'receita'), periodo);
+  const investimentos = itensInvestimentoNoPeriodo(doTipo(base, 'investimento'), periodo);
   const op = {entradas:0, saidas:0}, inv = {compras:0, vendas:0}, nao = {entradas:0, saidas:0};
   const fin = {emprestimosRecebidos:0, receitasFinanceiras:0, amortizacao:0, juros:0, outrasDespesasFinanceiras:0, dividendos:0};
   const dados = l => {
@@ -4448,10 +4569,10 @@ async function salvarFinanciamentoDoErp(){
     // contrato pela metade não pode valer: cancela, e as linhas do ERP seguem como estavam
     await db.from('financiamentos').update({status:'cancelado'}).eq('id', financiamentoId);
     alert('Não foi possível lançar o contrato do ERP: ' + error.message + '\n\nO contrato ficou cancelado e as linhas do ERP continuam valendo como estavam. Tente de novo.');
-    await loadAll(); return;
+    await loadAll(['financiamentos']); return;
   }
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['financiamentos']);
   alert(`Contrato lançado com ${parcelas.length} parcelas (${grupo.pagas.length} já pagas, ${grupo.aVencer.length} a vencer, R$ ${fmt(grupo.totalAVencer)}).\n\nEssas linhas saíram do ERP: a dívida e o fluxo de caixa agora vêm do contrato, sem contar duas vezes.`);
 }
 
@@ -4834,7 +4955,7 @@ async function pagarParcela(parcelaId){
   }).eq('id', p.id);
   if(erroParcela){ alert('O juros já foi lançado, mas não consegui atualizar a parcela: ' + erroParcela.message); return; }
   await quitarSeNaoRestam(f, [p.id]);
-  await loadAll();
+  await loadAll(['financiamentos','lancamentos']);
 }
 
 /* ---- Ajustes depois de lançar um contrato ----
@@ -4927,7 +5048,7 @@ async function salvarPagamentoParcela(){
   if(error){ alert((ids.length ? 'O juros já foi lançado, mas não consegui atualizar a parcela: ' : 'Não foi possível registrar o pagamento: ') + error.message); return; }
   await quitarSeNaoRestam(f, [p.id]);
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['financiamentos','lancamentos']);
 }
 
 // "Já foi amortizado": todas as parcelas em aberto viram pagas na data
@@ -4966,12 +5087,12 @@ async function salvarQuitacao(){
   const abertas = parcelasDoFinanciamento(f.id).filter(parcelaAberta);
   for(const p of abertas){
     const {error} = await db.from('parcelas_financiamento').update({status:'paga', data_pagamento:data, valor_pago:p.valorParcela}).eq('id', p.id);
-    if(error){ alert('Não foi possível quitar: ' + error.message); await loadAll(); return; }
+    if(error){ alert('Não foi possível quitar: ' + error.message); await loadAll(['financiamentos']); return; }
   }
   const {error} = await db.from('financiamentos').update({status:'quitado'}).eq('id', f.id);
-  if(error){ alert('As parcelas foram pagas, mas não consegui marcar o contrato como quitado: ' + error.message); await loadAll(); return; }
+  if(error){ alert('As parcelas foram pagas, mas não consegui marcar o contrato como quitado: ' + error.message); await loadAll(['financiamentos']); return; }
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['financiamentos']);
 }
 
 // Editar uma parcela em aberto: vencimento e juros sempre; a amortização só no
@@ -5046,9 +5167,9 @@ async function salvarParcelaFin(){
   if(!error && imp && arred2(Number(f.valorPrincipal))!==principal){
     ({error} = await db.from('financiamentos').update({valor_principal:principal}).eq('id', f.id));
   }
-  if(error){ alert('Não foi possível salvar a parcela: ' + error.message); await loadAll(); return; }
+  if(error){ alert('Não foi possível salvar a parcela: ' + error.message); await loadAll(['financiamentos']); return; }
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['financiamentos']);
 }
 
 // Refaz o juros ESTIMADO das parcelas em aberto de um contrato importado do
@@ -5103,9 +5224,9 @@ async function salvarEdicaoFinanciamentoTravado(){
   if(!error && imp && (Number(taxaTxt)!==Number(f.taxaJurosAa) || dataContratacao!==f.dataContratacao)){
     error = await reestimarJurosPendentes(f, Number(taxaTxt), dataContratacao);
   }
-  if(error){ alert('Não foi possível salvar: ' + error.message); await loadAll(); return; }
+  if(error){ alert('Não foi possível salvar: ' + error.message); await loadAll(['financiamentos']); return; }
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['financiamentos']);
 }
 
 // "Apagar": o contrato fica cancelado (sai da dívida e do fluxo de caixa, mas
@@ -5128,7 +5249,7 @@ async function cancelarFinanciamento(id){
   const {error} = await db.from('financiamentos').update({status:'cancelado'}).eq('id', id);
   if(error){ alert('Não foi possível cancelar: ' + error.message); return; }
   state.financiamentoDetalheId = null;
-  await loadAll();
+  await loadAll(['financiamentos']);
 }
 
 // Excluir de vez (contrato lançado errado). Diferente de Cancelar, que guarda
@@ -5160,9 +5281,9 @@ async function excluirFinanciamento(id){
     if(!error) ({error} = await db.from('parcelas_financiamento').update({status:'pendente'})
                   .eq('financiamento_id', f.financiamentoOrigemId).eq('status', 'cancelada'));
   }
-  if(error){ alert('Não foi possível excluir: ' + error.message); await loadAll(); return; }
+  if(error){ alert('Não foi possível excluir: ' + error.message); await loadAll(['financiamentos','lancamentos']); return; }
   state.financiamentoDetalheId = null;
-  await loadAll();
+  await loadAll(['financiamentos','lancamentos']);
   // sem permissão o banco não dá erro: só não apaga nada
   if(state.financiamentos.some(x=>x.id===id)) alert('O banco não deixou excluir este contrato (permissão). Peça ao administrador.');
 }
@@ -5475,7 +5596,10 @@ function lancamentosDoTipo(tipo){
     .sort((a,b)=>{
       if(!a.data && b.data) return -1;
       if(a.data && !b.data) return 1;
-      return (b.data||'').localeCompare(a.data||'');
+      // datas ISO (AAAA-MM-DD): comparar o texto direto dá a mesma ordem que localeCompare,
+      // que custava 160 ms para ordenar 21 mil linhas (e o dobro disso num tablet)
+      const x = b.data||'', y = a.data||'';
+      return x < y ? -1 : x > y ? 1 : 0;
     });
 }
 // Despesa com mês próprio substitui a recorrente naquele mês. Agrupa por
@@ -5506,19 +5630,49 @@ function lancamentosDoTipo(tipo){
 //
 // Esta função é a ÚNICA implementação desta regra nos quatro apps. Foi uma
 // segunda cópia divergindo da original que produziu o erro do custo mensal.
-function vigentesNoMes(despesas, mesStr){
-  const grupos = new Map();
+//
+// DESEMPENHO (06/11/2026): Relatórios e Empresa chamam esta função uma vez por mês (até 47x) com
+// a MESMA lista de 21 mil despesas, e cada chamada reagrupava tudo montando uma chave de texto
+// por lançamento (2 s no PC, ~10 s no tablet). Agora o agrupamento é feito uma vez por lista
+// (guardado por identidade da lista) e cada mês só escolhe dentro dos grupos. O resultado e a
+// ordem são exatamente os de antes: grupos na ordem em que aparecem, e dentro de cada um os do
+// mês ou, se não houver, os recorrentes.
+const gruposDeVigentesCache = new WeakMap();
+function gruposDeVigentes(despesas){
+  const guardado = gruposDeVigentesCache.get(despesas);
+  if(guardado && guardado.n === despesas.length) return guardado.grupos;
+  const mapa = new Map();
   despesas.forEach(l=>{
     const areas = (l.areas||[]).slice().sort().join(',');
     const chave = `${l.descricao}||${l.centroCustoId}||${l.atividade}||${l.fazendaId ?? ''}||${areas}`;
-    if(!grupos.has(chave)) grupos.set(chave, []);
-    grupos.get(chave).push(l);
+    let g = mapa.get(chave);
+    if(!g){ g = {porMes: new Map(), recorrentes: []}; mapa.set(chave, g); }
+    if(l.mes){
+      const doMes = g.porMes.get(l.mes);
+      if(doMes) doMes.push(l); else g.porMes.set(l.mes, [l]);
+    } else {
+      g.recorrentes.push(l);
+    }
   });
+  const grupos = [...mapa.values()];
+  gruposDeVigentesCache.set(despesas, {n: despesas.length, grupos});
+  return grupos;
+}
+// Filtro por tipo feito uma vez por lista: a lista vem do state e só é trocada (nunca alterada no
+// lugar) quando recarrega, então devolver sempre o mesmo array também faz o agrupamento acima
+// valer para todos os períodos que a tela calcula (a aba Empresa pede ~10).
+const porTipoCache = new WeakMap();
+function doTipo(lista, tipo){
+  let e = porTipoCache.get(lista);
+  if(!e || e.n !== lista.length){ e = {n: lista.length}; porTipoCache.set(lista, e); }
+  return e[tipo] || (e[tipo] = lista.filter(l=>l.tipo===tipo));
+}
+function vigentesNoMes(despesas, mesStr){
   const out = [];
-  grupos.forEach(rows=>{
-    const doMes = rows.filter(l=>l.mes===mesStr);
-    out.push(...(doMes.length>0 ? doMes : rows.filter(l=>!l.mes)));
-  });
+  for(const g of gruposDeVigentes(despesas)){
+    const escolhidas = g.porMes.get(mesStr) || g.recorrentes;
+    for(let i = 0; i < escolhidas.length; i++) out.push(escolhidas[i]);
+  }
   return out;
 }
 function despesasVigentesNoMes(mesStr){
@@ -6559,7 +6713,7 @@ async function salvarTitulo(){
   }
 
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['contas']);
 }
 
 async function salvarBaixaLote(){
@@ -6589,7 +6743,7 @@ async function salvarBaixaLote(){
   if(error){ alert('Não foi possível registrar as baixas: ' + error.message); return; }
   state.contasSelecionadas = [];
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['contas','lancamentos']);
 }
 
 async function salvarBaixa(){
@@ -6622,7 +6776,7 @@ async function salvarBaixa(){
   if(error){ alert('Não foi possível registrar a baixa: ' + error.message); return; }
 
   state.modal = null; editDraft = null;
-  await loadAll();
+  await loadAll(['contas','lancamentos']);
 }
 
 function rateioVazio(){
@@ -6740,7 +6894,7 @@ function ligarEventosContas(){
       if(!confirm(aviso)) return;
       const {error} = await db.from('titulos').delete().eq('id', t.id);
       if(error){ alert('Não foi possível excluir: ' + error.message); return; }
-      await loadAll();
+      await loadAll(['contas','lancamentos']);
     };
   });
   document.querySelectorAll('[data-del-baixa]').forEach(el=>{
@@ -6749,7 +6903,7 @@ function ligarEventosContas(){
       const {error} = await db.from('titulo_baixas').delete().eq('id', Number(el.dataset.delBaixa));
       if(error){ alert('Não foi possível desfazer: ' + error.message); return; }
       state.modal = null;
-      await loadAll();
+      await loadAll(['contas','lancamentos']);
     };
   });
 
@@ -8046,7 +8200,7 @@ function attachEvents(){
               + '\n\nSe houver lancamento usando este centro, desative-o em vez de excluir.');
         return;
       }
-      await loadAll();
+      await loadAll(['cadastros']);
     };
   });
 
@@ -8281,7 +8435,7 @@ function attachEvents(){
       if(!confirm(`Excluir "${l?.descricao||''}"? Essa ação não pode ser desfeita.`)) return;
       const {error} = await db.from('lancamentos_financeiros').delete().eq('id', Number(el.dataset.delLancamento));
       if(error){ alert('Não foi possível excluir: ' + error.message); return; }
-      await loadAll();
+      await atualizarLancamentos([Number(el.dataset.delLancamento)]);
     };
   });
 
@@ -8317,7 +8471,7 @@ function attachEvents(){
     const {error} = await db.from('funcionarios').insert(linhas);
     if(error){ alert('Não foi possível importar: ' + error.message); confirmarImportarBtn.disabled = false; confirmarImportarBtn.textContent = 'Importar selecionados'; return; }
     state.modal = null;
-    await loadAll();
+    await loadAll(['cadastros']);
   };
   // Trocar a conta vinculada precisa re-render pra o bloco de permissões
   // abaixo mostrar os dados da conta certa.
@@ -8396,7 +8550,7 @@ function attachEvents(){
       const id = Number(el.dataset.excluirFuncionario);
       const {error} = await db.from('funcionarios').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir este funcionário: ' + error.message); return; }
-      await loadAll();
+      await loadAll(['cadastros']);
     };
   });
 
@@ -8437,7 +8591,7 @@ function attachEvents(){
         return;
       }
       state.modal = null; editDraft = null;
-      await loadAll();
+      await loadAll(['cadastros']);
     };
   }
 
@@ -8457,6 +8611,7 @@ function attachEvents(){
     saveBtn.onclick = async ()=>{
       const type = saveBtn.dataset.save;
       let error;
+      let lancamentosGravados = null;   // ids que este salvar mexeu: só eles são buscados de novo
       if(type==='fazenda'){
         const campos = {
           nome: document.getElementById('f-nomefazenda').value.trim() || 'Sem nome',
@@ -8603,7 +8758,7 @@ function attachEvents(){
           const res = await salvarVendaAnimais(campos, row);
           if(res.error){ alert('Não foi possível registrar a venda: ' + res.error.message); return; }
           state.modal = null; editDraft = null;
-          await loadAll();
+          await loadAll(['lancamentos']);
           return;
         }
         if(campos.atividade==='dividir'){
@@ -8611,11 +8766,16 @@ function attachEvents(){
           // todos ou nenhum. O fechamento da soma é conferido antes.
           const divisao = montarDivisaoDoLancamento(campos);
           if(divisao.erro){ state.erroLancamento = divisao.erro; editDraft = campos; render(); return; }
-          ({error} = await db.from('lancamentos_financeiros').insert(divisao.linhas));
+          const res = await db.from('lancamentos_financeiros').insert(divisao.linhas).select('id');
+          error = res.error;
+          lancamentosGravados = (res.data||[]).map(r=>r.id);
         } else if(editDraft._editId){
           ({error} = await db.from('lancamentos_financeiros').update(row).eq('id', editDraft._editId));
+          lancamentosGravados = [editDraft._editId];
         } else {
-          ({error} = await db.from('lancamentos_financeiros').insert(row));
+          const res = await db.from('lancamentos_financeiros').insert(row).select('id');
+          error = res.error;
+          lancamentosGravados = (res.data||[]).map(r=>r.id);
         }
       } else if(type==='titulo'){
         await salvarTitulo(); return;
@@ -8743,7 +8903,8 @@ function attachEvents(){
       }
       if(error){ alert('Não foi possível salvar: ' + error.message); return; }
       state.modal = null; editDraft = null;
-      await loadAll();
+      if(type==='lancamento' && lancamentosGravados?.length) await atualizarLancamentos(lancamentosGravados);
+      else await loadAll(GRUPOS_AO_SALVAR[type]);
     };
   }
 
