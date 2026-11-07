@@ -452,7 +452,11 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   não é tocado e a conferência diz por quê (os outros seguem). Cópias fechadas
   `zz_backup_dup4_*_2026_11_07`, desfazer no fim do arquivo. Ensaiado num Postgres descartável com o
   adubo dividido, a nutrição e o combustível inteiros, os mesmos já na atividade certa, as travas de
-  06/11 instaladas, as recusas e o desfazer (37 checagens). **A rodar por ele.**
+  06/11 instaladas, as recusas e o desfazer (37 checagens). **RODADO por ele em 07/11/2026, tudo OK**:
+  3 lançamentos apagados (#14298, #17115, #2571), R$ 255.420,00; nenhum par pulado; as 3 que ficaram
+  (#14296 e #2570 inteiras em Cana, #17113 inteira em Pecuária); os 6 lançamentos estavam inteiros,
+  sem partes de rateio (backup 6 / 0); 0 lançamentos com rateio que não fecha; visão rateada =
+  Financeiro (diferença R$ 0,00). Cópias `zz_backup_dup4_*_2026_11_07` a apagar quando ele confirmar.
 
 ### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
 
