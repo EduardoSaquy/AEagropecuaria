@@ -6,6 +6,9 @@ combustivel, manutencao (com o custo preenchido na aba Manutencao), custo total 
   Caminhao B (hodometro): 500 L, leituras 5000 a 5500 -> 500 km; R$ 3.000; sem manutencao com custo; R$ 6,00 por km.
   Gerador (sem medidor): 50 L, R$ 300; sem horas -> sem custo por hora.
   Colhedora C: sem abastecimento no periodo e manutencao de R$ 1.500 -> aparece so com a manutencao.
+  Pecas e servicos do Financeiro (despesas ligadas a um equipamento, lancamentos_equipamento_01.sql): Trator A R$ 250 (pneu) + R$ 100
+    (so com o mes, conta no dia 1) = R$ 350 e custo total R$ 2.750 (R$ 91,67 por hora); a de agosto, a receita e o gasto sem maquina nao
+    entram; Moto D so com uma correia de R$ 120 aparece; consulta que falha deixa a coluna vazia sem erro.
 Prova tambem:
   - o abastecimento de setembro (fora do periodo) nao entra; o total da tabela soma combustivel e manutencao;
   - o campo de custo da manutencao e opcional e so vai ao banco quando tem valor (o app segue funcionando antes do SQL
@@ -50,6 +53,15 @@ DB = {
         {"id": 3, "fazenda_id": 1, "equipamento_id": 4, "tipo": "troca_oleo", "data": "2026-10-20", "leitura": 50, "intervalo": 250, "custo": 1500},
         {"id": 4, "fazenda_id": 1, "equipamento_id": 5, "tipo": "troca_oleo", "data": "2026-10-21", "leitura": 10, "intervalo": 250},          # sem custo
     ],
+    # despesas do Financeiro ligadas a um equipamento (lancamentos_equipamento_01.sql): pecas e servicos
+    "lancamentos_financeiros": [
+        {"id": 1, "tipo": "despesa", "atividade": "cana", "centro_custo_id": 1, "descricao": "Pneu", "valor": 250, "data": "2026-10-18", "mes": "2026-10", "equipamento_id": 1},
+        {"id": 2, "tipo": "despesa", "atividade": "cana", "centro_custo_id": 1, "descricao": "Servico de solda (so competencia)", "valor": 100, "data": None, "mes": "2026-10", "equipamento_id": 1},
+        {"id": 3, "tipo": "despesa", "atividade": "cana", "centro_custo_id": 1, "descricao": "Pneu de agosto", "valor": 900, "data": "2026-08-10", "mes": "2026-08", "equipamento_id": 1},
+        {"id": 4, "tipo": "receita", "atividade": "cana", "centro_custo_id": 1, "descricao": "Nao e despesa", "valor": 5000, "data": "2026-10-10", "mes": "2026-10", "equipamento_id": 1},
+        {"id": 5, "tipo": "despesa", "atividade": "geral", "centro_custo_id": 1, "descricao": "Correia da moto", "valor": 120, "data": "2026-10-22", "mes": "2026-10", "equipamento_id": 5},
+        {"id": 6, "tipo": "despesa", "atividade": "cana", "centro_custo_id": 1, "descricao": "Sem maquina", "valor": 7777, "data": "2026-10-10", "mes": "2026-10", "equipamento_id": None},
+    ],
     "produtos": [{"id": 1, "nome": "Diesel S10", "unidade": "L", "ativo": True}], "fornecedores": [{"id": 1, "nome": "Posto", "ativo": True}],
     "operadores": [], "profiles": [ADMIN],
 }
@@ -77,6 +89,7 @@ def abre(browser, w=1280, h=900):
     page.add_init_script(f"window.__DB__ = {json.dumps(DB)}; window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};")
     page.goto("file://" + str(REPO / "AECombustivel.html"))
     page.wait_for_function("() => typeof state !== 'undefined' && state.perfil && state.equipamentos.length > 0 && state.abastecimentos.length > 0", timeout=30000)
+    page.wait_for_function("() => state.pecasEquipamento.length > 0", timeout=30000)
     page.wait_for_timeout(400)
     return page
 
@@ -94,31 +107,43 @@ with sync_playwright() as pw:
 
     print("== custo por hora / km por equipamento (outubro/2026)")
     L = linhas(page)
-    # colunas apos o nome: Volume, Consumo, Horas/km, Combustivel, Manutencao, Custo total, R$ por hora/km
+    # colunas apos o nome: R$ por hora/km, Custo total, Combustivel, Manutencao, Pecas e servicos, Horas/km, Consumo, Volume
     trator = L.get("Trator A")
-    conf(trator and trator[0] == "300 L" and trator[1].startswith("10,00 L/h") and trator[2].startswith("30,0 h"),
+    conf(trator and trator[7] == "300 L" and trator[6].startswith("10,00 L/h") and trator[5].startswith("30,0 h"),
          "Trator A: 300 L, 10 L/h e 30 h", str(trator))
-    conf(trator and trator[3] == "1.800,00" and trator[4] == "600,00" and trator[5] == "2.400,00", "Trator A: combustivel R$ 1.800 + manutencao R$ 600 (a de agosto fica de fora) = R$ 2.400", str(trator))
-    conf(trator and trator[6].startswith("R$ 80,00 /h"), "Trator A: R$ 80,00 por hora", str(trator))
+    conf(trator and trator[2] == "1.800,00" and trator[3] == "600,00" and trator[4] == "350,00" and trator[1] == "2.750,00", "Trator A: combustivel R$ 1.800 + manutencao R$ 600 + pecas R$ 350 (pneu 250 + solda 100 so com o mes; agosto, receita e gasto sem maquina ficam de fora) = R$ 2.750", str(trator))
+    conf(trator and trator[0].startswith("R$ 91,67 /h"), "Trator A: R$ 91,67 por hora (2.750 / 30 h)", str(trator))
     cam = L.get("Caminhao B")
-    conf(cam and cam[1].startswith("1,00 L/km") and cam[2].startswith("500,0 km") and cam[3] == "3.000,00" and cam[4] == "—" and cam[6].startswith("R$ 6,00 /km"),
+    conf(cam and cam[6].startswith("1,00 L/km") and cam[5].startswith("500,0 km") and cam[2] == "3.000,00" and cam[3] == "—" and cam[4] == "—" and cam[0].startswith("R$ 6,00 /km"),
          "Caminhao B: 500 km, R$ 3.000, sem manutencao, R$ 6,00 por km", str(cam))
     ger = L.get("Gerador")
-    conf(ger and ger[3] == "300,00" and ger[2] == "—" and ger[6] == "—", "Gerador (sem medidor): custo do combustivel e sem custo por hora", str(ger))
+    conf(ger and ger[2] == "300,00" and ger[5] == "—" and ger[0] == "—", "Gerador (sem medidor): custo do combustivel e sem custo por hora", str(ger))
     col = L.get("Colhedora C")
-    conf(col and col[0] == "0 L" and col[3] == "0,00" and col[4] == "1.500,00" and col[5] == "1.500,00" and col[6] == "—",
+    conf(col and col[7] == "0 L" and col[2] == "0,00" and col[3] == "1.500,00" and col[4] == "—" and col[1] == "1.500,00" and col[0] == "—",
          "Colhedora C: sem abastecimento mas com manutencao R$ 1.500 aparece", str(col))
-    conf("Moto D" not in L, "manutencao sem custo preenchido nao cria linha")
+    moto = L.get("Moto D")
+    conf(moto and moto[2] == "0,00" and moto[3] == "—" and moto[4] == "120,00" and moto[1] == "120,00", "Moto D: a manutencao sem custo nao conta, e a correia de R$ 120 do Financeiro aparece", str(moto))
     ordem = page.evaluate("() => [...document.querySelectorAll('[data-equipamento-linha] td:first-child strong')].map(e => e.innerText.trim())")
-    conf(ordem == ["Caminhao B", "Trator A", "Colhedora C", "Gerador"], "ordenado pelo custo total (maior primeiro)", str(ordem))
+    conf(ordem == ["Caminhao B", "Trator A", "Colhedora C", "Gerador", "Moto D"], "ordenado pelo custo total (maior primeiro)", str(ordem))
     total = page.evaluate("() => [...document.querySelector('[data-rateio-equipamento] tbody tr:last-child').children].map(td => td.innerText.replace(/\\s+/g, ' ').trim())")
-    conf(total[4] == "5.100,00" and total[5] == "2.100,00" and total[6] == "7.200,00", "total: combustivel R$ 5.100 + manutencao R$ 2.100 = R$ 7.200", str(total))
+    conf(total[3] == "5.100,00" and total[4] == "2.100,00" and total[5] == "470,00" and total[2] == "7.670,00", "total: combustivel R$ 5.100 + manutencao R$ 2.100 + pecas R$ 470 = R$ 7.670", str(total))
     conf("Custo por hora (ou km)" in page.inner_text("body") and "Não inclui depreciação" in page.inner_text("body"), "a tela explica a conta e o que nao entra")
     page.evaluate("() => { state.rateioFiltro = {dataInicio: '2026-09-01', dataFim: '2026-09-30'}; render(); }")
     page.wait_for_timeout(200)
     L = linhas(page)
-    conf(list(L.keys()) == ["Trator A"] and L["Trator A"][0] == "1.000 L" and L["Trator A"][2] == "—", "em setembro so o abastecimento de setembro (1 leitura: sem horas)", str(L))
+    conf(list(L.keys()) == ["Trator A"] and L["Trator A"][7] == "1.000 L" and L["Trator A"][5] == "—", "em setembro so o abastecimento de setembro (1 leitura: sem horas)", str(L))
 
+    print("== sem acesso ao Financeiro ou antes do SQL: a coluna fica vazia, sem erro")
+    page.evaluate("""() => { state.rateioFiltro = {dataInicio: '2026-10-01', dataFim: '2026-10-31'}; state.page = 'rateioEquipamento';
+        const orig = db.from.bind(db);
+        db.from = (t) => { if (t === 'lancamentos_financeiros') { const q = { select(){return q;}, in(){return q;}, order(){return q;},
+            range(){ return Promise.resolve({data: null, error: {code: '42703', message: 'column lancamentos_financeiros.equipamento_id does not exist'}}); } }; return q; }
+            return orig(t); }; }""")
+    page.evaluate("async () => { await carregarPecasEquipamento(); render(); }")
+    page.wait_for_timeout(300)
+    L = linhas(page)
+    conf(page.evaluate("() => state.pecasEquipamento.length") == 0 and L["Trator A"][4] == "—" and L["Trator A"][1] == "2.400,00",
+         "consulta que falha: pecas e servicos ficam vazias e o resto da conta segue (R$ 2.400)", str(L.get("Trator A")))
     print("== custo da manutencao e opcional e so vai ao banco quando tem valor")
     page.evaluate("() => { state.page = 'manutencoes'; render(); }")
     page.wait_for_timeout(200)

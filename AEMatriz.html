@@ -620,7 +620,9 @@ function rowToLancamento(r){
           // Não é o mesmo campo que safraId acima: aquele é FK pra tabela
           // safras (fazenda+cultura, só cana/grãos); este é livre, cobre
           // qualquer atividade, e null significa "usa o mês normalmente".
-          anoSafra:r.ano_safra??null};
+          anoSafra:r.ano_safra??null,
+          // Máquina a que a despesa pertence (lancamentos_equipamento_01.sql). null: sem máquina, ou o SQL ainda não rodou.
+          equipamentoId:r.equipamento_id??null};
 }
 function lancamentoToRow(l){
   return {tipo:l.tipo, atividade:l.atividade,
@@ -658,7 +660,11 @@ function lancamentoToRow(l){
           // Mesma regra do undefined: só despesa/receita mostram este campo
           // no formulário, editar um investimento não pode mexer nele.
           ano_safra: l.anoSafra===undefined ? undefined
-                      : (l.anoSafra==='' || l.anoSafra==null ? null : Number(l.anoSafra))};
+                      : (l.anoSafra==='' || l.anoSafra==null ? null : Number(l.anoSafra)),
+          // Equipamento (opcional). Vazio NÃO manda a coluna (undefined), a menos que o lançamento já tivesse uma máquina e
+          // a pessoa tirou: aí manda null. Assim o app funciona antes de lancamentos_equipamento_01.sql (a coluna nem existe).
+          equipamento_id: l.equipamentoId===undefined ? undefined
+                      : (l.equipamentoId==='' || l.equipamentoId==null ? (l._equipamentoOriginal ? null : undefined) : Number(l.equipamentoId))};
 }
 /* O plano de contas do ERP é hierárquico, e essa hierarquia já está
  * gravada — só não era lida por nenhum app:
@@ -963,7 +969,7 @@ async function loadAll(grupos){
   const veFinanceiro = temPermissao('matriz_financeiro','visualizar');
   const veFuncionarios = temPermissao('matriz_funcionarios','visualizar');
   const veFinanciamentos = temPermissao('matriz_financiamentos','visualizar');
-  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec, fin, parcFin] = await Promise.all([
+  const [faz, fazAtiv, tal, cul, perfis, func, funcAtiv, lanc, cCusto, lotPec, fin, parcFin, equip] = await Promise.all([
     buscar('cadastros', true, ()=>db.from('fazendas').select('*').order('nome')),
     buscar('cadastros', true, ()=>db.from('fazenda_atividades').select('*')),
     buscar('cadastros', true, ()=>fetchAllRows(()=>db.from('talhoes_areas').select('id, fazenda_id, area_ha, cultura_id, ativo').eq('tipo','talhao').order('id'))),
@@ -981,6 +987,9 @@ async function loadAll(grupos){
     buscar('lancamentos', veFinanceiro, ()=>db.from('lotes').select('id, nome, numero_animais, destino, sexo, data_fim').order('nome')),
     buscar('financiamentos', veFinanciamentos, ()=>db.from('financiamentos').select('*').order('data_contratacao', {ascending:false})),
     buscar('financiamentos', veFinanciamentos, ()=>fetchAllRows(()=>db.from('parcelas_financiamento').select('*').order('numero').order('id'))),
+    // Máquinas (tabela do AE Combustível), só para o campo "Equipamento" da despesa. Fora de erroCarregamento de propósito: quem não
+    // tem acesso à tabela só fica sem o campo.
+    buscar('cadastros', veFinanceiro, ()=>db.from('equipamentos').select('id, nome, tipo, ativo, fazenda_id').order('nome')),
   ]);
   // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
   // devolve vazio e a consulta e desperdicio de rede.
@@ -1012,6 +1021,7 @@ async function loadAll(grupos){
     state.funcionarios = (func.data||[]).map(rowToFuncionario);
     state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
     state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
+    state.equipamentos = equip.data||[];
   }
   if(quer('lancamentos')){
     state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
@@ -1836,6 +1846,7 @@ const state = {
   perfis: [],
   lancamentos: [],    // modelo único: despesa, receita e investimento de todas as atividades
   centrosCusto: [],
+  equipamentos: [],   // máquinas do AE Combustível (id, nome, ativo): para ligar uma despesa a uma máquina
   filtroAtividade: '',
   subAbaResultados: 'geral', // 'geral' | 'operacional' | 'relatorios' | 'empresa'
   colheitasCana: [],   // {data, toneladas} — pra toneladas/ha no período (aba Operacional)
@@ -7891,6 +7902,7 @@ function lerLancamentoDoFormulario(base){
     unidade:       document.getElementById('f-unidadelanc') ? v('f-unidadelanc') : base.unidade,
     culturaId:     document.getElementById('f-culturalanc') ? v('f-culturalanc') : base.culturaId,
     anoSafra:      document.getElementById('f-safralanc') ? v('f-safralanc') : base.anoSafra,
+    equipamentoId: document.getElementById('f-equipamentolanc') ? v('f-equipamentolanc') : base.equipamentoId,
   };
 }
 // Le lancamento E venda. O valor da venda e sempre recalculado dos campos
@@ -8065,6 +8077,13 @@ function ModalLancamento(){
           <span class="hint">Só preencha quando a venda (ou a despesa) aconteceu depois do fim da safra, mas pertence à produção da safra anterior — ex.: gado vendido em junho que foi engordado na safra passada. Na maioria dos lançamentos deixe em branco: o app usa o mês normalmente.</span>
         </div>` : ''}
         ${ehDespesa?`<div class="field"><label>Fornecedor (opcional)</label><input id="f-fornecedorlanc" value="${esc(d.fornecedor||'')}" autocomplete="off"/></div>`:''}
+        ${ehDespesa && state.equipamentos.length ? `<div class="field"><label>Equipamento (opcional)</label>
+          <select id="f-equipamentolanc">
+            <option value="" ${!d.equipamentoId?'selected':''}>— Nenhum —</option>
+            ${state.equipamentos.filter(e=>e.ativo!==false || String(e.id)===String(d.equipamentoId)).map(e=>`<option value="${e.id}" ${String(d.equipamentoId)===String(e.id)?'selected':''}>${esc(e.nome)}</option>`).join('')}
+          </select>
+          <span class="hint">Peça, serviço ou reparo de uma máquina específica: o AE Combustível soma ao combustível e à manutenção para mostrar o custo por hora dela. Não muda nenhum resultado.</span>
+        </div>` : ''}
         ${ehDespesa && ehPecuaria ? `
         <div class="field"><label>Rateio entre as áreas da pecuária</label>
           <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;">
@@ -8874,7 +8893,7 @@ function attachEvents(){
       const l = state.lancamentos.find(x=>x.id===Number(el.dataset.editLancamento));
       // _atividadeOriginal: quem já é 'geral' (ERP ou antigo) segue 'geral'
       // e não pode ser trocado aqui; ver geralTravado em ModalLancamento.
-      editDraft = {...l, _editId:l.id, _atividadeOriginal:l.atividade};
+      editDraft = {...l, _editId:l.id, _atividadeOriginal:l.atividade, _equipamentoOriginal:l.equipamentoId ?? null};
       state.erroLancamento = '';
       state.modal = {type:'lancamento'}; render();
     };

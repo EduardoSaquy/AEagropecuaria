@@ -1512,14 +1512,26 @@ equipamento; faltava o **custo por hora**, que o Inttegra e os outros trazem em 
 período do filtro: litros, consumo (L/h ou L/km), **horas/km** (maior menos menor leitura do medidor nos abastecimentos do período),
 combustível (R$, custo médio do tanque), **manutenção** (soma do **custo** preenchido na aba Manutenção, por data), custo total e
 **R$ por hora/km = (combustível + manutenção) ÷ horas/km**. Equipamento só com manutenção no período também aparece; sem medidor ou
-com menos de 2 leituras fica sem custo por hora. **Não inclui** depreciação, financiamento da máquina, mão de obra nem peças/serviços
-lançados no Financeiro do Matriz (que não são ligados a um equipamento: ligar seria uma coluna `equipamento_id` em
-`lancamentos_financeiros`, decisão dele, ainda não feita).
+com menos de 2 leituras fica sem custo por hora. **Não inclui** depreciação, financiamento da máquina nem mão de obra.
+- **Peças e serviços do Financeiro (07/11/2026, pedido dele: "sim")**: a despesa do AE Matriz ganhou o campo opcional **Equipamento**
+  (só despesa; lista os equipamentos ativos do Combustível, mais o inativo que já estava ligado), gravado em
+  **`lancamentos_financeiros.equipamento_id`** (FK para `equipamentos`, índice parcial; SQL `lancamentos_equipamento_01.sql`, ensaiado num
+  Postgres descartável, repetível, **ele ainda precisa rodar**). Fora da conta: o resultado, o rateio e as políticas de acesso não mudam
+  (a coluna herda as da tabela). `lancamentoToRow` só manda `equipamento_id` quando há equipamento, ou `null` quando se TIRA um que o
+  lançamento já tinha (`_equipamentoOriginal`): o app funciona antes do SQL (a coluna nem é enviada). "Dividir entre as atividades" leva o
+  equipamento para cada parte; baixa de conta a pagar NÃO leva (a conta a pagar não tem o campo): para ligar um gasto que nasceu de uma
+  baixa, edite o lançamento em Financeiro. O Matriz lê `equipamentos` (`state.equipamentos`, fora do alerta de erro de carga: sem acesso
+  à tabela o campo só não aparece). No Combustível, `carregarPecasEquipamento()` lê as despesas ligadas (RLS do Financeiro: quem não tem
+  acesso vê a coluna vazia; antes do SQL a consulta falha e a coluna fica vazia, sem erro) e soma ao custo total e ao R$ por hora; lançamento
+  só com o mês conta no dia 1; receita e gasto sem equipamento não entram. **Mesmo gasto lançado na Manutenção (custo) e no Financeiro
+  conta duas vezes**: a tela avisa. Lançamentos antigos (ERP, 25 mil) não têm equipamento: o custo por hora só se completa daqui para a
+  frente ou ligando os antigos à mão. Colunas de Por Equipamento, na ordem: R$ por hora/km, custo total, combustível, manutenção, peças e
+  serviços, horas/km, consumo, volume (o que mais importa à esquerda). `.main{min-width:0}` no Combustível: tabela larga rola dentro do card.
 - SQL **`combustivel_manutencao_02_custo.sql`** (`manutencoes.custo`, opcional, com trava de não negativo; ensaiado num Postgres
   descartável, repetível): **ele ainda precisa rodar**. O app funciona antes: o campo de custo só vai ao banco quando tem valor
   (`soSeTiverValor`; limpar um custo que já existia manda null) e o erro de coluna faltando vira "Rode combustivel_manutencao_02_custo.sql".
 - `teste_custo_hora_equipamento.py` (20): contas à mão com trator (horímetro), caminhão (hodômetro), gerador (sem medidor), colhedora
-  (só manutenção) e um abastecimento de setembro que não entra.
+  (só manutenção) e um abastecimento de setembro que não entra; peças e serviços do Financeiro ligados ao equipamento.
 
 ### Pecuária: planilha de manejo para o curral sem sinal (07/11/2026)
 
@@ -1687,7 +1699,7 @@ divergem: conferir no painel). Por isso:
 
 ## Testes
 
-58 arquivos `teste_*.py`, 1.629 checagens (07/11/2026; a tabela abaixo lista os
+59 arquivos `teste_*.py`, 1.646 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1746,7 +1758,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_copia_seguranca.py` | 32 | AEMatriz.html (cópia de segurança em Usuários: JSON paginado com todas as linhas, tabela sem permissão fica de fora, CSV para o contador com BOM, vírgula decimal e fórmula neutralizada, só admin, sem violar a CSP) |
 | `teste_curva_abc.py` | 18 | AEMatriz.html (Curva ABC das despesas em Relatórios: classes A/B/C por centro e por fornecedor, só despesa, filtros de período e atividade, sem rolar de lado) |
 | `teste_manejo_planilha.py` | 64 | AEpecuaria.html (importar a planilha de manejo preenchida no curral: previa, validação com as regras do Manejo, nada gravado com erro, desmama, mudança de lote, mesma planilha duas vezes, rede que cai e Continuar, sem rolar de lado) |
-| `teste_custo_hora_equipamento.py` | 20 | AECombustivel.html (Rateio > Por Equipamento: horas/km, combustível, manutenção com custo, custo total e R$ por hora/km; período; custo da manutenção opcional que só vai ao banco com valor; sem rolar de lado) |
+| `teste_custo_hora_equipamento.py` | 21 | AECombustivel.html (Rateio > Por Equipamento: horas/km, combustível, manutenção com custo, custo total e R$ por hora/km; período; custo da manutenção opcional que só vai ao banco com valor; sem rolar de lado) |
+| `teste_lancamento_equipamento.py` | 16 | AEMatriz.html (despesa com o campo Equipamento: lista, só despesa, coluna só enviada com valor (ou null ao tirar), editar sem perder, dividir leva para cada parte, sem equipamentos não aparece) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

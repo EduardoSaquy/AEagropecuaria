@@ -572,6 +572,20 @@ async function loadAll(){
   state.logAuditoria = (results[CADASTRO_KEYS.length+2].data||[]).map(rowToLog);
   salvarCacheLocal();
   render();
+  carregarPecasEquipamento();
+}
+// Despesas do Financeiro (AE Matriz) ligadas a um equipamento: peças, serviços e reparos que entram no custo por hora. A leitura
+// segue a permissão do Financeiro (RLS): quem não tem só não vê esta coluna. Antes de lancamentos_equipamento_01.sql a coluna não
+// existe, a consulta falha e a coluna fica vazia, sem erro na tela.
+async function carregarPecasEquipamento(){
+  state.pecasEquipamento = [];
+  if(!temPermissao('combustivel_rateio','visualizar') || state.equipamentos.length===0) { return; }
+  try{
+    const r = await fetchAllRows(()=>db.from('lancamentos_financeiros').select('id, equipamento_id, tipo, valor, data, mes, descricao, fornecedor')
+      .in('equipamento_id', state.equipamentos.map(e=>e.id)).order('id'));
+    state.pecasEquipamento = r.error ? [] : (r.data||[]);
+  }catch(e){ state.pecasEquipamento = []; }
+  if(state.page==='rateioEquipamento') render();
 }
 async function recarregarAlertas(){
   const { data } = await fetchAllRows(()=>db.from('alertas').select('*').order('data_hora', {ascending:false}).order('id'));
@@ -597,6 +611,7 @@ const state = {
   rateioFiltro: { dataInicio: primeiroDiaMesISO(), dataFim: hojeISO() },
   // ---- alertas & auditoria ----
   alertas: [],
+  pecasEquipamento: [],   // despesas do Financeiro ligadas a um equipamento (carregarPecasEquipamento)
   logAuditoria: [],
   alertasMostrarResolvidos: false,
   // ---- painel & relatórios ----
@@ -1780,6 +1795,18 @@ function custoManutencaoDoEquipamento(equipamentoId){
     .filter(m=>m.equipamentoId===equipamentoId && m.custo!=null && m.custo!=='' && (!dataInicio || m.data>=dataInicio) && (!dataFim || m.data<=dataFim))
     .reduce((a,m)=>a+Number(m.custo||0), 0);
 }
+// Peças, serviços e reparos lançados no Financeiro (AE Matriz) com este equipamento, no período do filtro. Só despesa; lançamento só com
+// o mês (competência) conta no 1º dia do mês; recorrente (sem data nem mês) não entra.
+function custoPecasDoEquipamento(equipamentoId){
+  const { dataInicio, dataFim } = state.rateioFiltro;
+  return state.pecasEquipamento
+    .filter(x=>x.equipamento_id===equipamentoId && x.tipo==='despesa')
+    .filter(x=>{
+      const d = x.data || (x.mes ? x.mes + '-01' : null);
+      return d && (!dataInicio || d>=dataInicio) && (!dataFim || d<=dataFim);
+    })
+    .reduce((a,x)=>a+Number(x.valor||0), 0);
+}
 // Por equipamento, no período: combustível (litros e R$ do custo médio do tanque), consumo e horas/km (maior menos menor leitura do
 // medidor nos abastecimentos do período), manutenção com custo preenchido e o CUSTO POR HORA (ou km) = (combustível + manutenção) ÷
 // horas (ou km). Equipamento com manutenção no período e sem abastecimento também aparece.
@@ -1806,14 +1833,15 @@ function agruparPorEquipamento(lista){
       }
     }
     const custoManutencao = custoManutencaoDoEquipamento(equipamentoId);
-    const custoTotal = custo + custoManutencao;
+    const custoPecas = custoPecasDoEquipamento(equipamentoId);
+    const custoTotal = custo + custoManutencao + custoPecas;
     return { equipamentoId, nome: equipamento?.nome||'—', tipo: equipamento?.tipo||'', volume, custo, consumo, unidade, percorrido, unidadeMedida,
-      custoManutencao, custoTotal, custoPorUnidade: percorrido ? custoTotal/percorrido : null, qtd: registros.length };
+      custoManutencao, custoPecas, custoTotal, custoPorUnidade: percorrido ? custoTotal/percorrido : null, qtd: registros.length };
   };
   const grupos = Object.entries(porEquip).map(([idStr, registros])=>montar(Number(idStr), registros));
   state.equipamentos.forEach(e=>{
     if(porEquip[e.id]) return;
-    if(custoManutencaoDoEquipamento(e.id)>0) grupos.push(montar(e.id, []));
+    if(custoManutencaoDoEquipamento(e.id)>0 || custoPecasDoEquipamento(e.id)>0) grupos.push(montar(e.id, []));
   });
   return grupos.sort((a,b)=>b.custoTotal-a.custoTotal);
 }
@@ -1884,33 +1912,36 @@ function PageRateioTalhao(){
 function PageRateioEquipamento(){
   const lista = abastecimentosNoPeriodo();
   const grupos = agruparPorEquipamento(lista);
-  const totalComb = grupos.reduce((a,g)=>a+g.custo,0), totalManut = grupos.reduce((a,g)=>a+g.custoManutencao,0);
+  const totalComb = grupos.reduce((a,g)=>a+g.custo,0), totalManut = grupos.reduce((a,g)=>a+g.custoManutencao,0), totalPecas = grupos.reduce((a,g)=>a+g.custoPecas,0);
+  // O que mais importa vem primeiro (R$ por hora e custo total); volume, consumo e horas, que só explicam a conta, ficam no fim.
   return `
   ${FiltroPeriodoRateio()}
   <div class="card" style="overflow-x:auto;">
     ${grupos.length===0 ? Empty('Nenhum abastecimento no período','Ajuste o período ou registre abastecimentos na aba Abastecimento.') : `
     <table data-rateio-equipamento="1">
-      <thead><tr><th>Equipamento</th><th>Volume</th><th>Consumo</th><th>Horas / km</th><th>Combustível (R$)</th><th>Manutenção (R$)</th><th>Custo total (R$)</th><th>R$ por hora / km</th></tr></thead>
+      <thead><tr><th>Equipamento</th><th>R$ por hora / km</th><th>Custo total (R$)</th><th>Combust. (R$)</th><th>Manut. (R$)</th><th>Peças e serv. (R$)</th><th>Horas / km</th><th>Consumo</th><th>Volume</th></tr></thead>
       <tbody>
         ${grupos.map(g=>`
           <tr data-equipamento-linha="${g.equipamentoId}">
             <td><strong>${esc(g.nome)}</strong><br><span class="hint">${(OPCOES.TIPOS_EQUIPAMENTO.find(t=>t.value===g.tipo)||{}).label || g.tipo || '—'}</span></td>
-            <td class="mono">${fmtInt(g.volume)} L</td>
-            <td class="mono">${g.consumo!=null ? `${fmt(g.consumo,2)} ${g.unidade}` : '—'}</td>
-            <td class="mono">${g.percorrido!=null ? `${fmt(g.percorrido,1)} ${g.unidadeMedida}` : '—'}</td>
+            <td class="mono"><strong>${g.custoPorUnidade!=null ? `R$ ${fmt(g.custoPorUnidade)} /${g.unidadeMedida}` : '—'}</strong></td>
+            <td class="mono"><strong>${fmt(g.custoTotal)}</strong></td>
             <td class="mono">${fmt(g.custo)}</td>
             <td class="mono">${g.custoManutencao>0 ? fmt(g.custoManutencao) : '—'}</td>
-            <td class="mono"><strong>${fmt(g.custoTotal)}</strong></td>
-            <td class="mono"><strong>${g.custoPorUnidade!=null ? `R$ ${fmt(g.custoPorUnidade)} /${g.unidadeMedida}` : '—'}</strong></td>
+            <td class="mono">${g.custoPecas>0 ? fmt(g.custoPecas) : '—'}</td>
+            <td class="mono">${g.percorrido!=null ? `${fmt(g.percorrido,1)} ${g.unidadeMedida}` : '—'}</td>
+            <td class="mono">${g.consumo!=null ? `${fmt(g.consumo,2)} ${g.unidade}` : '—'}</td>
+            <td class="mono">${fmtInt(g.volume)} L</td>
           </tr>
         `).join('')}
-        <tr><td style="font-weight:700;">Total</td><td></td><td></td><td></td>
-          <td class="mono" style="font-weight:700;">${fmt(totalComb)}</td><td class="mono" style="font-weight:700;">${totalManut>0 ? fmt(totalManut) : '—'}</td>
-          <td class="mono" style="font-weight:700;">${fmt(totalComb+totalManut)}</td><td></td></tr>
+        <tr><td style="font-weight:700;">Total</td><td></td>
+          <td class="mono" style="font-weight:700;">${fmt(totalComb+totalManut+totalPecas)}</td>
+          <td class="mono" style="font-weight:700;">${fmt(totalComb)}</td><td class="mono" style="font-weight:700;">${totalManut>0 ? fmt(totalManut) : '—'}</td><td class="mono" style="font-weight:700;">${totalPecas>0 ? fmt(totalPecas) : '—'}</td>
+          <td></td><td></td><td></td></tr>
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin-top:10px;">Ranking por custo total no período. <strong>Custo por hora (ou km)</strong> = (combustível + manutenção do período) ÷ horas (ou km) rodados: a diferença entre a maior e a menor leitura do medidor nos abastecimentos do período, então precisa de pelo menos 2 abastecimentos com leitura. A manutenção só entra quando o custo foi preenchido na aba Manutenção. Não inclui depreciação, mão de obra nem peças lançadas fora do app.</p>`;
+  <p class="hint" style="margin-top:10px;">Ranking por custo total no período. <strong>Custo por hora (ou km)</strong> = (combustível + manutenção + peças e serviços) ÷ horas (ou km) rodados: a diferença entre a maior e a menor leitura do medidor nos abastecimentos do período, então precisa de pelo menos 2 abastecimentos com leitura. A manutenção só entra quando o custo foi preenchido na aba Manutenção. <strong>Peças e serviços</strong> são as despesas do Financeiro (AE Matriz) lançadas com este equipamento; só quem tem acesso ao Financeiro enxerga esta coluna. Se o mesmo gasto for lançado na Manutenção e no Financeiro, ele conta duas vezes: use o custo da Manutenção só para o que não está no Financeiro. Não inclui depreciação nem mão de obra.</p>`;
 }
 const RATEIO_PAGES = {
   rateioFrente: {label:'Por Frente', desc:'Custo e volume de combustível por frente de negócio (cana, grãos, pecuária) no período selecionado.', render:PageRateioFrente},
