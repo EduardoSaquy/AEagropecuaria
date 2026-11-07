@@ -804,6 +804,25 @@ function quandoUltimaCopia(){
     return d && !isNaN(d) ? d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
   }catch(e){ return ''; }
 }
+// Lembrete no Painel (só admin): a cópia só protege se alguém lembrar de baixá-la.
+const DIAS_AVISO_COPIA = 8;
+function diasDesdeUltimaCopia(){
+  try{
+    const iso = localStorage.getItem(COPIA_ULTIMA_KEY);
+    const d = iso ? new Date(iso) : null;
+    return d && !isNaN(d) ? Math.floor((Date.now() - d.getTime()) / 86400000) : null;
+  }catch(e){ return null; }
+}
+function AvisoCopiaDeSeguranca(){
+  if(!souAdmin()) return '';
+  const dias = diasDesdeUltimaCopia();
+  if(dias !== null && dias < DIAS_AVISO_COPIA) return '';
+  const texto = dias === null ? 'Nenhuma cópia de segurança foi baixada neste aparelho ainda.'
+    : `Faz ${dias} ${dias === 1 ? 'dia' : 'dias'} que a cópia de segurança não é baixada neste aparelho.`;
+  return `<div class="card aviso-copia" role="status" style="padding:10px 14px; margin-bottom:14px; border-left:4px solid #C98A2B; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+    <span><strong>${texto}</strong> O banco gratuito não guarda cópia automática.</span>
+    <button class="btn-ghost btn-sm" data-ir-copia="1">Baixar agora</button></div>`;
+}
 function baixarArquivo(nome, partes, tipo){
   const blob = new Blob(partes, {type: tipo + ';charset=utf-8'});
   const url = URL.createObjectURL(blob);
@@ -2541,7 +2560,7 @@ function PagePainel(){
   if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz (Pecuária, Combustível, Cana, Cereais...).');
   const visiveis = appsVisiveisNoPainel();
   if(visiveis.length===0) return Empty('Nenhum indicador liberado', 'Fale com o administrador para liberar o painel de algum app pra você.');
-  return `<div class="app-grid">${visiveis.map(AppCard).join('')}</div>`;
+  return `${AvisoCopiaDeSeguranca()}<div class="app-grid">${visiveis.map(AppCard).join('')}</div>`;
 }
 
 /* ===================== FILTRO DE PERÍODO (Mês / Ano / Safra) ===================== */
@@ -8994,6 +9013,7 @@ function attachEvents(){
     state.usuarioError = '';
     state.modal = {type:'usuario'}; render();
   };
+  document.querySelectorAll('[data-ir-copia]').forEach(el=>{ el.onclick = ()=>{ state.page = 'usuarios'; state.mobileNavAberto = false; render(); window.scrollTo(0, 0); }; });
   document.querySelectorAll('[data-baixar-copia]').forEach(el=>{ el.onclick = ()=>baixarCopiaDeSeguranca(); });
   document.querySelectorAll('[data-baixar-csv]').forEach(el=>{ el.onclick = ()=>baixarCsvLancamentos(); });
   document.querySelectorAll('[data-editar-usuario]').forEach(el=>{

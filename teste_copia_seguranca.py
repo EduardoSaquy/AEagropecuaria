@@ -1,6 +1,7 @@
 """
 Copia de seguranca dos dados no AE Matriz (07/11/2026). O plano gratuito do Supabase nao guarda copia automatica; em Usuarios o
 administrador baixa um arquivo com todas as tabelas e uma planilha dos lancamentos para o contador. Prova:
+  - o Painel lembra o administrador quando nao ha copia ou ela tem 8 dias ou mais (so admin) e leva ao cartao;
   - o cartao aparece para o administrador (e nao existe para outro perfil), com "Nenhuma copia baixada" ate a primeira;
   - "Baixar copia dos dados": baixa AE_copia_AAAA-MM-DD.json com TODAS as linhas (inclusive mais de 1000 por tabela, paginadas),
     uma chave por tabela, o resumo com a contagem, quem gerou e quando;
@@ -71,6 +72,25 @@ with sync_playwright() as pw:
     page.wait_for_timeout(500)
     page.evaluate("() => { state.page = 'usuarios'; render(); }")
     page.wait_for_timeout(300)
+
+    print("== lembrete no Painel")
+    page.evaluate("() => { state.page = 'painel'; render(); }")
+    page.wait_for_timeout(200)
+    conf("Nenhuma cópia de segurança foi baixada neste aparelho ainda" in page.inner_text("body"), "sem nenhuma copia o Painel lembra o administrador")
+    nao_admin_painel = page.evaluate("() => { const p = state.perfil; state.perfil = {...p, papel: 'proprietario'}; const h = PagePainel(); state.perfil = p; return h; }")
+    conf("aviso-copia" not in nao_admin_painel, "quem nao e administrador nao ve o lembrete")
+    page.evaluate("() => localStorage.setItem('ae_matriz_ultima_copia_v1', new Date(Date.now() - 3 * 86400000).toISOString())")
+    page.evaluate("() => render()")
+    conf("aviso-copia" not in page.evaluate("() => PagePainel()"), "copia de 3 dias atras: sem lembrete")
+    page.evaluate("() => localStorage.setItem('ae_matriz_ultima_copia_v1', new Date(Date.now() - 10 * 86400000).toISOString())")
+    page.evaluate("() => render()")
+    page.wait_for_timeout(200)
+    conf("Faz 10 dias que a cópia de segurança não é baixada" in page.inner_text("body"), "copia de 10 dias atras: o Painel avisa quantos dias")
+    page.click("[data-ir-copia]")
+    page.wait_for_timeout(200)
+    conf(page.locator("[data-baixar-copia]").count() == 1, "o botao 'Baixar agora' leva ao cartao da copia")
+    page.evaluate("() => { localStorage.removeItem('ae_matriz_ultima_copia_v1'); render(); }")
+    page.wait_for_timeout(200)
 
     print("== o cartao")
     corpo = page.inner_text("body")

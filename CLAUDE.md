@@ -1517,8 +1517,8 @@ divergem: conferir no painel). Por isso:
   (fechada a quem está logado; a visão `lancamentos_rateados` leva o resultado do rateio), `contas_bancarias` e `log_alteracoes`.
   O segundo botão baixa os lançamentos carregados em **CSV** (BOM, ponto e vírgula, vírgula decimal, data dd/mm/aaaa, recorrente
   marcado, texto que o Excel leria como fórmula neutralizado) para o contador. A tela guarda a data da última cópia deste aparelho
-  (`ae_matriz_ultima_copia_v1`). O arquivo tem valores e nomes: guardar em lugar seguro, nunca no repositório. Tabela nova que o
-  app passe a ler entra em `TABELAS_COPIA`. Restaurar é por script (não há botão de restaurar). `teste_copia_seguranca.py` (27).
+  (`ae_matriz_ultima_copia_v1`) e o **Painel lembra o admin** (`AvisoCopiaDeSeguranca`, `DIAS_AVISO_COPIA` = 8) quando não há cópia ou ela é antiga. O arquivo tem valores e nomes: guardar em lugar seguro, nunca no repositório. Tabela nova que o
+  app passe a ler entra em `TABELAS_COPIA`. Restaurar é por script (não há botão de restaurar). `teste_copia_seguranca.py` (32).
 - **Curva ABC das despesas** (Resultados > Relatórios, `curvaAbcDespesas`): por centro de custo e por fornecedor (os 25 maiores),
   da maior para a menor, com % e % acumulado; **A = até 80% do gasto** (um item é A se o acumulado ANTES dele ainda é menor que
   80%), **B até 95%, C o resto**. Só despesa (investimento e receita ficam de fora); segue o período e os filtros da aba;
@@ -1648,7 +1648,7 @@ divergem: conferir no painel). Por isso:
 
 ## Testes
 
-56 arquivos `teste_*.py`, 1.540 checagens (07/11/2026; a tabela abaixo lista os
+56 arquivos `teste_*.py`, 1.545 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1704,7 +1704,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |
 | `teste_offline_lancar.py` | 47 | AEpecuaria.html (lançar sem internet: cópia dos cadastros no aparelho por usuário, abrir sem sinal e com rede que não responde, fila, sobe uma vez só, janela aberta não é redesenhada, Sair apaga a cópia, aparelho sem espaço) |
-| `teste_copia_seguranca.py` | 27 | AEMatriz.html (cópia de segurança em Usuários: JSON paginado com todas as linhas, tabela sem permissão fica de fora, CSV para o contador com BOM, vírgula decimal e fórmula neutralizada, só admin, sem violar a CSP) |
+| `teste_copia_seguranca.py` | 32 | AEMatriz.html (cópia de segurança em Usuários: JSON paginado com todas as linhas, tabela sem permissão fica de fora, CSV para o contador com BOM, vírgula decimal e fórmula neutralizada, só admin, sem violar a CSP) |
 | `teste_curva_abc.py` | 18 | AEMatriz.html (Curva ABC das despesas em Relatórios: classes A/B/C por centro e por fornecedor, só despesa, filtros de período e atividade, sem rolar de lado) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
