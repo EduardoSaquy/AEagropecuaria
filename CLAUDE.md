@@ -1687,8 +1687,7 @@ no `teste_nucleo.py`, até alguém decidir o comportamento certo):
   continua só do admin (`souAdmin`). **Banco conferido por ele em 07/11/2026** (definições ao vivo): `is_admin()` = só `papel='admin'`; `is_dono()` =
   admin ou proprietário; **`tem_permissao()` chama `acesso_total()`** (criada por `lavoura_04_proprietario_acesso_total.sql`), então o proprietário já
   tinha acesso total no banco e a matriz dele é ignorada (dos 3 proprietários, 2 têm `nenhum`/vazio e 1 tem `editar` nos `combustivel_*`: não muda nada).
-  Ou seja, o app é que estava mais restrito que o banco; agora os dois concordam. Não vi o corpo de `acesso_total()` ao vivo (a consulta pedia só
-  as três funções); o `lavoura_04` o cria com admin e proprietário. `pode_acessar_frente*` só restringe quem tiver `frentes` marcadas no perfil. A mesma tela de acesso da **Pecuária** só lista
+  Ou seja, o app é que estava mais restrito que o banco; agora os dois concordam. `acesso_total()` ao vivo, conferido por ele: `papel in ('admin','proprietario')` e `ativo`. `pode_acessar_frente*` só restringe quem tiver `frentes` marcadas no perfil. A mesma tela de acesso da **Pecuária** só lista
   colaborador/consultor/proprietário/admin, então editar ali um gestor/operador/encarregado o rebaixa a Colaborador (não corrigido: não foi pedido).
 - `pareceErroDeRede`: a da Pecuária também reconhece `navigator.onLine === false`, `TypeError` e "load failed" (Safari); a do Matriz só olha três palavras.
 - `currentGroupKey`/`gruposVisiveis`: iguais em Pecuária, Cana e Combustível; o Cereais tem outra. `fazerLogin`: o Combustível tem outra.
