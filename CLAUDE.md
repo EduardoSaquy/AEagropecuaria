@@ -1274,7 +1274,7 @@ manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
   PC e 550 ms com CPU 4x mais lenta (eram 2,6 s e ~23 s); Relatórios 130/666 ms; Empresa 283/1.097 ms; abrir o app até os dados 1,6 s/5,6 s
   (o ponto fraco: a carga completa ainda baixa tudo). A Pecuária não foi medida em volume.
 - **Código** (medido pelo navegador): `attachEvents` com 909 linhas (Matriz) e 2.206 (Pecuária); 95 funções com o mesmo nome em 2+ apps, 42
-  idênticas e **53 que divergiram**; nenhum CI (nada roda os testes sozinho a cada envio); 201 SQL no repo sem índice do que já rodou; 5 `sw_*.js`
+  idênticas e **53 que divergiram**; nenhum CI no momento da medição (instalado no mesmo dia, ver "Testes automáticos no GitHub"); 201 SQL no repo sem índice do que já rodou; 5 `sw_*.js`
   aposentados ainda lá; dinheiro em ponto flutuante (97 `reduce` no Matriz).
 - **Segurança**: chave pública não lê nenhum objeto (inclui as cópias `zz_backup_dup4_*`); os apps chamam só 2 funções de criar usuário
   (`criar-usuario-cana`, `criar-usuario-combustivel`); `contas_bancarias` ainda tem as colunas `agencia` e `conta` (vazias na tela; apagar depois de
@@ -1853,6 +1853,29 @@ não confie de cabeça na lista acima ficar completa. Em sandbox sem rede pra
 buscar fonte/CDN externo, espere 2 falhas de `ERR_CONNECTION_RESET` em
 `teste_apps_lavoura.py` — é ruído do ambiente, não regressão (o teste já
 filtra outros códigos de erro de rede, mas não esse).
+
+### Testes automáticos no GitHub (CI, 07/11/2026)
+
+`.github/workflows/testes.yml` + `roda_testes.py`. A cada `push` (qualquer branch) e sob demanda (aba Actions > Testes > Run workflow), o GitHub
+roda **todos os `teste_*.py` em 4 partes ao mesmo tempo** (`ubuntu-latest`, Python 3.12, Chromium do Playwright, `TZ=America/Sao_Paulo`).
+Medido na primeira rodada boa: **61 de 61 testes passaram, cada parte em 1 a 2 minutos** (no notebook do Eduardo a bateria leva muito mais).
+- **Não impede o site de atualizar**: o GitHub Pages publica a `main` por conta própria. Quebrou = ✗ vermelho na aba Actions e e-mail do
+  GitHub. Para impedir a publicação seria preciso trocar o Pages para publicação por workflow (não feito: atrasaria todo envio).
+- **Como ver o motivo**: abrir a rodada; cada teste que falha vira uma anotação de erro com as últimas 40 linhas da saída dele, e cada parte
+  posta uma anotação-resumo (quantos testes, tempo de cada um). A mesma informação está na API pública
+  (`/repos/EduardoSaquy/AEagropecuaria/actions/runs`, `/actions/runs/{id}/jobs`, `/check-runs/{job}/annotations`), que dá para ler sem login.
+- **Ambiente que o CI monta** (passo "Monta o ambiente que os testes esperam"): os testes foram escritos num sandbox com caminhos fixos,
+  então `/home/claude/AEagropecuaria` aponta para o repositório, `/tmp/lav_test/stub.js` é o stub do Supabase e `/opt/pw-browsers/chromium` é
+  o Chromium do Playwright. Teste novo que dependa de outro caminho ou programa: acrescentar ali. Dependência de Python nova: `requirements.txt`
+  (o primeiro erro real do CI foi `openpyxl` faltando, usado por `teste_manejo_planilha.py`).
+- **No Linux do GitHub passam os dois que no notebook dele falham** (`teste_offline`, uma checagem de tempo, e `teste_layout_matriz`, caminho
+  Linux): ali a bateria inteira é verde, então **vermelho no CI = regressão de verdade**.
+- **Provado que pega erro**: uma branch descartável com o aviso do Matriz quebrado de propósito ficou vermelha, com 38 testes do Matriz
+  reprovados e cada um anotado, enquanto os da Pecuária, Cana e Combustível seguiram verdes (as duas branches de ensaio foram apagadas).
+- Teste novo (`teste_*.py`) é pego sozinho (o executor lista a pasta). `python roda_testes.py [--parte i --de n] [arquivo ...]` só funciona onde
+  existem os caminhos acima (Linux/CI); no Windows dele continua o `prepara.py` do scratchpad. Não rodam no CI: `ensaio_sql_banco.py` e
+  `conferir_chave_publica.py` (não são `teste_*`; precisam de Postgres e de internet).
+- Ações usadas: `actions/checkout@v7` e `actions/setup-python@v7` (do próprio GitHub; o GitHub avisa quando uma versão fica velha).
 
 ## Restrições de segurança permanentes
 
