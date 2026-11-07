@@ -1282,9 +1282,8 @@ manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
   idênticas e **53 que divergiram**; nenhum CI no momento da medição (instalado no mesmo dia, ver "Testes automáticos no GitHub"); 201 SQL no repo sem índice do que já rodou; 5 `sw_*.js`
   aposentados ainda lá; dinheiro em ponto flutuante (97 `reduce` no Matriz).
 - **Segurança**: chave pública não lê nenhum objeto (inclui as cópias `zz_backup_dup4_*`); os apps chamam só 2 funções de criar usuário
-  (`criar-usuario-cana`, `criar-usuario-combustivel`); `contas_bancarias` ainda tem as colunas `agencia` e `conta` (vazias na tela) → **`seguranca_03_apaga_agencia_e_conta.sql`**
-  (ensaiado: só apaga se estiverem vazias, recusa dizendo quantas linhas têm dado, sem CASCADE; desfazer no fim do arquivo; ele ainda vai rodar). A consulta
-  dele (07/11/2026) achou só mais três colunas de documento: `fornecedores.cnpj`, `lancamentos_financeiros.cnpj_nota` e a visão `lancamentos_rateados` — CNPJ de
+  (`criar-usuario-cana`, `criar-usuario-combustivel`); as colunas `agencia` e `conta` de `contas_bancarias` foram **APAGADAS** (07/11/2026, `seguranca_03_apaga_agencia_e_conta.sql`, que só apaga se estiverem vazias; a tabela
+  tem 0 linhas). Outras colunas de documento que a consulta dele achou: `fornecedores.cnpj`, `lancamentos_financeiros.cnpj_nota` e a visão `lancamentos_rateados` — CNPJ de
   fornecedor (dado de registro público, usado para casar com o ERP): ficam; backup automático e plano do Supabase não confirmados.
 - **`saude_do_banco_01.sql` rodada de novo por ele em 07/11/2026 (depois de todas as limpezas): 21 das 24 checagens OK** (eram 18). Agora
   OK: conta #107 (B2), pesagens com 0 kg (D3), `erp_id` repetido, geral sem partes, rateio que não fecha, financiamentos e cadastros. Seguem em
@@ -1720,6 +1719,29 @@ ficou **vazia**). O que não era igual foi decidido assim (só o que não muda o
 apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por tela); apagar os `sw_*.js` aposentados. `Adubacao.html` não usa o núcleo (sem login,
 `esc`/`fmt` próprios e diferentes).
 
+### Verificação em duas etapas (TOTP, 07/11/2026) — telas no ar, EXIGÊNCIA NO BANCO ainda não
+
+O Supabase já traz o TOTP ligado (conferido por ele no painel). Os 5 apps (`core.js`) ganharam:
+- **Cadastro**: botão "Ativar ou gerenciar" na tela **Trocar senha**, só para quem tem acesso total (`acessoTotal()`: admin e proprietário). Janela própria por cima do app
+  (`#mfa-dialogo`, `abrirSegundoFator`): QR code + chave para digitar, código de 6 números, cadastrar outro celular, remover, desistir no meio não deixa fator pela metade.
+  O QR do Supabase vem como `data:image/svg+xml` com o SVG por extenso e um `#` de cor corta o endereço: `qrComoImagem` relê e recodifica.
+- **Login**: conta com celular cadastrado → depois da senha aparece a tela cheia `#mfa-desafio` e **o app não carrega nada** (nem o perfil) até o código passar; cancelar volta ao
+  login. Vale no login com senha (`fazerLogin`), ao abrir o app com sessão guardada só de senha (`initAuth`) e na renovação do token de uma sessão que ganhou celular
+  depois. Com mais de um celular cadastrado o código é de UM deles, então se tenta cada fator. Sem internet o código não se confere (a tela avisa); sessão já confirmada
+  neste aparelho (aal2) abre sem pedir de novo, até sem sinal.
+- **Como se decide** (`precisaDoSegundoFator`, local, sem rede): o JWT do login diz `aal1` (só senha) ou `aal2` (senha + código) e `session.user.factors` traz os celulares
+  confirmados; pede o código se `aal1` **e** há fator confirmado. Eventos de sessão no meio da conferência são ignorados (`state.mfaEmAndamento`).
+- **Quem não ativou entra como sempre.** Funcionário de campo não muda nada.
+- O stub dos testes tem uma API de fator falsa (`window.__MFA__`, `window.__MFA_CODIGO__` = 123456, `window.__jwt('aal1'|'aal2')`).
+
+**O que AINDA falta (nada disto protege o banco hoje):** a tela sozinha é aviso, não proteção — com a senha roubada alguém ainda lê o banco por fora do app. A proteção
+é um SQL de RLS (`seguranca_04`, a escrever e ensaiar): política **restritiva** em toda tabela com RLS e a mesma regra nas funções/visões de permissão (a visão
+`lancamentos_rateados` roda com direitos do dono e filtra por `tem_permissao`, então a RLS das tabelas não a cobre) que, para quem TEM fator confirmado, exija `aal2`; quem
+não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2) ele ativa o dele (de preferência 2 celulares) e testa entrar, fechar e abrir, abrir sem sinal;
+(3) só então o SQL. Ligar o SQL antes de ele conseguir ativar pode trancá-lo para fora.
+**Se alguém perder o celular**: o Supabase não dá códigos de recuperação; o dono do projeto remove o fator no SQL Editor (`delete from auth.mfa_factors where user_id =
+'<uuid da pessoa>';`, a conferir quando for preciso) e a pessoa cadastra de novo.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**
@@ -1841,7 +1863,7 @@ apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por te
 
 ## Testes
 
-66 arquivos `teste_*.py`, 1.945 checagens (07/11/2026; a tabela abaixo lista os
+67 arquivos `teste_*.py`, 2.097 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1892,6 +1914,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_combustivel_proprietario.py` | 13 | AECombustivel.html (proprietário tem acesso total sem matriz e a tela de Usuários segue só do admin; gestor sem matriz não vê nada; "Proprietário" na lista de usuários; editar e salvar proprietário/colaborador/gestor não muda o perfil da pessoa) |
 | `teste_perfis_acesso.py` | 66 | os 5 apps (tela de acesso: abrir e salvar quem é de qualquer dos 7 perfis não troca o perfil; lista com cor e texto certos; formulário de novo usuário escapa o que se digita) |
 | `teste_sessao_abertura.py` | 65 | os 5 apps (tela de login com o nome do app e texto escapado; aparelho sem sinal na 1ª abertura diz "sem conexão" e o "Tentar novamente" abre o app; `TOKEN_REFRESHED` não redesenha nem recarrega; sair; `pareceErroDeRede` nos 3 navegadores) |
+| `teste_segundo_fator.py` | 152 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, QR carrega) |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |

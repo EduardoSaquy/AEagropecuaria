@@ -126,6 +126,11 @@ function ModalTrocarSenha(){
         <div class="field"><label>Nova senha</label><input id="f-novasenha" type="password" autocomplete="new-password" value="${d.novaSenha}"/></div>
         <div class="field"><label>Confirmar nova senha</label><input id="f-confirmarsenha" type="password" autocomplete="new-password" value="${d.confirmarSenha}"/></div>
         <p class="hint">A nova senha precisa ter pelo menos 6 caracteres.</p>
+        ${acessoTotal() ? `<div class="field" style="margin-top:18px; padding-top:14px; border-top:1px solid rgba(0,0,0,.1);">
+          <label>Verificação em duas etapas</label>
+          <button type="button" class="btn btn-ghost" data-mfa-abrir="1">Ativar ou gerenciar</button>
+          <span class="hint">Depois da senha, o app pede um código do celular. Recomendado para quem tem acesso total.</span>
+        </div>` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -275,7 +280,16 @@ async function fazerLogin(){
     render();
     return;
   }
-  state.session = data.session;
+  let sessao = data.session;
+  if(precisaDoSegundoFator(sessao)){
+    // senha certa, mas a conta tem verificação em duas etapas: o app só abre depois do código
+    state.mfaEmAndamento = true;
+    const passou = await desafioMFA(sessao);
+    state.mfaEmAndamento = false;
+    if(!passou){ try{ await db.auth.signOut(); }catch(e){ /* sem rede: a sessão local some de qualquer jeito */ } state.loginDraft = {usuario: state.loginDraft.usuario, senha:''}; render(); return; }
+    sessao = (await db.auth.getSession()).data.session || sessao;
+  }
+  state.session = sessao;
   await loadPerfil();
   state.loginDraft = {usuario:'', senha:''};
   render();
@@ -393,6 +407,13 @@ async function loadPerfil(){
 async function initAuth(){
   if(typeof aoIniciarApp === 'function') aoIniciarApp();
   state.session = await sessaoInicial();
+  if(state.session && precisaDoSegundoFator(state.session)){
+    state.mfaEmAndamento = true;
+    const passou = await desafioMFA(state.session);
+    state.mfaEmAndamento = false;
+    if(passou) state.session = (await db.auth.getSession()).data.session || state.session;
+    else { try{ await db.auth.signOut(); }catch(e){ /* sem rede */ } state.session = null; }
+  }
   if(state.session) await loadPerfil();
   state.authChecked = true;
   render();
@@ -401,11 +422,23 @@ async function initAuth(){
   let primeiroEvento = true;
   db.auth.onAuthStateChange(async (event, newSession)=>{
     if(primeiroEvento){ primeiroEvento = false; return; }
+    if(state.mfaEmAndamento) return;   // o código do 2º fator está sendo pedido: quem segue o fluxo é fazerLogin/initAuth
     // token renovado automaticamente (a cada ~1h) não é troca de sessão de
     // verdade — o cliente supabase-js já usa o token novo sozinho; só
     // guardamos a referência, sem re-renderizar (senão um modal aberto com
     // campo digitado e ainda não salvo perderia o texto no meio da digitação).
-    if(event==='TOKEN_REFRESHED'){ state.session = newSession; return; }
+    if(event==='TOKEN_REFRESHED' || event==='MFA_CHALLENGE_VERIFIED'){
+      state.session = newSession;
+      // sessão aberta só com a senha, antes de o celular ser cadastrado: a renovação traz o fator, e agora o código é pedido
+      if(event==='TOKEN_REFRESHED' && precisaDoSegundoFator(newSession) && !state.mfaEmAndamento){
+        state.mfaEmAndamento = true;
+        const passou = await desafioMFA(newSession);
+        state.mfaEmAndamento = false;
+        if(passou) state.session = (await db.auth.getSession()).data.session || state.session;
+        else await fazerLogout();
+      }
+      return;
+    }
     if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
     state.session = newSession;
     if(newSession){
@@ -479,3 +512,196 @@ function AguardandoLiberacao(){
     </div>
   </div>`;
 }
+
+/* ---------- Verificação em duas etapas (TOTP), igual nos cinco apps (07/11/2026) ----------
+ * Quem tem um fator confirmado (app autenticador no celular) digita um código de 6 números DEPOIS da senha. O Supabase marca o
+ * login com um nível: aal1 = só a senha, aal2 = senha + código. A tela de login e a de gerenciar ficam por cima do app (não
+ * dependem do render de cada app) e usam só as classes de login que todos têm. O que EXIGE o código no banco é o SQL de RLS
+ * (seguranca_04): sem ele esta tela é só aviso, não proteção. Só quem tem acesso total (admin e proprietário) vê o botão de
+ * ativar; quem não ativou entra como sempre.
+ */
+function lerJwt(token){
+  try{
+    const parte = String(token||'').split('.')[1];
+    if(!parte) return null;
+    const b64 = parte.replace(/-/g,'+').replace(/_/g,'/');
+    const bin = atob(b64 + '='.repeat((4 - b64.length % 4) % 4));
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c=>c.charCodeAt(0))));
+  }catch(e){ return null; }
+}
+function fatoresConfirmados(sessao){
+  return (sessao?.user?.factors || []).filter(f=>f.status==='verified' && (!f.factor_type || f.factor_type==='totp'));
+}
+// A sessão ainda pede o código? (tem fator confirmado e o login é só de senha, aal1.) Conta só com o que já está na sessão:
+// funciona sem internet, e sessão sem o código de volta (aal2 guardado neste aparelho) não é desafiada de novo.
+function precisaDoSegundoFator(sessao){
+  const claims = lerJwt(sessao?.access_token);
+  return !!claims && claims.aal === 'aal1' && fatoresConfirmados(sessao).length > 0;
+}
+// Tela cheia pedindo o código. Resolve true quando o código passa; false se a pessoa cancelar.
+function desafioMFA(sessao){
+  const fatores = fatoresConfirmados(sessao);
+  return new Promise(resolve=>{
+    const fundo = document.createElement('div');
+    fundo.id = 'mfa-desafio';
+    fundo.style.cssText = 'position:fixed; inset:0; z-index:10000; overflow:auto; background:' + (getComputedStyle(document.body).backgroundColor || '#fff');
+    fundo.innerHTML = `
+      <div class="login-wrap">
+        <div class="login-card">
+          <div class="login-brand">
+            ${brandMark()}
+            <div class="brand-name">${esc(NOME_DO_APP)}</div>
+          </div>
+          <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:16px;">Verificação em duas etapas. Digite o código de 6 números que aparece no app autenticador do seu celular.</p>
+          <div class="login-error" id="mfa-erro" style="display:none;"></div>
+          <form id="mfa-form">
+            <div class="login-field">
+              <label>Código</label>
+              <input id="mfa-codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+            </div>
+            <button type="submit" class="btn btn-primary login-btn" id="mfa-ok">Confirmar</button>
+          </form>
+          <button type="button" class="btn btn-ghost login-btn" id="mfa-sair" style="margin-top:10px;">Cancelar e sair</button>
+        </div>
+      </div>`;
+    document.body.appendChild(fundo);
+    const campo = fundo.querySelector('#mfa-codigo'), botao = fundo.querySelector('#mfa-ok'), caixaErro = fundo.querySelector('#mfa-erro');
+    const mostraErro = t=>{ caixaErro.textContent = t; caixaErro.style.display = 'block'; };
+    let ocupado = false;
+    fundo.querySelector('#mfa-form').onsubmit = async e=>{
+      e.preventDefault();
+      if(ocupado) return;
+      const codigo = campo.value.replace(/\D/g, '');
+      if(codigo.length !== 6){ mostraErro('Digite os 6 números do código.'); return; }
+      if(aparelhoSemRede()){ mostraErro('Sem internet: o código só pode ser conferido com sinal.'); return; }
+      ocupado = true; botao.disabled = true; botao.textContent = 'Conferindo...';
+      let passou = false, faltouRede = false;
+      // com mais de um celular cadastrado o código é de UM deles: tenta cada fator
+      for(const f of fatores){
+        const { error } = await db.auth.mfa.challengeAndVerify({ factorId: f.id, code: codigo });
+        if(!error){ passou = true; break; }
+        if(pareceErroDeRede(error)) faltouRede = true;
+      }
+      ocupado = false; botao.disabled = false; botao.textContent = 'Confirmar';
+      if(passou){ fundo.remove(); resolve(true); return; }
+      campo.value = ''; campo.focus();
+      mostraErro(faltouRede ? 'Não consegui falar com o servidor. Confira o sinal e tente de novo.' : 'Código inválido ou vencido. Espere o próximo código aparecer no app e digite de novo.');
+    };
+    fundo.querySelector('#mfa-sair').onclick = ()=>{ fundo.remove(); resolve(false); };
+    campo.focus();
+  });
+}
+// O QR code do Supabase vem como data:image/svg+xml com o SVG por extenso, e um '#' dentro (cor) corta o endereço no navegador: o
+// SVG é lido e posto de novo, codificado, para a imagem sempre carregar inteira.
+function qrComoImagem(qr){
+  const texto = String(qr || ''), i = texto.indexOf(',');
+  if(!texto.startsWith('data:image/svg+xml') || i < 0) return texto;
+  let svg = texto.slice(i + 1);
+  try{ if(/%3C/i.test(svg)) svg = decodeURIComponent(svg); }catch(e){ /* já estava como texto */ }
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+// Janela para ativar, ver e remover os celulares cadastrados (aberta pelo botão da tela "Trocar senha").
+async function abrirSegundoFator(){
+  if(document.getElementById('mfa-dialogo')) return;
+  const caixa = document.createElement('div');
+  caixa.id = 'mfa-dialogo'; caixa.className = 'overlay'; caixa.style.zIndex = '9000';
+  document.body.appendChild(caixa);
+  const m = { carregando: true, fatores: [], novo: null, erro: '', ocupado: false };
+  const lista = async ()=>{ const { data } = await db.auth.mfa.listFactors(); return data || { all: [], totp: [] }; };
+  const fecha = ()=>{
+    if(m.novo) db.auth.mfa.unenroll({ factorId: m.novo.factorId });   // ativação começada e não terminada: não deixa fator pela metade
+    caixa.remove();
+  };
+  const desenha = ()=>{
+    let corpo, rodape = '';
+    if(m.carregando){
+      corpo = '<p class="hint">Carregando...</p>';
+    } else if(m.novo){
+      corpo = `
+        <p class="hint">1. No celular, abra o app autenticador (Google Authenticator, Microsoft Authenticator ou Authy) e leia este QR code.</p>
+        <div style="text-align:center; margin:10px 0;"><img src="${esc(qrComoImagem(m.novo.qr))}" alt="QR code para o app autenticador" width="200" height="200" style="background:#fff; padding:6px;"/></div>
+        <p class="hint">Se não conseguir ler, digite esta chave no app: <strong class="mono" style="user-select:all;">${esc(m.novo.segredo)}</strong></p>
+        <p class="hint">2. Digite o código de 6 números que o app mostrar agora:</p>
+        <div class="field"><input id="mfa-ativar-codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>`;
+      rodape = `<button class="btn btn-ghost" data-mfa-voltar="1">Cancelar</button>
+                <button class="btn btn-primary" data-mfa-confirmar="1" ${m.ocupado ? 'disabled' : ''}>${m.ocupado ? 'Conferindo...' : 'Ativar'}</button>`;
+    } else if(m.fatores.length === 0){
+      corpo = `<p class="hint">Hoje o seu login é só com senha. Ativando, depois da senha o app pede um código de 6 números do app autenticador do seu celular. Recomendo cadastrar também um segundo celular, para o caso de perder o primeiro.</p>`;
+      rodape = `<button class="btn btn-ghost" data-mfa-fechar="1">Fechar</button>
+                <button class="btn btn-primary" data-mfa-ativar="1" ${m.ocupado ? 'disabled' : ''}>Ativar a verificação</button>`;
+    } else {
+      corpo = `<p class="hint">Verificação em duas etapas <strong>ativada</strong>. Aparelhos cadastrados:</p>
+        <ul style="list-style:none; padding:0; margin:8px 0;">
+          ${m.fatores.map(f=>`<li style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid rgba(0,0,0,.08);">
+            <span>${esc(f.friendly_name || 'Celular')}</span>
+            <button class="btn btn-ghost btn-sm" data-mfa-remover="${esc(f.id)}">Remover</button></li>`).join('')}
+        </ul>`;
+      rodape = `<button class="btn btn-ghost" data-mfa-fechar="1">Fechar</button>
+                <button class="btn btn-primary" data-mfa-ativar="1" ${m.ocupado ? 'disabled' : ''}>Cadastrar outro celular</button>`;
+    }
+    caixa.innerHTML = `
+      <div class="modal">
+        <div class="modal-head"><h3>Verificação em duas etapas</h3><button class="modal-close" data-mfa-fechar="1">&times;</button></div>
+        <div class="modal-body">
+          ${m.erro ? `<div class="login-error">${esc(m.erro)}</div>` : ''}
+          ${corpo}
+        </div>
+        ${rodape ? `<div class="modal-foot">${rodape}</div>` : ''}
+      </div>`;
+    const campo = caixa.querySelector('#mfa-ativar-codigo');
+    if(campo) campo.focus();
+  };
+  const recarrega = async ()=>{ m.fatores = (await lista()).totp || []; m.carregando = false; m.ocupado = false; desenha(); };
+  caixa.addEventListener('click', async e=>{
+    const alvo = e.target.closest ? e.target.closest('button') : null;
+    if(!alvo){ if(e.target === caixa) fecha(); return; }
+    if(alvo.dataset.mfaFechar !== undefined){ fecha(); return; }
+    if(alvo.dataset.mfaVoltar !== undefined){
+      if(m.novo) await db.auth.mfa.unenroll({ factorId: m.novo.factorId });
+      m.novo = null; m.erro = ''; desenha(); return;
+    }
+    if(alvo.dataset.mfaAtivar !== undefined){
+      m.ocupado = true; m.erro = ''; desenha();
+      // tentativas abandonadas (fator que nunca foi confirmado) saem antes de começar outra
+      for(const f of (await lista()).all || []) if(f.status !== 'verified') await db.auth.mfa.unenroll({ factorId: f.id });
+      const { data, error } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Celular ' + (m.fatores.length + 1) + ' - ' + new Date().toLocaleString('pt-BR') });
+      m.ocupado = false;
+      if(error || !data){ m.erro = 'Não foi possível começar a ativação: ' + ((error && error.message) || 'sem resposta') + '.'; desenha(); return; }
+      m.novo = { factorId: data.id, qr: data.totp.qr_code, segredo: data.totp.secret };
+      desenha(); return;
+    }
+    if(alvo.dataset.mfaConfirmar !== undefined){
+      const codigo = (caixa.querySelector('#mfa-ativar-codigo').value || '').replace(/\D/g, '');
+      if(codigo.length !== 6){ m.erro = 'Digite os 6 números que o app mostra.'; desenha(); return; }
+      m.ocupado = true; m.erro = ''; desenha();
+      const { error } = await db.auth.mfa.challengeAndVerify({ factorId: m.novo.factorId, code: codigo });
+      if(error){
+        m.ocupado = false;
+        m.erro = pareceErroDeRede(error) ? 'Sem conexão. Tente de novo com sinal.' : 'Código inválido ou vencido. Confira se o relógio do celular está certo e digite o código novo.';
+        desenha(); return;
+      }
+      m.novo = null;
+      avisar('Verificação em duas etapas ativada neste celular.');
+      await recarrega(); return;
+    }
+    if(alvo.dataset.mfaRemover !== undefined){
+      if(!confirm('Remover este celular? Se for o único, o login volta a ser só com senha.')) return;
+      m.ocupado = true; desenha();
+      const { error } = await db.auth.mfa.unenroll({ factorId: alvo.dataset.mfaRemover });
+      m.erro = error ? 'Não foi possível remover: ' + error.message + '.' : '';
+      await recarrega(); return;
+    }
+  });
+  caixa.addEventListener('keydown', e=>{ if(e.key === 'Escape') fecha(); });
+  desenha();
+  await recarrega();
+}
+// O botão fica na tela "Trocar senha" (ModalTrocarSenha); a fase de captura passa na frente do data-stop dos modais dos apps.
+document.addEventListener('click', e=>{
+  if(e.target && e.target.closest && e.target.closest('[data-mfa-abrir]')){
+    e.stopPropagation();
+    // a tela Trocar senha do app fecha: a janela do segundo fator fica sozinha por cima
+    state.modal = null; editDraft = null; render();
+    abrirSegundoFator();
+  }
+}, true);

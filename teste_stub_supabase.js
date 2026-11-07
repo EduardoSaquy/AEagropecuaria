@@ -17,6 +17,8 @@
 function semRede() {
   try { return !!window.__SEM_REDE__ || localStorage.getItem('__sem_rede') === '1'; } catch (e) { return !!window.__SEM_REDE__; }
 }
+// JWT de mentira so com o que o app le (aal): window.__jwt('aal1' | 'aal2')
+window.__jwt = (aal) => 'e30.' + btoa(JSON.stringify({ aal, sub: 'u1', exp: 9999999999 })).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_') + '.assinatura';
 const ERRO_REDE = { name: 'TypeError', message: 'Failed to fetch' };
 const SEM_RESPOSTA = () => Promise.resolve({ data: null, error: ERRO_REDE });
 window.supabase = {
@@ -119,6 +121,35 @@ window.supabase = {
         signInWithPassword: () => Promise.resolve({ data: { session: window.__SESSAO__ }, error: null }),
         signOut: () => Promise.resolve({}),
         updateUser: () => Promise.resolve({ error: null }),
+        // SEGUNDO FATOR (07/11/2026): window.__MFA__ = {fatores: [...]} guarda os celulares; o codigo certo e window.__MFA_CODIGO__ (padrao 123456).
+        // Ao confirmar, a sessao vira aal2 (window.__jwt('aal2')) e o ouvinte recebe MFA_CHALLENGE_VERIFIED, como no supabase-js.
+        mfa: {
+          listFactors: () => { const f = (window.__MFA__ = window.__MFA__ || { fatores: [] }).fatores; return Promise.resolve({ data: { all: f.slice(), totp: f.filter((x) => x.status === 'verified') }, error: null }); },
+          enroll: (o) => {
+            const m = (window.__MFA__ = window.__MFA__ || { fatores: [] });
+            if (m.fatores.some((x) => x.friendly_name === o.friendlyName)) return Promise.resolve({ data: null, error: { message: 'A factor with the friendly name "' + o.friendlyName + '" for this user already exists' } });
+            const id = 'f' + (m.fatores.length + 1) + '_' + Date.now();
+            m.fatores.push({ id, friendly_name: o.friendlyName, factor_type: 'totp', status: 'unverified' });
+            return Promise.resolve({ data: { id, type: 'totp', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#123456"/></svg>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' } }, error: null });
+          },
+          challengeAndVerify: ({ factorId, code }) => {
+            const m = (window.__MFA__ = window.__MFA__ || { fatores: [] });
+            const f = m.fatores.find((x) => x.id === factorId);
+            (window.__CHAMADAS_MFA__ = window.__CHAMADAS_MFA__ || []).push({ factorId, code });
+            if (semRede()) return SEM_RESPOSTA();
+            if (!f || code !== (window.__MFA_CODIGO__ || '123456')) return Promise.resolve({ data: null, error: { message: 'Invalid TOTP code entered', code: 'mfa_verification_failed' } });
+            f.status = 'verified';
+            const sessao = window.__SESSAO__ || { user: { id: 'u1' } };
+            window.__SESSAO__ = Object.assign({}, sessao, { access_token: window.__jwt('aal2'), user: Object.assign({}, sessao.user, { factors: m.fatores.filter((x) => x.status === 'verified') }) });
+            (window.__authCallbacks || []).forEach((cb) => cb('MFA_CHALLENGE_VERIFIED', window.__SESSAO__));
+            return Promise.resolve({ data: { access_token: window.__SESSAO__.access_token }, error: null });
+          },
+          unenroll: ({ factorId }) => {
+            const m = (window.__MFA__ = window.__MFA__ || { fatores: [] });
+            m.fatores = m.fatores.filter((x) => x.id !== factorId);
+            return Promise.resolve({ data: { id: factorId }, error: null });
+          },
+        },
       },
     };
   },
