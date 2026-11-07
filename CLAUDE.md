@@ -1372,6 +1372,20 @@ compra de animais e as travas do banco.
   - O stub de teste ganhou `rpc` (`window.__RPC__[nome]` registra um tratador; sem ele responde PGRST202).
   - A baixa de conta já é um insert só com gatilho no banco (uma transação). Os fluxos de várias gravações do AE
     Pecuária (lote, pesagem) ainda não foram revisados nesse ponto.
+- **Uso no campo (06/11/2026; achado 7 da revisão geral; `teste_campo_toque.py` 49 checagens)**. Medido num tablet
+  com toque (`pointer: coarse`): AE Matriz 284 botões/campos com menos de 44 px nas 15 telas e 11 rótulos sem `for`;
+  AE Pecuária 1.613 em 27 telas × 3 tamanhos. Agora, nos cinco apps (Matriz, Pecuária, Cana, Cereais, Combustível):
+  - bloco `@media (pointer: coarse)` no fim do `<style>`: botão, aba, link-botão e campo com **min-height 44 px**
+    (Apple 44, Material 48; WCAG 2.2 AA pede 24), caixas de marcar de 24 px; **o mouse do desktop fica como era**
+    (botão pequeno com 30 px). Medida: Matriz 284 → 0; Pecuária 1.613 → 2 (link de nome estreito); 0 telas passam a
+    rolar de lado. Classe nova que seja botão pequeno precisa entrar na lista desse bloco.
+  - rótulo solto liga ao campo (`ligarRotulosAosCampos` no Matriz; `MutationObserver` nos outros): só quando há um
+    rótulo e um campo com id no mesmo bloco; sem dúvida nenhuma, não chuta.
+  - contraste de texto: `--bom` #007A2B (5,5:1; era 4,4:1), `--alerta` #B03A24 (6,0:1; era 4,4:1 no fundo de alerta) e
+    `--ambar-texto` #7A4F08 (7,1:1; o âmbar #C98A2B dava 2,9:1) para TEXTO em âmbar; o âmbar continua para fundos.
+  - `orientation` dos 6 manifestos virou `any` (o tablet gira). O AE Combustível não tem esses tokens (não trocados).
+  - Falta no campo: os 137 `alert()` da Pecuária (bloqueiam a tela e os testes dependem do evento `dialog`; trocar
+    por aviso na página pede ajustar os testes junto).
 - **Compra de animais (decisões dele, 06/11/2026)**: matriz só é reconhecida no DESCARTE (sem depreciar: "ela vale o
   valor dela em carne"); o formulário de compra ganha lote e nº de cabeças (colunas `lote_id` e `quantidade` já
   existem); ele pediu a LISTA das compras para separar matriz de giro: `compra_animais_01_lista.sql` (só leitura,
@@ -1518,7 +1532,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-48 arquivos `teste_*.py`, 1.185 checagens (06/11/2026; a tabela abaixo lista os
+49 arquivos `teste_*.py`, 1.234 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1562,6 +1576,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
 | `teste_venda_atomica.py` | 19 | AEMatriz.html (venda de animais por uma função do banco: uma chamada, sem gravações soltas, saldo novo na tela, recusa do banco mostrada, caminho antigo se a função não existe) |
 | `teste_titulo_atomico.py` | 23 | AEMatriz.html (conta a pagar/receber por uma função do banco: parcelas e partes juntas, editar com id, recusa mostrada, caminho antigo) |
 | `teste_pecuaria_compra_animais.py` | 23 | AEMatriz.html (bloco "Investimentos da Pecuária" e resultado de caixa por classe de centro, aviso no Geral, só Pecuária, filtros mês/ano/safra, resultado de antes intacto) |

@@ -30,11 +30,12 @@
     --branco:#FFFFFF;
     --trigo:#C98A2B;
     --ambar:#C98A2B;
+    --ambar-texto:#7A4F08;   /* ambar como TEXTO: 7,1:1 no branco (o #C98A2B dava 2,9:1) */
     --ambar-bg:#F5E9D7;
-    --alerta:#C0432B;
+    --alerta:#B03A24;       /* 6,0:1 no branco, 5,2:1 no fundo de alerta (era #C0432B, 4,4:1) */
     --alerta-bg:#FBEAE6;
     --ok-bg:#E3F1EA;
-    --bom:#008C31;
+    --bom:#007A2B;          /* 5,5:1 no branco, 4,8:1 no fundo verde (era #008C31, 4,4:1 e 3,9:1) */
     --bom-bg:#DFF6E8;
     --radius:14px;
     --shadow:0 1px 2px rgba(15,42,74,0.04), 0 8px 24px rgba(15,42,74,0.06);
@@ -212,7 +213,7 @@
   .pill-ok{background:var(--ok-bg); color:var(--verde-vivo-escuro);}
   .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
   .pill-cat{background:var(--chip-bg); color:var(--chip-color); border-radius:8px; font-weight:600;}
-  .pill-warn{background:var(--ambar-bg); color:var(--ambar);}
+  .pill-warn{background:var(--ambar-bg); color:var(--ambar-texto);}
 
   /* form modal */
   .overlay{position:fixed; inset:0; background:rgba(23,61,46,0.4); display:flex; align-items:flex-start; justify-content:center; padding:50px 20px; overflow-y:auto; z-index:50;}
@@ -365,6 +366,23 @@
 .parcela-manual-num{grid-column:1/-1; font-weight:600; font-size:13px;}
 .parcela-manual label{display:flex; flex-direction:column; gap:3px; font-size:12px; font-weight:500; min-width:0;}
 .parcela-manual input{width:100%; min-width:0; box-sizing:border-box;}
+
+/* ---------- USO NO CAMPO: ALVOS DE TOQUE (06/11/2026) ----------
+   Em tela de toque (tablet/celular) botao e campo tem pelo menos 44 px de altura (Apple 44, Material 48; o
+   minimo da WCAG 2.2 AA e 24). Os botoes mediam 26 a 34 px. O mouse do desktop segue como era. */
+@media (pointer: coarse){
+  .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel{
+    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+  }
+  .nav-item{justify-content:flex-start;}
+  input:not([type=checkbox]):not([type=radio]):not([type=color]), select{min-height:44px;}
+  textarea{min-height:88px;}
+  input[type=checkbox], input[type=radio]{width:24px; height:24px; min-width:24px; accent-color:var(--bom); flex:none;}
+  label:has(> input[type=checkbox]), label:has(> input[type=radio]){min-height:44px; display:flex; align-items:center; gap:8px;}
+  td.acoes .btn-sm{margin:4px 8px 4px 0;}
+  .btn-sair, .modal-close{min-width:44px;}
+  .modal-close, .valor-clicavel{min-height:44px; display:inline-flex; align-items:center; justify-content:center;}
+}
 </style>
 </head>
 <body>
@@ -3860,9 +3878,9 @@ function PageResultadosEmpresa(){
   <p class="hint" style="margin-top:12px;">Esta aba usa o Financeiro inteiro da empresa, sem ratear por atividade. Os totais podem diferir de Geral e Operacional, que usam o custo de cada app (inclui ração e pasto consumidos), e de Relatórios, que lê a visão rateada. O histórico do ERP é por competência mensal. Resultado operacional = recebimentos − pagamentos operacionais; juros e encargos ficam no bloco Financiamento, como no plano de contas do ERP. Cobertura de juros abaixo de 1,5 x fica em alerta.</p>
   <p class="hint" style="margin-top:8px;">O ERP não tem as entradas de empréstimo, só as amortizações: se parte do principal foi paga com dinheiro de um novo empréstimo, a cobertura do serviço da dívida aparece pior do que a realidade. Amortização e entrada de empréstimo não são despesa nem receita: ficam em Financiamentos e na tabela de movimentos.</p>
   <p class="hint" style="margin-top:8px;">Custo médio da dívida = juros pagos no período ÷ saldo médio da dívida no período. O saldo médio é <strong>estimado</strong>: contrato lançado tem data e parcelas; o que ainda está só no ERP tem apenas vencimentos, então a data do contrato é estimada pelo ritmo das parcelas, e dívida quitada antes de 2023 não aparece. Use como indicador, não como a taxa contratada (essa é a "Taxa média dos contratos", ponderada pelo saldo). Período em andamento não tem custo médio, porque os juros dele ainda estão incompletos. O juros estimado dos vencimentos só existe para contratos lançados em Financiamentos.</p>
-  ${dif && Math.abs(dif.diferenca)>1 ? `<p class="hint" style="margin-top:8px; color:var(--ambar);"><strong>Atenção:</strong> neste período a visão rateada (Relatórios, Geral e Operacional) tem R$ ${fmt(Math.abs(dif.diferenca))} ${dif.diferenca>0 ? 'a menos' : 'a mais'} de despesa que o Financeiro (R$ ${fmt(dif.rateada)} contra R$ ${fmt(dif.financeiro)}). Esta aba usa o Financeiro, que está completo. A diferença costuma ser rateio incompleto de custos gerais: rode rateio_confere_soma_das_partes.sql no Supabase para achar os lançamentos.</p>` : ''}
-  ${semTabela ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">As amortizações do ERP (R$ 17,8 milhões) ainda não foram importadas. Rode <strong>financiamentos_02_movimentos_erp.sql</strong> no Supabase para o fluxo de caixa e a dívida a vencer ficarem completos.</p>` : ''}
-  ${!temPermissao('matriz_financiamentos','visualizar') ? `<p class="hint" style="margin-top:8px; color:var(--ambar);">Você não tem a permissão de Financiamentos: contratos lançados no módulo não entram nestes números.</p>` : ''}
+  ${dif && Math.abs(dif.diferenca)>1 ? `<p class="hint" style="margin-top:8px; color:var(--ambar-texto);"><strong>Atenção:</strong> neste período a visão rateada (Relatórios, Geral e Operacional) tem R$ ${fmt(Math.abs(dif.diferenca))} ${dif.diferenca>0 ? 'a menos' : 'a mais'} de despesa que o Financeiro (R$ ${fmt(dif.rateada)} contra R$ ${fmt(dif.financeiro)}). Esta aba usa o Financeiro, que está completo. A diferença costuma ser rateio incompleto de custos gerais: rode rateio_confere_soma_das_partes.sql no Supabase para achar os lançamentos.</p>` : ''}
+  ${semTabela ? `<p class="hint" style="margin-top:8px; color:var(--ambar-texto);">As amortizações do ERP (R$ 17,8 milhões) ainda não foram importadas. Rode <strong>financiamentos_02_movimentos_erp.sql</strong> no Supabase para o fluxo de caixa e a dívida a vencer ficarem completos.</p>` : ''}
+  ${!temPermissao('matriz_financiamentos','visualizar') ? `<p class="hint" style="margin-top:8px; color:var(--ambar-texto);">Você não tem a permissão de Financiamentos: contratos lançados no módulo não entram nestes números.</p>` : ''}
   `;
 }
 
@@ -3987,7 +4005,7 @@ function CardPecuariaAtividadeToda(pec, pecPorSafra){
       </div>
     </div>
     ${cobertura < COBERTURA_MINIMA_PEC ? `
-    <p class="hint" style="margin:12px 0 0; color:var(--ambar);">Só ${fmtInt(Math.round(cobertura*100))}% da receita do período (R$ ${fmt(pec.receitaRegistrada)} de R$ ${fmt(pec.receita)}) vem de vendas com animais registrados. Os outros R$ ${fmt(pec.receitaSemRegistro)} são lançamentos sem nº de animais (venda de gado de antes do cadastro de vendas, excedente de milho etc.). Por isso não há custo nem receita por cabeça neste período — o resultado acima é o da atividade toda.</p>`
+    <p class="hint" style="margin:12px 0 0; color:var(--ambar-texto);">Só ${fmtInt(Math.round(cobertura*100))}% da receita do período (R$ ${fmt(pec.receitaRegistrada)} de R$ ${fmt(pec.receita)}) vem de vendas com animais registrados. Os outros R$ ${fmt(pec.receitaSemRegistro)} são lançamentos sem nº de animais (venda de gado de antes do cadastro de vendas, excedente de milho etc.). Por isso não há custo nem receita por cabeça neste período — o resultado acima é o da atividade toda.</p>`
     : `<p class="hint" style="margin:12px 0 0;">Custo e receita por cabeça = total ÷ ${fmtInt(pec.cabecas)} cabeças vendidas.</p>`}
     <p class="hint" style="margin:14px 0 6px;">Vendas registradas por categoria <span style="opacity:.8;">(o custo não é dividido: é da atividade toda)</span></p>
     <div style="overflow-x:auto;">
@@ -4690,7 +4708,7 @@ function PageFinanciamentos(){
   <div class="stat-row">
     <div class="stat-card"><div class="stat-card-ic" style="background:var(--bom-bg); color:var(--bom);">${iconFinanciamento()}</div>
       <div class="stat-label">Total contratado (ativos)</div><div class="stat-value">R$ ${fmt(r.totalContratado)}</div></div>
-    <div class="stat-card"><div class="stat-card-ic" style="background:#F5E9D7; color:var(--trigo);">${iconCarteira()}</div>
+    <div class="stat-card"><div class="stat-card-ic" style="background:#F5E9D7; color:var(--ambar-texto);">${iconCarteira()}</div>
       <div class="stat-label">Saldo devedor (quanto falta)</div><div class="stat-value">R$ ${fmt(r.saldoDevedor)}</div></div>
     <div class="stat-card"><div class="stat-card-ic" style="background:var(--alerta-bg); color:var(--alerta);">${iconSetaAlta()}</div>
       <div class="stat-label">Juros pago em ${hojeStr().slice(0,4)}</div><div class="stat-value">R$ ${fmt(r.jurosPagoAno)}</div></div>
@@ -4774,7 +4792,7 @@ function PageFinanciamentoDetalhe(){
   </div>
   ${sb ? `
   <div class="stat-row">
-    <div class="stat-card"><div class="stat-card-ic" style="background:#F5E9D7; color:var(--trigo);">${iconCarteira()}</div>
+    <div class="stat-card"><div class="stat-card-ic" style="background:#F5E9D7; color:var(--ambar-texto);">${iconCarteira()}</div>
       <div class="stat-label">Principal que falta pagar</div><div class="stat-value">R$ ${fmt(saldoDevedorFinanciamento(f))}</div></div>
     <div class="stat-card"><div class="stat-card-ic" style="background:var(--bom-bg); color:var(--bom);">${iconFinanciamento()}</div>
       <div class="stat-label">Saldo devedor segundo o banco${sb.em ? ' em ' + dataBr(sb.em) : ''}</div><div class="stat-value">R$ ${fmt(sb.valor)}</div></div>
@@ -4886,7 +4904,7 @@ function ModalFinanciamento(){
       <div class="modal-body">
         ${d._origemId ? `<p class="hint" style="margin-bottom:10px;">O saldo devedor do financiamento anterior vira o principal deste contrato novo. O antigo fica marcado como renegociado, sem apagar o histórico.</p>` : ''}
         ${importar ? `<p class="hint" style="margin-bottom:12px;">O ERP tem <strong>${rc.pagas+rc.aVencer} parcelas</strong> deste contrato${rc.contrato ? ` (${esc(rc.contrato)})` : ''}: ${rc.pagas} já paga(s), R$ ${fmt(rc.totalPago)}, e ${rc.aVencer} a vencer, R$ ${fmt(rc.totalAVencer)}, de ${rc.primeira} a ${rc.ultima}. Ao salvar, o app cria o contrato com essas parcelas reais e tira as linhas do ERP das contas: a dívida e o fluxo de caixa passam a vir do contrato, sem contar duas vezes. O juros das parcelas já pagas continua no Financeiro, como veio do ERP.</p>` : ''}
-        ${pendentesErp.length ? `<p class="hint" style="margin-bottom:12px; color:var(--ambar);">O ERP ainda tem <strong>${pendentesErp.length} contrato(s) com R$ ${fmt(pendentesErp.reduce((s,g)=>s+g.totalAVencer,0))} a vencer</strong> sem contrato lançado. Se este é um deles, feche e use <strong>Lançar contrato</strong> na lista "Dívida do ERP ainda sem contrato": o app usa as parcelas reais e não conta a dívida duas vezes.</p>` : ''}
+        ${pendentesErp.length ? `<p class="hint" style="margin-bottom:12px; color:var(--ambar-texto);">O ERP ainda tem <strong>${pendentesErp.length} contrato(s) com R$ ${fmt(pendentesErp.reduce((s,g)=>s+g.totalAVencer,0))} a vencer</strong> sem contrato lançado. Se este é um deles, feche e use <strong>Lançar contrato</strong> na lista "Dívida do ERP ainda sem contrato": o app usa as parcelas reais e não conta a dívida duas vezes.</p>` : ''}
         ${travado ? `<p class="hint" style="margin-bottom:12px;">${impEdit ? 'Contrato importado do ERP' : 'Contrato com parcelas já pagas'}: o cronograma não muda aqui. Para ajustar uma parcela use <strong>Editar</strong> na lista de parcelas; se o contrato já foi pago, use <strong>Quitar</strong>.${impEdit ? ' Mudar a taxa ou a data refaz o juros estimado das parcelas em aberto.' : ''}</p>` : ''}
         <div class="field"><label>Banco</label><input id="f-bancofin" value="${esc(d.banco||'')}" placeholder="Ex: Banco do Brasil" autocomplete="off" ${semCronograma?'readonly':''}/></div>
         <div class="field"><label>Finalidade</label>
@@ -6448,7 +6466,7 @@ function ModalTitulo(){
           Math.abs(falta)>=0.005
             ? `<div class="login-error">Falta distribuir R$ ${fmt(Math.abs(falta))}${falta<0?' (o rateio passou do valor do título)':''}. A soma dos rateios tem que dar R$ ${fmt(total)}.</div>`
           : !rateiosCompletos
-            ? `<div class="hint" style="color:var(--ambar);">A soma fecha, mas ainda falta preencher centro de custo, competência ou valor em algum rateio.</div>`
+            ? `<div class="hint" style="color:var(--ambar-texto);">A soma fecha, mas ainda falta preencher centro de custo, competência ou valor em algum rateio.</div>`
             : `<div class="hint" style="color:var(--verde-vivo-escuro); font-weight:600;">O rateio fecha com o valor do título.</div>`
         ) : ''}
 
@@ -7953,7 +7971,7 @@ function ModalDetalheOperacao(){
     corpo = semDadosBase ? Empty('Sem dados ainda', vazioMsg) : `
       <div style="display:flex; flex-direction:column; gap:10px;">
         <div class="total-bar"><span>Receita</span><span class="mono" style="color:var(--bom); font-weight:600;">R$ ${fmt(r.receita)}</span></div>
-        <div class="total-bar"><span>Despesa</span><span class="mono" style="color:var(--trigo); font-weight:600;">R$ ${fmt(r.despesa)}</span></div>
+        <div class="total-bar"><span>Despesa</span><span class="mono" style="color:var(--ambar-texto); font-weight:600;">R$ ${fmt(r.despesa)}</span></div>
         <div class="total-bar ${r.resultado>=0?'ok':''}" style="${r.resultado<0?'color:var(--alerta);':''}">
           <span>Resultado</span><span class="mono" style="font-weight:700;">R$ ${fmt(r.resultado)}</span>
         </div>
@@ -8244,8 +8262,20 @@ function ModalDespesaPorCentro(){
 }
 
 /* ===================== EVENTOS ===================== */
+// Rotulo solto (sem "for") ao lado de UM campo com id: liga os dois. Clicar no nome do campo passa a abrir o
+// campo (alvo de toque maior) e o leitor de tela le o nome certo. So liga quando nao ha duvida: um rotulo e um
+// campo no mesmo bloco.
+function ligarRotulosAosCampos(){
+  document.querySelectorAll('label:not([for])').forEach(l=>{
+    if(l.querySelector('input,select,textarea') || !l.parentElement) return;
+    const campos = l.parentElement.querySelectorAll('input:not([type=hidden]),select,textarea');
+    const rotulos = l.parentElement.querySelectorAll(':scope > label');
+    if(campos.length === 1 && rotulos.length === 1 && campos[0].id) l.htmlFor = campos[0].id;
+  });
+}
 function attachEvents(){
   prepararCamposMoeda();
+  ligarRotulosAosCampos();
   const loginForm = document.querySelector('[data-login-form]');
   if(loginForm){
     loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };

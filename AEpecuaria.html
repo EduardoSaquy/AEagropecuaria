@@ -25,10 +25,10 @@
     --chip-color:#6B7280;
     --branco:#FFFFFF;
     --trigo:#C9862B;
-    --alerta:#C0432B;
+    --alerta:#B03A24;
     --alerta-bg:#FBEAE6;
     --ok-bg:#E3F1EA;
-    --bom:#008C31;
+    --bom:#007A2B;
     --bom-bg:#DFF6E8;
     --radius:14px;
     --shadow:0 1px 2px rgba(15,42,74,0.04), 0 8px 24px rgba(15,42,74,0.06);
@@ -363,6 +363,22 @@
     .demo-bar-row{grid-template-columns:1fr; gap:4px;}
     .demo-bar-valor{text-align:left;}
   }
+/* ---------- USO NO CAMPO: ALVOS DE TOQUE (06/11/2026) ----------
+   Em tela de toque (tablet/celular) botao e campo tem pelo menos 44 px de altura (Apple 44, Material 48; o
+   minimo da WCAG 2.2 AA e 24). Os botoes mediam 26 a 34 px. O mouse do desktop segue como era. */
+@media (pointer: coarse){
+  .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel{
+    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+  }
+  .nav-item{justify-content:flex-start;}
+  input:not([type=checkbox]):not([type=radio]):not([type=color]), select{min-height:44px;}
+  textarea{min-height:88px;}
+  input[type=checkbox], input[type=radio]{width:24px; height:24px; min-width:24px; accent-color:var(--bom); flex:none;}
+  label:has(> input[type=checkbox]), label:has(> input[type=radio]){min-height:44px; display:flex; align-items:center; gap:8px;}
+  td.acoes .btn-sm{margin:4px 8px 4px 0;}
+  .btn-sair, .modal-close{min-width:44px;}
+  .modal-close, .valor-clicavel{min-height:44px; display:inline-flex; align-items:center; justify-content:center;}
+}
 </style>
 </head>
 <body>
@@ -9408,6 +9424,23 @@ setInterval(tentarSincronizarFila, 30000);
 // se sobrou algo pendente de uma sessão anterior (app fechado antes de
 // sincronizar), tenta assim que o app abre de novo.
 setTimeout(tentarSincronizarFila, 3000);
+</script>
+<script>
+// Rotulo solto (sem "for") ao lado de UM campo com id: liga os dois (clicar no nome abre o campo; o leitor de
+// tela le o nome certo). So liga quando nao ha duvida: um rotulo e um campo no mesmo bloco.
+(function(){
+  function ligar(){
+    document.querySelectorAll('label:not([for])').forEach(function(l){
+      if(l.querySelector('input,select,textarea') || !l.parentElement) return;
+      var campos = l.parentElement.querySelectorAll('input:not([type=hidden]),select,textarea');
+      var rotulos = l.parentElement.querySelectorAll(':scope > label');
+      if(campos.length === 1 && rotulos.length === 1 && campos[0].id) l.htmlFor = campos[0].id;
+    });
+  }
+  var t = null;
+  new MutationObserver(function(){ clearTimeout(t); t = setTimeout(ligar, 80); }).observe(document.body, {childList:true, subtree:true});
+  ligar();
+})();
 </script>
 </body>
 </html>
