@@ -1341,7 +1341,15 @@ compra de animais e as travas do banco.
   (giro); #490/#491, #496/#497 e #492 (a descrição diz matriz) também vão para matriz.
   `compra_animais_03_classifica.sql` (ensaiado, **ainda não rodado**) passa as 8 lançadas à mão do centro ambíguo
   INVESTIMENTO EM ANIMAIS para COMPRA DE MATRIZES PARA REPRODUÇÃO (7) ou COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE (1);
-  só muda o centro, com guardas, cópia e desfazer. **Rodada 1 dele (06/11/2026) recusou: o banco tem 2 centros "COMPRA DE ANIMAIS%"**
+  só muda o centro, com guardas, cópia e desfazer. **RODADO por ele em 06/11/2026 (2ª tentativa; a 1ª recusou, abaixo)**:
+  7 compras foram para o centro #122 (COMPRA DE MATRIZES PARA REPRODUÇÃO, R$ 887.049,71) e 1 (#502, R$ 5.800) para o #99
+  (COMPRA DE ANIMAIS PARA RECRIA, ENGORDA E ABATE); `registrar_venda_animais`, `salvar_titulos` e `trg_titulo_valor_fecha`
+  estão instaladas (conferência final: OK): venda e conta a pagar/receber gravam em uma transação (PGRST202 = caminho antigo).
+  R$ 30.400 do Alemar: #508 (à mão, 13/07/2026, texto "Compra de animais para recria, engorda e…"), #22173 (ERP 5986, vence
+  18/08/2026) e #22307 (ERP 6304, R$ 25.900, vence 10/09/2026; os dois do ERP são "recria, engorda e abate" = giro). Ele disse
+  (06/11, depois) que **cada compra já diz no próprio texto o que é (matriz ou recria/engorda)**: pelo texto, #508 seria giro,
+  mas eu o movi para matriz porque ele tinha dito matriz; **a conferir com ele** (e o extrato: parcelas ou duplicata?).
+  **Rodada 1 dele (06/11/2026) recusou: o banco tem 2 centros "COMPRA DE ANIMAIS%"**
   (nada foi aplicado). O script passou a escolher o destino pelo **nome exato** (e, havendo nomes iguais, o mais usado;
   empate: recusa listando os candidatos); `sql_2026_11_06_juntos.sql` regerado. O R$ 30.400 repetido (#508 × #22173): ele acha que é a mesma compra
   lançada duas vezes, **mas precisa ver se não são parcelas**; `confere_compra_repetida.sql` (só leitura) mostra os
@@ -1388,6 +1396,19 @@ compra de animais e as travas do banco.
   - `orientation` dos 6 manifestos virou `any` (o tablet gira). O AE Combustível não tem esses tokens (não trocados).
   - Falta no campo: os 137 `alert()` da Pecuária (bloqueiam a tela e os testes dependem do evento `dialog`; trocar
     por aviso na página pede ajustar os testes junto).
+- **Política de segurança de conteúdo (CSP, 06/11/2026; `teste_csp.py` 43 checagens)**: `<meta http-equiv=Content-Security-Policy>`
+  no `<head>` dos cinco apps. Cada app só pode falar com o Supabase do projeto (`connect-src` https e wss
+  `kmkystqgpvmzrccxvyaz.supabase.co`), carregar script da `cdn.jsdelivr.net` (a biblioteca fixa em 2.118.0), css do
+  `fonts.googleapis.com` e fonte do `fonts.gstatic.com`; `default-src 'none'`, `object-src 'none'`, `base-uri` e
+  `form-action` 'self'. **Sem `'unsafe-eval'`** (script injetado não manda dado para fora, não faz eval); `'unsafe-inline'`
+  continua em script e estilo porque cada app é um arquivo só com tudo embutido. **Se um dia o app precisar de outro
+  serviço (mapa, clima, WhatsApp API...), o endereço entra nessa política nos cinco apps.** Provado: página de controle sem
+  política deixa passar fetch/imagem/script/eval de outra origem, e o app barra os quatro com a violação registrada pelo
+  navegador; os cinco apps percorrem as telas sem violar a própria política; e, com a biblioteca REAL do supabase-js 2.118.0
+  (baixada só para esse teste, fora do repo), `createClient`, `auth.getSession`, consulta e `rpc` funcionam dentro da política.
+  Falta (decisão dele, afeta o dia a dia dos peões): senha de 10 caracteres; hoje o mínimo é 6 em 4 telas por app, e o mínimo
+  do Auth do Supabase é uma configuração do painel dele (Authentication > Policies). SRI/auto-hospedar o supabase-js: não
+  feito (mexeria no cache offline do service worker e nos ~50 testes).
 - **Compra de animais (decisões dele, 06/11/2026)**: matriz só é reconhecida no DESCARTE (sem depreciar: "ela vale o
   valor dela em carne"); o formulário de compra ganha lote e nº de cabeças (colunas `lote_id` e `quantidade` já
   existem); ele pediu a LISTA das compras para separar matriz de giro: `compra_animais_01_lista.sql` (só leitura,
@@ -1534,7 +1555,7 @@ faltou, não se refaz). `teste_fila_sem_duplicar.py` (falha no código antigo).
 
 ## Testes
 
-49 arquivos `teste_*.py`, 1.234 checagens (06/11/2026; a tabela abaixo lista os
+50 arquivos `teste_*.py`, 1.277 checagens (06/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1578,6 +1599,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |
 | `teste_matriz_estoque_pecuaria.py` | 17 | AEMatriz.html (Rebanho estocado, só os totais: última pesagem de cada lote ativo, UA = PV/450, @ = PV×50%/15, valor pelo preço da @ por sexo, por hectare; lote sem pesagem fica de fora com aviso; sem rolar de lado) |
 | `teste_lancamento_atividade.py` | 32 | AEMatriz.html (lançamento novo nasce sem atividade e não oferece "Geral"; salvar sem escolher é barrado; "Dividir entre as atividades" em partes iguais, um lançamento por atividade numa chamada só, centavos fechando (900 → 300×3, 100 → 33,33+33,33+33,34), percentual escolhido, soma errada e uma atividade só barradas; "Geral" antigo abre travado; conta a pagar pede a atividade do rateio) |
+| `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
 | `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
 | `teste_venda_atomica.py` | 19 | AEMatriz.html (venda de animais por uma função do banco: uma chamada, sem gravações soltas, saldo novo na tela, recusa do banco mostrada, caminho antigo se a função não existe) |
 | `teste_titulo_atomico.py` | 23 | AEMatriz.html (conta a pagar/receber por uma função do banco: parcelas e partes juntas, editar com id, recusa mostrada, caminho antigo) |
