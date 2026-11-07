@@ -1352,6 +1352,9 @@ compra de animais e as travas do banco.
   **Resposta dele (06/11)**: os R$ 30.400 (#508 e #22173) "provavelmente são parcelas, valor igual e pagamento muito próximo":
   ficam os três lançamentos (#508, #22173, #22307); nada a apagar. Ele disse que rodou `confere_textos_das_compras.sql` mas não colou o
   resultado ainda. **Senha: fica com mínimo 6; ele conversa com o pessoal e depois muda para 10** (não mexer antes).
+  **Alemar (06/11, depois)**: ele disse que a compra do Alemar é de MATRIZES e que não foi com dinheiro do custeio (as outras matrizes foram, e
+  o custeio ainda não está lançado), mas, perguntado, decidiu que as duas parcelas do ERP (#22173 e #22307) **ficam como giro**: nada a mover
+  (`alemar_erp_para_matriz.sql` foi apagado do repo). #508 fica em matriz.
   **Rodada 1 dele (06/11/2026) recusou: o banco tem 2 centros "COMPRA DE ANIMAIS%"**
   (nada foi aplicado). O script passou a escolher o destino pelo **nome exato** (e, havendo nomes iguais, o mais usado;
   empate: recusa listando os candidatos); `sql_2026_11_06_juntos.sql` regerado. O R$ 30.400 repetido (#508 × #22173): ele acha que é a mesma compra
@@ -1368,6 +1371,10 @@ compra de animais e as travas do banco.
   "animais" a classificar / outro, pelo NOME do centro); `investimentosPecuariaNoPeriodo()`;
   Resultados > Operacional > Pecuária ganha o bloco "Investimentos da Pecuária" com o **resultado de caixa =
   resultado − investimentos**, e Resultados > Geral ganha o aviso. O resultado (receita − despesa) NÃO muda.
+  **Financiamento recebido (07/11/2026)**: o bloco ganhou a linha "Financiamento recebido para a Pecuária" e o cartão "Caixa depois do
+  financiamento" (= caixa + principal dos contratos NOVOS com atividade Pecuária e data da cédula no período; fora: contrato que já
+  existia, de outra atividade, cancelado, importado do ERP e renegociação; mesma regra do fluxo da Empresa). Financiamento é dívida: não
+  muda o resultado. Quando ele lançar o custeio das matrizes (Financiamentos, atividade Pecuária) aparece sozinho.
   Falta o **resultado econômico** (custo do lote casado com a venda, por cabeça; matriz só no descarte): pede
   lote e nº de cabeças em cada compra (formulário + preenchimento do histórico).
 - **Gravação atômica (06/11/2026; achado 4/5 da revisão geral)**: duas funções do banco, `security invoker` (as
@@ -1623,7 +1630,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
 | `teste_venda_atomica.py` | 19 | AEMatriz.html (venda de animais por uma função do banco: uma chamada, sem gravações soltas, saldo novo na tela, recusa do banco mostrada, caminho antigo se a função não existe) |
 | `teste_titulo_atomico.py` | 23 | AEMatriz.html (conta a pagar/receber por uma função do banco: parcelas e partes juntas, editar com id, recusa mostrada, caminho antigo) |
-| `teste_pecuaria_compra_animais.py` | 23 | AEMatriz.html (bloco "Investimentos da Pecuária" e resultado de caixa por classe de centro, aviso no Geral, só Pecuária, filtros mês/ano/safra, resultado de antes intacto) |
+| `teste_pecuaria_compra_animais.py` | 28 | AEMatriz.html (bloco "Investimentos da Pecuária" e resultado de caixa por classe de centro, aviso no Geral, só Pecuária, filtros mês/ano/safra, resultado de antes intacto) |
 | `teste_carga_leve.py` | 41 | AEMatriz.html (carga por grupo, visão rateada lida uma vez, `atualizarLancamentos` igual ao recarregamento completo, `vigentesNoMes` igual à versão antiga, voltar à aba depois de 10 min) |
 | `teste_financeiro_paginado.py` | 24 | AEMatriz.html (Financeiro: 100 linhas por vez e "Mostrar mais" de 200 em 200, total do filtro inteiro, busca que espera parar de digitar e devolve o foco, trocar aba/atividade/mês volta a 100, lista curta sem rodapé, Editar na linha certa) |
 | `teste_saldo_banco.py` | 51 | AEMatriz.html (Financiamentos: saldo devedor segundo o banco, com data, ao lado do contrato; saldo velho; não muda dívida, vencimentos, histórico nem fluxo; editar/criar com e sem o campo; Editar na lista para todo contrato ativo; lista e contrato sem rolar de lado de 1920 a 320 px) |

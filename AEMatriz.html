@@ -3088,11 +3088,23 @@ function investimentosPecuariaNoPeriodo(periodo=state.periodo){
   itens.forEach(l=>{ porClasse[classeInvestimentoPecuaria(l.centroCustoId)] += Number(l.valor||0); });
   return {...porClasse, total: porClasse.giro+porClasse.matriz+porClasse.animais+porClasse.outro, n: itens.length};
 }
+// Dinheiro de custeio/investimento que ENTROU para a Pecuária no período: contrato com atividade Pecuária e data da cédula
+// no período (já realizado). Mesma regra do fluxo da Empresa: renegociação, contrato importado do ERP e "contrato que já
+// existia" não são dinheiro novo. Financiamento é dívida, não receita: não entra no resultado, só no caixa.
+function financiamentoPecuariaNoPeriodo(periodo=state.periodo){
+  const meses = new Set(periodoMeses(periodo)), hoje = hojeStr();
+  const contratos = state.financiamentos.filter(f=>
+    f.atividade==='pecuaria' && f.status!=='cancelado' && !f.financiamentoOrigemId && !importadoDoErp(f) && !f.continuacao
+    && f.dataContratacao && f.dataContratacao<=hoje && meses.has(String(f.dataContratacao).slice(0,7)));
+  return {total: contratos.reduce((a,f)=>a+Number(f.valorPrincipal||0), 0), n: contratos.length};
+}
 function BlocoInvestimentosPecuaria(r){
   const inv = investimentosPecuariaNoPeriodo();
-  if(!inv || inv.total <= 0) return '';
+  const fin = financiamentoPecuariaNoPeriodo();
+  if(!inv || (inv.total <= 0 && fin.total <= 0)) return '';
   const linha = (rotulo, valor)=> valor > 0 ? `<tr><td>${rotulo}</td><td class="mono" style="text-align:right;">R$ ${fmt(valor)}</td></tr>` : '';
   const caixa = r.resultado - inv.total;
+  const caixaDepoisFin = caixa + fin.total;
   const comCustoAnimais = r.resultado - inv.giro;
   // Sem lote nem nº de cabeças nas compras (as de 2023 a 2025 foram feitas antes do app), o custo do
   // animal de giro entra no período em que foi PAGO. A variação do rebanho (animais que ficaram na
@@ -3113,6 +3125,7 @@ function BlocoInvestimentosPecuaria(r){
         ${linha('Compra de animais — falta dizer se é matriz ou giro', inv.animais)}
         ${linha('Outros investimentos (equinos, consórcio...)', inv.outro)}
         <tr><td style="font-weight:600;">Total investido</td><td class="mono" style="text-align:right; font-weight:600;" data-total-investido-pecuaria="1">R$ ${fmt(inv.total)}</td></tr>
+        ${fin.total > 0 ? `<tr><td>Financiamento recebido para a Pecuária (custeio ou investimento)</td><td class="mono" style="text-align:right;" data-financiamento-pecuaria="1">R$ ${fmt(fin.total)}</td></tr>` : ''}
       </tbody>
     </table>
     <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); margin-top:12px;">${cartaoCusto}
@@ -3120,7 +3133,12 @@ function BlocoInvestimentosPecuaria(r){
         <div class="stat-label">Resultado de caixa</div>
         <div class="stat-value ${caixa>=0?'bom':'alerta'}" style="font-size:19px;" data-resultado-caixa-pecuaria="1">R$ ${fmt(caixa)}</div>
         <div class="hint" style="margin-top:4px;">Resultado − todos os investimentos: quanto sobrou ou faltou no caixa.</div>
-      </div>
+      </div>${fin.total > 0 ? `
+      <div class="stat-card">
+        <div class="stat-label">Caixa depois do financiamento</div>
+        <div class="stat-value ${caixaDepoisFin>=0?'bom':'alerta'}" style="font-size:19px;" data-caixa-depois-financiamento-pecuaria="1">R$ ${fmt(caixaDepoisFin)}</div>
+        <div class="hint" style="margin-top:4px;">Resultado de caixa + o dinheiro do financiamento que entrou. Financiamento é dívida (só o juros é despesa): não entra no resultado.</div>
+      </div>` : ''}
     </div>
   </div>`;
 }

@@ -52,7 +52,16 @@ DB = {
     "fazendas": [], "fazenda_atividades": [], "culturas": [], "talhoes_areas": [],
     "funcionarios": [], "funcionario_atividades": [], "lotes": [],
     "centros_custo": CENTROS, "lancamentos_financeiros": L,
-    "financiamentos": [], "parcelas_financiamento": [], "movimentos_financiamento": [],
+    "financiamentos": [
+        {"id": 1, "banco": "Banco A", "finalidade": "custeio", "valor_principal": 300000, "data_contratacao": "2025-06-15", "atividade": "pecuaria", "status": "ativo", "observacao": ""},
+        {"id": 2, "banco": "Banco B", "finalidade": "custeio", "valor_principal": 111111, "data_contratacao": "2025-06-16", "atividade": "pecuaria", "status": "ativo", "continuacao": True},
+        {"id": 3, "banco": "Banco C", "finalidade": "custeio", "valor_principal": 222222, "data_contratacao": "2025-06-17", "atividade": "cana", "status": "ativo"},
+        {"id": 4, "banco": "Banco D", "finalidade": "custeio", "valor_principal": 333333, "data_contratacao": "2025-06-18", "atividade": "pecuaria", "status": "cancelado"},
+        {"id": 5, "banco": "Banco E", "finalidade": "investimento", "valor_principal": 444444, "data_contratacao": "2025-06-19", "atividade": "pecuaria", "status": "ativo", "observacao": "Importado do ERP (contrato C17)"},
+        {"id": 6, "banco": "Banco F", "finalidade": "custeio", "valor_principal": 555555, "data_contratacao": "2025-06-20", "atividade": "pecuaria", "status": "ativo", "financiamento_origem_id": 1},
+        {"id": 7, "banco": "Banco G", "finalidade": "custeio", "valor_principal": 666666, "data_contratacao": "2024-02-20", "atividade": "pecuaria", "status": "ativo"},
+    ],
+    "parcelas_financiamento": [], "movimentos_financiamento": [],
     "entidades": [], "contas_bancarias": [], "titulos": [], "titulo_rateios": [], "titulo_baixas": [],
     "profiles": [ADMIN],
 }
@@ -114,6 +123,15 @@ with sync_playwright() as pw:
     conf(r["receita"] == 500000 and r["despesa"] == 100000 and r["resultado"] == 400000, "o resultado (receita - despesa) continua o de antes", str(r))
     conf(page.evaluate("() => document.querySelectorAll('[data-bloco-investimentos-pecuaria]').length") == 1, "so um bloco (Cana e Cereais nao ganham)")
 
+    # financiamento recebido para a Pecuaria: so o contrato novo (id 1, R$ 300.000,00) de 2025; fora: "contrato que ja existia", de outra
+    # atividade, cancelado, importado do ERP, renegociacao e o de 2024
+    conf(txt(page, "[data-financiamento-pecuaria]") == "R$ 300.000,00", "financiamento recebido = so o contrato novo da Pecuaria (R$ 300.000,00)",
+         str(txt(page, "[data-financiamento-pecuaria]")))
+    conf(txt(page, "[data-caixa-depois-financiamento-pecuaria]") == "R$ 287.000,00", "caixa depois do financiamento = -13.000 + 300.000 = R$ 287.000,00",
+         str(txt(page, "[data-caixa-depois-financiamento-pecuaria]")))
+    r2 = page.evaluate("() => { const x = resultadoOperacaoNoPeriodo('pecuaria'); return {resultado: x.resultado, despesa: x.despesa}; }")
+    conf(r2["resultado"] == 400000 and r2["despesa"] == 100000, "o financiamento nao muda o resultado (receita - despesa)", str(r2))
+
     print("== Geral, ano 2025")
     ir({"tipo": "ano", "ano": 2025, "mes": "2025-06", "safra": 2025}, "geral")
     aviso = txt(page, "[data-aviso-investimento-pecuaria]")
@@ -128,8 +146,12 @@ with sync_playwright() as pw:
     conf(txt(page, "[data-resultado-caixa-pecuaria]") == "R$ 237.000,00", "mes 2025-06: caixa R$ 237.000,00", str(txt(page, "[data-resultado-caixa-pecuaria]")))
     conf(page.evaluate("() => document.querySelector('[data-resultado-caixa-pecuaria]').className.includes('bom')"), "caixa positivo fica em bom")
     conf(txt(page, "[data-resultado-custo-animais-pecuaria]") is None, "mes sem compra de giro: sem o cartao do custo dos animais")
+    conf(txt(page, "[data-financiamento-pecuaria]") == "R$ 300.000,00", "mes 2025-06: o contrato de 15/06 conta")
     ir({"tipo": "mes", "ano": 2025, "mes": "2025-01", "safra": 2024}, "operacional")
-    conf(txt(page, "[data-bloco-investimentos-pecuaria]") is None, "mes sem investimento: sem bloco")
+    conf(txt(page, "[data-bloco-investimentos-pecuaria]") is None, "mes sem investimento nem financiamento: sem bloco")
+    ir({"tipo": "mes", "ano": 2025, "mes": "2025-07", "safra": 2025}, "operacional")
+    conf(txt(page, "[data-financiamento-pecuaria]") is None, "mes sem contrato: sem a linha de financiamento")
+    ir({"tipo": "mes", "ano": 2025, "mes": "2025-01", "safra": 2024}, "operacional")
     ir({"tipo": "mes", "ano": 2025, "mes": "2025-01", "safra": 2024}, "geral")
     conf(txt(page, "[data-aviso-investimento-pecuaria]") is None, "mes sem investimento: sem aviso")
     # safra 2024/25 = maio/2024 a abril/2025: so a compra de bezerros de 15/03/2025 (200.000)
