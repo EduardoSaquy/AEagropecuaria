@@ -1,0 +1,56 @@
+name: Testes
+
+# Roda os testes automaticos (teste_*.py) a cada envio para o GitHub, em 4 partes ao mesmo tempo.
+# NAO impede o site de atualizar (o GitHub Pages publica a main por conta propria): se algo quebrar, a rodada fica
+# vermelha na aba Actions e o GitHub avisa por e-mail. Para ver o motivo, abra a rodada: cada teste que falha aparece
+# como erro com o fim da saida dele.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes (parte ${{ matrix.parte }} de 4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2, 3, 4]
+    env:
+      TZ: America/Sao_Paulo          # os apps assumem o fuso do Brasil para "hoje"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instala o Playwright e o navegador
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Monta o ambiente que os testes esperam
+        run: |
+          # os testes foram escritos num sandbox com estes tres caminhos fixos
+          sudo mkdir -p /opt/pw-browsers /home/claude /tmp/lav_test
+          sudo ln -sfn "$GITHUB_WORKSPACE" /home/claude/AEagropecuaria
+          cp teste_stub_supabase.js /tmp/lav_test/stub.js
+          CHROME=$(python -c "from playwright.sync_api import sync_playwright as s; p = s().start(); print(p.chromium.executable_path); p.stop()")
+          echo "navegador: $CHROME"
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium
+          /opt/pw-browsers/chromium --version
+
+      - name: Roda os testes
+        run: python roda_testes.py --parte ${{ matrix.parte }} --de 4 --workers 3
