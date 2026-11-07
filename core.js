@@ -240,3 +240,118 @@ function esc(s){
   return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function fmt(n, dec=2){ return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
+
+/* ---------- Login, perfis e acesso (iguais nos cinco apps desde 07/11/2026) ---------- */
+// Só administrador mesmo: tela de Usuários, criar conta, mexer na permissão dos outros (o banco só deixa is_admin()).
+// "Acesso a tudo" (administrador e proprietário) é acessoTotal(), mais acima.
+function souAdmin(){ return state.perfil?.papel === 'admin'; }
+// Cor do perfil na lista: acesso total em destaque, gestor/consultor em amarelo, os demais em verde. O texto vem de PAPEL_LABELS
+// (cada app define o seu); perfil que não está lá aparece com o nome cru.
+function papelPill(papel){
+  const label = PAPEL_LABELS[papel] || papel;
+  const classe = (papel==='admin' || papel==='proprietario') ? 'pill-cat' : ((papel==='gestor' || papel==='consultor') ? 'pill-warn' : 'pill-ok');
+  return `<span class="pill ${classe}">${esc(label)}</span>`;
+}
+// <option> do seletor de perfil na tela de acesso: os da lista [[valor, rótulo], ...] e, se a pessoa tem um perfil que a lista não
+// tem (colaborador, consultor, gestor... conforme o app), o dela também, marcado. Sem isso o seletor cairia no primeiro item e Salvar
+// rebaixaria a pessoa sem ninguém ver.
+function opcoesDePapel(lista, atual){
+  const opcoes = lista.map(([valor, rotulo])=>`<option value="${valor}" ${atual===valor?'selected':''}>${rotulo}</option>`);
+  if(atual && !lista.some(([valor])=>valor===atual)){
+    opcoes.push(`<option value="${esc(atual)}" selected>${esc(PAPEL_LABELS[atual] || atual)}</option>`);
+  }
+  return opcoes.join('');
+}
+async function fazerLogin(){
+  const usuario = normalizeUsuario(state.loginDraft.usuario);
+  const senha = state.loginDraft.senha;
+  if(!usuario || !senha){ state.loginError = 'Informe usuário e senha.'; render(); return; }
+  state.loginLoading = true; state.loginError = ''; render();
+  const email = `${usuario}@${DOMINIO_LOGIN}`;
+  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+  state.loginLoading = false;
+  if(error){
+    state.loginError = 'Usuário ou senha inválidos.';
+    render();
+    return;
+  }
+  state.session = data.session;
+  await loadPerfil();
+  state.loginDraft = {usuario:'', senha:''};
+  render();
+  if(state.perfil?.ativo){
+    const carga = loadAll();
+    // o app que precisa de um passo depois da carga (o Combustível confere os alertas) define aoEntrarDepoisDaCarga()
+    if(typeof aoEntrarDepoisDaCarga === 'function') Promise.resolve(carga).then(aoEntrarDepoisDaCarga);
+  }
+}
+function ModalUsuario(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        ${state.usuarioError ? `<div class="login-error">${esc(state.usuarioError)}</div>` : ''}
+        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
+        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${esc(d.senha)}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-criar-usuario="1" ${state.usuarioLoading?'disabled':''}>${state.usuarioLoading?'Criando...':'Criar usuário'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function PageAdminUsuarios(){
+  return `
+  <div class="toolbar">
+    <span class="hint">${state.perfis.length} usuário(s) cadastrado(s)</span>
+    <button class="btn btn-primary btn-sm" data-novo-usuario="1">+ Novo usuário</button>
+  </div>
+  <div class="card" style="overflow-x:auto;">
+    ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para as pessoas da sua equipe.') : `
+    <table>
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${state.perfis.map(p=>`
+          <tr>
+            <td><strong>${esc(p.nome)}</strong></td>
+            <td class="mono">${esc(p.usuario)}</td>
+            <td>${papelPill(p.papel)}</td>
+            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
+            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`}
+  </div>`;
+}
+
+/* ---------- Navegação por grupos e leitura de tabela inteira ---------- */
+// O app que troca de grupos conforme algo (o AE Cereais, pela cultura) define gruposAtuais(); os demais usam GROUPS.
+function currentGroupKey(){
+  const g = (typeof gruposAtuais === 'function') ? gruposAtuais() : GROUPS;
+  return Object.keys(g).find(k=>g[k].pages.some(p=>p.key===state.page));
+}
+function gruposVisiveis(){
+  const g = (typeof gruposAtuais === 'function') ? gruposAtuais() : GROUPS;
+  return Object.entries(g).filter(([key])=>grupoVisivel(key));
+}
+// Lê uma tabela inteira, de mil em mil, até a resposta vir incompleta (sinal de que acabou). O PostgREST corta cada resposta em
+// 1.000 linhas por conta própria (db-max-rows), então um .range(0, 19999) só parece trazer tudo: foi um teto, e os totais ficariam
+// errados sem aviso. A consulta tem que ter ordem ESTÁVEL (um .order('id') no fim): só 'data', por exemplo, repete ou perde linha
+// na fronteira entre páginas. Quem chama passa a consulta já montada, em função: fetchAllRows(()=>db.from('x').select('*').order('id')).
+async function fetchAllRows(consulta){
+  const PAGINA = 1000;
+  let todas = [], de = 0;
+  while(true){
+    const { data, error } = await consulta().range(de, de + PAGINA - 1);
+    if(error) return { data: todas, error };
+    todas = todas.concat(data || []);
+    if(!data || data.length < PAGINA) break;
+    de += PAGINA;
+  }
+  return { data: todas, error: null };
+}

@@ -115,16 +115,7 @@ for nome, lst in por_nome.items():
 # os apps que o carregam). Cada uma tem que ser reconciliada de vez: decidir o comportamento certo, passar para o nucleo e
 # tirar da lista. A lista so pode encolher: copia nova que nao esteja aqui falha o teste; item daqui que sumiu tambem falha
 # (para a lista nunca ficar mentindo).
-DIVIDA_CONHECIDA = {
-    ("ModalUsuario", ("AEMatriz.html", "AECombustivel.html")),
-    ("PageAdminUsuarios", ("AEpecuaria.html", "AECombustivel.html")),
-    ("currentGroupKey", ("AEpecuaria.html", "AECana.html", "AECombustivel.html")),
-    ("fazerLogin", ("AEMatriz.html", "AEpecuaria.html")),
-    ("fetchAllRows", ("AEMatriz.html", "AECombustivel.html")),
-    ("gruposVisiveis", ("AEpecuaria.html", "AECana.html", "AECombustivel.html")),
-    ("souAdmin", ("AEMatriz.html", "AECombustivel.html")),
-    ("papelPill", ("AEMatriz.html", "AECombustivel.html")),
-}
+DIVIDA_CONHECIDA = set()
 
 
 def mostra(conj):

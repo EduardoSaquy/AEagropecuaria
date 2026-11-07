@@ -270,7 +270,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=379f5e3060"></script>
+<script src="core.js?v=1c0da5dac9"></script>
 <script>
 /* ===================== SUPABASE =====================
  * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
@@ -534,23 +534,6 @@ function rowToLog(r){
   return { id:r.id, tabela:r.tabela, registroId:r.registro_id, acao:r.acao, dadosAntigos:r.dados_antigos, dadosNovos:r.dados_novos, usuarioId:r.usuario_id, criadoEm:r.criado_em };
 }
 
-// O Supabase trunca em 1000 linhas sem avisar (mesma armadilha documentada
-// no CLAUDE.md pros outros apps) — abastecimentos, entradas de estoque,
-// medições e ajustes crescem com o tempo e passam disso mais cedo ou mais
-// tarde. fetchAllRows pagina em blocos de 1000 até acabar.
-async function fetchAllRows(consulta){
-  const PAGINA = 1000;
-  let todas = [], de = 0;
-  while(true){
-    const { data, error } = await consulta().range(de, de + PAGINA - 1);
-    if(error) return { data: todas, error };
-    todas = todas.concat(data || []);
-    if(!data || data.length < PAGINA) break;
-    de += PAGINA;
-  }
-  return { data: todas, error: null };
-}
-
 async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
@@ -758,7 +741,6 @@ function render(){
 
 /* ===================== AUTENTICAÇÃO E PERMISSÕES ===================== */
 const DOMINIO_LOGIN = 'aeagropecuaria.local';
-function souAdmin(){ return state.perfil?.papel === 'admin'; }
 
 const PERFIL_CACHE_KEY = 'aecombustivel_perfil_cache_v1';
 // ---- Abertura sem internet (login e perfil guardados no aparelho) ----
@@ -826,21 +808,6 @@ async function initAuth(){
   window.addEventListener('online', sincronizarFila);
 }
 
-async function fazerLogin(){
-  const usuario = normalizeUsuario(state.loginDraft.usuario);
-  const senha = state.loginDraft.senha;
-  if(!usuario || !senha){ state.loginError = 'Informe usuário e senha.'; render(); return; }
-  state.loginLoading = true; state.loginError = ''; render();
-  const email = `${usuario}@${DOMINIO_LOGIN}`;
-  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
-  state.loginLoading = false;
-  if(error){ state.loginError = 'Usuário ou senha inválidos.'; render(); return; }
-  state.session = data.session;
-  await loadPerfil();
-  state.loginDraft = {usuario:'', senha:''};
-  render();
-  if(state.perfil?.ativo) loadAll().then(detectarAlertas);
-}
 async function fazerLogout(){
   await db.auth.signOut();
   state.session = null; state.perfil = null; state.page = 'painel';
@@ -922,7 +889,6 @@ const GROUPS = {
     {key:'adminUsuarios', label:'Usuários'},
   ]},
 };
-function currentGroupKey(){ return Object.keys(GROUPS).find(k=>GROUPS[k].pages.some(p=>p.key===state.page)); }
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   if(key==='estoque') return temPermissao('combustivel_estoque','visualizar');
@@ -949,7 +915,6 @@ function paginaAcessivel(page){
   if(!grupo) return false;
   return grupoVisivel(grupo[0]) && paginaVisivel(page);
 }
-function gruposVisiveis(){ return Object.entries(GROUPS).filter(([key])=>grupoVisivel(key)); }
 function primeiraPaginaVisivel(){
   for(const [,g] of gruposVisiveis()){
     const pagina = g.pages.find(p=>paginaVisivel(p.key));
@@ -1906,6 +1871,8 @@ function pillSeveridade(sev){
   return 'pill-cat';
 }
 function chaveAlerta(a){ return `${a.tipo}:${a.tanqueId||''}:${a.equipamentoId||''}:${a.abastecimentoId||''}`; }
+// Depois da carga que o login dispara (fazerLogin, em core.js), confere os alertas.
+const aoEntrarDepoisDaCarga = detectarAlertas;
 async function detectarAlertas(){
   if(!temPermissao('combustivel_alertas','visualizar')) return;
   const abertosPorChave = {};
@@ -2452,57 +2419,6 @@ const MODULOS_PERMISSAO = [
   ['combustivel_manutencao','Manutenção'],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', gestor:'Gestor', encarregado:'Encarregado', operador:'Operador'};
-// Perfis que a lista da tela de acesso oferece. Quem tem outro perfil (colaborador, consultor...) aparece com o dele
-// marcado: sem isso o seletor cairia no primeiro item (Operador) e Salvar rebaixaria a pessoa sem ninguem ver.
-const PAPEIS_DESTA_TELA = ['operador', 'encarregado', 'gestor', 'proprietario', 'admin'];
-function papelPill(papel){
-  const label = PAPEL_LABELS[papel] || papel;
-  const classe = (papel==='admin' || papel==='proprietario') ? 'pill-cat' : (papel==='gestor' ? 'pill-warn' : 'pill-ok');
-  return `<span class="pill ${classe}">${label}</span>`;
-}
-function PageAdminUsuarios(){
-  return `
-  <div class="toolbar">
-    <span class="hint">${state.perfis.length} usuário(s) cadastrado(s)</span>
-    <button class="btn btn-primary btn-sm" data-novo-usuario="1">+ Novo usuário</button>
-  </div>
-  <div class="card" style="overflow-x:auto;">
-    ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para as pessoas da sua equipe.') : `
-    <table>
-      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-        ${state.perfis.map(p=>`
-          <tr>
-            <td><strong>${esc(p.nome)}</strong></td>
-            <td class="mono">${esc(p.usuario)}</td>
-            <td>${papelPill(p.papel)}</td>
-            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
-            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
-}
-function ModalUsuario(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
-        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-criar-usuario="1" ${state.usuarioLoading?'disabled':''}>${state.usuarioLoading?'Criando...':'Criar usuário'}</button>
-      </div>
-    </div>
-  </div>`;
-}
 function ModalPermissoes(){
   const d = editDraft;
   return `
@@ -2513,12 +2429,7 @@ function ModalPermissoes(){
         <div class="field"><label>Usuário</label><input value="${esc(d.usuario)}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
-            <option value="operador" ${d.papel==='operador'?'selected':''}>Operador</option>
-            <option value="encarregado" ${d.papel==='encarregado'?'selected':''}>Encarregado</option>
-            <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
-            <option value="proprietario" ${d.papel==='proprietario'?'selected':''}>Proprietário</option>
-            <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
-            ${PAPEIS_DESTA_TELA.includes(d.papel) || !d.papel ? '' : `<option value="${esc(d.papel)}" selected>${esc(PAPEL_LABELS[d.papel] || d.papel)}</option>`}
+            ${opcoesDePapel([['operador','Operador'], ['encarregado','Encarregado'], ['gestor','Gestor'], ['proprietario','Proprietário'], ['admin','Administrador']], d.papel)}
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>

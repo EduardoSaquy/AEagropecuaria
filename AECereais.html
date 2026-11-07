@@ -322,8 +322,8 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=379f5e3060"></script>
-<script src="core_lavoura.js?v=a88ade4428"></script>
+<script src="core.js?v=1c0da5dac9"></script>
+<script src="core_lavoura.js?v=867c35bf1c"></script>
 <script>
 /* ===================== SUPABASE =====================
  * AE Lavoura reaproveita o MESMO projeto Supabase que hoje é o do AE
@@ -707,10 +707,6 @@ function talhaoEDaCultura(talhao, culturaId){
   if(plantios.length === 0) return String(talhao.culturaId)===String(culturaId);
   return plantios.some(p => String(p.culturaId)===String(culturaId));
 }
-function currentGroupKey(){
-  const g = gruposAtuais();
-  return Object.keys(g).find(k=>g[k].pages.some(p=>p.key===state.page));
-}
 function grupoVisivel(key){
   if(key==='admin') return souAdmin();
   // Cada cultura e um grupo de operacao: quem ve operacoes ve todas.
@@ -723,7 +719,6 @@ function paginaAcessivel(page){
   if(!grupo) return false;
   return grupoVisivel(grupo[0]);
 }
-function gruposVisiveis(){ return Object.entries(gruposAtuais()).filter(([key])=>grupoVisivel(key)); }
 
 /* ===================== SIDEBAR / HEADER ===================== */
 function Topbar(){

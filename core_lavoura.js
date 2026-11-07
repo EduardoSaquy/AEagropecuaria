@@ -162,33 +162,11 @@ function carregarCacheLocal(){
     filtrarPelaFrente(snapshot.__fazendaAtividades || []);
   }catch(e){ /* cache corrompido — ignora e segue vazio até conseguir carregar do servidor */ }
 }
-/* O Supabase limita cada consulta a no máximo 1000 linhas por padrão —
- * sem paginar, uma tabela grande (despesas_cana já passou de 2000
- * linhas na carga de 2026) vem cortada silenciosamente, subestimando
- * totais no Custo por Talhão e em Resultados. Paginamos todas as
- * tabelas (não só as de cana) por segurança. */
-async function fetchAllRows(table, orderBy, ascending){
-  const PAGE = 1000;
-  let all = [];
-  let from = 0;
-  while(true){
-    // .order('id') como desempate: orderBy sozinho (ex: 'data') não é
-    // único — duas linhas com o mesmo valor podem sair duplicadas ou
-    // sumir na fronteira entre páginas de 1000. Mesmo bug já corrigido em
-    // lancamentos_rateados, no AE Matriz.
-    const { data, error } = await db.from(table).select('*').order(orderBy, {ascending}).order('id').range(from, from+PAGE-1);
-    if(error) return { data: all, error };
-    all = all.concat(data||[]);
-    if(!data || data.length < PAGE) break;
-    from += PAGE;
-  }
-  return { data: all, error: null };
-}
 async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
       const cfg = CADASTROS[k];
-      return fetchAllRows(cfg.table, cfg.orderBy || 'nome', !cfg.orderDesc);
+      return fetchAllRows(()=>db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc}).order('id'));
     }),
     db.from('profiles').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
@@ -244,7 +222,6 @@ function render(){
   }
   attachEvents();
 }
-function souAdmin(){ return state.perfil?.papel === 'admin'; }
 // Excluir e so de admin ou proprietario, em todo o app. Mesma regra que o
 // banco aplica em pode_excluir(); aqui e so para nao mostrar um botao que
 // vai falhar - e falhar calado, porque a RLS nega delete sem dar erro.
@@ -289,21 +266,6 @@ async function initAuth(){
       render();
     }
   });
-}
-async function fazerLogin(){
-  const usuario = normalizeUsuario(state.loginDraft.usuario);
-  const senha = state.loginDraft.senha;
-  if(!usuario || !senha){ state.loginError = 'Informe usuário e senha.'; render(); return; }
-  state.loginLoading = true; state.loginError = ''; render();
-  const email = `${usuario}@${DOMINIO_LOGIN}`;
-  const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
-  state.loginLoading = false;
-  if(error){ state.loginError = 'Usuário ou senha inválidos.'; render(); return; }
-  state.session = data.session;
-  await loadPerfil();
-  state.loginDraft = {usuario:'', senha:''};
-  render();
-  if(state.perfil?.ativo) loadAll();
 }
 async function fazerLogout(){
   await db.auth.signOut();
@@ -411,54 +373,6 @@ function lerCampoDOM(f){
   if(!el) return undefined;
   return f.type==='checkbox' ? el.checked : el.value;
 }
-function papelPill(papel){
-  const label = PAPEL_LABELS[papel] || papel;
-  const classe = (papel==='admin' || papel==='proprietario') ? 'pill-cat' : (papel==='gestor' ? 'pill-warn' : 'pill-ok');
-  return `<span class="pill ${classe}">${label}</span>`;
-}
-function PageAdminUsuarios(){
-  return `
-  <div class="toolbar">
-    <span class="hint">${state.perfis.length} usuário(s) cadastrado(s)</span>
-    <button class="btn btn-primary btn-sm" data-novo-usuario="1">+ Novo usuário</button>
-  </div>
-  <div class="card" style="overflow-x:auto;">
-    ${state.perfis.length===0 ? Empty('Nenhum usuário cadastrado','Crie contas de acesso para as pessoas da sua equipe.') : `
-    <table>
-      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-        ${state.perfis.map(p=>`
-          <tr>
-            <td><strong>${esc(p.nome)}</strong></td>
-            <td class="mono">${p.usuario}</td>
-            <td>${papelPill(p.papel)}</td>
-            <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
-            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>`}
-  </div>`;
-}
-function ModalUsuario(){
-  const d = editDraft;
-  return `
-  <div class="overlay" data-close-overlay="1">
-    <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Novo usuário</h3><button class="modal-close" data-close="1">&times;</button></div>
-      <div class="modal-body">
-        ${state.usuarioError ? `<div class="login-error">${state.usuarioError}</div>` : ''}
-        <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
-        <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${d.usuario}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar. A mesma conta vale para todos os apps da AE Agropecuária.</span></div>
-        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${d.senha}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-close="1">Cancelar</button>
-        <button class="btn btn-primary" data-criar-usuario="1" ${state.usuarioLoading?'disabled':''}>${state.usuarioLoading?'Criando...':'Criar usuário'}</button>
-      </div>
-    </div>
-  </div>`;
-}
 function ModalPermissoes(){
   const d = editDraft;
   return `
@@ -469,12 +383,7 @@ function ModalPermissoes(){
         <div class="field"><label>Usuário</label><input value="${d.usuario}" disabled/></div>
         <div class="field"><label>Perfil</label>
           <select id="f-papelusuario">
-            <option value="operador" ${d.papel==='operador'?'selected':''}>Operador</option>
-            <option value="colaborador" ${d.papel==='colaborador'?'selected':''}>Colaborador</option>
-            <option value="encarregado" ${d.papel==='encarregado'?'selected':''}>Encarregado</option>
-            <option value="gestor" ${d.papel==='gestor'?'selected':''}>Gestor</option>
-            <option value="proprietario" ${d.papel==='proprietario'?'selected':''}>Proprietário</option>
-            <option value="admin" ${d.papel==='admin'?'selected':''}>Administrador</option>
+            ${opcoesDePapel([['operador','Operador'], ['colaborador','Colaborador'], ['encarregado','Encarregado'], ['gestor','Gestor'], ['proprietario','Proprietário'], ['admin','Administrador']], d.papel)}
           </select>
         </div>
         <div class="field"><label><input type="checkbox" id="f-ativousuario" ${d.ativo?'checked':''} style="width:auto; margin-right:6px;"/> Conta ativa</label></div>

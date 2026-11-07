@@ -104,7 +104,7 @@ troca a tabela. A view não tem coluna `id` (é `lancamento_id`; `rateio_id`
 distingue as partes de um mesmo lançamento rateado, útil como chave quando
 precisa de uma por linha).
 
-**`lancamento_id` não é único na view — `fetchAllRows`/`buscarTudo` precisam
+**`lancamento_id` não é único na view — `fetchAllRows` (antes `buscarTudo` na Pecuária) precisa
 de `.order('lancamento_id').order('rateio_id')`, as duas.** Um lançamento
 rateado em várias fazendas gera várias linhas com o mesmo `lancamento_id`;
 paginando com `.range()` em blocos de 1000 e só `order('lancamento_id')`,
@@ -982,7 +982,7 @@ Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: a tela
 dizia "Nenhum lote de cria cadastrado" e o lançamento "Não há lote de Cria
 ativo", com 6 lotes de Cria ativos no banco, permissão Cria: Editar e as dietas
 visíveis (conferido com o banco). O `loadAll` do AEpecuaria pega cada consulta
-com `buscarTudo`, que devolve lista **vazia** quando a consulta falha (login
+com `buscarTudo` (hoje `fetchAllRows`, do núcleo), que devolve lista **vazia** quando a consulta falha (login
 vencido, rede ruim), e nada avisava; tocar antes de a carga terminar também
 dava lista vazia. Agora:
 - `state.carregouDados`/`state.erroCarga`: aviso "Carregando os dados…" e, se
@@ -1676,23 +1676,30 @@ cache procura **primeiro o endereço exato** e só depois qualquer versão do me
 arquivo (`limpaVersoesAntigas`). Isso foi achado pelo `teste_nucleo_offline.py`: o `sw.js` antigo (`ignoreSearch` direto) devolvia a cópia mais
 ANTIGA, e depois da primeira atualização do núcleo o app offline rodaria HTML novo com núcleo velho. Versão do cache (`ae-v5`) não foi trocada.
 
-**Divergências que o trabalho mostrou e que NÃO foram decididas** (o núcleo só recebeu o que era igual; estas ficam como estão em `DIVIDA_CONHECIDA`
-no `teste_nucleo.py`, até alguém decidir o comportamento certo):
-- `souAdmin`: na Pecuária conta `admin` **e** `proprietario`; nos outros é só `admin`. `podeExcluir`: Pecuária admin/proprietário, Matriz/Cana/Cereais
-  `acessoTotal()` (admin/proprietário).
-- ~~AE Combustível não conhece o papel `proprietario`~~ **RESOLVIDO (07/11/2026, ele disse "Sim")**: `temPermissao` virou uma só (em `core.js`, usa
-  `acessoTotal()`, igual Cana/Cereais; Matriz e Pecuária já davam o mesmo resultado escrito de outro jeito) e o Combustível passou a mostrar
-  "Proprietário", destacar o papel e oferecê-lo na tela de acesso. A mesma tela rebaixava a Operador quem tinha perfil que ela não listava
-  (proprietário, colaborador, consultor), sem ninguém ver: agora o seletor mantém o perfil atual (`PAPEIS_DESTA_TELA`). A tela de Usuários
-  continua só do admin (`souAdmin`). **Banco conferido por ele em 07/11/2026** (definições ao vivo): `is_admin()` = só `papel='admin'`; `is_dono()` =
-  admin ou proprietário; **`tem_permissao()` chama `acesso_total()`** (criada por `lavoura_04_proprietario_acesso_total.sql`), então o proprietário já
-  tinha acesso total no banco e a matriz dele é ignorada (dos 3 proprietários, 2 têm `nenhum`/vazio e 1 tem `editar` nos `combustivel_*`: não muda nada).
-  Ou seja, o app é que estava mais restrito que o banco; agora os dois concordam. `acesso_total()` ao vivo, conferido por ele: `papel in ('admin','proprietario')` e `ativo`. `pode_acessar_frente*` só restringe quem tiver `frentes` marcadas no perfil. A mesma tela de acesso da **Pecuária** só lista
-  colaborador/consultor/proprietário/admin, então editar ali um gestor/operador/encarregado o rebaixa a Colaborador (não corrigido: não foi pedido).
-- `pareceErroDeRede`: a da Pecuária também reconhece `navigator.onLine === false`, `TypeError` e "load failed" (Safari); a do Matriz só olha três palavras.
-- `currentGroupKey`/`gruposVisiveis`: iguais em Pecuária, Cana e Combustível; o Cereais tem outra. `fazerLogin`: o Combustível tem outra.
+**Fase 2 (07/11/2026): login, perfis e acesso no núcleo, e a lista de cópias zerada.** `fazerLogin`, `ModalUsuario`, `PageAdminUsuarios`, `souAdmin`,
+`papelPill`, `opcoesDePapel`, `currentGroupKey`, `gruposVisiveis` e `fetchAllRows` passaram a ser uma só, em `core.js` (`DIVIDA_CONHECIDA` do `teste_nucleo.py`
+ficou **vazia**). O que não era igual foi decidido assim (só o que não muda o que a pessoa vê/pode, ou conserta erro):
+- **`temPermissao`** única (`acessoTotal()`), **Combustível com o proprietário em acesso total** (ele disse "Sim"; o banco já dava: `tem_permissao()` chama
+  `acesso_total()` = admin ou proprietário ativo, conferido ao vivo; o app é que estava mais restrito). Tela de Usuários segue só do admin (`souAdmin()`).
+- **A Pecuária não tem mais `souAdmin` próprio**: o dela era "admin ou proprietário", ou seja, `acessoTotal()`; as 14 chamadas viraram `acessoTotal()` (mesmo
+  resultado). O `souAdmin()` do núcleo é só administrador, como nos outros quatro.
+- **Tela de acesso não rebaixa mais ninguém** (achado e corrigido nos 5 apps): o seletor de perfil de cada app tinha uma lista própria e quem tinha perfil que
+  a lista não trazia caía no PRIMEIRO item, e Salvar o rebaixava sem aviso (Pecuária: gestor/operador/encarregado viravam Colaborador; Matriz, Cana, Cereais:
+  consultor virava Operador; Combustível: proprietário/colaborador/consultor). `opcoesDePapel(lista, atual)` mantém o perfil atual marcado. A lista de cada app
+  não mudou (decisão de produto dele). O banco aceita 7 perfis: admin, proprietario, gestor, encarregado, colaborador, operador, consultor.
+- **Escape**: `ModalUsuario` e `PageAdminUsuarios` passaram a escapar tudo (o Matriz, o Combustível e o Cana/Cereais deixavam a senha digitada e a mensagem de
+  erro sem escape; o Cana/Cereais também o login digitado e o da lista). Era "auto-ataque" (só o administrador digitando), mas a senha com aspas truncava o campo.
+- **`papelPill`**: gestor e consultor em amarelo em todos (na Pecuária só o consultor era; ali o gestor agora também fica amarelo).
+- **Leitura de tabela inteira em páginas**: eram três códigos (`fetchAllRows(consulta)` no Matriz e no Combustível, `buscarTudo(consulta)` idêntico na Pecuária e
+  `fetchAllRows(tabela, ordem)` no Cana/Cereais). Ficou só `fetchAllRows(()=>db.from(...).select(...).order(...).order('id'))` no núcleo; a Pecuária chama o mesmo
+  nome (27 chamadas renomeadas) e o Cana/Cereais passa a consulta montada, com o `.order('id')` de desempate que já tinham.
+- **`fazerLogin`**: igual nos 5; o passo extra do Combustível (conferir alertas depois da carga) agora é a função `aoEntrarDepoisDaCarga`, que o app define se
+  precisar.
+**Ainda diferentes de verdade** (cada app tem a sua, nada decidido): `initAuth`, `loadPerfil`, `loadAll`, `Header`, `Topbar`, `LoginPage`, `AguardandoLiberacao`,
+`brandMark`, `attachEvents`, `pareceErroDeRede` (a da Pecuária também reconhece `navigator.onLine === false`, `TypeError` e "load failed" do Safari; a do Matriz só
+olha três palavras), `PageCadastro`/`salvarCadastro` (Cana, Cereais, Combustível), `mesLabel`. São a próxima camada do núcleo: cada uma pede comparar e decidir.
 
-**Falta** (próximas etapas): reconciliar essas divergências (decidir e passar para o núcleo, tirando da lista); o CSS dos avisos ainda está copiado nos 5
+**Falta** (próximas etapas): as "ainda diferentes" acima; o CSS dos avisos ainda está copiado nos 5
 apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por tela); apagar os `sw_*.js` aposentados. `Adubacao.html` não usa o núcleo (sem login,
 `esc`/`fmt` próprios e diferentes).
 
@@ -1817,7 +1824,7 @@ apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por te
 
 ## Testes
 
-64 arquivos `teste_*.py`, 1.814 checagens (07/11/2026; a tabela abaixo lista os
+65 arquivos `teste_*.py`, 1.880 checagens (07/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1866,6 +1873,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_nucleo.py` | 34 | os cinco apps + `core*.js` (tags e `?v=` em dia e na ordem certa, app não repete o que o núcleo declara, **nenhuma função nova copiada entre apps** — lista `DIVIDA_CONHECIDA` só pode encolher —, `sw.js` guarda os núcleos, cada app enxerga as funções do núcleo) |
 | `teste_nucleo_offline.py` | 6 | `sw.js` + `core.js?v=` com service worker de verdade: versão nova publicada, offline abre com o núcleo NOVO (provado que o `sw.js` antigo devolvia o velho) e o cache não guarda a cópia antiga |
 | `teste_combustivel_proprietario.py` | 13 | AECombustivel.html (proprietário tem acesso total sem matriz e a tela de Usuários segue só do admin; gestor sem matriz não vê nada; "Proprietário" na lista de usuários; editar e salvar proprietário/colaborador/gestor não muda o perfil da pessoa) |
+| `teste_perfis_acesso.py` | 66 | os 5 apps (tela de acesso: abrir e salvar quem é de qualquer dos 7 perfis não troca o perfil; lista com cor e texto certos; formulário de novo usuário escapa o que se digita) |
 | `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
 | `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
