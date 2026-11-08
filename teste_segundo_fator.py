@@ -35,6 +35,24 @@ def conf(ok, desc, extra=""):
         print(f"    FALHOU  {desc}" + (f"\n              {extra}" if extra else ""))
 
 
+def confere_qr(page, rotulo):
+    """O QR aparece como SVG dentro da pagina e DESENHA os tres cantos de posicao nos lugares certos (lido de volta num canvas)."""
+    info = page.evaluate("""() => { const q = document.querySelector('#mfa-qr'); const s = q && q.querySelector('svg');
+        return {svg: !!s, img: !!(q && q.querySelector('img')), vb: s && s.getAttribute('viewBox'), d: s ? (s.querySelector('path').getAttribute('d') || '').length : 0}; }""")
+    conf(info["svg"] and not info["img"] and info["vb"] == "0 0 111 111" and 100 < info["d"] < 30000,
+         f"QR ({rotulo}): aparece como SVG pequeno dentro da pagina, com viewBox", str(info))
+    amostra = page.evaluate("""async () => {
+        const s = document.querySelector('#mfa-qr svg');
+        const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(s)); await img.decode();
+        const L = 370, c = document.createElement('canvas'); c.width = L; c.height = L;
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, L, L); x.drawImage(img, 0, 0, L, L);
+        const mod = (col, lin) => x.getImageData(Math.round((col + 4.5) * L / 37), Math.round((lin + 4.5) * L / 37), 1, 1).data[0] < 128 ? 1 : 0;
+        return {zona: x.getImageData(3, 3, 1, 1).data[0], sup_esq: [mod(0, 0), mod(3, 3), mod(1, 1), mod(6, 6)], sup_dir: [mod(28, 0), mod(25, 3), mod(27, 1)], inf_esq: [mod(0, 28), mod(3, 25), mod(1, 27)]}; }""")
+    ok = (amostra["zona"] > 200 and amostra["sup_esq"] == [1, 1, 0, 1] and amostra["sup_dir"] == [1, 1, 0] and amostra["inf_esq"] == [1, 1, 0])
+    conf(ok, f"QR ({rotulo}): os tres cantos de posicao estao inteiros, nos lugares certos", str(amostra))
+
+
+
 def perfil(papel="admin"):
     return {"id": "u1", "nome": "Chefe", "usuario": "chefe", "papel": papel, "ativo": True, "permissoes": {}, "frentes": []}
 
@@ -177,10 +195,11 @@ with sync_playwright() as pw:
             conf("só com senha" in page.inner_text("#mfa-dialogo"), "sem celular cadastrado: diz que o login e so com senha")
             page.locator("[data-mfa-ativar]").click()
             page.wait_for_selector("#mfa-ativar-codigo", timeout=5000)
-            qr = page.evaluate("() => document.querySelector('#mfa-dialogo img').getAttribute('src')")
-            conf(qr.startswith("data:image/svg+xml") and "JBSWY3DPEHPK3PXP" in page.inner_text("#mfa-dialogo"), "mostra o QR code e a chave para digitar no app")
-            page.wait_for_timeout(300)
-            conf(page.evaluate("() => { const i = document.querySelector('#mfa-dialogo img'); return i.complete && i.naturalWidth > 0; }"), "a imagem do QR carrega inteira (o '#' de uma cor no SVG nao corta o endereco)")
+            conf("JBSWY3DPEHPK3PXP" in page.inner_text("#mfa-dialogo"), "mostra a chave para digitar no app")
+            page.wait_for_timeout(200)
+            confere_qr(page, "formato do Supabase (SVG do servidor, sem viewBox, quadradinhos pretos e brancos)")
+            conf(page.evaluate("() => { const a = document.querySelector('#mfa-abrir-app'); return !!a && a.getAttribute('href').startsWith('otpauth://totp/') && a.getAttribute('href').includes('secret=JBSWY3DPEHPK3PXP'); }"),
+                 "tem o botao 'Estou neste celular: abrir no app autenticador' (link otpauth com a chave)")
             conf(page.locator("#f-senhaatual").count() == 0, "a tela Trocar senha do app sai de baixo da janela")
             page.fill("#mfa-ativar-codigo", "000000")
             page.locator("[data-mfa-confirmar]").click()
@@ -198,6 +217,24 @@ with sync_playwright() as pw:
             conf(page.evaluate("() => __MFA__.fatores.length") == 2, "outro celular: comeca um cadastro novo")
             page.locator("[data-mfa-voltar]").click()
             page.wait_for_selector("[data-mfa-remover]", timeout=5000)
+            # o mesmo QR com a cor escrita como '#000000' (cor com '#' cortava o endereco da imagem)
+            page.evaluate("() => { window.__QR_FORMATO__ = 'hex'; }")
+            page.locator("[data-mfa-ativar]").click()
+            page.wait_for_selector("#mfa-ativar-codigo", timeout=5000)
+            confere_qr(page, "SVG com a cor escrita como #000000")
+            page.locator("[data-mfa-voltar]").click()
+            page.wait_for_selector("[data-mfa-remover]", timeout=5000)
+            # SVG que nao da para ler: plano B (imagem), e a chave e o botao continuam la
+            page.evaluate("() => { window.__QR_FORMATO__ = 'ilegivel'; }")
+            page.locator("[data-mfa-ativar]").click()
+            page.wait_for_selector("#mfa-ativar-codigo", timeout=5000)
+            page.wait_for_timeout(300)
+            conf(page.evaluate("() => { const i = document.querySelector('#mfa-qr img'); return !!i && i.complete && i.naturalWidth > 0 && !document.querySelector('#mfa-qr svg'); }"),
+                 "SVG que nao da para ler: cai na imagem, que carrega")
+            conf("JBSWY3DPEHPK3PXP" in page.inner_text("#mfa-dialogo") and page.locator("#mfa-abrir-app").count() == 1, "mesmo assim a chave e o botao de abrir no app aparecem")
+            page.locator("[data-mfa-voltar]").click()
+            page.wait_for_selector("[data-mfa-remover]", timeout=5000)
+            page.evaluate("() => { window.__QR_FORMATO__ = 'gotrue'; }")
             conf(page.evaluate("() => __MFA__.fatores.length") == 1, "desistir no meio nao deixa fator pela metade")
 
             # remover

@@ -591,13 +591,56 @@ function desafioMFA(sessao){
     campo.focus();
   });
 }
-// O QR code do Supabase vem como data:image/svg+xml com o SVG por extenso, e um '#' dentro (cor) corta o endereço no navegador: o
-// SVG é lido e posto de novo, codificado, para a imagem sempre carregar inteira.
-function qrComoImagem(qr){
+// O QR code do Supabase vem como data:image/svg+xml com o SVG por extenso (uns 280 KB: um <rect> por quadradinho, sem viewBox).
+// Numa <img> isso é pesado, depende do navegador aceitar o endereço enorme e, sem viewBox, não encolhe (corta). Por isso o QR é
+// redesenhado aqui, DENTRO da página, como um SVG pequeno (um único caminho, ~20 KB, com viewBox): carrega em qualquer navegador.
+function qrSvgDoSupabase(qr){
   const texto = String(qr || ''), i = texto.indexOf(',');
-  if(!texto.startsWith('data:image/svg+xml') || i < 0) return texto;
+  if(!texto.startsWith('data:image/svg+xml') || i < 0) return '';
   let svg = texto.slice(i + 1);
   try{ if(/%3C/i.test(svg)) svg = decodeURIComponent(svg); }catch(e){ /* já estava como texto */ }
+  return svg;
+}
+function qrComoSvgInline(qr, tamanho){
+  const svg = qrSvgDoSupabase(qr);
+  const raiz = /<svg\b[^>]*>/i.exec(svg);
+  if(!raiz) return '';
+  const medida = (tag, nome)=>{ const r = new RegExp('\\s' + nome + '\\s*=\\s*["\']?(-?[\\d.]+)', 'i').exec(tag); return r ? Number(r[1]) : NaN; };
+  let largura = medida(raiz[0], 'width'), altura = medida(raiz[0], 'height');
+  const vb = /\bviewBox\s*=\s*["']\s*[-\d.]+[ ,]+[-\d.]+[ ,]+([\d.]+)[ ,]+([\d.]+)/i.exec(raiz[0]);
+  if(vb){ largura = Number(vb[1]); altura = Number(vb[2]); }
+  if(!(largura > 0) || !(altura > 0)) return '';
+  // só os quadradinhos pretos; os que vêm em sequência na mesma linha viram um traço só
+  let d = '', corrente = null, n = 0;
+  const fecha = ()=>{ if(corrente){ d += 'M' + corrente.x + ' ' + corrente.y + 'h' + corrente.w + 'v' + corrente.h + 'h-' + corrente.w + 'z'; corrente = null; } };
+  const preto = /fill\s*[:=]\s*["']?\s*(black|#000000|#000)\b/i;
+  const re = /<rect\b[^>]*>/gi;
+  let r;
+  while((r = re.exec(svg))){
+    const tag = r[0];
+    if(!preto.test(tag)) continue;
+    const x = medida(tag, 'x'), y = medida(tag, 'y'), w = medida(tag, 'width'), h = medida(tag, 'height');
+    if(![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
+    n++;
+    if(corrente && corrente.y === y && corrente.h === h && corrente.x + corrente.w === x) corrente.w += w;
+    else { fecha(); corrente = { x, y, w, h }; }
+  }
+  fecha();
+  if(!n) return '';
+  const lado = tamanho || 220;
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + largura + ' ' + altura + '" width="' + lado + '" height="' + lado + '" shape-rendering="crispEdges" role="img" aria-label="QR code para o app autenticador" style="background:#fff; display:inline-block; max-width:100%; height:auto;"><path d="' + d + '" fill="#000"/></svg>';
+}
+// Plano B (se o SVG vier num formato que não dá para ler): a <img> de antes, com o endereço recodificado ('#' de uma cor cortava o
+// endereço) e com viewBox posto na raiz quando falta.
+function qrComoImagem(qr){
+  const texto = String(qr || '');
+  let svg = qrSvgDoSupabase(texto);
+  if(!svg) return texto;
+  svg = svg.replace(/<svg\b([^>]*)>/i, (tudo, atributos)=>{
+    if(/\bviewBox\s*=/i.test(atributos)) return tudo;
+    const w = /\bwidth\s*=\s*["']?([\d.]+)/i.exec(atributos), h = /\bheight\s*=\s*["']?([\d.]+)/i.exec(atributos);
+    return w && h ? '<svg' + atributos + ' viewBox="0 0 ' + w[1] + ' ' + h[1] + '">' : tudo;
+  });
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 // Janela para ativar, ver e remover os celulares cadastrados (aberta pelo botão da tela "Trocar senha").
@@ -619,8 +662,9 @@ async function abrirSegundoFator(){
     } else if(m.novo){
       corpo = `
         <p class="hint">1. No celular, abra o app autenticador (Google Authenticator, Microsoft Authenticator ou Authy) e leia este QR code.</p>
-        <div style="text-align:center; margin:10px 0;"><img src="${esc(qrComoImagem(m.novo.qr))}" alt="QR code para o app autenticador" width="200" height="200" style="background:#fff; padding:6px;"/></div>
-        <p class="hint">Se não conseguir ler, digite esta chave no app: <strong class="mono" style="user-select:all;">${esc(m.novo.segredo)}</strong></p>
+        <div id="mfa-qr" style="text-align:center; margin:10px 0;">${m.novo.qrHtml || `<img src="${esc(qrComoImagem(m.novo.qr))}" alt="QR code para o app autenticador" width="220" height="220" style="background:#fff; padding:6px;"/>`}</div>
+        <p class="hint">Se não conseguir ler (ou se estiver neste mesmo celular), digite esta chave no app: <strong class="mono" style="user-select:all; overflow-wrap:anywhere;">${esc(m.novo.segredo)}</strong></p>
+        ${m.novo.uri && /^otpauth:\/\//i.test(m.novo.uri) ? `<p class="hint"><a class="btn btn-ghost btn-sm" id="mfa-abrir-app" href="${esc(m.novo.uri)}">Estou neste celular: abrir no app autenticador</a></p>` : ''}
         <p class="hint">2. Digite o código de 6 números que o app mostrar agora:</p>
         <div class="field"><input id="mfa-ativar-codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>`;
       rodape = `<button class="btn btn-ghost" data-mfa-voltar="1">Cancelar</button>
@@ -667,7 +711,10 @@ async function abrirSegundoFator(){
       const { data, error } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Celular ' + (m.fatores.length + 1) + ' - ' + new Date().toLocaleString('pt-BR') });
       m.ocupado = false;
       if(error || !data){ m.erro = 'Não foi possível começar a ativação: ' + ((error && error.message) || 'sem resposta') + '.'; desenha(); return; }
-      m.novo = { factorId: data.id, qr: data.totp.qr_code, segredo: data.totp.secret };
+      const totp = data.totp || {};
+      let qrHtml = '';
+      try{ qrHtml = qrComoSvgInline(totp.qr_code); }catch(e){ qrHtml = ''; }
+      m.novo = { factorId: data.id, qr: totp.qr_code, qrHtml, segredo: totp.secret || '', uri: totp.uri || '' };
       desenha(); return;
     }
     if(alvo.dataset.mfaConfirmar !== undefined){
