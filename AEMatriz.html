@@ -542,11 +542,8 @@ const db = supabase.createClient(
 // código do Painel.
 const dbPecuaria = db;
 
-// AE Combustível ainda não foi implantado com banco real — o card dele
-// fica "em breve" no Painel por enquanto (ver APPS_REGISTRO) e
-// carregarCombustivel() abaixo não faz nenhuma chamada de rede. Quando o
-// schema for desenhado, ele entra no mesmo projeto do Lavoura (db acima),
-// sem precisar de projeto Supabase novo.
+// AE Combustível está no mesmo banco (db acima). O Painel mostra os indicadores dele
+// (carregarIndicadoresCombustivel); o custo NÃO entra em Resultados (ver carregarCombustivel()).
 
 // Cadastro de fazenda foi centralizado aqui no Matriz (era espalhado entre
 // Lavoura e Pecuária) — este app agora é o único que cria/edita/exclui
@@ -1073,6 +1070,7 @@ async function loadAll(grupos){
     if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
     carregarResultadoCereais();
     carregarCombustivel();
+    if(temPermissao('matriz_painel_combustivel','visualizar')) carregarIndicadoresCombustivel();
     carregarLancamentosRateados();
   }
   if(quer('financiamentos')) carregarMovimentosFinanciamento();
@@ -1821,8 +1819,70 @@ function agregarPeriodo(resultado, meses){
 // se um dia quiserem ratear o custo por frente aqui no Painel/Resultados,
 // é aqui que a leitura de tanques/entradas/abastecimentos entraria.
 async function carregarCombustivel(){
-  state.indicadores.combustivel = {loading:false, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
   state.resultados.combustivelPorFrente = {loading:false, erro:'', mensal:[]};
+  renderCarga();
+}
+
+// Indicadores do AE Combustivel no Painel (pedido do Eduardo, 08/11/2026). Mesmas contas do Painel do proprio
+// AE Combustivel (PagePainel): estoque = entradas - abastecimentos + ajustes dos tanques ativos; consumo do mes =
+// litros abastecidos no mes (dia local, nao UTC); custo do mes = litros x custo medio ponderado das notas do tanque
+// ate o dia do abastecimento (abastecimento no posto nao tem tanque e fica sem custo, como la); alertas = abertos.
+// Cada numero so aparece para quem tem a permissao do modulo correspondente no AE Combustivel (sem ela o banco
+// devolveria vazio e o card mostraria 0 L, falso): sem permissao, "—". So informativo: NAO entra em despesa nem
+// Resultados (a compra do diesel ja e lancamento no Financeiro; somar o consumo contaria duas vezes).
+function dataLocalDeTimestamp(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(isNaN(d)) return String(ts).slice(0,10);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function indicadoresCombustivelDe(dados, hoje){
+  const {tanques, entradas, ajustes, abastecimentos, alertas} = dados;
+  const inicioMes = hoje.slice(0,7) + '-01';
+  const ativos = new Set(tanques.filter(t=>t.ativo!==false).map(t=>t.id));
+  const somaPor = (lista, campo) => lista.filter(x=>ativos.has(x.tanque_id)).reduce((a,x)=>a+Number(x[campo]||0),0);
+  const estoque = somaPor(entradas,'volume_litros') - somaPor(abastecimentos,'volume_litros') + somaPor(ajustes,'volume_ajuste_litros');
+  const custoMedio = (tanqueId, dia) => {
+    let vol = 0, valor = 0;
+    for(const e of entradas){ if(e.tanque_id===tanqueId && String(e.data||'').slice(0,10)<=dia){ vol += Number(e.volume_litros||0); valor += Number(e.valor_total||0); } }
+    return vol>0 ? valor/vol : null;
+  };
+  let consumoMes = 0, custoMes = 0;
+  for(const a of abastecimentos){
+    const dia = dataLocalDeTimestamp(a.data_hora);
+    if(dia < inicioMes || dia > hoje) continue;
+    const litros = Number(a.volume_litros||0);
+    consumoMes += litros;
+    if(a.tanque_id!=null){ const c = custoMedio(a.tanque_id, dia); if(c!=null) custoMes += c*litros; }
+  }
+  return {estoqueAtual: estoque, consumoMes, custoMes, alertasAbertos: alertas.filter(a=>a.status==='aberto').length};
+}
+async function carregarIndicadoresCombustivel(){
+  const pode = {
+    estoque: temPermissao('combustivel_estoque','visualizar'),
+    consumo: temPermissao('combustivel_abastecimento','visualizar'),
+    custo: temPermissao('combustivel_rateio','visualizar'),
+    alertas: temPermissao('combustivel_alertas','visualizar'),
+  };
+  state.indicadores.combustivel = {...state.indicadores.combustivel, loading:true, erro:'', pode};
+  renderCarga();
+  try{
+    const vazio = Promise.resolve({data:[], error:null});
+    const precisaTanques = pode.estoque || pode.custo;
+    const precisaAbast = pode.estoque || pode.consumo || pode.custo;
+    const [tq, en, aj, ab, al] = await Promise.all([
+      precisaTanques ? fetchAllRows(()=>db.from('tanques').select('id, ativo').order('id')) : vazio,
+      precisaTanques ? fetchAllRows(()=>db.from('entradas_estoque').select('id, tanque_id, data, volume_litros, valor_total').order('id')) : vazio,
+      pode.estoque ? fetchAllRows(()=>db.from('ajustes_estoque').select('id, tanque_id, volume_ajuste_litros').order('id')) : vazio,
+      precisaAbast ? fetchAllRows(()=>db.from('abastecimentos').select('id, tanque_id, data_hora, volume_litros').order('id')) : vazio,
+      pode.alertas ? fetchAllRows(()=>db.from('alertas').select('id, status').order('id')) : vazio,
+    ]);
+    for(const r of [tq, en, aj, ab, al]) if(r.error) throw r.error;
+    const ind = indicadoresCombustivelDe({tanques:tq.data||[], entradas:en.data||[], ajustes:aj.data||[], abastecimentos:ab.data||[], alertas:al.data||[]}, hojeStr());
+    state.indicadores.combustivel = {loading:false, erro:'', pode, ...ind};
+  } catch(e){
+    state.indicadores.combustivel = {loading:false, erro:'Não foi possível carregar agora.', pode, estoqueAtual:null, consumoMes:null, custoMes:null, alertasAbertos:null};
+  }
   renderCarga();
 }
 // Junta o custo mensal de combustível (por operação) com o resultado
@@ -2370,9 +2430,9 @@ function Header(){
 
 /* ===================== PAINEL ===================== */
 function AppCard(a){
-  // "em breve" (Combustível hoje) não tem indicador nenhum ainda — nem
-  // tenta mostrar carregando/erro, só o selo "Em breve".
-  const ind = a.status!=='ativo' ? null : a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='cana' ? state.indicadores.cana : a.slug==='cereais' ? state.indicadores.cereais : null;
+  // app "em breve" não tem indicador nenhum — nem tenta mostrar carregando/erro, só o selo "Em breve".
+  const ind = a.status!=='ativo' ? null : a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='cana' ? state.indicadores.cana
+    : a.slug==='cereais' ? state.indicadores.cereais : a.slug==='combustivel' ? state.indicadores.combustivel : null;
   let stats = '';
   if(ind){
     if(ind.loading){
@@ -2396,6 +2456,14 @@ function AppCard(a){
         <div class="app-card-stat"><div class="v">${fmtInt(ind.talhoes)}</div><div class="l">Talhões</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.plantiosAtivos)}</div><div class="l">Plantios ativos</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.sacasMes)} sc</div><div class="l">Colhido no mês</div></div>
+      </div>`;    } else if(a.slug==='combustivel'){
+      const p = ind.pode || {};
+      const nada = !p.estoque && !p.consumo && !p.custo && !p.alertas;
+      stats = nada ? `<p class="hint">Sem acesso aos módulos do AE Combustível (Estoque, Abastecimento, Rateio, Alertas).</p>` : `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${p.estoque ? fmtInt(Math.round(ind.estoqueAtual))+' L' : '—'}</div><div class="l">Estoque nos tanques</div></div>
+        <div class="app-card-stat"><div class="v">${p.consumo ? fmtInt(Math.round(ind.consumoMes))+' L' : '—'}</div><div class="l">Consumo no mês</div></div>
+        <div class="app-card-stat"><div class="v">${p.custo ? 'R$ '+fmtInt(Math.round(ind.custoMes)) : '—'}</div><div class="l">Custo no mês</div></div>
+        <div class="app-card-stat"><div class="v"${p.alertas && ind.alertasAbertos>0 ? ' style="color:var(--alerta);"' : ''}>${p.alertas ? fmtInt(ind.alertasAbertos) : '—'}</div><div class="l">Alertas abertos</div></div>
       </div>`;
     }
   }
