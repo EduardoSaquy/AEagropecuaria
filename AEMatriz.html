@@ -375,7 +375,7 @@
    minimo da WCAG 2.2 AA e 24). Os botoes mediam 26 a 34 px. O mouse do desktop segue como era.
    NAO definir display aqui: uma classe que o CSS esconde em tela larga (menu de celular) voltaria a aparecer. */
 @media (pointer: coarse){
-  .aviso-fechar, .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel, .side-app{
+  .aviso-fechar, .btn, .btn-sm, .btn-sair, .nav-item, .periodo-tab, .btn-ghost, .btn-danger-ghost, button.btn-link, summary, .mobile-nav-toggle, .subtab, .tab, .link-nome, .valor-clicavel{
     min-height:44px;
   }
   input:not([type=checkbox]):not([type=radio]):not([type=color]), select{min-height:44px;}
@@ -387,14 +387,16 @@
   .modal-close, .valor-clicavel{min-height:44px;}
 }
 
-/* ---------- MENU LATERAL (tela larga, 06/11/2026) ----------
-   Pedido do Eduardo: o menu principal (Painel, Resultados, Financeiro...) grande e os apps (Pecuaria, Cana, Cereais,
-   Combustivel) pequenos na barra. Da largura de 1280 px para cima a barra vira uma coluna a esquerda (o conteudo ainda
-   fica com ~990 px, o que as tabelas largas da Empresa e dos Financiamentos pedem); de 760 a 1279 px (tablet menor)
-   segue a barra de cima, com o menu maior e os apps pequenos a direita; abaixo de 760 px e o menu de celular. So CSS: o topo (.topbar) usa display:contents para que a
-   marca e o usuario virem pecas da coluna; os botoes, atributos e a ordem do HTML nao mudam. */
-.side-apps{display:none;}
-@media (min-width:1280px){
+/* ---------- MENU LATERAL (06/11/2026; tablet deitado 08/11/2026) ----------
+   Pedido do Eduardo: o menu principal (Painel, Resultados, Financeiro...) grande, em coluna. Da largura de 1160 px para cima
+   a barra vira uma coluna a esquerda: 232 px de 1280 para cima, 196 px de 1160 a 1279 (iPad deitado, ~1180). Os 4 apps
+   (Pecuaria, Cana, Cereais, Combustivel) sao janelinhas no Painel, ao lado do menu (a lista pequena de apps da barra saiu em
+   08/11/2026, a pedido dele). Em 08/11/2026 ele pediu o menu em coluna tambem no tablet dele, que
+   estava na faixa da barra de cima; as tabelas largas se adaptam a largura que sobra (ver "tabela estreita" abaixo).
+   De 760 a 1159 px (tablet em pe) segue a barra de cima, com o menu maior; abaixo de 760 px
+   e o menu de celular. So CSS: o topo (.topbar) usa display:contents para que a marca e o usuario virem pecas da coluna;
+   os botoes, atributos e a ordem do HTML nao mudam. */
+@media (min-width:1160px){
   .app{display:grid; grid-template-columns:232px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto;
        grid-template-areas:"marca conteudo" "menu conteudo" "usuario conteudo";}
   .topbar{display:contents;}
@@ -403,18 +405,11 @@
   .brand-name{font-size:22px;}
   .tabsrow{grid-area:menu; background:var(--verde-escuro); border:none; flex-direction:column; flex-wrap:nowrap; gap:5px;
            padding:4px 14px 14px; overflow-y:auto;}
-  .nav-item{font-size:16px; font-weight:700; padding:0 16px; min-height:54px; gap:14px; width:100%; color:rgba(255,255,255,0.82); border-radius:12px;}
+  .nav-item{font-size:16px; font-weight:700; padding:7px 16px; min-height:54px; gap:14px; width:100%; color:rgba(255,255,255,0.82); border-radius:12px;
+            white-space:normal; text-align:left; line-height:1.2;}
   .nav-item svg{width:23px; height:23px; opacity:0.9;}
   .nav-item:hover{background:rgba(255,255,255,0.09); color:#fff;}
   .nav-item.active{background:var(--verde-vivo); color:#0B2318;}
-  .side-apps{display:grid; grid-template-columns:1fr 1fr; gap:2px 6px; margin-top:auto; padding-top:14px; border-top:1px solid rgba(255,255,255,0.14);}
-  .side-apps-titulo{grid-column:1 / -1; font-size:10.5px; letter-spacing:1.3px; text-transform:uppercase; color:rgba(255,255,255,0.5); font-weight:700; padding:0 6px 4px;}
-  .side-app{display:flex; align-items:center; gap:6px; min-height:44px; padding:0 4px; font-size:12px; font-weight:600; min-width:0;
-            color:rgba(255,255,255,0.78); text-decoration:none; border-radius:9px; white-space:nowrap;}
-  .side-app:hover{background:rgba(255,255,255,0.09); color:#fff;}
-  .side-app-ic{width:20px; height:20px; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
-  .side-app-ic svg{width:12px; height:12px;}
-  .side-app-nome{overflow:hidden; text-overflow:ellipsis;}
   .topbar-user{grid-area:usuario; margin:0; background:var(--verde-escuro); padding:12px 16px 18px; border-top:1px solid rgba(255,255,255,0.14);
                display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
   .avatar{order:-1; width:36px; height:36px; font-size:14px;}
@@ -424,36 +419,89 @@
   .main{grid-area:conteudo; max-width:none; padding:32px 24px 60px 24px;}
   .main > *{max-width:1240px;}
 }
-/* 760 a 1279 px: a barra de cima fica, com o menu principal maior e os apps (pequenos) no canto direito */
-@media (min-width:760px) and (max-width:1279px){
+/* 1160 a 1279 px (iPad deitado): a mesma coluna, um pouco mais estreita, e as tabelas um pouco mais justas, para o conteudo
+   (~940 px a 1180) continuar mostrando as tabelas largas inteiras, sem rolar de lado */
+@media (min-width:1160px) and (max-width:1279px){
+  .app{grid-template-columns:196px minmax(0,1fr);}
+  .brand{padding:22px 16px 16px;}
+  .brand-name{font-size:20px;}
+  .tabsrow{padding:4px 4px 12px;}
+  .nav-item{font-size:15px; padding:7px 10px; gap:10px;}
+  .nav-item svg{width:20px; height:20px;}
+  .topbar-user{padding:12px 10px 16px;}
+  .main{padding:28px 14px 56px 14px;}
+  th, td{padding-left:8px; padding-right:8px;}
+  .tabela-compacta th, .tabela-compacta td{padding-left:5px; padding-right:5px;}
+}
+/* 760 a 1159 px: a barra de cima fica, com o menu principal maior */
+@media (min-width:760px) and (max-width:1159px){
   .tabsrow{align-items:center; gap:6px; padding:10px 20px;}
   .nav-item{font-size:15px; padding:0 16px; min-height:46px; gap:10px;}
   .nav-item svg{width:20px; height:20px;}
-  .side-apps{display:flex; align-items:center; gap:2px; margin-left:auto; padding-left:12px; border-left:1px solid var(--cinza-claro);}
-  .side-apps-titulo{display:none;}
-  .side-app{display:flex; align-items:center; gap:6px; padding:0 8px; font-size:12px; font-weight:600; color:var(--cinza); text-decoration:none; border-radius:8px; white-space:nowrap;}
-  .side-app:hover{background:var(--cinza-bg); color:var(--verde-escuro);}
-  .side-app-ic{width:20px; height:20px; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
-  .side-app-ic svg{width:12px; height:12px;}
 }
-/* Painel: os apps viram linhas compactas (a barra, lateral ou de cima, ja tem o atalho de cada um) */
+/* Painel: os 4 apps viram janelinhas, duas por linha, ao lado do menu (08/11/2026; antes eram linhas compactas) */
 @media (min-width:900px){
-  .app-grid{display:flex; flex-direction:column; gap:10px;}
-  .app-card{display:grid; grid-template-columns:minmax(240px,1.1fr) minmax(0,2fr) auto; align-items:center; gap:18px; padding:14px 20px;}
-  .app-card-top{grid-column:1;}
-  .app-card-actions{grid-column:3;}
+  .app-grid{grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px; align-items:stretch;}
+  .app-card{padding:22px 24px 20px;}
   .app-card:hover{transform:none;}
-  .app-card-desc{display:none;}
-  .app-card-stats{margin:0; padding:0; border:none; flex-wrap:nowrap; gap:26px;}
-  .app-card-actions{margin:0; padding:0;}
+  .app-card-stats{gap:22px;}
 }
 /* tela de pouca altura (tablet deitado): menu mais compacto para os apps de baixo aparecerem inteiros */
-@media (min-width:1280px) and (max-height:900px){
+@media (min-width:1160px) and (max-height:900px){
   .brand{padding:18px 22px 12px;}
   .tabsrow{gap:3px; padding:2px 14px 10px;}
   .nav-item{min-height:48px; font-size:15.5px;}
-  .side-apps{padding-top:10px;}
   .topbar-user{padding:10px 14px 14px;}
+}
+/* ---------- SETINHA COM AS SUB-ABAS DE CADA ITEM DO MENU (08/11/2026) ----------
+   Pedido do Eduardo: uma setinha nos itens do menu que tem sub-abas, para abrir a lista ali e ir direto numa delas (o
+   HTML vem do ItemDoMenu(), em core.js). So aparece onde o menu e uma coluna; na barra de cima fica escondida e os
+   envoltorios nao criam caixa (display:contents), entao a barra se desenha como antes. */
+.nav-grupo, .nav-linha{display:contents;}
+.nav-seta, .nav-sub{display:none;}
+@media (min-width:1160px){
+  .nav-grupo{display:flex; flex-direction:column; gap:3px; width:100%; flex-shrink:0;}
+  .nav-linha{display:flex; align-items:stretch; gap:2px; width:100%;}
+  .nav-linha .nav-item{flex:1 1 auto; min-width:0; width:auto; padding-right:4px;}
+  /* a setinha tem 44 px de toque, mas o desenho dela so ocupa o meio: a ponta esquerda fica por baixo do nome do item, para nomes
+     compridos (Confinamento, Formulacao de Dietas) nao serem cortados */
+  .nav-linha .nav-seta{margin-left:-14px; position:relative;}
+  .nav-seta{display:flex; flex:none; width:44px; align-items:center; justify-content:center; padding:0; border:none; border-radius:12px;
+            background:transparent; color:rgba(255,255,255,0.78); cursor:pointer;}
+  .nav-seta:hover{background:rgba(255,255,255,0.09); color:#fff;}
+  .nav-seta svg{transition:transform 0.15s;}
+  .nav-grupo.aberto .nav-seta svg{transform:rotate(180deg);}
+  .nav-grupo.ativo .nav-linha{background:var(--verde-vivo); border-radius:12px; gap:0;}
+  .nav-grupo.ativo .nav-linha .nav-item.active{background:transparent;}
+  .nav-grupo.ativo .nav-seta{background:transparent; color:#0B2318;}
+  .nav-sub{display:none; flex-direction:column; gap:2px; margin:0 0 6px 22px; padding-left:12px; border-left:2px solid rgba(255,255,255,0.2);}
+  .nav-grupo.aberto .nav-sub{display:flex;}
+  .nav-sub-item{min-height:44px; padding:6px 12px; border:none; border-radius:9px; background:transparent; text-align:left; cursor:pointer;
+                font-family:'Inter',sans-serif; font-size:14.5px; font-weight:600; line-height:1.25; color:rgba(255,255,255,0.8);}
+  .nav-sub-item:hover{background:rgba(255,255,255,0.09); color:#fff;}
+  .nav-sub-item.active{background:rgba(255,255,255,0.16); color:#fff; font-weight:700;}
+}
+@media (min-width:1160px) and (max-width:1279px){
+  .nav-linha .nav-item{padding:7px 2px 7px 8px; gap:7px; font-size:14px; overflow-wrap:break-word;}
+  .nav-linha .nav-item svg{width:17px; height:17px;}
+  .nav-sub{margin-left:18px; padding-left:8px;}
+}
+/* Celular (Matriz): o menu e um painel claro que abre por cima da tela; a setinha e a lista seguem as cores dele */
+@media (max-width:759px){
+  .nav-grupo{display:flex; flex-direction:column; gap:2px; width:100%;}
+  .nav-linha{display:flex; align-items:stretch; gap:2px; width:100%;}
+  .nav-linha .nav-item{flex:1 1 auto; min-width:0; width:auto;}
+  .nav-seta{display:flex; flex:none; width:48px; align-items:center; justify-content:center; padding:0; border:none; border-radius:8px;
+            background:transparent; color:var(--cinza); cursor:pointer;}
+  .nav-seta:hover{background:var(--cinza-bg);}
+  .nav-seta svg{transition:transform 0.15s;}
+  .nav-grupo.aberto .nav-seta svg{transform:rotate(180deg);}
+  .nav-sub{display:none; flex-direction:column; gap:2px; margin:0 0 6px 30px; padding-left:10px; border-left:2px solid var(--cinza-claro);}
+  .nav-grupo.aberto .nav-sub{display:flex;}
+  .nav-sub-item{min-height:44px; padding:8px 12px; border:none; border-radius:8px; background:transparent; text-align:left; cursor:pointer;
+                font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; color:var(--grafite);}
+  .nav-sub-item:hover{background:var(--cinza-bg);}
+  .nav-sub-item.active{background:var(--cinza-bg); color:var(--verde-escuro); font-weight:700;}
 }
 /* ---------- AVISOS NA PAGINA (07/11/2026): no lugar do alert() que travava a tela ---------- */
 .avisos{position:fixed; z-index:10050; left:50%; top:12px; transform:translateX(-50%); width:min(600px, calc(100vw - 24px));
@@ -472,7 +520,7 @@
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=4bb048d26b"></script>
+<script src="core.js?v=6bc7a3ba1b"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -2274,26 +2322,28 @@ function TabsRow(){
     ${iconChevronDown()}
   </button>
   <div class="tabsrow ${state.mobileNavAberto?'aberto':''}">
-    ${paginasVisiveis().map(p=>`
-      <button class="nav-item ${state.page===p.key?'active':''}" data-nav="${p.key}">
-        ${p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():p.key==='funcionarios'?iconFuncionarios():p.key==='financiamentos'?iconFinanciamento():p.key==='financeiro'?iconFinanceiroNav():p.key==='centrosCusto'?iconCentros():p.key==='contas'?iconContas():p.key==='usuarios'?iconUsuarios():iconAdmin()} ${p.label}
-      </button>
-    `).join('')}
-    ${AppsNaBarra()}
+    ${paginasVisiveis().map(p=>ItemDoMenu({chave:p.key, rotulo:p.label.replace('/', '/<wbr>'), ativo:state.page===p.key, botao:`data-nav="${p.key}"`,
+      icone:p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():p.key==='funcionarios'?iconFuncionarios():p.key==='financiamentos'?iconFinanciamento():p.key==='financeiro'?iconFinanceiroNav():p.key==='centrosCusto'?iconCentros():p.key==='contas'?iconContas():p.key==='usuarios'?iconUsuarios():iconAdmin(),
+      subs:(SUBABAS_DO_MENU[p.key]||[]).map(([k,l])=>({rotulo:l, valor:p.key+'|'+k, ativo:state.page===p.key && subAbaAtualDoMenu(p.key)===k}))})).join('')}
   </div>`;
 }
-// Os apps da AE na barra lateral: pequenos, so um atalho. O menu principal (Painel, Resultados, Financeiro...)
-// e o que ocupa a barra. Em tela estreita a barra e o menu de celular e esta lista fica escondida (CSS).
-function AppsNaBarra(){
-  const apps = appsVisiveisNoPainel().filter(a=>a.status==='ativo' && a.url);
-  if(!apps.length) return '';
-  return `<div class="side-apps">
-    <div class="side-apps-titulo">Apps</div>
-    ${apps.map(a=>`<a class="side-app" href="${a.url}" style="--app-cor:${a.cor}">
-      <span class="side-app-ic" style="background:${hexToRgba(a.cor,0.22)}; color:${a.cor};">${iconOperacao(a.slug, a.nome)}</span><span class="side-app-nome">${esc(a.nome.replace(/^AE\s+/, ''))}</span></a>`).join('')}
-  </div>`;
+// Sub-abas que cada item do menu mostra na setinha (as mesmas abas que ja existem dentro de cada tela).
+const SUBABAS_DO_MENU = {
+  resultados: [['geral','Geral'], ['operacional','Operacional'], ['relatorios','Relatórios'], ['empresa','Empresa']],
+  financeiro: [['despesa','Despesas'], ['receita','Receitas'], ['investimento','Investimentos'], ['custoha','Custo por hectare']],
+  contas: [['pagar','A Pagar'], ['receber','A Receber']],
+};
+function subAbaAtualDoMenu(pagina){
+  return pagina==='resultados' ? state.subAbaResultados : pagina==='financeiro' ? state.abaFinanceiro : pagina==='contas' ? state.abaContas : null;
 }
-
+// Clique numa sub-aba da setinha do menu (core.js chama): vai para a tela e escolhe a aba, como os botoes de dentro da tela fazem.
+function irParaSubAbaDoApp(valor){
+  const [pagina, sub] = String(valor).split('|');
+  state.page = pagina; state.financiamentoDetalheId = null; state.mobileNavAberto = false;
+  if(pagina==='resultados') state.subAbaResultados = sub;
+  else if(pagina==='financeiro'){ state.abaFinanceiro = sub; state.limiteListaFinanceiro = LINHAS_FINANCEIRO_INICIAL; }
+  else if(pagina==='contas'){ state.abaContas = sub; state.contasSelecionadas = []; }
+}
 function Header(){
   const titles = {
     painel:{eyebrow:'Visão geral', title:'Painel', desc:'Indicadores rápidos de cada app da AE Agropecuária, num só lugar.'},

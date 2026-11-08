@@ -1,13 +1,14 @@
 """
 Menu lateral nos outros quatro apps (pedido do Eduardo, 07/11/2026, depois de aprovar o do AE Matriz): AE Pecuaria, AE Cana e AE
-Cereais ganham a coluna a esquerda a partir de 1280 px (menu principal grande, usuario, "← Painel", Trocar senha e Sair no
-rodape); de 760 a 1279 px a barra de cima fica, com o menu maior; no celular nada muda. O AE Combustivel ja tinha barra lateral
+Cereais ganham a coluna a esquerda a partir de 1160 px (menu principal grande, usuario, "← Painel", Trocar senha e Sair no
+rodape; 232 px de 1280 para cima e 196 px de 1160 a 1279, o iPad deitado, 08/11/2026); de 760 a 1159 px a barra de cima fica,
+com o menu maior; no celular nada muda. O AE Combustivel ja tinha barra lateral
 (azul): ficou com o menu maior e o usuario embaixo, como os outros. Prova:
   - em 1280 e 1440 px a barra e uma coluna a esquerda de ~232 px (Combustivel 244), o conteudo ao lado, o menu grande;
   - usuario, "← Painel" (aponta para o AE Matriz), Trocar senha e Sair aparecem inteiros na tela, nos tres apps de grade e no
     Combustivel, e os botoes continuam com os mesmos atributos (data-logout, data-trocar-senha-abrir);
   - a marca (que era verde escuro sobre verde escuro) aparece em cor clara;
-  - em 1180 px a barra de cima fica, com o menu maior (letra de 15 px ou mais);
+  - em 1180 e 1194 px (iPad deitado) a coluna fica mais estreita (~196 px); em 1100 px a barra de cima fica, com o menu maior;
   - no celular (390 px) a barra de cima segue como era.
 """
 import json
@@ -82,10 +83,20 @@ with sync_playwright() as pw:
             conf(m["painelHref"] == "./AEMatriz.html", "← Painel aponta para o AE Matriz", str(m["painelHref"]))
             conf(any(c in m["marca"] for c in CLARO), "a marca aparece em cor clara na barra escura", m["marca"][:160])
             page.context.close()
-        print(f"== {arq} 1180x820 (tablet menor): barra de cima com o menu maior")
-        page = abre(browser, arq, db, 1180, 820, True)
+        for larg, alt in ((1180, 820), (1194, 834)):
+            print(f"== {arq} {larg}x{alt} (iPad deitado, 08/11/2026): a mesma coluna, um pouco mais estreita")
+            page = abre(browser, arq, db, larg, alt, True)
+            m = page.evaluate(MEDE)
+            conf(m["tabs"]["x"] == 0 and 190 <= m["tabs"]["w"] <= 206 and m["tabs"]["y"] > 50 - 1, "a barra do menu e uma coluna a esquerda (%d px)" % m["tabs"]["w"], str(m["tabs"]))
+            conf(m["main"]["x"] >= 190 and m["main"]["y"] == 0, "o conteudo fica ao lado, desde o topo", str(m["main"]))
+            conf(m["nav"]["fonte"] >= 14 and m["nav"]["h"] >= 44, "menu grande (letra %.1f px, botao %d px; 14 px nos itens com setinha)" % (m["nav"]["fonte"], m["nav"]["h"]))
+            conf(all(m[k] and m[k]["bottom"] <= m["alturaJanela"] for k in ("sair", "senha", "painel")),
+                 "Sair, Trocar senha e ← Painel aparecem inteiros na tela", str({k: m[k] for k in ("sair", "senha", "painel")}))
+            page.context.close()
+        print(f"== {arq} 1100x800 (tablet pequeno): barra de cima com o menu maior")
+        page = abre(browser, arq, db, 1100, 800, True)
         m = page.evaluate(MEDE)
-        conf(m["tabs"]["y"] >= 55 and m["tabs"]["w"] >= 1100, "a barra do menu continua em cima", str(m["tabs"]))
+        conf(m["tabs"]["y"] >= 55 and m["tabs"]["w"] >= 1040, "a barra do menu continua em cima", str(m["tabs"]))
         conf(m["nav"]["fonte"] >= 14.5 and m["nav"]["h"] >= 44, "menu maior (letra %.1f px, botao %d px)" % (m["nav"]["fonte"], m["nav"]["h"]))
         page.context.close()
         print(f"== {arq} 390x800 (celular): como era")
@@ -95,6 +106,10 @@ with sync_playwright() as pw:
         page.context.close()
 
     print("== AECombustivel.html (barra lateral azul ja existente, agora com o menu maior)")
+    page = abre(browser, "AECombustivel.html", DB_VAZIO, 1180, 820, True)
+    m = page.evaluate(MEDE)
+    conf(m["sidebar"]["x"] == 0 and 240 <= m["sidebar"]["w"] <= 250 and m["sidebar"]["h"] == m["alturaJanela"], "1180x820 (iPad): a barra e uma coluna a esquerda, na altura da tela", str(m["sidebar"]))
+    page.context.close()
     for rotulo, w, h, toque in (("1280x800 toque", 1280, 800, True), ("1440x860 mouse", 1440, 860, False)):
         page = abre(browser, "AECombustivel.html", DB_VAZIO, w, h, toque)
         m = page.evaluate(MEDE)

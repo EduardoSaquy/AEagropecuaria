@@ -353,6 +353,59 @@ function gruposVisiveis(){
   const g = (typeof gruposAtuais === 'function') ? gruposAtuais() : GROUPS;
   return Object.entries(g).filter(([key])=>grupoVisivel(key));
 }
+/* ---------- Menu lateral: a setinha que abre as sub-abas de cada item (08/11/2026) ----------
+ * Pedido do Eduardo: uma setinha nos itens do menu que têm sub-abas; ela abre a lista ali mesmo e dá para ir direto numa sub-aba,
+ * sem passar antes pela tela do item. Um item aberto por vez (sanfona), para o menu não crescer demais. O que ficou aberto é
+ * guardado neste aparelho; sem nada guardado, abre o item da tela atual. Item com uma página só não tem setinha (o botão sozinho,
+ * como sempre foi). O desenho é só CSS de cada app: a setinha e a lista só aparecem onde o menu é uma coluna (tela larga) ou o painel
+ * do celular do Matriz; na barra de cima (tablet em pé) e na barra rolável dos outros apps ficam escondidas.
+ * it = {chave, rotulo, icone, ativo, botao: 'data-nav-group="x"', subs: [{rotulo, valor, ativo}]}; o app que precisa de mais que
+ * "state.page = valor" na sub-aba define irParaSubAbaDoApp(valor) (o Matriz: sub-aba de Resultados, Financeiro e Contas). */
+let menuAbertoMemoria = null;
+function chaveMenuAberto(){ return 'ae_menu_aberto_v1_' + (typeof NOME_DO_APP !== 'undefined' ? NOME_DO_APP : ''); }
+function menuAbertoAgora(){
+  if(menuAbertoMemoria !== null) return menuAbertoMemoria;
+  try{ const v = localStorage.getItem(chaveMenuAberto()); if(v !== null) menuAbertoMemoria = v; }catch(e){ /* sem armazenamento: fica só na memória */ }
+  return menuAbertoMemoria;   // null = ainda não mexeu: abre o item da tela atual
+}
+function guardarMenuAberto(chave){
+  menuAbertoMemoria = String(chave);
+  try{ localStorage.setItem(chaveMenuAberto(), menuAbertoMemoria); }catch(e){ /* idem */ }
+}
+function iconSetaMenu(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`; }
+function ItemDoMenu(it){
+  const subs = it.subs || [];
+  const temSubs = subs.length >= 2;
+  const guardado = menuAbertoAgora();
+  const aberto = temSubs && (guardado === null ? !!it.ativo : guardado === String(it.chave));
+  const botao = `<button class="nav-item ${it.ativo ? 'active' : ''}" ${it.botao} data-menu-chave="${esc(it.chave)}">${it.icone} ${it.rotulo}</button>`;
+  if(!temSubs) return botao;
+  const nome = String(it.rotulo).replace(/<[^>]*>/g, '');
+  return `<div class="nav-grupo ${aberto ? 'aberto' : ''} ${it.ativo ? 'ativo' : ''}">
+    <div class="nav-linha">${botao}<button class="nav-seta" data-nav-seta="${esc(it.chave)}" aria-expanded="${aberto ? 'true' : 'false'}" aria-label="${aberto ? 'Fechar' : 'Abrir'} as sub-abas de ${esc(nome)}" title="Sub-abas">${iconSetaMenu()}</button></div>
+    <div class="nav-sub">${subs.map(s=>`<button class="nav-sub-item ${s.ativo ? 'active' : ''}" data-menu-sub="${esc(s.valor)}">${s.rotulo}</button>`).join('')}</div>
+  </div>`;
+}
+// Clicar no nome de um item guarda qual item fica aberto (fase de captura: roda antes do clique do app, que já redesenha com isso).
+document.addEventListener('click', e=>{
+  const alvo = e.target && e.target.closest ? e.target.closest('[data-menu-chave]') : null;
+  if(alvo) guardarMenuAberto(alvo.getAttribute('data-menu-chave'));
+}, true);
+document.addEventListener('click', e=>{
+  if(!e.target || !e.target.closest) return;
+  const seta = e.target.closest('[data-nav-seta]');
+  if(seta){
+    guardarMenuAberto(seta.getAttribute('aria-expanded') === 'true' ? '' : seta.getAttribute('data-nav-seta'));
+    render();
+    return;
+  }
+  const sub = e.target.closest('[data-menu-sub]');
+  if(sub){
+    const valor = sub.getAttribute('data-menu-sub');
+    if(typeof irParaSubAbaDoApp === 'function') irParaSubAbaDoApp(valor); else state.page = valor;
+    render();
+  }
+});
 // Lê uma tabela inteira, de mil em mil, até a resposta vir incompleta (sinal de que acabou). O PostgREST corta cada resposta em
 // 1.000 linhas por conta própria (db-max-rows), então um .range(0, 19999) só parece trazer tudo: foi um teto, e os totais ficariam
 // errados sem aviso. A consulta tem que ter ordem ESTÁVEL (um .order('id') no fim): só 'data', por exemplo, repete ou perde linha

@@ -232,9 +232,8 @@ function TabsRow(){
   const activeGroup = currentGroupKey();
   return `
   <div class="tabsrow">
-    ${gruposVisiveis().map(([key,g])=>`
-      <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
-    `).join('')}
+    ${gruposVisiveis().map(([key,g])=>ItemDoMenu({chave:key, rotulo:g.label, icone:g.icon, ativo:activeGroup===key, botao:`data-nav-group="${key}"`,
+      subs:g.pages.map(p=>({rotulo:p.label, valor:p.key, ativo:state.page===p.key}))})).join('')}
   </div>`;
 }
 function brandMark(){

@@ -1473,32 +1473,50 @@ compra de animais e as travas do banco.
     `teste_venda_atomica`) ganharam um `page.on("console")` que lê o `[aviso] ...`; teste novo que precise do texto de um aviso lê
     por ali (ou por `window.__AVISOS__`), nunca pelo evento `dialog`. Nenhum `alert()` dos quatro apps é seguido de redirecionamento
     ou logout (conferido), então a faixa não some antes de ser lida.
-- **Menu lateral do AE Matriz (06/11/2026; `teste_menu_lateral.py` 37 checagens)**. Pedido do Eduardo ("não gosto muito deste
-  formato; quero as opções da barra maiores e as dos apps menores na barra"; ele viu as imagens e disse "ficou ótimo"). Três modos,
-  só CSS + o bloco `AppsNaBarra()` dentro do `.tabsrow`:
-  - **1280 px ou mais**: a barra vira uma coluna à esquerda (232 px, verde escuro) com o menu principal GRANDE (letra 16 px,
-    botão de 54 px; 15,5 px/48 px se a altura for menor que 900 px) e, embaixo, os 4 apps PEQUENOS em duas colunas (só os que o
-    usuário pode ver, `appsVisiveisNoPainel()`); usuário, Trocar senha e Sair no rodapé. O `.topbar` usa `display:contents`
-    para a marca e o usuário virarem peças da coluna, então botões, `data-*` e a ordem do HTML não mudaram.
-  - **760 a 1279 px** (tablet menor, ex.: 1180): continua a barra de cima, com o menu maior (15 px, 46 px) e os 4 apps pequenos
-    no canto direito. **Por que não o menu lateral aqui:** o conteúdo precisa de ~990 px para as tabelas largas da Empresa e dos
-    Financiamentos não rolarem de lado dentro dos cards (`teste_empresa`, `teste_divida_empresa`, `teste_saldo_banco`); com
-    a coluna a partir de 1000 px esses testes falharam. Se um dia as tabelas se adaptarem à largura do contêiner, o ponto de
-    corte pode baixar.
-  - **menos de 760 px**: menu de celular (botão de menu) como antes; lista de apps da barra escondida.
-  Painel: cards de app viram linhas compactas a partir de 900 px. Ícones próprios para Financeiro, Centros de Custo,
-  Pagar/Receber e Usuários (antes quatro itens usavam o mesmo desenho de pessoa). Os outros 4 apps (Pecuária, Cana, Cereais,
-  Combustível) ainda usam a barra de cima: aplicar o mesmo desenho neles só se ele pedir.
-- **Menu lateral nos outros 4 apps (07/11/2026; `teste_menu_lateral_apps.py` 54 checagens)**. Ele aprovou o desenho do Matriz e pediu
+- **Menu lateral do AE Matriz (06/11/2026; tablet e janelinhas em 08/11/2026; `teste_menu_lateral.py` 85 checagens)**. Pedido do Eduardo ("não gosto muito deste
+  formato; quero as opções da barra maiores..."; ele viu as imagens e disse "ficou ótimo"). Em 08/11/2026, vendo o Painel no iPad
+  dele (1180 px, que estava na faixa da barra de cima): "gostaria que as abas em cima ficassem em uma coluna lateral e os apps em
+  quatro janelinhas ao lado direito" e, sobre a lista pequena de apps no pé da barra: "pode tirar". Três modos, só CSS:
+  - **1160 px ou mais**: a barra vira uma coluna à esquerda (verde escuro) com o menu principal GRANDE (letra 16 px, botão de 54 px;
+    15,5 px/48 px se a altura for menor que 900 px), usuário, Trocar senha e Sair no rodapé. **232 px de 1280 para cima; 196 px de
+    1160 a 1279** (iPad deitado, 1180 e 1194): nessa faixa a letra é de 15 px, o conteúdo ganha padding menor (14 px) e as células
+    das tabelas ficam mais justas (8 px; 5 px nas `tabela-compacta`) para o conteúdo (~940 px) mostrar as tabelas largas da Empresa e
+    dos Financiamentos inteiras (`teste_empresa`, `teste_divida_empresa`, `teste_saldo_banco` medem 1280, 1194, 1180, 1160). **O corte é
+    1160 de propósito:** em 1133 e 1100 a mesma coluna estourava os cards em 44 e 77 px; ali a barra de cima fica. O `.topbar` usa
+    `display:contents` para a marca e o usuário virarem peças da coluna, então botões, `data-*` e a ordem do HTML não mudaram.
+  - **760 a 1159 px** (tablet em pé, iPad mini): continua a barra de cima, com o menu maior (15 px, 46 px).
+  - **menos de 760 px**: menu de celular (botão de menu) como antes.
+  **A lista pequena de apps (`AppsNaBarra()`, `.side-apps`) SAIU** (08/11/2026): os 4 apps são janelinhas no Painel, **duas por linha**
+  a partir de 900 px (`.app-grid` em 2 colunas, cada janelinha com ícone, nome, status, o que o app faz, os números e "Abrir app";
+  uma coluna abaixo de 900 px). Ícones próprios para Financeiro, Centros de Custo, Pagar/Receber e Usuários (antes quatro itens
+  usavam o mesmo desenho de pessoa). O item "Pagar/Receber" quebra depois da barra (`<wbr>`) quando a setinha aperta o nome.
+- **Menu lateral nos outros 4 apps (07/11/2026; tablet 08/11/2026; `teste_menu_lateral_apps.py` 79 checagens)**. Ele aprovou o desenho do Matriz e pediu
   nos outros. **AE Pecuária, AE Cana e AE Cereais** têm a mesma estrutura (`.topbar` + `.tabsrow` + `.main`) e ganharam o MESMO bloco
-  de CSS (fim do `<style>`, "MENU LATERAL (tela larga, 07/11/2026)"): de 1280 px, coluna à esquerda de 232 px com o menu grande (os
+  de CSS (fim do `<style>`, "MENU LATERAL (tela larga, 07/11/2026; tablet deitado 08/11/2026)"): **de 1160 px** (como o Matriz; 196 px de 1160 a 1279 para o iPad deitado, onde ele pediu em 08/11/2026 todos os apps "dessa maneira"), coluna à esquerda de 232 px com o menu grande (os
   grupos `data-nav-group`; nome comprido quebra em duas linhas, ex.: "Formulação de Dietas") e, no rodapé, usuário, "← Painel" (link
-  para o AE Matriz), Trocar senha e Sair; de 760 a 1279 px a barra de cima com o menu maior; celular como era. A marca desenhada em
+  para o AE Matriz), Trocar senha e Sair; de 760 a 1159 px a barra de cima com o menu maior; celular como era. Medido em 08/11/2026 com `auditoria_1180` (scratchpad, não versionado): as 70 telas dos quatro apps em 1180 e 1194 px não rolam de lado; só o card "Por Lote" da Pecuária já rolava por dentro do próprio card antes (197 px; agora 261 px, a página não rola). A marca desenhada em
   verde escuro (cabeça de boi, haste da cana) ficava invisível no fundo verde escuro: CSS `.topbar .brand-mark [stroke=...]` troca
   para cor clara. O link `a.btn-sair` virou `inline-flex` (com o min-height do toque o texto ficava no topo). **AE Combustível** já
   tinha barra lateral própria (azul, `Sidebar()`): ficou com 244 px, menu grande (16 px, 54 px), usuário e botões embaixo
   (`order`), barra `sticky` na altura da tela. Nos apps de grade o `.tabsrow` rola por dentro quando há muitos grupos (Pecuária tem
   12), com o rodapé do usuário fixo. Sem a lista pequena de apps da barra: nesses apps o atalho é o "← Painel" (o hub é o Matriz).
+- **Setinha com as sub-abas no menu, nos 5 apps (08/11/2026; `teste_menu_setinha.py` 173 checagens)**. Pedido do Eduardo: "uma setinha para ter a
+  opção de clicar nas sub abas direto". `ItemDoMenu({chave, rotulo, icone, ativo, botao, subs})` em `core.js` desenha o item do menu: com **2 ou
+  mais sub-abas** vira `.nav-grupo` > `.nav-linha` (o botão do item, que continua com o mesmo `data-nav-group`/`data-nav` de sempre, e a setinha
+  `[data-nav-seta]`) + `.nav-sub` com um `[data-menu-sub]` por sub-aba; com uma página só devolve o botão sozinho, como era. **Sanfona: um item
+  aberto por vez**; sem nada guardado abre o item da tela atual; o que ficou aberto (ou `''` = tudo fechado) vai para o `localStorage`
+  (`ae_menu_aberto_v1_<NOME_DO_APP>`). Clicar no **nome** do item guarda aquele item como aberto (ouvinte de captura, antes do clique do app, que
+  já redesenha); a setinha só abre/fecha a lista e **não troca de tela**; clicar numa sub-aba vai direto (ouvinte delegado em `core.js`:
+  `state.page = valor`, ou `irParaSubAbaDoApp(valor)` se o app definir). **Atributo próprio `data-menu-sub`, não `data-subnav`**: os testes e
+  os botões de dentro da tela usam `[data-subnav="x"]` e uma segunda cópia quebraria o modo estrito do Playwright.
+  - Pecuária, Cana, Cereais e Combustível: as sub-abas são as páginas do grupo (as mesmas `.subtabs` de dentro da tela, que continuam lá).
+  - **Matriz** (`SUBABAS_DO_MENU`, `irParaSubAbaDoApp`): Resultados (Geral, Operacional, Relatórios, Empresa), Financeiro (Despesas, Receitas,
+    Investimentos, Custo por hectare) e Pagar/Receber (A Pagar, A Receber); o valor é `pagina|aba` e escolhe a tela **e** a aba de dentro
+    (`subAbaResultados`, `abaFinanceiro`, `abaContas`; trocar de aba limpa o que a aba limpa: limite da lista, contas marcadas).
+  - **Onde aparece**: só onde o menu é coluna (1160 px para cima; Combustível de 761 px) e no painel do celular do Matriz (claro, fecha ao escolher).
+    Na barra de cima (tablet em pé) e na barra rolável dos outros apps no celular a setinha e a lista ficam escondidas e os envoltórios são
+    `display:contents` (a barra se desenha como antes). O item ativo e a setinha formam uma pílula só (cor do app: verde; azul no Combustível).
+    CSS do bloco "SETINHA COM AS SUB-ABAS" copiado nos 5 apps (`core.css` segue sendo uma etapa futura): quem mexer num, mexa nos cinco.
 - **Política de segurança de conteúdo (CSP, 06/11/2026; `teste_csp.py` 43 checagens)**: `<meta http-equiv=Content-Security-Policy>`
   no `<head>` dos cinco apps. Cada app só pode falar com o Supabase do projeto (`connect-src` https e wss
   `kmkystqgpvmzrccxvyaz.supabase.co`), carregar script da `cdn.jsdelivr.net` (a biblioteca fixa em 2.118.0), css do
@@ -1724,7 +1742,15 @@ apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por te
 O Supabase já traz o TOTP ligado (conferido por ele no painel). Os 5 apps (`core.js`) ganharam:
 - **Cadastro**: botão "Ativar ou gerenciar" na tela **Trocar senha**, só para quem tem acesso total (`acessoTotal()`: admin e proprietário). Janela própria por cima do app
   (`#mfa-dialogo`, `abrirSegundoFator`): QR code + chave para digitar, código de 6 números, cadastrar outro celular, remover, desistir no meio não deixa fator pela metade.
-  O QR do Supabase vem como `data:image/svg+xml` com o SVG por extenso e um `#` de cor corta o endereço: `qrComoImagem` relê e recodifica.
+  **QR (corrigido em 08/11/2026: ele relatou "não apareceu QR Code")**: o SVG que o Supabase devolve é o do GoTrue (`goqrsvg` + SVGo, bloco de 3 px, **sem
+  `viewBox`**, um `<rect>` preto ou branco por quadradinho, ~280 KB, com `data:image/svg+xml;utf-8,` na frente). Não consegui reproduzir a falha numa
+  `<img>` (o QR real decodifica em Chromium), então em vez de adivinhar a janela passou a **redesenhar o QR dentro da página** (`qrComoSvgInline`): lê os
+  quadradinhos pretos, junta os da mesma linha e monta um `<svg viewBox>` de ~15 KB com um só `<path>`, sem `<img>` nem endereço `data:` gigante (a
+  causa mais provável no Safari do iPad). Se o SVG vier num formato ilegível cai na `<img>` de antes (`qrComoImagem`, agora com `viewBox` posto na raiz).
+  A janela sempre mostra a **chave para digitar** e um botão **"Estou neste celular: abrir no app autenticador"** (link `otpauth://`, para quem ativa no mesmo
+  aparelho do autenticador, onde não dá para ler o próprio QR). O stub dos testes devolve o QR no formato REAL (`window.__QR_FORMATO__` = `gotrue`, `hex`,
+  `ilegivel`); `teste_segundo_fator.py` (182) lê o QR de volta num canvas e confere os três cantos de posição. Local: o QR real (61x61) decodificou com
+  OpenCV nas três formas (scratchpad `repro_qr.py`).
 - **Login**: conta com celular cadastrado → depois da senha aparece a tela cheia `#mfa-desafio` e **o app não carrega nada** (nem o perfil) até o código passar; cancelar volta ao
   login. Vale no login com senha (`fazerLogin`), ao abrir o app com sessão guardada só de senha (`initAuth`) e na renovação do token de uma sessão que ganhou celular
   depois. Com mais de um celular cadastrado o código é de UM deles, então se tenta cada fator. Sem internet o código não se confere (a tela avisa); sessão já confirmada
@@ -1863,7 +1889,7 @@ não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2
 
 ## Testes
 
-67 arquivos `teste_*.py`, 2.097 checagens (07/11/2026; a tabela abaixo lista os
+68 arquivos `teste_*.py`, 2.373 checagens (08/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1914,9 +1940,10 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_combustivel_proprietario.py` | 13 | AECombustivel.html (proprietário tem acesso total sem matriz e a tela de Usuários segue só do admin; gestor sem matriz não vê nada; "Proprietário" na lista de usuários; editar e salvar proprietário/colaborador/gestor não muda o perfil da pessoa) |
 | `teste_perfis_acesso.py` | 66 | os 5 apps (tela de acesso: abrir e salvar quem é de qualquer dos 7 perfis não troca o perfil; lista com cor e texto certos; formulário de novo usuário escapa o que se digita) |
 | `teste_sessao_abertura.py` | 65 | os 5 apps (tela de login com o nome do app e texto escapado; aparelho sem sinal na 1ª abertura diz "sem conexão" e o "Tentar novamente" abre o app; `TOKEN_REFRESHED` não redesenha nem recarrega; sair; `pareceErroDeRede` nos 3 navegadores) |
-| `teste_segundo_fator.py` | 152 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, QR carrega) |
-| `teste_menu_lateral_apps.py` | 54 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1280 px, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1180 px, celular como era) |
-| `teste_menu_lateral.py` | 37 | AEMatriz.html (menu lateral em tela larga: coluna à esquerda, menu grande e apps pequenos, cabe no tablet deitado, links certos, permissão por app, layout antigo em tela estreita) |
+| `teste_segundo_fator.py` | 182 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, QR no formato real do GoTrue redesenhado dentro da página com os três cantos de posição lidos de volta, plano B da imagem, chave e botão de abrir no app) |
+| `teste_menu_lateral_apps.py` | 79 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1160 px, 196 px no iPad deitado, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1100 px, celular como era) |
+| `teste_menu_lateral.py` | 85 | AEMatriz.html (menu lateral de 1160 px: coluna à esquerda, menu grande, sem lista de apps na barra, Painel com os 4 apps em janelinhas 2x2 no iPad 1180/1194, 1280 e desktop, links certos, permissão por app, barra de cima em 1100 e 820, celular) |
+| `teste_menu_setinha.py` | 173 | os 5 apps (setinha com as sub-abas de cada item do menu: abre uma lista por vez, não troca de tela, vai direto na sub-aba, Matriz escolhe tela e aba, guarda o que ficou aberto, escondida na barra de cima e no celular dos outros apps, painel do celular do Matriz) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
 | `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
 | `teste_venda_atomica.py` | 19 | AEMatriz.html (venda de animais por uma função do banco: uma chamada, sem gravações soltas, saldo novo na tela, recusa do banco mostrada, caminho antigo se a função não existe) |

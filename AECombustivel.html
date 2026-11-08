@@ -253,6 +253,34 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
   /* Tabela larga não pode esticar a página: o .main é item flex e crescia junto com ela (07/11/2026) */
   .main{min-width:0;}
   [data-rateio-equipamento] th, [data-rateio-equipamento] td{padding-left:10px; padding-right:10px;}
+/* ---------- SETINHA COM AS SUB-ABAS DE CADA ITEM DO MENU (08/11/2026) ----------
+   Pedido do Eduardo: uma setinha nos itens do menu que tem sub-abas, para abrir a lista ali e ir direto numa delas (o
+   HTML vem do ItemDoMenu(), em core.js). So aparece onde o menu e uma coluna; na barra de cima fica escondida e os
+   envoltorios nao criam caixa (display:contents), entao a barra se desenha como antes. */
+.nav-grupo, .nav-linha{display:contents;}
+.nav-seta, .nav-sub{display:none;}
+@media (min-width:761px){
+  .nav-grupo{display:flex; flex-direction:column; gap:3px; width:100%; flex-shrink:0;}
+  .nav-linha{display:flex; align-items:stretch; gap:2px; width:100%;}
+  .nav-linha .nav-item{flex:1 1 auto; min-width:0; width:auto; padding-right:4px;}
+  /* a setinha tem 44 px de toque, mas o desenho dela so ocupa o meio: a ponta esquerda fica por baixo do nome do item, para nomes
+     compridos (Confinamento, Formulacao de Dietas) nao serem cortados */
+  .nav-linha .nav-seta{margin-left:-14px; position:relative;}
+  .nav-seta{display:flex; flex:none; width:44px; align-items:center; justify-content:center; padding:0; border:none; border-radius:12px;
+            background:transparent; color:rgba(255,255,255,0.78); cursor:pointer;}
+  .nav-seta:hover{background:rgba(255,255,255,0.09); color:#fff;}
+  .nav-seta svg{transition:transform 0.15s;}
+  .nav-grupo.aberto .nav-seta svg{transform:rotate(180deg);}
+  .nav-grupo.ativo .nav-linha{background:var(--azul-medio); border-radius:12px; gap:0;}
+  .nav-grupo.ativo .nav-linha .nav-item.active{background:transparent;}
+  .nav-grupo.ativo .nav-seta{background:transparent; color:var(--branco);}
+  .nav-sub{display:none; flex-direction:column; gap:2px; margin:0 0 6px 22px; padding-left:12px; border-left:2px solid rgba(255,255,255,0.2);}
+  .nav-grupo.aberto .nav-sub{display:flex;}
+  .nav-sub-item{min-height:44px; padding:6px 12px; border:none; border-radius:9px; background:transparent; text-align:left; cursor:pointer;
+                font-family:'Inter',sans-serif; font-size:14.5px; font-weight:600; line-height:1.25; color:rgba(255,255,255,0.8);}
+  .nav-sub-item:hover{background:rgba(255,255,255,0.09); color:#fff;}
+  .nav-sub-item.active{background:rgba(255,255,255,0.16); color:#fff; font-weight:700;}
+}
 /* ---------- AVISOS NA PAGINA (07/11/2026): no lugar do alert() que travava a tela ---------- */
 .avisos{position:fixed; z-index:10050; left:50%; top:12px; transform:translateX(-50%); width:min(600px, calc(100vw - 24px));
         display:flex; flex-direction:column; gap:10px; pointer-events:none;}
@@ -270,7 +298,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=4bb048d26b"></script>
+<script src="core.js?v=6bc7a3ba1b"></script>
 <script>
 /* ===================== SUPABASE =====================
  * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
@@ -866,9 +894,8 @@ function Sidebar(){
       </div>
     </div>
     <nav>
-      ${gruposVisiveis().map(([key,g])=>`
-        <button class="nav-item ${activeGroup===key?'active':''}" data-nav-group="${key}">${g.icon} ${g.label}</button>
-      `).join('')}
+      ${gruposVisiveis().map(([key,g])=>ItemDoMenu({chave:key, rotulo:g.label, icone:g.icon, ativo:activeGroup===key, botao:`data-nav-group="${key}"`,
+        subs:g.pages.filter(p=>paginaVisivel(p.key)).map(p=>({rotulo:p.label, valor:p.key, ativo:state.page===p.key}))})).join('')}
     </nav>
     <div class="sidebar-footer">MVP · dados salvos<br/>na nuvem (Supabase).</div>
   </div>`;
