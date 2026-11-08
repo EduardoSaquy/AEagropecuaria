@@ -1889,7 +1889,7 @@ não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2
 
 ## Testes
 
-68 arquivos `teste_*.py`, 2.373 checagens (08/11/2026; a tabela abaixo lista os
+69 arquivos `teste_*.py`, 2.533 checagens (08/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1943,6 +1943,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_segundo_fator.py` | 182 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, QR no formato real do GoTrue redesenhado dentro da página com os três cantos de posição lidos de volta, plano B da imagem, chave e botão de abrir no app) |
 | `teste_menu_lateral_apps.py` | 79 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1160 px, 196 px no iPad deitado, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1100 px, celular como era) |
 | `teste_menu_lateral.py` | 85 | AEMatriz.html (menu lateral de 1160 px: coluna à esquerda, menu grande, sem lista de apps na barra, Painel com os 4 apps em janelinhas 2x2 no iPad 1180/1194, 1280 e desktop, links certos, permissão por app, barra de cima em 1100 e 820, celular) |
+| `teste_botoes_rodape_menu.py` | 160 | os 5 apps (rodape do menu lateral: ← Painel, Trocar senha e Sair cabem na coluna e o texto cabe no botao com 16 px de folga, em 1180/1194/1280/1440, toque e mouse; nos apps de grade um botao por linha, porque lado a lado "Trocar senha" saia da borda no Safari do iPad, 08/11/2026) |
 | `teste_menu_setinha.py` | 173 | os 5 apps (setinha com as sub-abas de cada item do menu: abre uma lista por vez, não troca de tela, vai direto na sub-aba, Matriz escolhe tela e aba, guarda o que ficou aberto, escondida na barra de cima e no celular dos outros apps, painel do celular do Matriz) |
 | `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
 | `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
