@@ -1287,7 +1287,7 @@ manutenibilidade 4,5 → **5,0**; campo 6 → **7,5**; média 6,2 → **7,4**.
   fornecedor (dado de registro público, usado para casar com o ERP): ficam; backup automático e plano do Supabase não confirmados.
 - **`saude_do_banco_01.sql` rodada de novo por ele em 07/11/2026 (depois de todas as limpezas): 21 das 24 checagens OK** (eram 18). Agora
   OK: conta #107 (B2), pesagens com 0 kg (D3), `erp_id` repetido, geral sem partes, rateio que não fecha, financiamentos e cadastros. Seguem em
-  ATENÇÃO, todas esperadas: **A4** 22 receitas em centro de saída, R$ 339.094,22 (ele decidiu deixar como está; o tipo do centro é só etiqueta);
+  ATENÇÃO, todas esperadas: **A4** 22 receitas em centro de saída, R$ 339.094,22 (ele tinha deixado como estava; **RESOLVIDO em 09/11/2026**, ver "Centro de custo do lado certo");
   **D2** 10 lotes ativos sem pesagem há 60 dias (matrizes e cria não são pesados de rotina: a checagem poderia olhar só engorda); **A8** 509 linhas,
   R$ 672.552,40 (eram 515 e R$ 1.183.392,40; os 3 pares de 07/11 saíram, R$ 510.840,00). Desse A8, R$ 405.287,52 são as 8 linhas das 4 duplas que ele
   mandou manter (#497/#20805, #496/#20806, #500/#21098, #3018/#21300); sobram ~501 linhas e ~R$ 267 mil de valores repetidos pequenos (tarifas, salários
@@ -1777,6 +1777,26 @@ não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2
 (3) só então o SQL. Ligar o SQL antes de ele conseguir ativar pode trancá-lo para fora.
 **Se alguém perder o celular**: o Supabase não dá códigos de recuperação; o dono do projeto remove o fator no SQL Editor (`delete from auth.mfa_factors where user_id =
 '<uuid da pessoa>';`, a conferir quando for preciso) e a pessoa cadastra de novo.
+
+### Centro de custo do lado certo: os 22 da A4 resolvidos e a trava (09/11/2026)
+
+Pedido do Eduardo ("aqueles 22 lançamentos vamos resolver também!!"; ele tinha deixado como estavam em 07/11). Eram 22 receitas de 2023 (R$ 339.094,22, todas do ERP, atividade
+`geral`, com as partes do rateio) presas em **três centros de SAÍDA**: 18 em "AJUSTE DE SALDO BANCÁRIO" (R$ 299.890,29), 3 em "OUTRAS MOVIMENTAÇÕES DE CAIXA" (R$ 37.203,93) e 1 em
+"MANUTENÇÃO E PRESTADORES DE SERVIÇO NA CASA-SEDE" (R$ 2.000,00). Não existia centro de entrada com esses nomes: **o índice único em `lower(nome)` impede dois centros com o mesmo nome**,
+e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** só oferecem centro de ENTRADA para receita e de SAÍDA para despesa/investimento (`ladoDoCentro`,
+`tipoEsperado`); a falha vinha da importação do ERP e de SQL direto.
+- **`a4_01_onde_estao_os_22.sql`** (só leitura): lista os lançamentos do lado errado, o centro do lado certo com o mesmo nome (`PAR`) e os centros de entrada ativos. Ele rodou.
+- **`a4_02_corrige_os_22.sql`**, **RODADO por ele em 09/11/2026, tudo OK** (os 6 itens da conferência: 22 em centro de entrada, R$ 339.094,22 iguais, 0 receitas em centro de saída em todo o banco,
+  0 despesas/investimentos em centro de entrada, 3 centros novos, 0 `geral` sem partes). Tudo ou nada; recusa se não forem exatamente esses 22 nesses centros e valores; cria 3 centros de
+  ENTRADA irmãos com o **mesmo nome + " (ENTRADA)"**, copiando `subcategoria` e `classe` do centro de saída (por isso o **grupo, e o bloco do fluxo de caixa da aba Empresa, não mudam**); só o
+  `centro_custo_id` muda (valor, data, atividade, tipo e rateio ficam). Cópias fechadas `zz_backup_a4_lanc_2026_11_09` e `zz_backup_a4_centros_2026_11_09` (a apagar quando ele confirmar);
+  desfazer no fim do arquivo. Ensaiado num Postgres descartável (caminho feliz, recusas, rodar de novo, desfazer devolve o banco idêntico, centro irmão já existente, nome já usado do outro lado).
+  O R$ 2.000 da casa-sede ficou num centro de entrada do grupo ADM (escolha provisória minha para não mudar número nenhum); se ele preferir, passa para "ESTORNO E/OU DEVOLUÇÃO DE PAGAMENTO".
+- **`banco_travas_02_centro_do_lado_certo.sql`** (ensaiado, **AINDA NÃO RODADO por ele**): receita só em centro de ENTRADA, despesa e investimento só em centro de SAÍDA, conferido ao gravar um
+  lançamento novo ou ao mudar o tipo ou o centro de um (editar só valor ou descrição de um antigo não dispara); centro sem tipo vale para qualquer lado; trocar o lado de um centro que já tem
+  lançamentos do outro lado é recusado (gatilho em `centros_custo`). `security definer` (quem grava pode não ler `centros_custo`). **Recusa instalar** se hoje houver lançamento do lado
+  errado ou conta a pagar/receber EM ABERTO com rateio do lado errado (a baixa criaria lançamento do lado errado e seria barrada). **Se o ERP for reimportado, receita em centro de saída será
+  recusada**: a importação precisa usar o centro de entrada. Desfazer no fim do arquivo.
 
 ## Armadilhas que já custaram caro
 
