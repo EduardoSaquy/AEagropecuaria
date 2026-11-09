@@ -1744,23 +1744,23 @@ apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por te
 
 O Supabase já traz o TOTP ligado (conferido por ele no painel). Os 5 apps (`core.js`) ganharam:
 - **Cadastro**: botão "Ativar ou gerenciar" na tela **Trocar senha**, só para quem tem acesso total (`acessoTotal()`: admin e proprietário). Janela própria por cima do app
-  (`#mfa-dialogo`, `abrirSegundoFator`): QR code + chave para digitar, código de 6 números, cadastrar outro celular, remover, desistir no meio não deixa fator pela metade.
-  **QR (corrigido em 08/11/2026, duas vezes: ele relatou "não apareceu QR Code", e de novo "ainda não" depois da primeira correção)**:
-  - **Causa provável, achada na 2ª vez: o foco automático.** `desenha()` dava `focus()` no campo do código toda vez que desenhava o passo do QR; no iPad e
-    no celular o foco abre o teclado e **rola a janela até o campo, empurrando o QR para fora da vista**. Agora **nada toma foco sozinho** (a pessoa toca no
-    campo quando chegar a hora) e a janela volta ao topo ao mostrar o QR. O `#mfa-desafio` do login pode focar (ali o campo é a única coisa).
-  - **O QR é gerado no próprio app** (`qrMatriz`/`qrSvgLocal` em `core.js`: modo byte, correção M, versões 1 a 15), a partir do endereço `otpauth://` que o
-    servidor manda (ou montado só com a chave), em vez de depender do SVG do servidor (o do GoTrue: `goqrsvg` + SVGo, bloco de 3 px, **sem `viewBox`**, um
-    `<rect>` por quadradinho, ~280 KB, com `data:image/svg+xml;utf-8,` na frente, conferido no código-fonte). Ordem (`qrParaJanela`, atributo
-    `data-qr-origem` no `#mfa-qr`): `local` → `servidor` (SVG do servidor redesenhado, `qrComoSvgInline`) → `imagem` (`<img>`, `qrComoImagem` com viewBox) →
-    `nenhum` (mensagem vermelha mandando usar a chave). O QR é um `<svg viewBox>` de ~15 KB com um só `<path>`, cada módulo com número inteiro de pixels.
-  - A janela sempre mostra a **chave para digitar** e o botão **"Estou neste celular: abrir no app autenticador"** (link `otpauth://`, para quem ativa no mesmo
-    aparelho do autenticador, onde não dá para ler o próprio QR).
-  - **Prova**: `teste_qr_local.py` (20) compara a matriz gerada com a da biblioteca de referência **segno** em todas as 15 versões × 8 máscaras (SHA-256 das linhas,
-    textos que enchem a capacidade; o segno põe um byte 0 a mais antes dos bytes de enchimento, por isso textos curtos não servem de comparação exata);
-    `teste_segundo_fator.py` (222) abre a janela de verdade, lê o QR de volta num canvas (três cantos de posição), confere que o campo do código não toma o foco,
-    que o QR fica inteiro na vista em tela de 560 px e cada plano B. Localmente o QR renderizado na tela decodifica com OpenCV (scratchpad). O stub devolve o QR do
-    servidor no formato REAL (`window.__QR_FORMATO__` = `gotrue`, `hex`, `ilegivel`) e `__MFA_SEM_URI__`, `__MFA_SO_SERVIDOR__`, `__MFA_NADA__` forçam cada plano B.
+  (`#mfa-dialogo`, `abrirSegundoFator`): botão "abrir no app autenticador" + chave para digitar (sem QR code), código de 6 números, cadastrar outro celular, remover, desistir no meio não deixa fator pela metade.
+  **Sem QR code (decisão dele, 09/11/2026: "Só chave e botão").** Ele relatou "não apareceu QR Code" e, depois da primeira correção, "ainda não"; quando
+  perguntei por que precisaria dele, ele disse que não precisa. O QR só serve para passar ao app autenticador a **chave secreta** (~32 letras) sem digitar. A janela
+  agora mostra: o botão grande **"Estou neste celular: abrir no app autenticador"** (`a#mfa-abrir-app`, link `otpauth://` que o servidor manda ou que o app monta com a
+  chave; no próprio celular é o caminho de um toque, e ali o QR nem serviria, porque o celular não lê a própria tela), a **chave em grupos de 4 letras**
+  (`#mfa-chave`, `data-chave` guarda a chave sem espaços) e o botão **"Copiar a chave"** (`data-mfa-copiar`, `navigator.clipboard`; sem permissão avisa para tocar e
+  segurar). Se o servidor não mandar a chave, avisa e desfaz o cadastro pela metade (`unenroll`).
+  - **A causa provável do QR "sumido" era o foco automático**: `desenha()` dava `focus()` no campo do código ao desenhar o passo; no iPad e no celular o foco abre o
+    teclado e **rola a janela até o campo, empurrando o conteúdo de cima para fora da vista**. Agora **nada toma foco sozinho** (a pessoa toca no campo na hora) e a
+    janela volta ao topo. Regra geral: janela com campo de texto no meio de uma instrução NÃO dá `focus()` ao abrir; só tela de uma coisa só (o `#mfa-desafio` do login).
+  - O código do gerador de QR (modo byte, correção M, versões 1 a 15, conferido contra a biblioteca segno nas 15 versões × 8 máscaras) foi escrito e depois **retirado**
+    por esta decisão; está no histórico do git (commit 1f7bede, "QR do segundo fator gerado no proprio app...") se um dia ele quiser o QR de volta. O SVG que o servidor
+    manda (GoTrue: `goqrsvg` + SVGo, bloco de 3 px, **sem `viewBox`**, um `<rect>` por quadradinho, ~280 KB) nunca foi desenhado com sucesso no iPad dele; a causa exata
+    não foi provada.
+  - **Prova**: `teste_segundo_fator.py` (187) abre a janela de verdade e confere o botão com o link certo, a chave em grupos, o botão de copiar, que não há `<img>`/`<svg>`, que
+    o campo do código não toma o foco, que botão e chave ficam inteiros na vista (inclusive em tela de 560 px), o endereço montado quando o servidor não manda `uri` e o
+    aviso quando não manda a chave. O stub (`window.__MFA_SEM_URI__`, `__MFA_NADA__`) força esses dois casos.
 - **Login**: conta com celular cadastrado → depois da senha aparece a tela cheia `#mfa-desafio` e **o app não carrega nada** (nem o perfil) até o código passar; cancelar volta ao
   login. Vale no login com senha (`fazerLogin`), ao abrir o app com sessão guardada só de senha (`initAuth`) e na renovação do token de uma sessão que ganhou celular
   depois. Com mais de um celular cadastrado o código é de UM deles, então se tenta cada fator. Sem internet o código não se confere (a tela avisa); sessão já confirmada
@@ -1899,7 +1899,7 @@ não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2
 
 ## Testes
 
-74 arquivos `teste_*.py`, 2.854 checagens (09/11/2026; a tabela abaixo lista os
+73 arquivos `teste_*.py`, 2.799 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1950,9 +1950,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_combustivel_proprietario.py` | 13 | AECombustivel.html (proprietário tem acesso total sem matriz e a tela de Usuários segue só do admin; gestor sem matriz não vê nada; "Proprietário" na lista de usuários; editar e salvar proprietário/colaborador/gestor não muda o perfil da pessoa) |
 | `teste_perfis_acesso.py` | 66 | os 5 apps (tela de acesso: abrir e salvar quem é de qualquer dos 7 perfis não troca o perfil; lista com cor e texto certos; formulário de novo usuário escapa o que se digita) |
 | `teste_sessao_abertura.py` | 65 | os 5 apps (tela de login com o nome do app e texto escapado; aparelho sem sinal na 1ª abertura diz "sem conexão" e o "Tentar novamente" abre o app; `TOKEN_REFRESHED` não redesenha nem recarrega; sair; `pareceErroDeRede` nos 3 navegadores) |
-| `teste_segundo_fator.py` | 222 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, QR gerado no app e lido de volta num canvas, campo do código sem foco automático, QR inteiro em tela baixa, planos B do servidor/imagem/nenhum, chave e botão de abrir no app) |
+| `teste_segundo_fator.py` | 187 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, sem QR: botão de abrir no app autenticador, chave em grupos e copiar, campo do código sem foco automático, tudo inteiro na vista em tela baixa, endereço montado sem `uri`, aviso sem a chave) |
 | `teste_menu_lateral_apps.py` | 79 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1160 px, 196 px no iPad deitado, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1100 px, celular como era) |
-| `teste_qr_local.py` | 20 | core.js (gerador de QR code: 15 versões × 8 máscaras com a mesma matriz da biblioteca segno, escolha da máscara, UTF-8, texto grande demais, SVG com viewBox e um só caminho) |
 | `teste_menu_lateral.py` | 85 | AEMatriz.html (menu lateral de 1160 px: coluna à esquerda, menu grande, sem lista de apps na barra, Painel com os 4 apps em janelinhas 2x2 no iPad 1180/1194, 1280 e desktop, links certos, permissão por app, barra de cima em 1100 e 820, celular) |
 | `teste_combustivel_menu_cabe.py` | 35 | AECombustivel.html (coluna do menu cabe na altura da tela com cada item aberto, em 1180x820, 1194x834, 1280x800, 1366x768 e 1440x900, toque e mouse; ← Painel, Trocar senha e Sair numa linha; item de 44 px no toque) |
 | `teste_celular_topo_apps.py` | 156 | Pecuaria, Cana, Cereais e Combustivel no celular (320/360/390 px): ← Painel, Trocar senha e Sair inteiros, faixa de cima sem rolar de lado, botao ☰ com a tela atual, menu fechado que abre numa coluna, setinha sem fechar, tocar num item troca de tela e fecha) |

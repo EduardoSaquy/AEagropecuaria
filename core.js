@@ -669,208 +669,6 @@ function desafioMFA(sessao){
     campo.focus();
   });
 }
-// O QR code do Supabase vem como data:image/svg+xml com o SVG por extenso (uns 280 KB: um <rect> por quadradinho, sem viewBox).
-// Numa <img> isso é pesado, depende do navegador aceitar o endereço enorme e, sem viewBox, não encolhe (corta). Por isso o QR é
-// redesenhado aqui, DENTRO da página, como um SVG pequeno (um único caminho, ~20 KB, com viewBox): carrega em qualquer navegador.
-function qrSvgDoSupabase(qr){
-  const texto = String(qr || ''), i = texto.indexOf(',');
-  if(!texto.startsWith('data:image/svg+xml') || i < 0) return '';
-  let svg = texto.slice(i + 1);
-  try{ if(/%3C/i.test(svg)) svg = decodeURIComponent(svg); }catch(e){ /* já estava como texto */ }
-  return svg;
-}
-function qrComoSvgInline(qr, tamanho){
-  const svg = qrSvgDoSupabase(qr);
-  const raiz = /<svg\b[^>]*>/i.exec(svg);
-  if(!raiz) return '';
-  const medida = (tag, nome)=>{ const r = new RegExp('\\s' + nome + '\\s*=\\s*["\']?(-?[\\d.]+)', 'i').exec(tag); return r ? Number(r[1]) : NaN; };
-  let largura = medida(raiz[0], 'width'), altura = medida(raiz[0], 'height');
-  const vb = /\bviewBox\s*=\s*["']\s*[-\d.]+[ ,]+[-\d.]+[ ,]+([\d.]+)[ ,]+([\d.]+)/i.exec(raiz[0]);
-  if(vb){ largura = Number(vb[1]); altura = Number(vb[2]); }
-  if(!(largura > 0) || !(altura > 0)) return '';
-  // só os quadradinhos pretos; os que vêm em sequência na mesma linha viram um traço só
-  let d = '', corrente = null, n = 0;
-  const fecha = ()=>{ if(corrente){ d += 'M' + corrente.x + ' ' + corrente.y + 'h' + corrente.w + 'v' + corrente.h + 'h-' + corrente.w + 'z'; corrente = null; } };
-  const preto = /fill\s*[:=]\s*["']?\s*(black|#000000|#000)\b/i;
-  const re = /<rect\b[^>]*>/gi;
-  let r;
-  while((r = re.exec(svg))){
-    const tag = r[0];
-    if(!preto.test(tag)) continue;
-    const x = medida(tag, 'x'), y = medida(tag, 'y'), w = medida(tag, 'width'), h = medida(tag, 'height');
-    if(![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
-    n++;
-    if(corrente && corrente.y === y && corrente.h === h && corrente.x + corrente.w === x) corrente.w += w;
-    else { fecha(); corrente = { x, y, w, h }; }
-  }
-  fecha();
-  if(!n) return '';
-  const lado = tamanho || 220;
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + largura + ' ' + altura + '" width="' + lado + '" height="' + lado + '" shape-rendering="crispEdges" role="img" aria-label="QR code para o app autenticador" style="background:#fff; display:inline-block; max-width:100%; height:auto;"><path d="' + d + '" fill="#000"/></svg>';
-}
-// Plano B (se o SVG vier num formato que não dá para ler): a <img> de antes, com o endereço recodificado ('#' de uma cor cortava o
-// endereço) e com viewBox posto na raiz quando falta.
-function qrComoImagem(qr){
-  const texto = String(qr || '');
-  let svg = qrSvgDoSupabase(texto);
-  if(!svg) return texto;
-  svg = svg.replace(/<svg\b([^>]*)>/i, (tudo, atributos)=>{
-    if(/\bviewBox\s*=/i.test(atributos)) return tudo;
-    const w = /\bwidth\s*=\s*["']?([\d.]+)/i.exec(atributos), h = /\bheight\s*=\s*["']?([\d.]+)/i.exec(atributos);
-    return w && h ? '<svg' + atributos + ' viewBox="0 0 ' + w[1] + ' ' + h[1] + '">' : tudo;
-  });
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-}
-/* ---------- Gerador de QR code (08/11/2026) ----------
- * Modo byte, correção de erro M, versões 1 a 15 (até 412 bytes): sobra para o endereço otpauth:// do segundo fator. Escrito aqui para o
- * QR não depender do SVG que o servidor devolve (grande, sem viewBox, num formato que cada navegador desenha do seu jeito). Conferido
- * contra a biblioteca segno (as 8 máscaras dão a mesma matriz, em teste_qr_local.py) e lido de volta com OpenCV. */
-const QR_ECC_M = [0,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24];
-const QR_BLOCOS_M = [0,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10];
-function qrModulosDeDados(v){ let r = (16*v+128)*v+64; if(v>=2){ const a = Math.floor(v/7)+2; r -= (25*a-10)*a-55; if(v>=7) r -= 36; } return r; }
-function qrMultiplica(x, y){ let z = 0; for(let i=7;i>=0;i--){ z = (z<<1) ^ ((z>>>7)*0x11D); z ^= ((y>>>i)&1)*x; } return z; }
-function qrDivisorRS(grau){
-  const r = new Array(grau).fill(0); r[grau-1] = 1; let raiz = 1;
-  for(let i=0;i<grau;i++){ for(let j=0;j<grau;j++){ r[j] = qrMultiplica(r[j], raiz); if(j+1<grau) r[j] ^= r[j+1]; } raiz = qrMultiplica(raiz, 2); }
-  return r;
-}
-function qrRestoRS(dados, divisor){
-  const r = new Array(divisor.length).fill(0);
-  for(const b of dados){ const f = b ^ r.shift(); r.push(0); divisor.forEach((c,i)=>{ r[i] ^= qrMultiplica(c, f); }); }
-  return r;
-}
-// Devolve {n, mod (matriz n x n de true/false, true = escuro), versao, mascara}. mascaraFixa (0 a 7) é só para teste.
-function qrMatriz(texto, mascaraFixa){
-  const bytes = Array.from(new TextEncoder().encode(String(texto)));
-  let v = 1, capacidade = 0;
-  for(;; v++){
-    if(v > 15) throw new Error('QR: texto grande demais');
-    capacidade = Math.floor(qrModulosDeDados(v)/8) - QR_ECC_M[v]*QR_BLOCOS_M[v];
-    if(4 + (v < 10 ? 8 : 16) + bytes.length*8 <= capacidade*8) break;
-  }
-  const bits = [];
-  const poe = (valor, n)=>{ for(let i=n-1;i>=0;i--) bits.push((valor>>>i)&1); };
-  poe(4, 4); poe(bytes.length, v < 10 ? 8 : 16); bytes.forEach(b=>poe(b, 8));
-  poe(0, Math.min(4, capacidade*8 - bits.length));
-  poe(0, (8 - bits.length % 8) % 8);
-  for(let pad = 0xEC; bits.length < capacidade*8; pad ^= 0xEC ^ 0x11) poe(pad, 8);
-  const dados = [];
-  for(let i=0;i<bits.length;i+=8){ let b = 0; for(let j=0;j<8;j++) b = (b<<1) | bits[i+j]; dados.push(b); }
-  // blocos com correção de erro, intercalados
-  const nBlocos = QR_BLOCOS_M[v], eccLen = QR_ECC_M[v], bruto = Math.floor(qrModulosDeDados(v)/8);
-  const nCurtos = nBlocos - bruto % nBlocos, lenCurto = Math.floor(bruto / nBlocos);
-  const divisor = qrDivisorRS(eccLen), blocos = [];
-  for(let i=0, k=0;i<nBlocos;i++){
-    const dat = dados.slice(k, k + lenCurto - eccLen + (i < nCurtos ? 0 : 1)); k += dat.length;
-    const ecc = qrRestoRS(dat, divisor);
-    if(i < nCurtos) dat.push(0);
-    blocos.push(dat.concat(ecc));
-  }
-  const tudo = [];
-  for(let i=0;i<blocos[0].length;i++) blocos.forEach((bl, j)=>{ if(i !== lenCurto - eccLen || j >= nCurtos) tudo.push(bl[i]); });
-  // desenho
-  const n = v*4 + 17;
-  const mod = Array.from({length:n}, ()=>new Array(n).fill(false)), fun = Array.from({length:n}, ()=>new Array(n).fill(false));
-  const seta = (x, y, escuro)=>{ mod[y][x] = escuro; fun[y][x] = true; };
-  for(let i=0;i<n;i++){ seta(6, i, i%2 === 0); seta(i, 6, i%2 === 0); }
-  const localizador = (cx, cy)=>{
-    for(let dy=-4;dy<=4;dy++) for(let dx=-4;dx<=4;dx++){
-      const d = Math.max(Math.abs(dx), Math.abs(dy)), x = cx+dx, y = cy+dy;
-      if(x >= 0 && x < n && y >= 0 && y < n) seta(x, y, d !== 2 && d !== 4);
-    }
-  };
-  localizador(3, 3); localizador(n-4, 3); localizador(3, n-4);
-  const pos = [];
-  if(v > 1){ const k = Math.floor(v/7) + 2, passo = Math.ceil((v*4+4)/(k*2-2))*2; pos.push(6); for(let p=n-7;pos.length<k;p-=passo) pos.splice(1, 0, p); }
-  for(let i=0;i<pos.length;i++) for(let j=0;j<pos.length;j++){
-    if((i === 0 && j === 0) || (i === 0 && j === pos.length-1) || (i === pos.length-1 && j === 0)) continue;
-    for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++) seta(pos[i]+dx, pos[j]+dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
-  }
-  const formato = mascara=>{
-    const dado = mascara;   // nível M = 0
-    let resto = dado; for(let i=0;i<10;i++) resto = (resto<<1) ^ ((resto>>>9)*0x537);
-    const b = ((dado<<10) | resto) ^ 0x5412, bit = i=>((b>>>i)&1) !== 0;
-    for(let i=0;i<=5;i++) seta(8, i, bit(i));
-    seta(8, 7, bit(6)); seta(8, 8, bit(7)); seta(7, 8, bit(8));
-    for(let i=9;i<15;i++) seta(14-i, 8, bit(i));
-    for(let i=0;i<8;i++) seta(n-1-i, 8, bit(i));
-    for(let i=8;i<15;i++) seta(8, n-15+i, bit(i));
-    seta(8, n-8, true);
-  };
-  formato(0);
-  if(v >= 7){
-    let resto = v; for(let i=0;i<12;i++) resto = (resto<<1) ^ ((resto>>>11)*0x1F25);
-    const b = (v<<12) | resto;
-    for(let i=0;i<18;i++){ const cor = ((b>>>i)&1) !== 0, a = n-11 + i%3, c = Math.floor(i/3); seta(a, c, cor); seta(c, a, cor); }
-  }
-  // dados em zigue-zague, de baixo para cima, de duas em duas colunas
-  const total = tudo.length*8;
-  for(let k=0, direita=n-1;direita>=1;direita-=2){
-    if(direita === 6) direita = 5;
-    for(let vert=0;vert<n;vert++) for(let j=0;j<2;j++){
-      const x = direita - j, y = ((direita+1) & 2) === 0 ? n-1-vert : vert;
-      if(!fun[y][x] && k < total){ mod[y][x] = ((tudo[k>>>3] >>> (7-(k&7))) & 1) !== 0; k++; }
-    }
-  }
-  const aplica = m=>{
-    for(let y=0;y<n;y++) for(let x=0;x<n;x++){
-      const inv = m === 0 ? (x+y)%2 === 0 : m === 1 ? y%2 === 0 : m === 2 ? x%3 === 0 : m === 3 ? (x+y)%3 === 0
-        : m === 4 ? (Math.floor(x/3) + Math.floor(y/2))%2 === 0 : m === 5 ? x*y%2 + x*y%3 === 0 : m === 6 ? (x*y%2 + x*y%3)%2 === 0 : ((x+y)%2 + x*y%3)%2 === 0;
-      if(!fun[y][x] && inv) mod[y][x] = !mod[y][x];
-    }
-  };
-  const penalidade = ()=>{
-    let p = 0;
-    const linha = (get)=>{
-      for(let a=0;a<n;a++){
-        let corrida = 1;
-        for(let b=1;b<n;b++){ if(get(a, b) === get(a, b-1)){ corrida++; if(corrida === 5) p += 3; else if(corrida > 5) p++; } else corrida = 1; }
-        for(let b=0;b+10<n;b++){   // 1:1:3:1:1 com 4 claros de um lado
-          const s = []; for(let k=0;k<11;k++) s.push(get(a, b+k) ? 1 : 0);
-          const t = s.join('');
-          if(t === '10111010000' || t === '00001011101') p += 40;
-        }
-      }
-    };
-    linha((y, x)=>mod[y][x]); linha((x, y)=>mod[y][x]);
-    for(let y=0;y<n-1;y++) for(let x=0;x<n-1;x++){ const c = mod[y][x]; if(c === mod[y][x+1] && c === mod[y+1][x] && c === mod[y+1][x+1]) p += 3; }
-    let escuros = 0; for(let y=0;y<n;y++) for(let x=0;x<n;x++) if(mod[y][x]) escuros++;
-    p += (Math.ceil(Math.abs(escuros*20 - n*n*10) / (n*n)) - 1) * 10;
-    return p;
-  };
-  let melhor = typeof mascaraFixa === 'number' ? mascaraFixa : 0;
-  if(typeof mascaraFixa !== 'number'){
-    let pior = Infinity;
-    for(let m=0;m<8;m++){ aplica(m); formato(m); const p = penalidade(); aplica(m); if(p < pior){ pior = p; melhor = m; } }
-  }
-  aplica(melhor); formato(melhor);
-  return { n, mod, versao: v, mascara: melhor, palavras: tudo, funcao: fun };
-}
-// O QR como <svg> (um só <path>, com viewBox): cada módulo ocupa um número inteiro de pixels, para ficar nítido e fácil de ler.
-function qrSvgLocal(texto, tamanho){
-  const q = qrMatriz(texto), borda = 4, lado = q.n + 2*borda;
-  let d = '';
-  for(let y=0;y<q.n;y++){
-    for(let x=0;x<q.n;){
-      if(!q.mod[y][x]){ x++; continue; }
-      let x2 = x; while(x2 < q.n && q.mod[y][x2]) x2++;
-      d += 'M' + (x+borda) + ' ' + (y+borda) + 'h' + (x2-x) + 'v1h-' + (x2-x) + 'z';
-      x = x2;
-    }
-  }
-  const px = Math.max(3, Math.floor((tamanho || 240) / lado)) * lado;
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + lado + ' ' + lado + '" width="' + px + '" height="' + px + '" shape-rendering="crispEdges" role="img" aria-label="QR code para o app autenticador" style="background:#fff; display:inline-block; max-width:100%; height:auto;"><path d="' + d + '" fill="#000"/></svg>';
-}
-// Que QR a janela mostra: primeiro o gerado aqui (a partir do endereço otpauth:// que o servidor mandou, ou montado só com a chave);
-// depois o SVG do servidor, redesenhado; por último a <img> de antes. Devolve {html, origem}; origem vazia = nenhum deu certo.
-function qrParaJanela(totp){
-  totp = totp || {};
-  const uri = /^otpauth:\/\//i.test(totp.uri || '') ? totp.uri : (totp.secret ? 'otpauth://totp/AE%20Agropecuaria?secret=' + encodeURIComponent(totp.secret) + '&issuer=AE%20Agropecuaria' : '');
-  if(uri){ try{ return { html: qrSvgLocal(uri), origem: 'local' }; }catch(e){ /* cai para o do servidor */ } }
-  try{ const h = qrComoSvgInline(totp.qr_code); if(h) return { html: h, origem: 'servidor' }; }catch(e){ /* idem */ }
-  if(totp.qr_code) return { html: '<img src="' + esc(qrComoImagem(totp.qr_code)) + '" alt="QR code para o app autenticador" width="220" height="220" style="background:#fff; padding:6px;"/>', origem: 'imagem' };
-  return { html: '', origem: '' };
-}
 // Janela para ativar, ver e remover os celulares cadastrados (aberta pelo botão da tela "Trocar senha").
 async function abrirSegundoFator(){
   if(document.getElementById('mfa-dialogo')) return;
@@ -888,11 +686,13 @@ async function abrirSegundoFator(){
     if(m.carregando){
       corpo = '<p class="hint">Carregando...</p>';
     } else if(m.novo){
+      const grupos = String(m.novo.segredo).replace(/(.{4})/g, '$1 ').trim();
       corpo = `
-        <p class="hint">1. No celular, abra o app autenticador (Google Authenticator, Microsoft Authenticator ou Authy) e leia este QR code.</p>
-        <div id="mfa-qr" data-qr-origem="${m.novo.origem || 'nenhum'}" style="text-align:center; margin:10px 0;">${m.novo.qrHtml || '<p class="hint" style="color:var(--alerta);">Não consegui desenhar o QR neste aparelho. Use a chave logo abaixo: no app autenticador, escolha adicionar conta e depois "inserir chave de configuração" (tipo: baseado em tempo).</p>'}</div>
-        <p class="hint">Se não conseguir ler (ou se estiver neste mesmo celular), digite esta chave no app: <strong class="mono" style="user-select:all; overflow-wrap:anywhere;">${esc(m.novo.segredo)}</strong></p>
-        ${m.novo.uri && /^otpauth:\/\//i.test(m.novo.uri) ? `<p class="hint"><a class="btn btn-ghost btn-sm" id="mfa-abrir-app" href="${esc(m.novo.uri)}">Estou neste celular: abrir no app autenticador</a></p>` : ''}
+        <p class="hint"><strong>1. Coloque esta conta no app autenticador do celular</strong> (Google Authenticator, Microsoft Authenticator ou Authy).</p>
+        <p style="margin:10px 0;"><a class="btn btn-primary" id="mfa-abrir-app" href="${esc(m.novo.uri)}">Estou neste celular: abrir no app autenticador</a></p>
+        <p class="hint">Se o botão não abrir o app, ou se o app está em outro aparelho: no app autenticador escolha adicionar conta, depois "inserir chave de configuração" (tipo: baseado em tempo) e digite esta chave:</p>
+        <div id="mfa-chave" data-chave="${esc(m.novo.segredo)}" class="mono" style="font-size:19px; letter-spacing:1.5px; line-height:1.5; user-select:all; overflow-wrap:anywhere; background:var(--cinza-bg, #f4f5f7); border-radius:10px; padding:12px 14px; margin:8px 0;">${esc(grupos)}</div>
+        <p style="margin:0 0 10px;"><button class="btn btn-ghost btn-sm" data-mfa-copiar="1">Copiar a chave</button></p>
         <p class="hint">2. Digite o código de 6 números que o app mostrar agora:</p>
         <div class="field"><input id="mfa-ativar-codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>`;
       rodape = `<button class="btn btn-ghost" data-mfa-voltar="1">Cancelar</button>
@@ -920,8 +720,8 @@ async function abrirSegundoFator(){
         </div>
         ${rodape ? `<div class="modal-foot">${rodape}</div>` : ''}
       </div>`;
-    // SEM foco automatico no campo do codigo: no iPad e no celular o foco abre o teclado e rola a janela ate o campo, empurrando o QR
-    // para fora da vista (foi o que o Eduardo viu em 08/11/2026: "nao apareceu QR Code"). A pessoa toca no campo quando chegar a hora.
+    // SEM foco automatico no campo do codigo: no iPad e no celular o foco abre o teclado e rola a janela ate o campo, empurrando a chave
+    // e o botao para fora da vista (foi o que o Eduardo viu em 08/11/2026). A pessoa toca no campo quando chegar a hora.
     if(m.novo && !m.novo.jaMostrado){ m.novo.jaMostrado = true; const corpoJanela = caixa.querySelector('.modal-body'); if(corpoJanela) corpoJanela.scrollTop = 0; }
   };
   const recarrega = async ()=>{ m.fatores = (await lista()).totp || []; m.carregando = false; m.ocupado = false; desenha(); };
@@ -941,9 +741,20 @@ async function abrirSegundoFator(){
       m.ocupado = false;
       if(error || !data){ m.erro = 'Não foi possível começar a ativação: ' + ((error && error.message) || 'sem resposta') + '.'; desenha(); return; }
       const totp = data.totp || {};
-      const qr = qrParaJanela(totp);
-      m.novo = { factorId: data.id, qrHtml: qr.html, origem: qr.origem, segredo: totp.secret || '', uri: totp.uri || '' };
+      if(!totp.secret){
+        await db.auth.mfa.unenroll({ factorId: data.id });
+        m.erro = 'O servidor não mandou a chave de ativação. Tente de novo em alguns minutos.'; desenha(); return;
+      }
+      const uri = /^otpauth:\/\//i.test(totp.uri || '') ? totp.uri : 'otpauth://totp/AE%20Agropecuaria?secret=' + encodeURIComponent(totp.secret) + '&issuer=AE%20Agropecuaria';
+      m.novo = { factorId: data.id, segredo: totp.secret, uri };
       desenha(); return;
+    }
+    if(alvo.dataset.mfaCopiar !== undefined){
+      const chave = m.novo ? m.novo.segredo : '';
+      const ok = ()=>avisar('Chave copiada. Cole no app autenticador.');
+      const manual = ()=>avisar('Não consegui copiar sozinho. Toque e segure a chave para copiar.');
+      try{ navigator.clipboard.writeText(chave).then(ok, manual); }catch(e){ manual(); }
+      return;
     }
     if(alvo.dataset.mfaConfirmar !== undefined){
       const codigo = (caixa.querySelector('#mfa-ativar-codigo').value || '').replace(/\D/g, '');
