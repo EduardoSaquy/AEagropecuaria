@@ -509,6 +509,14 @@ footer{max-width:560px; margin:18px auto 0 auto; padding:0 14px; font-size:11px;
 <div id="relatorioImpressao"></div>
 
 <script>
+/* Rodinha do mouse não muda número de campo (09/11/2026): mesma regra do core.js dos outros apps (este app não usa
+   o núcleo). Girar a rodinha em cima de um campo numérico selecionado tira a seleção e rola a tela, sem mudar o valor. */
+document.addEventListener('wheel', e=>{
+  const foco = document.activeElement;
+  if(foco && foco.tagName === 'INPUT' && String(foco.type).toLowerCase() === 'number'
+     && (e.target === foco || (foco.contains && foco.contains(e.target)))) foco.blur();
+}, {capture: true, passive: true});
+
 /* ============================================================
    AE ADUBAÇÃO — motor de cálculo (porta fiel do modelo validado
    na planilha AEAdubacao.xlsx: mesmas fórmulas, mesmas fontes).

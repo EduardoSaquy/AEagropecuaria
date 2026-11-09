@@ -47,6 +47,21 @@ document.addEventListener('keydown', e=>{
 window.alert = avisar;
 
 
+/* ---------- Rodinha do mouse não muda número de campo (09/11/2026) ----------
+ * Pedido do Eduardo (as secretárias): com o cursor parado em cima de um campo numérico que ainda está selecionado
+ * (ex.: nº de parcelas da conta a pagar), girar a rodinha para rolar a tela somava ou tirava 1 do campo, e a conta
+ * refazia o valor de cada parcela sem ninguém ver. Agora a rodinha só rola: o campo perde a seleção na hora e o
+ * navegador rola a página (ou a janela aberta) em vez de mudar o número. Teclado (setas) e digitar continuam iguais.
+ * Fase de captura e sem preventDefault (passive): roda antes de qualquer ouvinte do app e não trava a rolagem. */
+function campoQueARodinhaMudaria(el){
+  return !!el && el.tagName === 'INPUT' && String(el.type).toLowerCase() === 'number';
+}
+document.addEventListener('wheel', e=>{
+  const foco = document.activeElement;
+  if(campoQueARodinhaMudaria(foco) && (e.target === foco || (foco.contains && foco.contains(e.target)))) foco.blur();
+}, {capture: true, passive: true});
+
+
 /* ---------- Sessão e perfil guardado no aparelho ---------- */
 async function sessaoInicial(){
   const daBiblioteca = db.auth.getSession().then(r=>r.data.session).catch(()=>null);
