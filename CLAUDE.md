@@ -976,6 +976,40 @@ fica no próprio elemento). O resto do código lê e grava sem mudar. Campo de
 dinheiro novo: `type="text" inputmode="decimal" data-moeda`. Taxa (%), área,
 quantidade e parcelas continuam `type="number"`. `teste_campo_moeda.py`.
 
+### Número de cada lançamento e rodinha do mouse (09/11/2026)
+
+Pedidos do Eduardo depois de conversar com as secretárias que lançam no app.
+- **Número (ID) em todo lançamento, conta e contrato** (AE Matriz): é o `id` que o banco já dá a cada linha (único,
+  nunca muda nem se repete; o mesmo número que os scripts e a conversa usam, "conta Nº 113"). `NumeroId(id)` desenha
+  "Nº 113" (`.num-id`, 12 px, mono, `data-num-id`). Aparece: Financeiro (embaixo da data, nas três abas, inclusive
+  recorrente; compras sem lote também), Pagar/Receber (embaixo do vencimento), Financiamentos (lista e tela do contrato) e no
+  título das janelas de editar lançamento, conta e contrato, de baixar (uma e em lote), da lista de baixas e de
+  registrar pagamento/editar parcela/quitar ("parcela 1 do contrato Nº 7"). Lançamento novo não tem número (o banco dá ao
+  gravar). Renegociação passou a dizer "financiamento Nº 4" (era "#4").
+- **Origem do lançamento que o sistema criou**: a linha do Financeiro diz "veio da baixa da conta Nº 113" (baixa de conta,
+  `lancamentos_financeiros.titulo_baixa_id`, agora em `rowToLancamento` como `tituloBaixaId`, só leitura) e "juros do
+  contrato Nº 4" (`parcelas_financiamento.lancamentos_financeiro_ids`). `origemDosLancamentos()` monta os mapas uma vez por
+  desenho.
+- **Busca pelo número** (`numeroDaBusca`, `filtroPeloNumero`): "#113", "nº 113", "n° 113", "no 113" acham SÓ o 113;
+  "113" sozinho acha o 113 e também o texto com 113 (como a busca já fazia). Vale no Financeiro, em Pagar/Receber e em
+  Financiamentos. **A busca do Financeiro aparece nas três abas** (antes só em Despesas, mas o texto digitado lá continuava
+  filtrando Receitas e Investimentos sem campo visível).
+- **Rodinha do mouse não muda número de campo** (`core.js`, os 5 apps; o mesmo trecho no `Adubacao.html`, que não usa o
+  núcleo): girar a rodinha com o cursor em cima de um `type="number"` ainda selecionado somava/tirava 1 (o nº de parcelas da
+  conta a pagar mudava e o valor de cada parcela era refeito sem ninguém ver). Ouvinte de `wheel` em captura, passivo: se o
+  campo com o foco é numérico e a rodinha está em cima dele, `blur()`; o navegador então rola a página (ou a janela) em vez
+  de mudar o valor. Teclado e digitação iguais; rodinha em outro lugar não tira o foco. Os campos de dinheiro do Matriz já
+  eram texto (`data-moeda`) e não tinham o problema; os numéricos são parcelas, taxa, área, quantidade, cabeças e os da
+  Pecuária/Adubação. `<select>` não muda com a rodinha no Chromium (medido), então ficou de fora.
+- `teste_numero_lancamentos.py` (45) e `teste_rodinha_numero.py` (53), os dois falham no código anterior.
+- **O que mais foi feito no mesmo dia (operação, sem código)**: as 3 cédulas do BASA foram lançadas por SQL em Financiamentos
+  (contratos #4 a #7; os valores ficam fora do git): custeio de soja 25/26 (já pago, ele registra o pagamento com o extrato),
+  investimento das matrizes (Pecuária; com isso o "financiamento recebido para a Pecuária" aparece) e o pré-custeio 26/27
+  **dividido em dois custeios de 50%, Grãos e Cana** (decisão dele: capital de giro poria 1/3 do juros na Pecuária; no
+  vencimento, registrar o pagamento nas duas metades). Parcelas pela regra de cada cédula (juros estimado; o real entra em
+  "Registrar pagamento"); a das matrizes segue o "% do saldo devedor" da cédula, com juros capitalizados na carência. E a
+  baixa da conta a pagar #113 no vencimento (diagnóstico e baixa com trava, como a `contas_09`).
+
 ### Pecuária: dado que não carregou não pode parecer "nenhum lote"
 
 Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: a tela
@@ -1426,7 +1460,7 @@ compra de animais e as travas do banco.
   **Financiamento recebido (07/11/2026)**: o bloco ganhou a linha "Financiamento recebido para a Pecuária" e o cartão "Caixa depois do
   financiamento" (= caixa + principal dos contratos NOVOS com atividade Pecuária e data da cédula no período; fora: contrato que já
   existia, de outra atividade, cancelado, importado do ERP e renegociação; mesma regra do fluxo da Empresa). Financiamento é dívida: não
-  muda o resultado. Quando ele lançar o custeio das matrizes (Financiamentos, atividade Pecuária) aparece sozinho.
+  muda o resultado. Quando ele lançar o custeio das matrizes (Financiamentos, atividade Pecuária) aparece sozinho (**lançado em 09/11/2026**, ver "Número de cada lançamento e rodinha do mouse").
   Falta o **resultado econômico** (custo do lote casado com a venda, por cabeça; matriz só no descarte): pede
   lote e nº de cabeças em cada compra (formulário + preenchimento do histórico).
 - **Gravação atômica (06/11/2026; achado 4/5 da revisão geral)**: duas funções do banco, `security invoker` (as
@@ -1924,7 +1958,7 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
 
 ## Testes
 
-73 arquivos `teste_*.py`, 2.799 checagens (09/11/2026; a tabela abaixo lista os
+75 arquivos `teste_*.py`, 2.897 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1999,6 +2033,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_custo_hora_equipamento.py` | 21 | AECombustivel.html (Rateio > Por Equipamento: horas/km, combustível, manutenção com custo, custo total e R$ por hora/km; período; custo da manutenção opcional que só vai ao banco com valor; sem rolar de lado) |
 | `teste_lancamento_equipamento.py` | 16 | AEMatriz.html (despesa com o campo Equipamento: lista, só despesa, coluna só enviada com valor (ou null ao tirar), editar sem perder, dividir leva para cada parte, sem equipamentos não aparece) |
 | `teste_custo_animais_lote.py` | 27 | AEMatriz.html (compra de animais com lote e nº de cabeças: campos que aparecem e somem com o centro, lote e cabeças juntos, inteiro, unidade cab; bloco Custo dos animais por lote: R$ por cabeça, custo dos vendidos, margem sobre o animal, estoque a custo, animais próprios, matriz à parte, compras sem lote com Editar, sem seguir o período) |
+| `teste_numero_lancamentos.py` | 45 | AEMatriz.html (número (id) de cada lançamento, conta e contrato: Financeiro nas três abas, Pagar/Receber, Financiamentos e as janelas de editar/baixar/pagar; origem "veio da baixa da conta Nº" e "juros do contrato Nº"; busca "#113" só o número e "113" número e texto; busca visível nas três abas do Financeiro; sem rolar de lado em 1280 e 390 px) |
+| `teste_rodinha_numero.py` | 53 | os 5 apps e Adubacao.html (rodinha do mouse em cima de campo numérico selecionado não muda o valor e rola a página; teclado e digitação iguais; rodinha em outro lugar não tira o foco; nº de parcelas da conta a pagar e do financiamento) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
