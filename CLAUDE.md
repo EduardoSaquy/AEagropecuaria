@@ -1789,7 +1789,7 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
 - **`a4_02_corrige_os_22.sql`**, **RODADO por ele em 09/11/2026, tudo OK** (os 6 itens da conferência: 22 em centro de entrada, R$ 339.094,22 iguais, 0 receitas em centro de saída em todo o banco,
   0 despesas/investimentos em centro de entrada, 3 centros novos, 0 `geral` sem partes). Tudo ou nada; recusa se não forem exatamente esses 22 nesses centros e valores; cria 3 centros de
   ENTRADA irmãos com o **mesmo nome + " (ENTRADA)"**, copiando `subcategoria` e `classe` do centro de saída (por isso o **grupo, e o bloco do fluxo de caixa da aba Empresa, não mudam**); só o
-  `centro_custo_id` muda (valor, data, atividade, tipo e rateio ficam). Cópias fechadas `zz_backup_a4_lanc_2026_11_09` e `zz_backup_a4_centros_2026_11_09` (a apagar quando ele confirmar);
+  `centro_custo_id` muda (valor, data, atividade, tipo e rateio ficam). Cópias fechadas `zz_backup_a4_lanc_2026_11_09` e `zz_backup_a4_centros_2026_11_09` (a apagar quando ele confirmar; foi feito, desfeito sem querer e refeito no mesmo dia, 6 itens OK de novo);
   desfazer no fim do arquivo. Ensaiado num Postgres descartável (caminho feliz, recusas, rodar de novo, desfazer devolve o banco idêntico, centro irmão já existente, nome já usado do outro lado).
   **O que aconteceu depois (09/11/2026, aprendizado):** na mensagem do script eu mandei um SEGUNDO bloco de código, o "para desfazer"; ele rodou os dois ("já rodei o segundo, deu sucesso") e o conserto foi
   desfeito (os 22 voltaram aos centros de saída, os 3 centros novos foram apagados; as cópias `zz_backup_a4_*` ficaram). A `banco_travas_02` recusou instalar por isso (achou 22 do lado errado) e a
@@ -1797,11 +1797,11 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
   texto quando precisar.** O `a4_02` passou a poder ser **rodado de novo depois de desfeito**: se as cópias de uma rodada anterior existem e batem com o estado de hoje, troca por cópias novas; se não
   batem, recusa (ensaiado: fez, desfez, fez de novo).
   O R$ 2.000 da casa-sede ficou num centro de entrada do grupo ADM (escolha provisória minha para não mudar número nenhum); se ele preferir, passa para "ESTORNO E/OU DEVOLUÇÃO DE PAGAMENTO".
-- **`banco_travas_02_centro_do_lado_certo.sql`** (ensaiado, **AINDA NÃO RODADO por ele**): receita só em centro de ENTRADA, despesa e investimento só em centro de SAÍDA, conferido ao gravar um
+- **`banco_travas_02_centro_do_lado_certo.sql`** (**INSTALADA por ele em 09/11/2026, conferência dos 5 itens OK**, depois de o conserto ser refeito; a 1ª tentativa recusou porque o conserto tinha sido desfeito sem querer, ver acima): receita só em centro de ENTRADA, despesa e investimento só em centro de SAÍDA, conferido ao gravar um
   lançamento novo ou ao mudar o tipo ou o centro de um (editar só valor ou descrição de um antigo não dispara); centro sem tipo vale para qualquer lado; trocar o lado de um centro que já tem
   lançamentos do outro lado é recusado (gatilho em `centros_custo`). `security definer` (quem grava pode não ler `centros_custo`). **Recusa instalar** se hoje houver lançamento do lado
   errado ou conta a pagar/receber EM ABERTO com rateio do lado errado (a baixa criaria lançamento do lado errado e seria barrada). **Se o ERP for reimportado, receita em centro de saída será
-  recusada**: a importação precisa usar o centro de entrada. Desfazer no fim do arquivo.
+  recusada**: a importação precisa usar o centro de entrada. Desfazer no fim do arquivo. Os fluxos do app que gravam lançamento com centro fixo seguem do lado certo: o juros das parcelas ("Juros e Encargos de Financiamento", `saida`) e a venda de animais ("Vendas", `entrada`); as telas de lançamento e de contas já filtram o lado.
 
 ## Armadilhas que já custaram caro
 
