@@ -1024,6 +1024,29 @@ dividem o resto. Título de coluna com `hyphens:auto` e letter-spacing .3px. No 
 com hífen, como já quebrava (sem hífen) antes. `teste_contas_atividade_fazenda.py` (28, falha no código anterior; inclui "nenhuma
 palavra cortada no meio" em 1920, 1340, 1280 e 1100 px).
 
+### Pagamento de parcela: data do vencimento e safra do juros (09/11/2026)
+
+O caso: o custeio da soja 25/26 (contrato Nº 4) venceu e foi pago em 10/07/2026, mas foi marcado como pago em **09/11/2026**:
+"Registrar pagamento" abria com a data de hoje e "Marcar como paga" usava hoje sem mostrar. O juros (Nº 24812, ainda o
+**estimado** pela cédula; valores do contrato ficam fora do git) caiu em novembro (~90% da despesa dos Grãos no mês, ~R$ 295/ha
+a mais em 800 ha) e, sem safra, na 26/27. Não havia dobra: o ERP/acerto não tinham juros do BASA em 2026 e nenhum
+lançamento dos Grãos tem o valor do principal ("Agro Amazônia" é fornecedor de defensivos, não o banco). **Corrigido no banco
+por mim em 09/11/2026 pelo conector do Supabase** (com o OK dele): parcela 15 paga em 10/07/2026; lançamento 24812 em
+10/07/2026, mês 2026-07, `ano_safra` 2025; cópia em `zz_backup_custeio_soja_2026_11_09` (RLS ligado, fechada). **O juros
+segue estimado**: quando ele passar o valor do extrato, trocar na parcela (`valor_juros`, `valor_pago`, `valor_parcela`) e no
+lançamento.
+
+No app (`AEMatriz.html`, `teste_pagamento_parcela_data_safra.py` 23, falha no código anterior):
+- `dataPadraoPagamento(p)`: parcela **já vencida** abre/paga com a data do **vencimento**; a vencer, com hoje. Vale para
+  "Registrar pagamento" e "Marcar como paga" (a pergunta agora mostra a data, diz que o juros é estimado e aponta "Registrar
+  pagamento" para outra data ou o juros do extrato).
+- `avisoDataPagamento`: data a mais de 30 dias (`DIAS_AVISO_PAGAMENTO`) do vencimento mostra aviso na hora; **depois** do
+  vencimento, salvar pede confirmação (cancelar não grava). Antes do vencimento só avisa (pagamento antecipado existe).
+- **Safra do juros** (campo novo na janela, grava `ano_safra` do lançamento, também nos 3 do capital de giro):
+  `safraSugeridaDoJuros(f, p)` sugere, **só para custeio**, a safra do ponto médio entre a cédula e o vencimento (soja 25/26
+  → 2025; pré-custeio 26/27, cédula 02/2026 e vencimento 06/2027 → 2026). Investimento e capital de giro vêm em branco
+  (contam pelo mês). A safra pela data da cédula sozinha erraria o pré-custeio, e pelo vencimento erraria os dois.
+
 ### Pecuária: dado que não carregou não pode parecer "nenhum lote"
 
 Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: a tela
@@ -1982,7 +2005,7 @@ do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como re
 
 ## Testes
 
-76 arquivos `teste_*.py`, 2.925 checagens (09/11/2026; a tabela abaixo lista os
+77 arquivos `teste_*.py`, 2.948 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2060,6 +2083,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_numero_lancamentos.py` | 45 | AEMatriz.html (número (id) de cada lançamento, conta e contrato: Financeiro nas três abas, Pagar/Receber, Financiamentos e as janelas de editar/baixar/pagar; origem "veio da baixa da conta Nº" e "juros do contrato Nº"; busca "#113" só o número e "113" número e texto; busca visível nas três abas do Financeiro; sem rolar de lado em 1280 e 390 px) |
 | `teste_rodinha_numero.py` | 53 | os 5 apps e Adubacao.html (rodinha do mouse em cima de campo numérico selecionado não muda o valor e rola a página; teclado e digitação iguais; rodinha em outro lugar não tira o foco; nº de parcelas da conta a pagar e do financiamento) |
 | `teste_contas_atividade_fazenda.py` | 28 | AEMatriz.html (Pagar/Receber: coluna Atividade / Fazenda em A Pagar e A Receber, uma linha por par atividade/fazenda, "Geral" sem fazenda, nome curto, Onde pesa só com centro e competência numa parte e com cada parte na conta dividida, "—" sem rateio, busca pela atividade, total embaixo de Valor, sem rolar de lado de 1920 a 320 px, nenhuma palavra cortada no meio de 1100 a 1920 px) |
+| `teste_pagamento_parcela_data_safra.py` | 23 | AEMatriz.html (pagamento de parcela: vencida abre/paga com a data do vencimento, a vencer com hoje; safra do juros sugerida para custeio (soja 25/26 → 2025, pré-custeio 26/27 → 2026), em branco para investimento e capital de giro, escolhida na tela vale nos 3 do capital de giro; aviso a mais de 30 dias do vencimento e confirmação quando é depois, cancelar não grava; "Marcar como paga" com data e "estimado" na pergunta; sem rolar de lado no celular) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

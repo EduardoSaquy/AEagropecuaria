@@ -5341,7 +5341,7 @@ function centroDeJurosFinanciamento(){
 // Lança o juros de uma parcela como despesa no Financeiro: 1 lançamento
 // (investimento/custeio) ou 3 iguais (capital de giro, 1 por atividade).
 // `data` é o dia do pagamento. Devolve {ids}, ou {ids, error} se algum falhar.
-async function lancarJurosDaParcela(f, p, totalJuros, data, centro){
+async function lancarJurosDaParcela(f, p, totalJuros, data, centro, anoSafra){
   const atividades = f.finalidade==='capital_giro' ? ATIVIDADES_PRODUTIVAS : [f.atividade];
   // valor é numeric(12,2) no banco: dividir R$100 por 3 dá R$33,333... e
   // cada insert arredonda pra R$33,33 sozinho, sem saber dos outros dois -
@@ -5359,6 +5359,8 @@ async function lancarJurosDaParcela(f, p, totalJuros, data, centro){
       tipo:'despesa', atividade, fazendaId: f.fazendaId||'', centroCustoId: centro.id,
       descricao: `Juros — ${f.banco} (parcela ${p.numero}/${f.numeroParcelas})`,
       valor, data, fornecedor: f.banco, observacao: '', areas: [],
+      // safra do juros (campo Safra do Financeiro): sem ela o juros conta pelo mes do pagamento
+      anoSafra: anoSafra==null || anoSafra==='' ? undefined : Number(anoSafra),
     });
     const {data: lancado, error} = await db.from('lancamentos_financeiros').insert(row).select().single();
     if(error) return {ids, error};
@@ -5366,6 +5368,46 @@ async function lancarJurosDaParcela(f, p, totalJuros, data, centro){
   }
   return {ids};
 }
+/* ---- Data e safra do pagamento de uma parcela (09/11/2026) ----
+ * O custeio da soja 25/26 (venceu e foi pago em 10/07/2026) foi marcado como pago
+ * em 09/11/2026: a janela abria com a data de HOJE e o botao rapido usava hoje sem
+ * mostrar. O juros caiu em novembro (R$ 295/ha a mais nos Graos) e, sem safra, na
+ * safra 26/27. Agora: parcela ja vencida abre com a data do VENCIMENTO; data a mais
+ * de 30 dias do vencimento mostra aviso (e pede confirmacao se for depois); juros de
+ * CUSTEIO sai com a safra que o dinheiro financiou (sugestao editavel). */
+const DIAS_AVISO_PAGAMENTO = 30;
+function diasEntreDatas(de, ate){
+  const [a,b] = [de, ate].map(x=>{ const [y,m,d] = String(x).split('-').map(Number); return Date.UTC(y, m-1, d); });
+  return Math.round((b - a) / 86400000);
+}
+// Parcela ja vencida: o mais provavel e ter sido paga no vencimento. A vencer: hoje.
+function dataPadraoPagamento(p){
+  const hoje = hojeStr();
+  return p.dataVencimento && p.dataVencimento < hoje ? p.dataVencimento : hoje;
+}
+function safraDaData(iso){
+  const [y, m] = String(iso).split('-').map(Number);
+  return m >= 5 ? y : y - 1;
+}
+// Custeio financia UMA safra: a do meio do caminho entre a cedula e o vencimento
+// (soja 25/26: cedula 08/2025, vence 07/2026 -> 2025/26; pre-custeio 26/27: cedula
+// 02/2026, vence 06/2027 -> 2026/27). Investimento e capital de giro: sem safra (mes).
+function safraSugeridaDoJuros(f, p){
+  if(!f || f.finalidade!=='custeio' || !f.dataContratacao || !p.dataVencimento) return '';
+  const meio = Date.UTC(...f.dataContratacao.split('-').map((x,i)=>i===1?Number(x)-1:Number(x)))/2
+             + Date.UTC(...p.dataVencimento.split('-').map((x,i)=>i===1?Number(x)-1:Number(x)))/2;
+  return safraDaData(new Date(meio).toISOString().slice(0,10));
+}
+function avisoDataPagamento(p, data){
+  if(!p || !p.dataVencimento || !ISO_DATA.test(String(data||''))) return '';
+  const dias = diasEntreDatas(p.dataVencimento, data);
+  if(Math.abs(dias) <= DIAS_AVISO_PAGAMENTO) return '';
+  const mes = data.slice(5,7) + '/' + data.slice(0,4);
+  return dias > 0
+    ? `A data está ${dias} dias depois do vencimento (${dataBr(p.dataVencimento)}): o juros vai contar em ${mes}. Confira no extrato se foi pago mesmo nesse dia.`
+    : `A data está ${-dias} dias antes do vencimento (${dataBr(p.dataVencimento)}): o juros vai contar em ${mes}. Confira no extrato se foi pago mesmo nesse dia.`;
+}
+
 // Última parcela paga quita o financiamento sozinho — sem precisar de
 // uma tela separada só pra marcar "quitado" manualmente.
 async function quitarSeNaoRestam(f, idsPagos){
@@ -5385,12 +5427,15 @@ async function pagarParcela(parcelaId){
     alert(`Centro de custo "${NOME_CENTRO_JUROS_FIN}" não encontrado. Rode a migração do módulo de financiamentos antes de pagar uma parcela.`);
     return;
   }
-  if(!confirm(`Marcar a parcela ${p.numero} (R$ ${fmt(p.valorParcela)}) como paga?\n\nSó o juros (R$ ${fmt(p.valorJuros)}) vira despesa lançada no Resultado — a amortização (R$ ${fmt(p.valorAmortizacao)}) não afeta o resultado, só reduz o saldo devedor.`)) return;
+  const dataPag = dataPadraoPagamento(p), safra = safraSugeridaDoJuros(f, p);
+  if(!confirm(`Marcar a parcela ${p.numero} (R$ ${fmt(p.valorParcela)}) como paga em ${dataBr(dataPag)}?\n\n`
+    + `Só o juros (R$ ${fmt(p.valorJuros)}, estimado pela taxa) vira despesa lançada no Resultado${safra!=='' ? `, na safra ${safra}/${safra+1}` : ''} — a amortização (R$ ${fmt(p.valorAmortizacao)}) não afeta o resultado, só reduz o saldo devedor.\n\n`
+    + `Para outra data ou o juros do extrato, use "Registrar pagamento".`)) return;
 
-  const {ids: idsGerados, error} = await lancarJurosDaParcela(f, p, Number(p.valorJuros), hojeStr(), centro);
+  const {ids: idsGerados, error} = await lancarJurosDaParcela(f, p, Number(p.valorJuros), dataPag, centro, safra);
   if(error){ alert('Não foi possível lançar o juros: ' + error.message); return; }
   const {error: erroParcela} = await db.from('parcelas_financiamento').update({
-    status:'paga', data_pagamento: hojeStr(), valor_pago: p.valorParcela,
+    status:'paga', data_pagamento: dataPag, valor_pago: p.valorParcela,
     lancamentos_financeiro_ids: idsGerados,
   }).eq('id', p.id);
   if(erroParcela){ alert('O juros já foi lançado, mas não consegui atualizar a parcela: ' + erroParcela.message); return; }
@@ -5425,7 +5470,9 @@ function parteDoUsuarioNaObsErp(obs){
 function abrirPagamentoParcela(parcelaId){
   const p = state.parcelasFinanciamento.find(x=>x.id===parcelaId);
   if(!p) return;
-  editDraft = {_parcelaId:p.id, data:hojeStr(), juros:arred2(Number(p.valorJuros)||0), lancar:true};
+  const f = state.financiamentos.find(x=>x.id===p.financiamentoId);
+  editDraft = {_parcelaId:p.id, data:dataPadraoPagamento(p), juros:arred2(Number(p.valorJuros)||0), lancar:true,
+               safra:safraSugeridaDoJuros(f, p)};
   state.erroFinanciamento = '';
   state.modal = {type:'pagamentoParcela'}; render();
 }
@@ -5438,10 +5485,16 @@ function ModalPagamentoParcela(){
     <div class="modal" data-stop="1">
       <div class="modal-head"><h3>Registrar pagamento da parcela ${p.numero} do contrato${NumeroId(f.id)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
-        <p class="hint" style="margin-bottom:12px;">${esc(f.banco)} · vencimento ${p.dataVencimento} · amortização R$ ${fmt(p.valorAmortizacao)}. A amortização não é despesa: só reduz o saldo devedor.</p>
-        <div class="field"><label>Data do pagamento</label><input id="f-pagdata" type="date" value="${d.data}"/></div>
+        <p class="hint" style="margin-bottom:12px;">${esc(f.banco)} · vencimento ${dataBr(p.dataVencimento)} · amortização R$ ${fmt(p.valorAmortizacao)}. A amortização não é despesa: só reduz o saldo devedor.</p>
+        <div class="field"><label>Data do pagamento</label><input id="f-pagdata" type="date" value="${d.data}"/>
+          <span class="hint" id="f-pag-aviso" style="color:var(--alerta);">${esc(avisoDataPagamento(p, d.data))}</span></div>
         <div class="field"><label>Juros pago (R$)</label><input id="f-pagjuros" type="text" inputmode="decimal" data-moeda value="${d.juros}" autocomplete="off"/>
           <span class="hint">Se veio estimado pela taxa, troque pelo valor que o banco cobrou.</span></div>
+        <div class="field"><label>Safra do juros</label><select id="f-pagsafra">
+            <option value="" ${d.safra===''||d.safra==null?'selected':''}>— Pelo mês do pagamento —</option>
+            ${anosSafraParaLancamento().map(a=>`<option value="${a}" ${String(d.safra)===String(a)?'selected':''}>${a}/${a+1}</option>`).join('')}
+          </select>
+          <span class="hint">${f.finalidade==='custeio' ? 'Custeio: a safra que o dinheiro financiou (já vem sugerida pela cédula e pelo vencimento).' : 'Em branco, o juros conta no mês do pagamento.'}</span></div>
         <div class="field"><label style="display:flex; align-items:center; gap:8px; font-weight:400;"><input type="checkbox" id="f-paglancar" ${d.lancar?'checked':''} style="width:auto;"/> Lançar o juros como despesa no Financeiro</label>
           <span class="hint">Desmarque se o juros desta parcela já está no Financeiro (veio do ERP ou foi lançado à mão): lançar de novo dobraria a despesa.</span></div>
         ${state.erroFinanciamento ? `<div class="login-error">${esc(state.erroFinanciamento)}</div>` : ''}
@@ -5461,12 +5514,19 @@ async function salvarPagamentoParcela(){
   }
   const v = id => document.getElementById(id)?.value ?? '';
   const data = v('f-pagdata'), juros = Number(v('f-pagjuros')), lancar = !!document.getElementById('f-paglancar')?.checked;
+  const safra = v('f-pagsafra');
   const faltando = [];
   if(!ISO_DATA.test(data)) faltando.push('data do pagamento');
   if(v('f-pagjuros')==='' || !(juros >= 0)) faltando.push('juros (pode ser zero)');
   if(faltando.length){
     state.erroFinanciamento = 'Preencha: ' + faltando.join(', ') + '.';
-    editDraft = {...d, data, juros: v('f-pagjuros'), lancar}; render(); return;
+    editDraft = {...d, data, juros: v('f-pagjuros'), lancar, safra}; render(); return;
+  }
+  const diasDepois = diasEntreDatas(p.dataVencimento, data);
+  if(p.dataVencimento && diasDepois > DIAS_AVISO_PAGAMENTO
+     && !confirm(`A data do pagamento (${dataBr(data)}) é ${diasDepois} dias depois do vencimento (${dataBr(p.dataVencimento)}).\n\n`
+                 + `O juros vai contar em ${data.slice(5,7)}/${data.slice(0,4)}. Foi pago mesmo nesse dia?`)){
+    editDraft = {...d, data, juros: v('f-pagjuros'), lancar, safra}; return;
   }
   state.erroFinanciamento = '';
   let ids = [];
@@ -5476,7 +5536,7 @@ async function salvarPagamentoParcela(){
       alert(`Centro de custo "${NOME_CENTRO_JUROS_FIN}" não encontrado. Rode a migração do módulo de financiamentos antes de lançar o juros.`);
       return;
     }
-    const r = await lancarJurosDaParcela(f, p, arred2(juros), data, centro);
+    const r = await lancarJurosDaParcela(f, p, arred2(juros), data, centro, safra);
     if(r.error){ alert('Não foi possível lançar o juros: ' + r.error.message); return; }
     ids = r.ids;
   }
@@ -8778,6 +8838,12 @@ function attachEvents(){
   document.querySelectorAll('[data-pagamento-parcela]').forEach(el=>{
     el.onclick = ()=> abrirPagamentoParcela(Number(el.dataset.pagamentoParcela));
   });
+  const campoDataPag = document.getElementById('f-pagdata');
+  if(campoDataPag) campoDataPag.oninput = campoDataPag.onchange = ()=>{
+    const p = editDraft && state.parcelasFinanciamento.find(x=>x.id===editDraft._parcelaId);
+    const aviso = document.getElementById('f-pag-aviso');
+    if(aviso) aviso.textContent = avisoDataPagamento(p, campoDataPag.value);
+  };
   document.querySelectorAll('[data-editar-parcela]').forEach(el=>{
     el.onclick = ()=> abrirEditarParcela(Number(el.dataset.editarParcela));
   });
