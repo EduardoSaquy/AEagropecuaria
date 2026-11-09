@@ -1837,6 +1837,16 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
   errado ou conta a pagar/receber EM ABERTO com rateio do lado errado (a baixa criaria lançamento do lado errado e seria barrada). **Se o ERP for reimportado, receita em centro de saída será
   recusada**: a importação precisa usar o centro de entrada. Desfazer no fim do arquivo. Os fluxos do app que gravam lançamento com centro fixo seguem do lado certo: o juros das parcelas ("Juros e Encargos de Financiamento", `saida`) e a venda de animais ("Vendas", `entrada`); as telas de lançamento e de contas já filtram o lado.
 
+### Backup automático do banco (09/11/2026): pronto no repositório, AINDA NÃO LIGADO
+
+O plano gratuito do Supabase não guarda cópia do banco (a própria documentação deles manda exportar com `pg_dump` e guardar fora). Em `backup_banco/` (`backup.yml` e `LEIA-ME.md`) está a tarefa
+do GitHub Actions que faz `pg_dump` (formato custom) do schema `public` e, a parte e sem derrubar o resto se falhar, do `auth`, confere o arquivo (conta as tabelas com dados e o tamanho) e guarda
+como artefato por 14 dias, todo dia 03:00 no Brasil. **Tem que rodar num repositório PRIVADO** (artefato de repositório público é baixável por qualquer pessoa): o `backup.yml` é um modelo e não
+roda aqui. Precisa do segredo `DATABASE_URL` (URI do **Session pooler**, a conexão direta é só IPv6 e o GitHub só fala IPv4; com a senha do banco), que **só o Eduardo cria** (credencial: eu nunca
+a vejo nem a digito). `VERSAO_PG` tem de ser a do banco (`select version();`); GitHub gratuito dá 2.000 min/mês e 500 MB de artefatos (por isso o tamanho do banco decide os dias guardados).
+Ensaiado num Postgres descartável (dump dos dois schemas, `--list`, restauração num banco novo: linhas, RLS, visão, função e contas voltam). **Não testado**: a conexão real pelo pooler e o `pg_dump`
+do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como restaurar: `backup_banco/LEIA-ME.md`.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**

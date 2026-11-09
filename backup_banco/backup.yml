@@ -1,0 +1,83 @@
+# BACKUP AUTOMATICO DO BANCO (Supabase gratuito nao guarda copia)
+#
+# ESTE ARQUIVO NAO RODA NO REPOSITORIO PUBLICO. Ele vai para um repositorio PRIVADO, em
+# .github/workflows/backup.yml (ver LEIA-ME.md). Motivo: o arquivo de backup fica como "artefato" da execucao, e
+# artefato de repositorio publico pode ser baixado por qualquer pessoa. Num repositorio privado so quem tem acesso baixa.
+#
+# O que faz, todo dia (e quando voce mandar rodar na mao):
+#   1. instala o pg_dump da MESMA versao do banco (pg_dump mais velho que o banco recusa);
+#   2. copia o schema "public" (todas as tabelas dos apps) e, a parte, o schema "auth" (as contas de login);
+#   3. confere que o arquivo saiu inteiro (lista o conteudo e conta as tabelas);
+#   4. guarda o arquivo por 14 dias. Se qualquer passo falhar, o GitHub avisa por e-mail.
+#
+# O segredo DATABASE_URL (Settings > Secrets and variables > Actions) e o endereco do banco com a senha, no formato
+# "Session pooler" do painel do Supabase. O GitHub nao mostra o valor nem nos registros.
+
+name: Backup do banco
+
+on:
+  schedule:
+    - cron: '0 6 * * *'      # todo dia as 06:00 UTC (03:00 no Brasil)
+  workflow_dispatch:          # botao "Run workflow" na aba Actions
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSAO_PG: '17'         # TROCAR se o banco for de outra versao (select version(); no Supabase)
+    steps:
+      - name: Instala o pg_dump da versao do banco
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${VERSAO_PG}"
+          "/usr/lib/postgresql/${VERSAO_PG}/bin/pg_dump" --version
+
+      - name: Faz o backup dos apps (schema public)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL" || { echo "Falta o segredo DATABASE_URL (ver LEIA-ME.md)."; exit 1; }
+          DATA=$(date -u +%Y-%m-%d_%H%M)
+          "/usr/lib/postgresql/${VERSAO_PG}/bin/pg_dump" --dbname="$DATABASE_URL" \
+            --format=custom --compress=9 --no-owner --no-privileges \
+            --schema=public --file="apps_${DATA}.dump"
+
+      - name: Faz o backup das contas de login (schema auth)
+        continue-on-error: true      # se este falhar, o backup dos apps acima continua valendo
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          DATA=$(date -u +%Y-%m-%d_%H%M)
+          "/usr/lib/postgresql/${VERSAO_PG}/bin/pg_dump" --dbname="$DATABASE_URL" \
+            --format=custom --compress=9 --no-owner --no-privileges \
+            --schema=auth --file="login_${DATA}.dump"
+
+      - name: Confere que o backup dos apps saiu inteiro
+        run: |
+          set -euo pipefail
+          arq=$(ls apps_*.dump)
+          "/usr/lib/postgresql/${VERSAO_PG}/bin/pg_restore" --list "$arq" > lista.txt
+          tabelas=$(grep -c " TABLE DATA " lista.txt || true)
+          tamanho=$(stat -c%s "$arq")
+          echo "tabelas com dados: $tabelas | tamanho: $tamanho bytes"
+          ls -l ./*.dump
+          [ "$tabelas" -ge 20 ] || { echo "Backup suspeito: so $tabelas tabelas com dados."; exit 1; }
+          [ "$tamanho" -ge 50000 ] || { echo "Backup suspeito: arquivo pequeno demais ($tamanho bytes)."; exit 1; }
+
+      - name: Guarda o arquivo
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-banco
+          path: '*.dump'
+          retention-days: 14
+          if-no-files-found: error
