@@ -242,6 +242,9 @@
   input:focus, select:focus, textarea:focus{border-color:var(--verde-vivo); box-shadow:0 0 0 3px rgba(0,190,94,0.14);}
   input[type=color]{padding:3px; height:38px; width:100%;}
   .hint{font-size:11px; color:var(--cinza);}
+  /* número (id) de cada lançamento, conta e contrato: NumeroId() */
+  .num-id{display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500; color:var(--cinza); white-space:nowrap;}
+  .modal-head h3 .num-id{font-size:13px; margin-left:6px; vertical-align:middle;}
   .total-bar{display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:8px; background:var(--cinza-bg); font-size:13px;}
   .total-bar.ok{color:var(--verde-medio); font-weight:600;}
 
@@ -537,7 +540,7 @@
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=28eb5ca26c"></script>
+<script src="core.js?v=151f9d9a86"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -682,7 +685,10 @@ function rowToLancamento(r){
           // qualquer atividade, e null significa "usa o mês normalmente".
           anoSafra:r.ano_safra??null,
           // Máquina a que a despesa pertence (lancamentos_equipamento_01.sql). null: sem máquina, ou o SQL ainda não rodou.
-          equipamentoId:r.equipamento_id??null};
+          equipamentoId:r.equipamento_id??null,
+          // Baixa de conta a pagar/receber que criou este lançamento (gatilho trg_baixa_gera_lancamento). Só leitura: o
+          // lancamentoToRow não manda (quem grava é o banco). Serve para a lista mostrar "da conta Nº ...".
+          tituloBaixaId:r.titulo_baixa_id??null};
 }
 function lancamentoToRow(l){
   return {tipo:l.tipo, atividade:l.atividade,
@@ -3310,7 +3316,7 @@ function BlocoCustoAnimaisPorLote(){
       <summary class="hint" style="cursor:pointer;"><strong>${c.soltas.length} compra(s) de animais sem lote ou sem nº de cabeças</strong> (R$ ${fmt(c.soltasValor)}): as mais recentes abaixo; toque em Editar para ligar a um lote</summary>
       <div style="overflow-x:auto; margin-top:6px;"><table style="font-size:12.5px;">
         <thead><tr><th>Data</th><th>Descrição</th><th>Fornecedor</th><th>Valor</th><th></th></tr></thead>
-        <tbody>${c.soltas.slice(0, 15).map(l=>`<tr><td class="mono">${dia(l)}</td><td>${esc(l.descricao)}</td><td>${esc(l.fornecedor||'—')}</td><td class="mono">R$ ${fmt(l.valor)}</td>
+        <tbody>${c.soltas.slice(0, 15).map(l=>`<tr><td class="mono">${dia(l)}<div>${NumeroId(l.id)}</div></td><td>${esc(l.descricao)}</td><td>${esc(l.fornecedor||'—')}</td><td class="mono">R$ ${fmt(l.valor)}</td>
           <td>${podeEditarFinanceiro() ? `<button class="btn-ghost btn-sm" data-edit-lancamento="${l.id}">Editar</button>` : ''}</td></tr>`).join('')}</tbody>
       </table></div>
       ${c.soltas.length > 15 ? `<p class="hint" style="margin:6px 0 0;">Mostrando 15 de ${c.soltas.length}. Na lista de Financeiro > Investimentos estão todas.</p>` : ''}
@@ -5041,7 +5047,7 @@ function PageFinanciamentos(){
   const podeEditar = temPermissao('matriz_financiamentos','editar');
   const busca = (state.searchFinanciamentos||'').toLowerCase();
   const linhas = state.financiamentos
-    .filter(f => !busca || f.banco.toLowerCase().includes(busca))
+    .filter(f => { if(!busca) return true; const pelo = filtroPeloNumero(busca, f.id); return pelo!==null ? pelo : f.banco.toLowerCase().includes(busca); })
     .sort((a,b)=> (a.status==='ativo'?0:1)-(b.status==='ativo'?0:1) || (b.dataContratacao||'').localeCompare(a.dataContratacao||''));
   const r = resumoFinanciamentos();
   const pendentesErp = state.movimentosFinanciamentoOk ? gruposErpParaLancar() : [];
@@ -5055,7 +5061,7 @@ function PageFinanciamentos(){
       <div class="stat-label">Juros pago em ${hojeStr().slice(0,4)}</div><div class="stat-value">R$ ${fmt(r.jurosPagoAno)}</div></div>
   </div>
   <div class="toolbar">
-    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar por banco..." value="${esc(state.searchFinanciamentos||'')}" data-search-financiamentos="1" autocomplete="off"/></div>
+    <div class="search">${iconSearch()}<input type="text" placeholder="Buscar por nº ou banco..." value="${esc(state.searchFinanciamentos||'')}" data-search-financiamentos="1" autocomplete="off"/></div>
     <span class="hint">${linhas.length} de ${state.financiamentos.length}</span>
     ${podeEditar ? `<button class="btn btn-primary btn-sm" data-novo-financiamento="1">+ Novo financiamento</button>` : ''}
   </div>
@@ -5070,7 +5076,7 @@ function PageFinanciamentos(){
           const atividadeLabel = f.finalidade==='capital_giro' ? 'Rateado (Pec./Cana/Grãos)' : (ATIVIDADES_LANC.find(([k])=>k===f.atividade)?.[1] || '—');
           return `
           <tr${f.status!=='ativo' ? ' style="opacity:.6;"' : ''}>
-            <td><div style="text-align:left;"><strong>${esc(f.banco)}</strong><div class="hint" style="font-weight:400;">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)}</div></div></td>
+            <td><div style="text-align:left;"><strong>${esc(f.banco)}</strong> ${NumeroId(f.id)}<div class="hint" style="font-weight:400;">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)}</div></div></td>
             <td class="mono" data-rotulo="Contratado" style="white-space:nowrap;">R$ ${fmt(f.valorPrincipal)}</td>
             <td class="mono" data-rotulo="Data do contrato" style="white-space:nowrap;">${f.dataContratacao||'—'}</td>
             <td class="mono" data-rotulo="Saldo devedor"><div><span style="white-space:nowrap;">R$ ${fmt(saldoDevedorFinanciamento(f))}</span>${sb ? `<div class="hint" style="font-family:'Inter',sans-serif;">No banco: R$ ${fmt(sb.valor)}${sb.em ? ' em ' + dataBr(sb.em) : ''}${sb.velho ? ' (desatualizado)' : ''}</div>` : ''}</div></td>
@@ -5124,10 +5130,10 @@ function PageFinanciamentoDetalhe(){
     ${podeExcluir() ? `<button class="btn-danger-ghost" data-excluir-financiamento="${f.id}">Excluir</button>` : ''}
   </div>
   <div class="card card-pad" style="margin-bottom:14px;">
-    <h3 style="margin-bottom:8px;">${esc(f.banco)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
+    <h3 style="margin-bottom:8px;">${esc(f.banco)} ${NumeroId(f.id)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
     <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}${f.sistemaAmortizacao!=='parcela_unica' && !importadoDoErp(f) ? ` · parcelas ${PERIODICIDADE_FIN_PLURAL[periodicidadeFin(f)]}` : ''}${f.continuacao ? ' · contrato que já existia (só o saldo)' : ''}</p>
     ${f.garantia ? `<p class="hint">Garantia: ${esc(f.garantia)}</p>` : ''}
-    ${f.financiamentoOrigemId ? `<p class="hint">Nasceu de renegociação do financiamento #${f.financiamentoOrigemId}.</p>` : ''}
+    ${f.financiamentoOrigemId ? `<p class="hint">Nasceu de renegociação do financiamento Nº ${f.financiamentoOrigemId}.</p>` : ''}
     ${(Number(f.valorIof)>0 || Number(f.valorSeguro)>0) ? `<p class="hint">IOF: R$ ${fmt(f.valorIof)} · Seguro: R$ ${fmt(f.valorSeguro)} (informativo, não lançado no Financeiro)</p>` : ''}
     ${f.observacao ? `<p class="hint">${esc(f.observacao)}</p>` : ''}
   </div>
@@ -5241,7 +5247,7 @@ function ModalFinanciamento(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${importar?'Lançar contrato do ERP':d._origemId?'Renegociar financiamento':(d._editId?'Editar financiamento':'Novo financiamento')}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${importar?'Lançar contrato do ERP':d._origemId?'Renegociar financiamento':(d._editId?'Editar financiamento':'Novo financiamento')}${d._editId ? NumeroId(d._editId) : ''}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${d._origemId ? `<p class="hint" style="margin-bottom:10px;">O saldo devedor do financiamento anterior vira o principal deste contrato novo. O antigo fica marcado como renegociado, sem apagar o histórico.</p>` : ''}
         ${importar ? `<p class="hint" style="margin-bottom:12px;">O ERP tem <strong>${rc.pagas+rc.aVencer} parcelas</strong> deste contrato${rc.contrato ? ` (${esc(rc.contrato)})` : ''}: ${rc.pagas} já paga(s), R$ ${fmt(rc.totalPago)}, e ${rc.aVencer} a vencer, R$ ${fmt(rc.totalAVencer)}, de ${rc.primeira} a ${rc.ultima}. Ao salvar, o app cria o contrato com essas parcelas reais e tira as linhas do ERP das contas: a dívida e o fluxo de caixa passam a vir do contrato, sem contar duas vezes. O juros das parcelas já pagas continua no Financeiro, como veio do ERP.</p>` : ''}
@@ -5427,7 +5433,7 @@ function ModalPagamentoParcela(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Registrar pagamento da parcela ${p.numero}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Registrar pagamento da parcela ${p.numero} do contrato${NumeroId(f.id)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-bottom:12px;">${esc(f.banco)} · vencimento ${p.dataVencimento} · amortização R$ ${fmt(p.valorAmortizacao)}. A amortização não é despesa: só reduz o saldo devedor.</p>
         <div class="field"><label>Data do pagamento</label><input id="f-pagdata" type="date" value="${d.data}"/></div>
@@ -5497,7 +5503,7 @@ function ModalQuitarFinanciamento(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Quitar ${esc(f.banco)}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Quitar ${esc(f.banco)}${NumeroId(f.id)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-bottom:12px;">Use quando este contrato já foi pago ou amortizado. As <strong>${abertas.length} parcela(s) em aberto</strong> (R$ ${fmt(principal)} de principal) viram pagas na data abaixo e o saldo devedor zera. <strong>Nenhum juros é lançado</strong> no Financeiro; a amortização entra no fluxo de caixa dessa data.</p>
         <div class="field"><label>Data em que foi pago</label><input id="f-quitdata" type="date" value="${d.data}"/></div>
@@ -5544,7 +5550,7 @@ function ModalParcelaFin(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Editar parcela ${p.numero}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Editar parcela ${p.numero} do contrato${NumeroId(f.id)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-bottom:12px;">${esc(f.banco)}${imp ? ' · cronograma importado do ERP' : ''}</p>
         <div class="field"><label>Vencimento</label><input id="f-parcdata" type="date" value="${d.data}"/></div>
@@ -6008,6 +6014,54 @@ function nomeFazendaLanc(id){
   return f ? f.nome : '—';
 }
 function rotuloAtividade(a){ return (ATIVIDADES_LANC.find(([k])=>k===a)||[null,a])[1]; }
+/* ---------- Número de cada lançamento, conta e contrato (09/11/2026) ----------
+ * Pedido do Eduardo e das secretárias: "identificação em todos os lançamentos, um número de ID". É o id que o banco
+ * já dá a cada linha (lançamento, conta a pagar/receber, contrato): único, nunca muda nem se repete, e é o mesmo
+ * número que os scripts de conferência e a conversa usam ("conta Nº 113"). Aparece na lista, na janela de editar e
+ * nas janelas de baixa/pagamento; a busca acha pelo número. Lançamento novo ainda não tem número (o banco dá ao gravar). */
+function NumeroId(id){
+  if(id===null || id===undefined || id==='') return '';
+  const n = esc(String(id));
+  return `<span class="num-id" data-num-id="${n}" title="Número de identificação">Nº ${n}</span>`;
+}
+// "#113", "nº 113", "n° 113", "no 113", "n. 113" e "113" sozinho: devolve 113; o que não é número, null.
+function numeroDaBusca(texto){
+  const m = String(texto||'').trim().toLowerCase().match(/^(?:#|n\s*[º°o.]?)?\s*(\d+)$/);
+  return m ? Number(m[1]) : null;
+}
+// Com o sinal ("#113", "nº 113") a pessoa pediu O número: acha só ele. Só os algarismos ("113") acham o número 113
+// e também o texto que tenha 113 (descrição, documento...), como a busca já fazia.
+function buscaPediuSoONumero(texto){
+  return numeroDaBusca(texto)!==null && !/^\d+$/.test(String(texto||'').trim());
+}
+// Filtro da busca por número para as listas: true = é este; false = a busca era só pelo número e não é este;
+// null = decidir pelo texto, como antes.
+function filtroPeloNumero(texto, id){
+  const n = numeroDaBusca(texto);
+  if(n===null) return null;
+  if(Number(id)===n) return true;
+  return buscaPediuSoONumero(texto) ? false : null;
+}
+// De onde veio o lançamento que o próprio sistema criou: a baixa de uma conta a pagar/receber (o banco cria, um por
+// parte do rateio) e o juros de uma parcela de financiamento. Montado uma vez por desenho da lista.
+function origemDosLancamentos(){
+  const tituloDaBaixa = new Map((state.baixas||[]).map(b=>[b.id, b.tituloId]));
+  const contratoDoJuros = new Map();
+  (state.parcelasFinanciamento||[]).forEach(p=>(p.lancamentosFinanceiroIds||[])
+    .forEach(id=>contratoDoJuros.set(Number(id), p.financiamentoId)));
+  return {tituloDaBaixa, contratoDoJuros};
+}
+function textoOrigemLancamento(l, origem){
+  const partes = [];
+  if(l.tituloBaixaId!=null){
+    const t = origem.tituloDaBaixa.get(l.tituloBaixaId);
+    partes.push(t!=null ? `veio da baixa da conta Nº ${t}` : 'veio da baixa de uma conta a pagar/receber');
+  }
+  const c = origem.contratoDoJuros.get(Number(l.id));
+  if(c!=null) partes.push(`juros do contrato Nº ${c}`);
+  return partes.length ? `<div class="hint" style="margin-top:2px;" data-origem-lancamento="1">${esc(partes.join(' · '))}</div>` : '';
+}
+
 function lancamentosDoTipo(tipo){
   return state.lancamentos
     .filter(l=>l.tipo===tipo)
@@ -6020,6 +6074,8 @@ function lancamentosDoTipo(tipo){
     .filter(l=>{
       const b = state.searchDespesas.toLowerCase();
       if(!b) return true;
+      const pelo = filtroPeloNumero(b, l.id);
+      if(pelo!==null) return pelo;
       return l.descricao.toLowerCase().includes(b)
           || nomeCentroCusto(l.centroCustoId).toLowerCase().includes(b)
           || (l.fornecedor||'').toLowerCase().includes(b);
@@ -6404,6 +6460,8 @@ function titulosFiltrados(){
     })
     .filter(t=>{
       if(!busca) return true;
+      const pelo = filtroPeloNumero(busca, t.id);
+      if(pelo!==null) return pelo;
       const rat = rateiosDoTitulo(t.id);
       const alvo = [
         t.descricao, t.documento, nomeEntidade(t.entidadeId),
@@ -6482,7 +6540,7 @@ function PageContas(){
         <button class="${state.filtroContas===k?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-filtro-contas="${k}">${l}</button>
       `).join('')}
     </div>
-    <input type="text" placeholder="Buscar por fornecedor, descrição, centro de custo..." value="${esc(state.searchContas)}" data-search-contas="1" style="max-width:340px;" autocomplete="off"/>
+    <input type="text" placeholder="Buscar por nº, fornecedor, descrição, centro de custo..." value="${esc(state.searchContas)}" data-search-contas="1" style="max-width:340px;" autocomplete="off"/>
   </div>
 
   ${podeSelecionar && selecionados.length>0 ? `
@@ -6510,7 +6568,7 @@ function PageContas(){
           return `
           <tr>
             ${podeSelecionar ? `<td data-rotulo="Selecionar">${tituloBaixavel(t) ? `<input type="checkbox" data-selecionar-titulo="${t.id}" ${state.contasSelecionadas.includes(t.id)?'checked':''}/>` : ''}</td>` : ''}
-            <td class="mono" data-rotulo="Vencimento"><span>${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}</span></td>
+            <td class="mono" data-rotulo="Vencimento"><span>${dataBr(t.vencimento)}${t.parcelas>1?`<div class="hint">parcela ${t.parcela}/${t.parcelas}</div>`:''}<div>${NumeroId(t.id)}</div></span></td>
             <td data-rotulo="${tipo==='pagar'?'Fornecedor':'Cliente'}">${esc(nomeEntidade(t.entidadeId))}</td>
             <td data-rotulo="Descrição"><span><strong>${esc(t.descricao)}</strong>
               ${t.documento?`<div class="hint">doc ${esc(t.documento)}</div>`:''}
@@ -6665,7 +6723,7 @@ function ModalTitulo(){
   <div class="overlay" data-close-overlay="1">
     <div class="modal modal-lg" data-stop="1">
       <div class="modal-head">
-        <h3>${editando?'Editar':'Nova'} ${ehPagar?'conta a pagar':'conta a receber'}</h3>
+        <h3>${editando?'Editar':'Nova'} ${ehPagar?'conta a pagar':'conta a receber'}${editando ? NumeroId(d._editId) : ''}</h3>
         <button class="modal-close" data-close="1">&times;</button>
       </div>
       <div class="modal-body">
@@ -6843,7 +6901,7 @@ function ModalBaixa(){
       </div>
       <div class="modal-body">
         <div class="card" style="background:var(--cinza-bg); padding:12px; margin-bottom:12px;">
-          <strong>${esc(t.descricao)}</strong>
+          <strong>${esc(t.descricao)}</strong> ${NumeroId(t.id)}
           <div class="hint">${esc(nomeEntidade(t.entidadeId))} · vence ${dataBr(t.vencimento)}${t.parcelas>1?` · parcela ${t.parcela}/${t.parcelas}`:''}</div>
           <div class="hint">Valor do título R$ ${fmt(t.valor)}${t.valorBaixado>0?` · já baixado R$ ${fmt(t.valorBaixado)}`:''}</div>
           <div style="font-size:18px; font-weight:700; margin-top:6px;">Saldo: R$ ${fmt(saldo)}</div>
@@ -6903,7 +6961,7 @@ function ModalBaixaLote(){
       </div>
       <div class="modal-body">
         <div class="card" style="background:var(--cinza-bg); padding:12px; margin-bottom:12px; max-height:220px; overflow-y:auto;">
-          ${titulos.map(t=>`<div class="hint">${dataBr(t.vencimento)} · ${esc(nomeEntidade(t.entidadeId))} · ${esc(t.descricao)} · <strong>R$ ${fmt(saldoDoTitulo(t))}</strong></div>`).join('')}
+          ${titulos.map(t=>`<div class="hint">Nº ${t.id} · ${dataBr(t.vencimento)} · ${esc(nomeEntidade(t.entidadeId))} · ${esc(t.descricao)} · <strong>R$ ${fmt(saldoDoTitulo(t))}</strong></div>`).join('')}
           <div style="font-size:18px; font-weight:700; margin-top:8px;">Total: R$ ${fmt(total)}</div>
         </div>
         <div class="field"><label>Data do pagamento</label>
@@ -6936,7 +6994,7 @@ function ModalVerBaixas(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>Baixas — ${esc(t.descricao)}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>Baixas — ${esc(t.descricao)}${NumeroId(t.id)}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <p class="hint">Título de R$ ${fmt(t.valor)} · já baixado R$ ${fmt(t.valorBaixado)} · saldo R$ ${fmt(saldoDoTitulo(t))}</p>
         <table>
@@ -7820,6 +7878,7 @@ function PageFinanceiro(){
   const ehDespesa = state.abaFinanceiro==='despesa';
   const visiveis = lista.slice(0, state.limiteListaFinanceiro);
   const faltam = lista.length - visiveis.length;
+  const origem = origemDosLancamentos();
 
   return `
   <div class="toolbar" style="gap:8px;">
@@ -7844,8 +7903,8 @@ function PageFinanceiro(){
       <option value="">Todas as atividades</option>
       ${ATIVIDADES_LANC.map(([k,l])=>`<option value="${k}" ${state.filtroAtividade===k?'selected':''}>${l}</option>`).join('')}
     </select>
+    <input type="text" placeholder="Buscar por nº, descrição, centro de custo ou fornecedor..." value="${esc(state.searchDespesas)}" data-search-despesas="1" style="max-width:340px;" autocomplete="off"/>
     ${ehDespesa ? `
-    <input type="text" placeholder="Buscar por descrição, centro de custo ou fornecedor..." value="${esc(state.searchDespesas)}" data-search-despesas="1" style="max-width:340px;" autocomplete="off"/>
     <select data-filtro-mes-despesas="1" style="max-width:200px;">
       <option value="">Todos os meses</option>
       <option value="__recorrente__" ${state.filtroMesDespesas==='__recorrente__'?'selected':''}>Só recorrentes</option>
@@ -7863,13 +7922,14 @@ function PageFinanceiro(){
       <tbody>
         ${visiveis.map(l=>`
           <tr>
-            <td class="mono">${l.data ? l.data.split('-').reverse().join('/') : `<span class="pill pill-ok">Recorrente</span>`}</td>
+            <td class="mono">${l.data ? l.data.split('-').reverse().join('/') : `<span class="pill pill-ok">Recorrente</span>`}<div>${NumeroId(l.id)}</div></td>
             <td>${rotuloAtividade(l.atividade)}</td>
             <td>${l.fazendaId ? esc(nomeFazendaLanc(l.fazendaId)) : `<span class="hint">Geral</span>`}</td>
             <td>${esc(nomeCentroCusto(l.centroCustoId))}</td>
             <td><strong>${esc(l.descricao)}</strong>
               ${l.culturaId?`<div class="hint" style="margin-top:2px;"><span class="pill pill-cat">${esc(nomeCultura(l.culturaId))}</span></div>`:''}
-              ${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}</td>
+              ${l.fornecedor?`<div class="hint" style="margin-top:2px;">${esc(l.fornecedor)}</div>`:''}
+              ${textoOrigemLancamento(l, origem)}</td>
             ${ehDespesa?`<td>${l.atividade==='pecuaria' ? areasLabel(l.areas) : '—'}</td>`:''}
             <td class="mono">R$ ${fmt(l.valor)}</td>
             <td style="display:flex; gap:6px;">
@@ -8041,7 +8101,7 @@ function ModalLancamento(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar':'Nova'} ${TIPO_LABEL[d.tipo]}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar':'Nova'} ${TIPO_LABEL[d.tipo]}${d._editId ? NumeroId(d._editId) : ''}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field"><label>Atividade</label>
           <select id="f-atividadelanc" ${geralTravado?'disabled':''}>
