@@ -1500,6 +1500,7 @@ compra de animais e as travas do banco.
   tinha barra lateral própria (azul, `Sidebar()`): ficou com 244 px, menu grande (16 px, 54 px), usuário e botões embaixo
   (`order`), barra `sticky` na altura da tela. Nos apps de grade o `.tabsrow` rola por dentro quando há muitos grupos (Pecuária tem
   12), com o rodapé do usuário fixo. Sem a lista pequena de apps da barra: nesses apps o atalho é o "← Painel" (o hub é o Matriz).
+- **AE Combustivel no celular igual aos outros (09/11/2026, pedido dele)**: ate 760 px a barra azul virava uma faixa so de ~1.860 px (marca, botoes e os 10 itens do menu): o menu comecava fora da tela e o Sair saia cortado. Agora marca em cima, "← Painel"/"Trocar senha"/"Sair" inteiros embaixo dela e o menu numa faixa branca propria que se arrasta para o lado (item ativo em azul), como Pecuaria/Cana/Cereais. Ja era assim antes do menu lateral de 08/11. `teste_celular_topo_apps.py`.
 - **Setinha com as sub-abas no menu, nos 5 apps (08/11/2026; `teste_menu_setinha.py` 173 checagens)**. Pedido do Eduardo: "uma setinha para ter a
   opção de clicar nas sub abas direto". `ItemDoMenu({chave, rotulo, icone, ativo, botao, subs})` em `core.js` desenha o item do menu: com **2 ou
   mais sub-abas** vira `.nav-grupo` > `.nav-linha` (o botão do item, que continua com o mesmo `data-nav-group`/`data-nav` de sempre, e a setinha
@@ -1889,7 +1890,7 @@ não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2
 
 ## Testes
 
-71 arquivos `teste_*.py`, 2.603 checagens (09/11/2026; a tabela abaixo lista os
+72 arquivos `teste_*.py`, 2.687 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -1943,6 +1944,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_segundo_fator.py` | 182 | os 5 apps (verificação em duas etapas: pede o código só de quem tem celular cadastrado, o app não carrega antes do código, cancelar, login com senha, sessão aal2 abre sem pedir de novo, renovação do token de sessão que ganhou celular, ativar/cadastrar outro/desistir/remover, botão só para acesso total, QR no formato real do GoTrue redesenhado dentro da página com os três cantos de posição lidos de volta, plano B da imagem, chave e botão de abrir no app) |
 | `teste_menu_lateral_apps.py` | 79 | Pecuária, Cana, Cereais e Combustível (menu lateral de 1160 px, 196 px no iPad deitado, rodapé do usuário inteiro na tela, "← Painel" para o Matriz, marca clara, barra de cima em 1100 px, celular como era) |
 | `teste_menu_lateral.py` | 85 | AEMatriz.html (menu lateral de 1160 px: coluna à esquerda, menu grande, sem lista de apps na barra, Painel com os 4 apps em janelinhas 2x2 no iPad 1180/1194, 1280 e desktop, links certos, permissão por app, barra de cima em 1100 e 820, celular) |
+| `teste_celular_topo_apps.py` | 84 | Pecuaria, Cana, Cereais e Combustivel no celular (320/360/390 px): ← Painel, Trocar senha e Sair inteiros, faixa de cima sem rolar de lado, primeiro item do menu inteiro abaixo dos botoes, menu numa faixa propria que se arrasta, tocar troca de tela; falha no Combustivel antigo) |
 | `teste_painel_celular.py` | 52 | AEMatriz.html (Painel no celular, ate 760 px: os 4 apps viram icones grandes (76 px), um embaixo do outro, com nome curto e link, sem janelinhas, numeros nem aviso da copia de seguranca; app em breve apagado; so os apps permitidos; de 761 px para cima nada muda) |
 | `teste_painel_combustivel.py` | 18 | AEMatriz.html (indicadores do AE Combustivel no Painel: estoque dos tanques ativos, consumo e custo do mes com custo medio das notas ate o dia, alertas abertos; traco sem a permissao do modulo; custo fora de Resultados; sem rolar de lado em 1180 e 390 px) |
 | `teste_botoes_rodape_menu.py` | 160 | os 5 apps (rodape do menu lateral: ← Painel, Trocar senha e Sair cabem na coluna e o texto cabe no botao com 16 px de folga, em 1180/1194/1280/1440, toque e mouse; nos apps de grade um botao por linha, porque lado a lado "Trocar senha" saia da borda no Safari do iPad, 08/11/2026) |
