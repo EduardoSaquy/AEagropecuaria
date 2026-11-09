@@ -976,6 +976,31 @@ fica no próprio elemento). O resto do código lê e grava sem mudar. Campo de
 dinheiro novo: `type="text" inputmode="decimal" data-moeda`. Taxa (%), área,
 quantidade e parcelas continuam `type="number"`. `teste_campo_moeda.py`.
 
+### Datas no formato do Brasil em qualquer navegador (09/11/2026)
+
+Pedido do Eduardo: "as datas têm aparecido tipo data americana. Coloca na data normal". Duas causas:
+- **Campo de data do navegador** (`type="date"`, `"month"`, `"datetime-local"`): se desenha no idioma do NAVEGADOR, não no
+  do app (num Chrome em inglês, 10 de julho aparece 07/10/2026; no iPad em português, "10 de jul. de 2026"). Não há atributo
+  que mude isso. Agora `core.js` (os 5 apps; `Adubacao.html` não tem campo de data) converte cada um, assim que aparece na tela
+  (um `MutationObserver`), num campo de texto `dd/mm/aaaa` (`mm/aaaa` no mês, `dd/mm/aaaa hh:mm` com hora), mesmo padrão dos
+  campos de dinheiro: **`el.value` continua devolvendo e recebendo o formato do banco** (`2026-07-10`, `2026-07`,
+  `2026-07-10T08:30`), então o código dos apps não mudou e os templates continuam escrevendo `type="date"`. Data incompleta ou
+  impossível devolve `''` (como o navegador) e fica com a borda vermelha ao sair; ao sair, ano de 2 números vira 20xx e dia/mês
+  de 1 número ganha o 0. Digitando só números as barras entram sozinhas; colar o formato do banco também funciona.
+  - **Calendário**: o ícone à direita é um `<input type=date>` de verdade, invisível (`.campo-data-seletor`, 44 px, `aria-hidden`,
+    fora do Tab), por cima do ícone, dentro de `.campo-data-caixa`. No iPad o calendário só abre tocando num campo de data de
+    verdade (`showPicker()` não funciona no iOS); no computador o clique chama `showPicker()`; Alt+↓ ou F4 no campo também abre.
+    Navegador sem o calendário daquele tipo (Firefox no computador não tem o de mês) fica só digitando, sem ícone.
+  - **`change`** sai quando a data fica completa (como o campo do navegador fazia) e o do navegador ao sair do campo é segurado
+    se a data não mudou desde então (captura no documento). Assim um `onchange` que redesenha não roda duas vezes.
+  - Seletores que contam campos (`ligarRotulosAosCampos` e o observador de rótulos dos outros apps) excluem
+    `.campo-data-seletor`. **Teste que DIGITA numa data tem de digitar no formato do Brasil** (`teste_contas.py`, `preencher`);
+    `page.fill(sel, "2026-07-10")` continua funcionando (é colar).
+- **Data crua do banco na tela**: Financiamentos (data do contrato, vencimento, próxima parcela, "em" do pagamento,
+  "Contratado em") passou por `dataBr`; a competência em Pagar/Receber ("Onde pesa") por `mesLabel` ("Ago/2026").
+- `teste_datas_brasil.py` (58, navegador em inglês, os 5 apps; falha no código anterior). Removida também a segunda
+  `safraDaData` do Matriz (a do pagamento de parcela repetia a da aba Empresa).
+
 ### Número de cada lançamento e rodinha do mouse (09/11/2026)
 
 Pedidos do Eduardo depois de conversar com as secretárias que lançam no app.
@@ -2005,7 +2030,7 @@ do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como re
 
 ## Testes
 
-77 arquivos `teste_*.py`, 2.948 checagens (09/11/2026; a tabela abaixo lista os
+78 arquivos `teste_*.py`, 3.006 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2084,6 +2109,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_rodinha_numero.py` | 53 | os 5 apps e Adubacao.html (rodinha do mouse em cima de campo numérico selecionado não muda o valor e rola a página; teclado e digitação iguais; rodinha em outro lugar não tira o foco; nº de parcelas da conta a pagar e do financiamento) |
 | `teste_contas_atividade_fazenda.py` | 28 | AEMatriz.html (Pagar/Receber: coluna Atividade / Fazenda em A Pagar e A Receber, uma linha por par atividade/fazenda, "Geral" sem fazenda, nome curto, Onde pesa só com centro e competência numa parte e com cada parte na conta dividida, "—" sem rateio, busca pela atividade, total embaixo de Valor, sem rolar de lado de 1920 a 320 px, nenhuma palavra cortada no meio de 1100 a 1920 px) |
 | `teste_pagamento_parcela_data_safra.py` | 23 | AEMatriz.html (pagamento de parcela: vencida abre/paga com a data do vencimento, a vencer com hoje; safra do juros sugerida para custeio (soja 25/26 → 2025, pré-custeio 26/27 → 2026), em branco para investimento e capital de giro, escolhida na tela vale nos 3 do capital de giro; aviso a mais de 30 dias do vencimento e confirmação quando é depois, cancelar não grava; "Marcar como paga" com data e "estimado" na pergunta; sem rolar de lado no celular) |
+| `teste_datas_brasil.py` | 58 | os 5 apps num navegador em inglês (campos de data viram texto dd/mm/aaaa, mm/aaaa e dd/mm/aaaa hh:mm com `value` no formato do banco; digitar só números, 9/9/26 ao sair, data impossível vazia e vermelha, Backspace na barra, colar; change uma vez; calendário invisível de 44 px sobre o ícone, sincronizado, no toque recebe o foco, desabilitado junto; Financiamentos e Pagar/Receber sem data crua; rótulo ligado; sem rolar de lado no celular) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
