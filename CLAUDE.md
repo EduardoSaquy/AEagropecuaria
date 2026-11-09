@@ -1010,6 +1010,20 @@ Pedidos do Eduardo depois de conversar com as secretárias que lançam no app.
   "Registrar pagamento"); a das matrizes segue o "% do saldo devedor" da cédula, com juros capitalizados na carência. E a
   baixa da conta a pagar #113 no vencimento (diagnóstico e baixa com trava, como a `contas_09`).
 
+### Pagar/Receber: coluna "Atividade / Fazenda" (09/11/2026)
+
+Pedido do Eduardo ("uma coluna mostrando a atividade relacionada à conta e a fazenda"). Em A Pagar e A Receber, entre
+Descrição e Onde pesa, `atividadesFazendasDoTitulo(rat)` lista cada par atividade/fazenda das partes do rateio **uma vez só**
+(duas partes da mesma atividade e fazenda em centros diferentes viram uma linha); parte sem fazenda = "Geral" (`nomeFazendaLanc`,
+como no Financeiro). Nome curto só nessa coluna (`ROTULO_CURTO_ATIVIDADE`: "Cana", "Geral (adm.)"); o resto da tela segue com
+`rotuloAtividade`. Conta sem rateio: "—" (o aviso "sem rateio" continua em Onde pesa). **Onde pesa** de conta com uma parte só
+ficou só com centro e competência (atividade e fazenda estão na coluna nova; o valor é o da conta); conta dividida segue com cada
+parte, a atividade, a fazenda e o valor dela. A busca acha pela atividade. Larguras (`table-layout:fixed`): Vencimento 100 px
+(com 96 o título cortava "VENCIMENT O"), Onde pesa 17%, Situação 92, ações 90; Fornecedor, Descrição e Atividade/Fazenda
+dividem o resto. Título de coluna com `hyphens:auto` e letter-spacing .3px. No iPad deitado (1160 a 1279 px) "FORNECEDOR" quebra
+com hífen, como já quebrava (sem hífen) antes. `teste_contas_atividade_fazenda.py` (28, falha no código anterior; inclui "nenhuma
+palavra cortada no meio" em 1920, 1340, 1280 e 1100 px).
+
 ### Pecuária: dado que não carregou não pode parecer "nenhum lote"
 
 Em 22/10/2026 o Joilson (Cria) não conseguia lançar saída de ração: a tela
@@ -1958,7 +1972,7 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
 
 ## Testes
 
-75 arquivos `teste_*.py`, 2.897 checagens (09/11/2026; a tabela abaixo lista os
+76 arquivos `teste_*.py`, 2.925 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2035,6 +2049,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_custo_animais_lote.py` | 27 | AEMatriz.html (compra de animais com lote e nº de cabeças: campos que aparecem e somem com o centro, lote e cabeças juntos, inteiro, unidade cab; bloco Custo dos animais por lote: R$ por cabeça, custo dos vendidos, margem sobre o animal, estoque a custo, animais próprios, matriz à parte, compras sem lote com Editar, sem seguir o período) |
 | `teste_numero_lancamentos.py` | 45 | AEMatriz.html (número (id) de cada lançamento, conta e contrato: Financeiro nas três abas, Pagar/Receber, Financiamentos e as janelas de editar/baixar/pagar; origem "veio da baixa da conta Nº" e "juros do contrato Nº"; busca "#113" só o número e "113" número e texto; busca visível nas três abas do Financeiro; sem rolar de lado em 1280 e 390 px) |
 | `teste_rodinha_numero.py` | 53 | os 5 apps e Adubacao.html (rodinha do mouse em cima de campo numérico selecionado não muda o valor e rola a página; teclado e digitação iguais; rodinha em outro lugar não tira o foco; nº de parcelas da conta a pagar e do financiamento) |
+| `teste_contas_atividade_fazenda.py` | 28 | AEMatriz.html (Pagar/Receber: coluna Atividade / Fazenda em A Pagar e A Receber, uma linha por par atividade/fazenda, "Geral" sem fazenda, nome curto, Onde pesa só com centro e competência numa parte e com cada parte na conta dividida, "—" sem rateio, busca pela atividade, total embaixo de Valor, sem rolar de lado de 1920 a 320 px, nenhuma palavra cortada no meio de 1100 a 1920 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
