@@ -62,6 +62,245 @@ document.addEventListener('wheel', e=>{
 }, {capture: true, passive: true});
 
 
+/* ---------- Datas no formato do Brasil, em qualquer navegador (09/11/2026) ----------
+ * Pedido do Eduardo: "as datas têm aparecido tipo data americana". O campo de data do navegador (<input type="date">,
+ * "month" e "datetime-local") se desenha no idioma do NAVEGADOR, não no do app: num Chrome em inglês 9 de novembro
+ * aparece 11/09/2026, e não há como mudar isso por fora. Por isso todo campo de data dos apps vira, assim que aparece
+ * na tela, um campo de texto que mostra e aceita dd/mm/aaaa (mm/aaaa no mês; dd/mm/aaaa hh:mm com hora):
+ * - el.value continua devolvendo e recebendo o formato do banco (2026-11-09; 2026-11; 2026-11-09T08:30), como o campo
+ *   do navegador fazia: o resto do código lê e grava sem mudar nada. Data incompleta ou impossível devolve '' (igual ao
+ *   navegador). Ao sair do campo, ano com 2 números vira 20xx (09/11/26 -> 09/11/2026) e dia/mês de 1 número ganha o 0.
+ * - digitando só números as barras entram sozinhas (09112026 -> 09/11/2026); teclado numérico no celular.
+ * - o calendário continua: o ícone à direita é um campo de data de verdade, invisível, por cima do ícone (no iPad o
+ *   calendário só abre tocando num campo de data de verdade; showPicker() não funciona lá).
+ * - "change" sai quando a data fica completa (como no campo do navegador) e não se repete ao sair do campo.
+ * Feito uma vez aqui para os cinco apps: um observador converte cada campo novo depois de cada redesenho. */
+const VALOR_NATIVO_CAMPO = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+const FORMATOS_DATA = {
+  'date':           {grupos:[2,2,4],     seps:['/','/'],         modelo:'dd/mm/aaaa',       ano:2},
+  'month':          {grupos:[2,4],       seps:['/'],             modelo:'mm/aaaa',          ano:1},
+  'datetime-local': {grupos:[2,2,4,2,2], seps:['/','/',' ',':'], modelo:'dd/mm/aaaa hh:mm', ano:2},
+};
+const SELETOR_CAMPO_DATA = Object.keys(FORMATOS_DATA).map(t=>`input[type="${t}"]:not(.campo-data-seletor)`).join(', ');
+// Formato do banco -> partes na ordem da tela ([dia, mês, ano(, hora, minuto)]); null se não for desse formato.
+function partesDoIsoData(tipo, v){
+  const m = /^\s*(\d{4})-(\d{2})(?:-(\d{2}))?(?:[T ](\d{2}):(\d{2}))?/.exec(String(v ?? ''));
+  if(!m) return null;
+  const [, a, me, d, h, mi] = m;
+  if(tipo === 'month') return [me, a];
+  if(!d) return null;
+  return tipo === 'date' ? [d, me, a] : [d, me, a, h || '00', mi || '00'];
+}
+// Texto digitado -> partes. Separador digitado fecha a parte (mesmo curta: "09/1/2026" é o mês sendo corrigido);
+// número corrido enche cada parte e passa para a próxima. aoSair: completa o 0 do dia/mês/hora e o 20 do ano.
+function analisarTextoData(tipo, texto, aoSair){
+  const f = FORMATOS_DATA[tipo], s = String(texto ?? '');
+  const doBanco = partesDoIsoData(tipo, s);
+  if(doBanco) return {partes: doBanco, sepNoFim: false};
+  const partes = [];
+  for(let t of s.split(/\D+/)){
+    if(!t) continue;
+    while(t && partes.length < f.grupos.length){
+      const tam = f.grupos[partes.length];
+      partes.push(t.slice(0, tam)); t = t.slice(tam);
+    }
+    if(partes.length >= f.grupos.length) break;
+  }
+  const sepNoFim = partes.length > 0 && partes.length < f.grupos.length && /\D\s*$/.test(s);
+  const ult = partes.length - 1;
+  if(sepNoFim && f.grupos[ult] === 2) partes[ult] = partes[ult].padStart(2, '0');   // "9/" -> "09/"
+  if(aoSair){
+    partes.forEach((p, i)=>{
+      if(f.grupos[i] === 2 && p.length === 1) partes[i] = '0' + p;
+      if(i === f.ano && p.length === 2) partes[i] = '20' + p;
+    });
+  }
+  return {partes, sepNoFim};
+}
+function textoDasPartesData(tipo, a){
+  const f = FORMATOS_DATA[tipo];
+  let out = a.partes.map((p, i)=>(i ? f.seps[i-1] : '') + p).join('');
+  if(a.sepNoFim) out += f.seps[a.partes.length-1];
+  return out;
+}
+function mascararData(tipo, texto){ return textoDasPartesData(tipo, analisarTextoData(tipo, texto, false)); }
+// Texto -> formato do banco. '' se faltar algo, se o ano não tiver 4 números ou se a data não existir.
+function isoDoTextoData(tipo, texto){
+  const f = FORMATOS_DATA[tipo];
+  const p = analisarTextoData(tipo, texto, false).partes;
+  if(p.length !== f.grupos.length || p.some((x, i)=>x.length !== f.grupos[i])) return '';
+  const ano = Number(p[f.ano]);
+  if(ano < 1900 || ano > 2100) return '';
+  if(tipo === 'month'){ const m = Number(p[0]); return m >= 1 && m <= 12 ? `${p[1]}-${p[0]}` : ''; }
+  const d = Number(p[0]), m = Number(p[1]);
+  if(m < 1 || m > 12 || d < 1 || d > new Date(Date.UTC(ano, m, 0)).getUTCDate()) return '';
+  const dia = `${p[2]}-${p[1]}-${p[0]}`;
+  if(tipo === 'date') return dia;
+  return Number(p[3]) <= 23 && Number(p[4]) <= 59 ? `${dia}T${p[3]}:${p[4]}` : '';
+}
+function textoDoValorData(tipo, v){
+  if(v === null || v === undefined || v === '') return '';
+  const p = partesDoIsoData(tipo, v);
+  return p ? textoDasPartesData(tipo, {partes: p, sepNoFim: false}) : mascararData(tipo, v);
+}
+const TIPO_DATA_TEM_CALENDARIO = {};
+function navegadorTemCalendario(tipo){
+  if(!(tipo in TIPO_DATA_TEM_CALENDARIO)){
+    const i = document.createElement('input'); i.setAttribute('type', tipo);
+    TIPO_DATA_TEM_CALENDARIO[tipo] = i.type === tipo;   // Firefox no computador não tem o de mês: fica só digitando
+  }
+  return TIPO_DATA_TEM_CALENDARIO[tipo];
+}
+function sincronizarCalendarioDoCampo(el){
+  const sel = el.__calendario;
+  if(sel) VALOR_NATIVO_CAMPO.set.call(sel, el.value || '');
+}
+function abrirCalendarioDoCampo(el){
+  const sel = el.__calendario;
+  if(!sel || sel.disabled) return;
+  sincronizarCalendarioDoCampo(el);
+  try{ sel.showPicker ? sel.showPicker() : sel.focus(); }catch(_){ try{ sel.focus(); }catch(__){} }
+}
+// Ao sair: completa o 0 e o ano, e marca de vermelho o que não é uma data.
+function completarCampoData(el){
+  const tipo = el.__tipoData, texto = VALOR_NATIVO_CAMPO.get.call(el);
+  if(texto.trim()){
+    const novo = textoDasPartesData(tipo, analisarTextoData(tipo, texto, true));
+    if(novo !== texto) VALOR_NATIVO_CAMPO.set.call(el, novo);
+  }
+  el.classList.toggle('campo-data-invalido', !!VALOR_NATIVO_CAMPO.get.call(el).trim() && !el.value);
+  sincronizarCalendarioDoCampo(el);
+}
+const ICONE_CAMPO_DATA = '<svg class="campo-data-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/></svg>';
+function converterCampoData(el){
+  const tipo = el.getAttribute('type');
+  if(!FORMATOS_DATA[tipo] || el.__tipoData || !el.parentNode) return;
+  const f = FORMATOS_DATA[tipo];
+  const doBanco = VALOR_NATIVO_CAMPO.get.call(el);    // o navegador já validou: '' ou o formato do banco
+  const tinhaFoco = document.activeElement === el;
+  el.__tipoData = tipo;
+  el.type = 'text';
+  el.setAttribute('data-tipo-data', tipo);
+  el.setAttribute('inputmode', 'numeric');
+  el.setAttribute('autocomplete', 'off');
+  if(!el.getAttribute('placeholder')) el.setAttribute('placeholder', f.modelo);
+  el.classList.add('campo-data');
+  Object.defineProperty(el, 'value', {
+    configurable: true,
+    get(){ return isoDoTextoData(tipo, VALOR_NATIVO_CAMPO.get.call(el)); },
+    set(v){
+      VALOR_NATIVO_CAMPO.set.call(el, textoDoValorData(tipo, v));
+      el.__ultimaData = el.value;
+      el.classList.remove('campo-data-invalido');
+      sincronizarCalendarioDoCampo(el);
+    },
+  });
+  VALOR_NATIVO_CAMPO.set.call(el, textoDoValorData(tipo, doBanco));
+  el.__ultimaData = el.value;
+  // caixa com o ícone e o calendário de verdade por cima dele
+  const caixa = document.createElement('span');
+  caixa.className = 'campo-data-caixa';
+  if(el.hidden) caixa.hidden = true;
+  el.parentNode.insertBefore(caixa, el);
+  caixa.appendChild(el);
+  caixa.insertAdjacentHTML('beforeend', ICONE_CAMPO_DATA);
+  if(navegadorTemCalendario(tipo)){
+    const sel = document.createElement('input');
+    sel.type = tipo;
+    sel.className = 'campo-data-seletor';
+    sel.tabIndex = -1;
+    sel.setAttribute('aria-hidden', 'true');
+    sel.title = 'Abrir o calendário';
+    ['min', 'max', 'step'].forEach(a=>{ if(el.hasAttribute(a)) sel.setAttribute(a, el.getAttribute(a)); });
+    sel.disabled = el.disabled || el.readOnly;
+    caixa.appendChild(sel);
+    el.__calendario = sel;
+    sincronizarCalendarioDoCampo(el);
+    sel.addEventListener('pointerdown', ()=>sincronizarCalendarioDoCampo(el));
+    sel.addEventListener('click', ()=>{ try{ if(sel.showPicker) sel.showPicker(); }catch(_){ /* já aberto ou sem suporte: o toque abre */ } });
+    const escolheu = (e)=>{
+      e.stopPropagation();   // o app só vê o campo de texto
+      const v = VALOR_NATIVO_CAMPO.get.call(sel);
+      if(!v || v === el.value || !el.isConnected) return;
+      el.value = v;
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+      el.dispatchEvent(new Event('change', {bubbles: true}));
+    };
+    sel.addEventListener('input', escolheu);
+    sel.addEventListener('change', escolheu);
+  } else {
+    caixa.classList.add('sem-calendario');
+  }
+  if(tinhaFoco) el.focus();
+  el.addEventListener('input', ()=>{
+    const texto = VALOR_NATIVO_CAMPO.get.call(el);
+    const cursor = el.selectionStart ?? texto.length;
+    const novo = mascararData(tipo, texto);
+    if(novo !== texto){
+      let pos = novo.length;
+      if(cursor < texto.length){
+        const digitos = (texto.slice(0, cursor).match(/\d/g) || []).length;
+        pos = 0; let vistos = 0;
+        while(pos < novo.length && vistos < digitos){ if(/\d/.test(novo[pos])) vistos++; pos++; }
+      }
+      VALOR_NATIVO_CAMPO.set.call(el, novo);
+      try{ el.setSelectionRange(pos, pos); }catch(_){}
+    }
+    el.classList.remove('campo-data-invalido');
+    sincronizarCalendarioDoCampo(el);
+    const v = el.value;
+    if(v && v !== el.__ultimaData){ el.__ultimaData = v; el.dispatchEvent(new Event('change', {bubbles: true})); }
+  });
+  el.addEventListener('keydown', (e)=>{
+    if((e.key === 'ArrowDown' && e.altKey) || e.key === 'F4'){ e.preventDefault(); abrirCalendarioDoCampo(el); return; }
+    const ini = el.selectionStart, fim = el.selectionEnd, t = VALOR_NATIVO_CAMPO.get.call(el);
+    if(ini === null || ini !== fim) return;
+    // apagar em cima da barra apaga o número do lado (a barra voltaria sozinha)
+    if(e.key === 'Backspace' && ini > 0 && ini < t.length && /\D/.test(t[ini-1])) el.setSelectionRange(ini-1, ini-1);
+    if(e.key === 'Delete' && ini < t.length && /\D/.test(t[ini])) el.setSelectionRange(ini+1, ini+1);
+  });
+  el.addEventListener('blur', ()=>completarCampoData(el));
+}
+// "change" que o navegador manda ao sair do campo: completa a data antes do app ler e não repete o que já saiu
+// quando a data ficou completa (o app redesenharia a tela de novo à toa). Captura no documento: roda antes do app.
+document.addEventListener('change', (e)=>{
+  const el = e.target;
+  if(!e.isTrusted || !el || !el.__tipoData) return;
+  completarCampoData(el);
+  const v = el.value;
+  if(v === el.__ultimaData) e.stopImmediatePropagation();
+  else el.__ultimaData = v;
+}, true);
+function prepararCamposData(raiz){
+  const r = raiz || document;
+  if(r.matches && r.matches(SELETOR_CAMPO_DATA)) converterCampoData(r);
+  if(r.querySelectorAll) r.querySelectorAll(SELETOR_CAMPO_DATA).forEach(converterCampoData);
+}
+(function(){
+  const css = document.createElement('style');
+  css.id = 'estilo-campo-data';
+  css.textContent = `
+  .campo-data-caixa{position:relative; display:block; min-width:0; max-width:100%;}
+  .campo-data-caixa > input.campo-data{padding-right:40px; font-variant-numeric:tabular-nums;}
+  .campo-data-caixa.sem-calendario > input.campo-data{padding-right:12px;}
+  .campo-data-icone{position:absolute; right:12px; top:50%; width:18px; height:18px; margin-top:-9px; color:var(--cinza, #6E756C); pointer-events:none;}
+  .campo-data-caixa.sem-calendario .campo-data-icone{display:none;}
+  .campo-data-caixa > input:disabled ~ .campo-data-icone{opacity:.45;}
+  .campo-data-caixa > input.campo-data-seletor{position:absolute !important; top:0 !important; right:0 !important; bottom:0 !important; left:auto !important;
+    width:44px !important; min-width:0 !important; max-width:none !important; height:100% !important; min-height:0 !important;
+    margin:0 !important; padding:0 !important; border:0 !important; opacity:0 !important; background:transparent !important;
+    box-shadow:none !important; font-size:16px !important; cursor:pointer; z-index:1;}
+  .campo-data-caixa > input.campo-data-seletor:disabled{cursor:default;}
+  input.campo-data.campo-data-invalido{border-color:var(--alerta, #B03A24);}`;
+  (document.head || document.documentElement).appendChild(css);
+  new MutationObserver(lista=>{
+    for(const m of lista) for(const n of m.addedNodes) if(n.nodeType === 1) prepararCamposData(n);
+  }).observe(document.documentElement, {childList: true, subtree: true});
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ()=>prepararCamposData(document));
+  else prepararCamposData(document);
+})();
+
+
 /* ---------- Sessão e perfil guardado no aparelho ---------- */
 async function sessaoInicial(){
   const daBiblioteca = db.auth.getSession().then(r=>r.data.session).catch(()=>null);

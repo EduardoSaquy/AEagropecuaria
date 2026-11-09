@@ -110,11 +110,13 @@ def preencher(page, seletor, valor):
     enxergaria o que foi digitado, e o teste estaria medindo o Playwright.
     """
     el = page.locator(seletor)
-    tipo = el.get_attribute("type") or "text"
+    tipo = el.get_attribute("data-tipo-data") or el.get_attribute("type") or "text"
     if tipo in ("month", "date"):
-        # campos de data/mes nao aceitam digitacao caractere a caractere;
-        # fill() escreve certo neles. O change sai no Tab logo abaixo.
-        el.fill(valor)
+        # campo de data do app (texto dd/mm/aaaa desde 09/11/2026): digita como
+        # uma pessoa, no formato do Brasil ("2026-12" -> "12/2026").
+        el.click()
+        el.fill("")
+        el.type("/".join(reversed(valor.split("-"))))
     else:
         el.click()
         el.fill("")

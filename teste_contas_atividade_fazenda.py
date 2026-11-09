@@ -27,6 +27,8 @@ STUB = (REPO / "teste_stub_supabase.js").read_text()
 HOJE = datetime.date.today()
 D = lambda n: (HOJE + datetime.timedelta(days=n)).isoformat()
 MES = HOJE.isoformat()[:7]
+# como a tela mostra a competencia: "Nov/2026" (mesLabel), nunca "2026-11"
+MES_TELA = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][HOJE.month - 1] + f"/{HOJE.year}"
 
 
 def tit(i, tipo, ent, desc, valor, venc):
@@ -142,7 +144,7 @@ with sync_playwright() as pw:
     conf(itens(107) == ["Cana Geral"], "uma parte sem fazenda: atividade e 'Geral'", str(itens(107)))
     conf(itens(108) == ["Grãos Faz. Invernada"], "uma parte com fazenda: atividade e fazenda", str(itens(108)))
     onde = celula(108, "Onde pesa")
-    conf(onde == f"MANUTENCAO DA FROTA · {MES}", "uma parte: Onde pesa fica so com o centro e a competencia", onde)
+    conf(onde == f"MANUTENCAO DA FROTA · {MES_TELA}", "uma parte: Onde pesa fica so com o centro e a competencia (mes/ano)", onde)
     conf(itens(109) == ["Grãos Faz. Invernada", "Pecuária Fazenda Santa Alice"], "conta dividida: cada atividade/fazenda", str(itens(109)))
     onde = celula(109, "Onde pesa") or ""
     conf("Grãos · Faz. Invernada" in onde and "R$ 600,00" in onde and "Pecuária · Fazenda Santa Alice" in onde and "R$ 300,00" in onde,

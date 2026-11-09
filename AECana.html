@@ -407,7 +407,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=151f9d9a86"></script>
+<script src="core.js?v=07cd7f7e35"></script>
 <script src="core_lavoura.js?v=852b937013"></script>
 <script>
 /* ===================== SUPABASE =====================
@@ -1147,7 +1147,7 @@ if('serviceWorker' in navigator){
   function ligar(){
     document.querySelectorAll('label:not([for])').forEach(function(l){
       if(l.querySelector('input,select,textarea') || !l.parentElement) return;
-      var campos = l.parentElement.querySelectorAll('input:not([type=hidden]),select,textarea');
+      var campos = l.parentElement.querySelectorAll('input:not([type=hidden]):not(.campo-data-seletor),select,textarea');
       var rotulos = l.parentElement.querySelectorAll(':scope > label');
       if(campos.length === 1 && rotulos.length === 1 && campos[0].id) l.htmlFor = campos[0].id;
     });

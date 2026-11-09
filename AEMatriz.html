@@ -543,7 +543,7 @@
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=151f9d9a86"></script>
+<script src="core.js?v=07cd7f7e35"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -4003,7 +4003,6 @@ function dividaEmpresa(){
  * contrato vem de inicioEstimadoErp e o principal é a soma das parcelas).
  * Dívida quitada antes de 2023 não aparece. Por isso o custo médio é um
  * indicador, não a taxa contratada. */
-function safraDaData(d){ const [y,m] = d.split('-').map(Number); return m>=5 ? y : y-1; }
 function primeiroDiaMesSeguinte(ym){
   const [y,m] = ym.split('-').map(Number);
   return m===12 ? `${y+1}-01-01` : `${y}-${String(m+1).padStart(2,'0')}-01`;
@@ -5081,9 +5080,9 @@ function PageFinanciamentos(){
           <tr${f.status!=='ativo' ? ' style="opacity:.6;"' : ''}>
             <td><div style="text-align:left;"><strong>${esc(f.banco)}</strong> ${NumeroId(f.id)}<div class="hint" style="font-weight:400;">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)}</div></div></td>
             <td class="mono" data-rotulo="Contratado" style="white-space:nowrap;">R$ ${fmt(f.valorPrincipal)}</td>
-            <td class="mono" data-rotulo="Data do contrato" style="white-space:nowrap;">${f.dataContratacao||'—'}</td>
+            <td class="mono" data-rotulo="Data do contrato" style="white-space:nowrap;">${dataBr(f.dataContratacao)}</td>
             <td class="mono" data-rotulo="Saldo devedor"><div><span style="white-space:nowrap;">R$ ${fmt(saldoDevedorFinanciamento(f))}</span>${sb ? `<div class="hint" style="font-family:'Inter',sans-serif;">No banco: R$ ${fmt(sb.valor)}${sb.em ? ' em ' + dataBr(sb.em) : ''}${sb.velho ? ' (desatualizado)' : ''}</div>` : ''}</div></td>
-            <td data-rotulo="Próxima parcela">${prox ? `${prox.dataVencimento} <span class="hint" style="white-space:nowrap;">R$ ${fmt(prox.valorParcela)}</span>` : '—'}</td>
+            <td data-rotulo="Próxima parcela">${prox ? `${dataBr(prox.dataVencimento)} <span class="hint" style="white-space:nowrap;">R$ ${fmt(prox.valorParcela)}</span>` : '—'}</td>
             <td data-rotulo="Status"><span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></td>
             <td class="acoes" style="display:flex; gap:6px;">
               <button class="btn-ghost btn-sm" data-abrir-financiamento="${f.id}">Ver parcelas</button>
@@ -5106,8 +5105,8 @@ function PageFinanciamentos(){
           <td><strong>${esc(nomeBancoDoErp(g.credor))}</strong> <span class="hint">${g.contrato ? 'contrato '+esc(g.contrato) : 'sem número · parcela de R$ '+fmt(g.linhas[0].valor)}</span></td>
           <td class="mono" data-rotulo="Já pago">R$ ${fmt(g.totalPago)} <span class="hint">(${g.pagas.length})</span></td>
           <td class="mono" data-rotulo="A vencer">R$ ${fmt(g.totalAVencer)} <span class="hint">(${g.aVencer.length})</span></td>
-          <td class="mono" data-rotulo="Próxima parcela">${g.aVencer[0].data}</td>
-          <td class="mono" data-rotulo="Último vencimento">${g.aVencer[g.aVencer.length-1].data}</td>
+          <td class="mono" data-rotulo="Próxima parcela">${dataBr(g.aVencer[0].data)}</td>
+          <td class="mono" data-rotulo="Último vencimento">${dataBr(g.aVencer[g.aVencer.length-1].data)}</td>
           <td>${podeEditar ? `<button class="btn-ghost btn-sm" data-lancar-erp="${esc(g.chave)}">Lançar contrato</button>` : ''}</td>
         </tr>`).join('')}
       </tbody>
@@ -5134,7 +5133,7 @@ function PageFinanciamentoDetalhe(){
   </div>
   <div class="card card-pad" style="margin-bottom:14px;">
     <h3 style="margin-bottom:8px;">${esc(f.banco)} ${NumeroId(f.id)} <span class="pill ${f.status==='ativo'?'pill-ok':f.status==='quitado'?'pill-cat':'pill-warn'}">${STATUS_FIN_LABEL[f.status]||f.status}</span></h3>
-    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${f.dataContratacao} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}${f.sistemaAmortizacao!=='parcela_unica' && !importadoDoErp(f) ? ` · parcelas ${PERIODICIDADE_FIN_PLURAL[periodicidadeFin(f)]}` : ''}${f.continuacao ? ' · contrato que já existia (só o saldo)' : ''}</p>
+    <p class="hint">${FINALIDADE_FIN.find(([k])=>k===f.finalidade)?.[1]||f.finalidade} · ${esc(atividadeLabel)} · Contratado em ${dataBr(f.dataContratacao)} · Taxa ${fmt(f.taxaJurosAa,2)}% a.a. · ${SISTEMA_AMORT.find(([k])=>k===f.sistemaAmortizacao)?.[1]||f.sistemaAmortizacao}${f.sistemaAmortizacao!=='parcela_unica' && !importadoDoErp(f) ? ` · parcelas ${PERIODICIDADE_FIN_PLURAL[periodicidadeFin(f)]}` : ''}${f.continuacao ? ' · contrato que já existia (só o saldo)' : ''}</p>
     ${f.garantia ? `<p class="hint">Garantia: ${esc(f.garantia)}</p>` : ''}
     ${f.financiamentoOrigemId ? `<p class="hint">Nasceu de renegociação do financiamento Nº ${f.financiamentoOrigemId}.</p>` : ''}
     ${(Number(f.valorIof)>0 || Number(f.valorSeguro)>0) ? `<p class="hint">IOF: R$ ${fmt(f.valorIof)} · Seguro: R$ ${fmt(f.valorSeguro)} (informativo, não lançado no Financeiro)</p>` : ''}
@@ -5160,13 +5159,13 @@ function PageFinanciamentoDetalhe(){
           return `
           <tr>
             <td data-rotulo="Parcela">${p.numero}</td>
-            <td class="mono" data-rotulo="Vencimento">${p.dataVencimento}</td>
+            <td class="mono" data-rotulo="Vencimento">${dataBr(p.dataVencimento)}</td>
             <td class="mono" data-rotulo="Valor">R$ ${fmt(p.valorParcela)}</td>
             <td class="mono" data-rotulo="Amortização">R$ ${fmt(p.valorAmortizacao)}</td>
             <td class="mono" data-rotulo="Juros">R$ ${fmt(p.valorJuros)}</td>
             <td class="mono" data-rotulo="Saldo após">R$ ${fmt(p.saldoDevedorApos)}</td>
             <td data-rotulo="Status"><div><span class="pill ${st==='paga'?'pill-ok':st==='atrasada'?'pill-warn':st==='cancelada'?'pill-cat':''}">${STATUS_PARC_LABEL[st]||st}</span>
-              ${p.status==='paga' && p.dataPagamento ? `<div class="hint">em ${p.dataPagamento}</div>` : ''}
+              ${p.status==='paga' && p.dataPagamento ? `<div class="hint">em ${dataBr(p.dataPagamento)}</div>` : ''}
               ${p.status==='paga' && p.lancamentosFinanceiroIds.length===0 ? `<div class="hint">${importadoDoErp(f) ? 'juros já no Financeiro (ERP)' : 'sem juros lançado pelo app'}</div>` : ''}</div></td>
             <td class="acoes">${podeEditar && parcelaAberta(p) ? `
               <button class="btn-ghost btn-sm" data-pagar-parcela="${p.id}">Marcar como paga</button>
@@ -6658,9 +6657,9 @@ function PageContas(){
                   ? `<span class="pill pill-alerta">sem rateio</span>`
                   : rat.length===1
                   // uma parte só: atividade e fazenda já estão na coluna ao lado e o valor é o da conta
-                  ? `<div class="hint">${esc(nomeCentroCusto(rat[0].centroCustoId))} · ${esc(rat[0].competencia)}</div>`
+                  ? `<div class="hint">${esc(nomeCentroCusto(rat[0].centroCustoId))} · ${esc(mesLabel(rat[0].competencia))}</div>`
                   // dividida: cada parte com a atividade, a fazenda e o valor dela
-                  : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(r.competencia)} · R$ ${fmt(r.valor)}</div>`).join('')}</span></td>
+                  : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(mesLabel(r.competencia))} · R$ ${fmt(r.valor)}</div>`).join('')}</span></td>
             <td class="mono num" data-rotulo="Valor">R$ ${fmt(t.valor)}</td>
             <td class="mono num" data-rotulo="Saldo">${saldo>0?`R$ ${fmt(saldo)}`:'<span class="hint">—</span>'}</td>
             <td data-rotulo="Situação">${PillSituacao(t)}</td>
@@ -8721,7 +8720,7 @@ function ModalDespesaPorCentro(){
 function ligarRotulosAosCampos(){
   document.querySelectorAll('label:not([for])').forEach(l=>{
     if(l.querySelector('input,select,textarea') || !l.parentElement) return;
-    const campos = l.parentElement.querySelectorAll('input:not([type=hidden]),select,textarea');
+    const campos = l.parentElement.querySelectorAll('input:not([type=hidden]):not(.campo-data-seletor),select,textarea');
     const rotulos = l.parentElement.querySelectorAll(':scope > label');
     if(campos.length === 1 && rotulos.length === 1 && campos[0].id) l.htmlFor = campos[0].id;
   });
