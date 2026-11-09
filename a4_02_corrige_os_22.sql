@@ -21,7 +21,8 @@
 --   4. passa cada lancamento para o centro irmao. SO O CENTRO MUDA: valor, data, atividade, tipo e o rateio
 --      ficam como estao, entao nenhum total do app muda (o grupo do centro e o mesmo, entao o bloco do fluxo
 --      de caixa da aba Empresa tambem nao).
---   Rodar de novo e seguro: se os 22 ja estiverem nos centros de entrada, so avisa "JA FEITO".
+--   Rodar de novo e seguro: se os 22 ja estiverem nos centros de entrada, so avisa "JA FEITO". Se o conserto foi feito e depois
+--   desfeito, pode rodar de novo: a copia da rodada anterior e trocada por uma nova (so se ela bater com o estado de hoje).
 --   A conferencia no fim tem que mostrar tudo OK.
 --
 -- PARA DESFAZER: ver o fim do arquivo (devolve os 22 aos centros de antes e apaga os centros novos, se vazios).
@@ -77,6 +78,21 @@ begin
   end loop;
 
   -- 2) copia de seguranca (fechada: so quem tem acesso ao banco le)
+  -- Se ja existe copia de uma rodada anterior (por exemplo, o conserto foi feito e depois DESFEITO), so a reaproveito se
+  -- ela bater com o estado de hoje; ai a troco por uma nova. Se nao bater, RECUSA: ela pode ser a unica copia do que existia antes.
+  if to_regclass('public.zz_backup_a4_lanc_2026_11_09') is not null or to_regclass('public.zz_backup_a4_centros_2026_11_09') is not null then
+    if to_regclass('public.zz_backup_a4_lanc_2026_11_09') is null or to_regclass('public.zz_backup_a4_centros_2026_11_09') is null then
+      raise exception 'RECUSADO: so uma das duas copias de seguranca de uma rodada anterior existe. Nao mexi em nada. Me mande esta mensagem.';
+    end if;
+    execute 'select count(*) from lancamentos_financeiros l join zz_backup_a4_lanc_2026_11_09 b
+              on b.id = l.id and b.centro_custo_id = l.centro_custo_id and b.valor = l.valor and b.tipo = l.tipo' into v_n;
+    execute 'select count(*) from centros_custo c join zz_backup_a4_centros_2026_11_09 b on b.id = c.id and b.nome = c.nome and b.tipo = c.tipo' into v_linhas;
+    if v_n <> 22 or v_linhas <> 3 then
+      raise exception 'RECUSADO: ja existe copia de seguranca de uma rodada anterior e ela nao bate com o estado de hoje (% de 22 lancamentos e % de 3 centros iguais). Nao mexi em nada. Me mande esta mensagem.', v_n, v_linhas;
+    end if;
+    execute 'drop table zz_backup_a4_lanc_2026_11_09, zz_backup_a4_centros_2026_11_09';
+    raise notice 'Copia de seguranca da rodada anterior (desfeita) trocada por uma nova.';
+  end if;
   execute 'create table zz_backup_a4_lanc_2026_11_09 as select * from lancamentos_financeiros where id = any($1)' using v_todos;
   execute 'create table zz_backup_a4_centros_2026_11_09 as select * from centros_custo where id = any($1)' using c_velhos;
   execute 'select count(*) from zz_backup_a4_lanc_2026_11_09' into v_n;

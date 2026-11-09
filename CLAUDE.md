@@ -1791,6 +1791,11 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
   ENTRADA irmãos com o **mesmo nome + " (ENTRADA)"**, copiando `subcategoria` e `classe` do centro de saída (por isso o **grupo, e o bloco do fluxo de caixa da aba Empresa, não mudam**); só o
   `centro_custo_id` muda (valor, data, atividade, tipo e rateio ficam). Cópias fechadas `zz_backup_a4_lanc_2026_11_09` e `zz_backup_a4_centros_2026_11_09` (a apagar quando ele confirmar);
   desfazer no fim do arquivo. Ensaiado num Postgres descartável (caminho feliz, recusas, rodar de novo, desfazer devolve o banco idêntico, centro irmão já existente, nome já usado do outro lado).
+  **O que aconteceu depois (09/11/2026, aprendizado):** na mensagem do script eu mandei um SEGUNDO bloco de código, o "para desfazer"; ele rodou os dois ("já rodei o segundo, deu sucesso") e o conserto foi
+  desfeito (os 22 voltaram aos centros de saída, os 3 centros novos foram apagados; as cópias `zz_backup_a4_*` ficaram). A `banco_travas_02` recusou instalar por isso (achou 22 do lado errado) e a
+  consulta de diagnóstico mostrou o estado. **Regra: o desfazer NUNCA vai como bloco de código separado na conversa com ele (ele roda todos os blocos); fica só no fim do arquivo SQL e se oferece em
+  texto quando precisar.** O `a4_02` passou a poder ser **rodado de novo depois de desfeito**: se as cópias de uma rodada anterior existem e batem com o estado de hoje, troca por cópias novas; se não
+  batem, recusa (ensaiado: fez, desfez, fez de novo).
   O R$ 2.000 da casa-sede ficou num centro de entrada do grupo ADM (escolha provisória minha para não mudar número nenhum); se ele preferir, passa para "ESTORNO E/OU DEVOLUÇÃO DE PAGAMENTO".
 - **`banco_travas_02_centro_do_lado_certo.sql`** (ensaiado, **AINDA NÃO RODADO por ele**): receita só em centro de ENTRADA, despesa e investimento só em centro de SAÍDA, conferido ao gravar um
   lançamento novo ou ao mudar o tipo ou o centro de um (editar só valor ou descrição de um antigo não dispara); centro sem tipo vale para qualquer lado; trocar o lado de um centro que já tem
