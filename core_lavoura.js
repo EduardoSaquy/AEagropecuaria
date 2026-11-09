@@ -185,6 +185,7 @@ function render(){
   root.innerHTML = `
     <div class="app">
       ${Topbar()}
+      ${BotaoMenuCelular()}
       ${TabsRow()}
       <div class="main">
         ${semModulos ? Empty('Nenhum módulo liberado','Fale com o administrador do sistema para liberar o acesso aos cadastros.') : `
