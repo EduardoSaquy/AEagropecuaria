@@ -298,6 +298,22 @@
   .app-card-stat .v{font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--grafite); font-size:17px;}
   .app-card-stat .l{font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);}
   .app-card-actions{display:flex; gap:8px; margin-top:auto; padding-top:6px;}
+  /* Painel no celular (pedido do Eduardo, 09/11/2026): os apps viram icones grandes, um embaixo do outro (icone + nome ao lado,
+     a linha inteira e o toque que abre o app), sem descricao, sem numeros e sem o aviso da copia de seguranca.
+     Do iPad para cima nada muda. */
+  .app-icones{display:none;}
+  @media (max-width:760px){
+    .painel-cartoes, .aviso-copia{display:none !important;}
+    .app-icones{display:flex; flex-direction:column; gap:12px; margin-top:4px;}
+    .app-icone{display:flex; align-items:center; gap:16px; padding:12px 14px; text-decoration:none; color:var(--grafite);
+               background:var(--branco); border:1px solid var(--cinza-claro); border-radius:18px; box-shadow:var(--shadow); min-width:0;}
+    .app-icone:active{background:var(--cinza-claro);}
+    .app-icone-img{width:76px; height:76px; border-radius:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+    .app-icone-img svg{width:38px; height:38px;}
+    .app-icone-nome{font-family:'Fraunces',serif; font-size:21px; font-weight:700; line-height:1.2; min-width:0; overflow-wrap:anywhere;}
+    .app-icone-breve{font-size:12px; color:var(--cinza); margin-left:auto;}
+    .app-icone.inativo{opacity:0.55;}
+  }
   .badge-em-breve{background:var(--cinza-claro); color:var(--cinza);}
 
   /* ---------- RESPONSIVO (celular) ---------- */
@@ -2491,7 +2507,15 @@ function PagePainel(){
   if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz (Pecuária, Combustível, Cana, Cereais...).');
   const visiveis = appsVisiveisNoPainel();
   if(visiveis.length===0) return Empty('Nenhum indicador liberado', 'Fale com o administrador para liberar o painel de algum app pra você.');
-  return `${AvisoCopiaDeSeguranca()}<div class="app-grid">${visiveis.map(AppCard).join('')}</div>`;
+  return `${AvisoCopiaDeSeguranca()}<div class="app-grid painel-cartoes">${visiveis.map(AppCard).join('')}</div>
+    <nav class="app-icones" aria-label="Apps">${visiveis.map(AppIcone).join('')}</nav>`;
+}
+// Celular: icone + nome curto; app "em breve" aparece apagado e sem link
+function AppIcone(a){
+  const nome = esc(a.nome.replace(/^AE\s+/, ''));
+  const img = `<span class="app-icone-img" style="background:${hexToRgba(a.cor,0.16)}; color:${a.cor};">${iconOperacao(a.slug, a.nome)}</span>`;
+  if(a.status==='ativo' && a.url) return `<a class="app-icone" href="${a.url}" data-app-icone="${esc(a.slug)}">${img}<span class="app-icone-nome">${nome}</span></a>`;
+  return `<span class="app-icone inativo" data-app-icone="${esc(a.slug)}">${img}<span class="app-icone-nome">${nome}</span><span class="app-icone-breve">Em breve</span></span>`;
 }
 
 /* ===================== FILTRO DE PERÍODO (Mês / Ano / Safra) ===================== */

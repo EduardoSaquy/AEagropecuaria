@@ -97,8 +97,8 @@ with sync_playwright() as pw:
     page, erros = abre(browser, 390, 844)
     larg = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
     conf(larg <= 0, "390 px: a pagina nao rola de lado", str(larg))
-    card = page.evaluate(CARD)
-    conf(card and len(card["stats"]) == 4, "390 px: os 4 indicadores aparecem", str(card))
+    escondido = page.evaluate("() => getComputedStyle(document.querySelector('.painel-cartoes')).display === 'none'")
+    conf(escondido, "390 px: no celular os numeros nao aparecem (so os icones, pedido de 09/11/2026)")
 
     print("== so abastecimento")
     so_abast = {**ADMIN, "papel": "colaborador", "permissoes": {"matriz_painel_combustivel": "visualizar", "combustivel_abastecimento": "visualizar"}}
