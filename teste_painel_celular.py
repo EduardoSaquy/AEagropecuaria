@@ -1,9 +1,9 @@
 """
 Painel do AE Matriz no celular (pedido do Eduardo, 09/11/2026: "no celular os apps poderiam aparecer em icones pequenos,
-nao tem necessidade de ter alertas no celular"; escolheu: some o aviso da copia de seguranca e os numeros, 4 icones numa linha).
+nao tem necessidade de ter alertas no celular"; escolheu: some o aviso da copia de seguranca e os numeros; depois: icones maiores, um embaixo do outro).
 Prova, em 320, 360, 390 e 760 px (celular):
   - as janelinhas (com descricao e numeros) e o aviso da copia de seguranca nao aparecem;
-  - os 4 apps aparecem como icones numa linha so, com o nome curto (sem "AE"), dentro da tela, alvo de toque >= 44 px;
+  - os 4 apps aparecem como icones grandes, um embaixo do outro, com o nome curto (sem "AE"), dentro da tela, alvo de toque >= 44 px;
   - cada icone e um link para o app certo, e tocar abre o app;
   - app "em breve" aparece apagado, sem link;
   - so os apps que a pessoa pode ver;
@@ -52,7 +52,7 @@ MEDE = """() => {
   const vis = e => e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0;
   const icones = [...document.querySelectorAll('.app-icone')].map(e => { const b = e.getBoundingClientRect();
     return {slug: e.dataset.appIcone, href: e.getAttribute('href'), nome: e.querySelector('.app-icone-nome').textContent.trim(),
-            x: b.x, y: Math.round(b.y), w: b.width, h: b.height, right: b.right, inativo: e.classList.contains('inativo')}; });
+            x: b.x, y: Math.round(b.y), w: b.width, img: e.querySelector('.app-icone-img').getBoundingClientRect().width, h: b.height, right: b.right, inativo: e.classList.contains('inativo')}; });
   return {cartoes: vis(document.querySelector('.painel-cartoes')), aviso: vis(document.querySelector('.aviso-copia')),
           temAviso: !!document.querySelector('.aviso-copia'), icones, iconesVis: vis(document.querySelector('.app-icones')),
           largura: document.documentElement.clientWidth,
@@ -68,7 +68,9 @@ with sync_playwright() as pw:
         conf(not m["cartoes"], "as janelinhas com descricao e numeros nao aparecem")
         conf(m["temAviso"] and not m["aviso"], "o aviso da copia de seguranca existe mas nao aparece no celular")
         conf(m["iconesVis"] and len(m["icones"]) == 4, "os 4 apps aparecem como icones", str(m["icones"]))
-        conf(len({i["y"] for i in m["icones"]}) == 1, "numa linha so", str([i["y"] for i in m["icones"]]))
+        ys = [i["y"] for i in m["icones"]]
+        conf(len({round(i["x"]) for i in m["icones"]}) == 1 and ys == sorted(ys) and len(set(ys)) == 4, "um embaixo do outro", str(ys))
+        conf(all(i["img"] >= 70 for i in m["icones"]), "icone grande (70 px ou mais)", str([i["img"] for i in m["icones"]]))
         conf(all(i["x"] >= 0 and i["right"] <= m["largura"] + 0.5 for i in m["icones"]), "todos dentro da tela", str(m["icones"]))
         conf(all(i["w"] >= 44 and i["h"] >= 44 for i in m["icones"]), "alvo de toque de pelo menos 44 px", str([(i["w"], i["h"]) for i in m["icones"]]))
         conf(all(ESPERADO[i["slug"]] == (i["nome"], i["href"]) for i in m["icones"]), "nome curto e link certo de cada app", str(m["icones"]))

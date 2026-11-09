@@ -298,19 +298,20 @@
   .app-card-stat .v{font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--grafite); font-size:17px;}
   .app-card-stat .l{font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);}
   .app-card-actions{display:flex; gap:8px; margin-top:auto; padding-top:6px;}
-  /* Painel no celular (pedido do Eduardo, 09/11/2026): os apps viram 4 icones pequenos numa linha (toca e abre o app),
-     sem descricao, sem numeros e sem o aviso da copia de seguranca. Do iPad para cima nada muda. */
+  /* Painel no celular (pedido do Eduardo, 09/11/2026): os apps viram icones grandes, um embaixo do outro (icone + nome ao lado,
+     a linha inteira e o toque que abre o app), sem descricao, sem numeros e sem o aviso da copia de seguranca.
+     Do iPad para cima nada muda. */
   .app-icones{display:none;}
   @media (max-width:760px){
     .painel-cartoes, .aviso-copia{display:none !important;}
-    .app-icones{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-top:4px;}
-    .app-icone{display:flex; flex-direction:column; align-items:center; gap:7px; padding:6px 2px; text-decoration:none; color:var(--grafite);
-               border-radius:14px; min-width:0;}
+    .app-icones{display:flex; flex-direction:column; gap:12px; margin-top:4px;}
+    .app-icone{display:flex; align-items:center; gap:16px; padding:12px 14px; text-decoration:none; color:var(--grafite);
+               background:var(--branco); border:1px solid var(--cinza-claro); border-radius:18px; box-shadow:var(--shadow); min-width:0;}
     .app-icone:active{background:var(--cinza-claro);}
-    .app-icone-img{width:60px; height:60px; border-radius:16px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow);}
-    .app-icone-img svg{width:28px; height:28px;}
-    .app-icone-nome{font-size:12.5px; font-weight:600; line-height:1.2; text-align:center; overflow-wrap:anywhere;}
-    .app-icone-breve{font-size:10.5px; color:var(--cinza);}
+    .app-icone-img{width:76px; height:76px; border-radius:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+    .app-icone-img svg{width:38px; height:38px;}
+    .app-icone-nome{font-family:'Fraunces',serif; font-size:21px; font-weight:700; line-height:1.2; min-width:0; overflow-wrap:anywhere;}
+    .app-icone-breve{font-size:12px; color:var(--cinza); margin-left:auto;}
     .app-icone.inativo{opacity:0.55;}
   }
   .badge-em-breve{background:var(--cinza-claro); color:var(--cinza);}
