@@ -56,11 +56,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           DATA=$(date -u +%Y-%m-%d_%H%M)
-          "/usr/lib/postgresql/${VERSAO_PG}/bin/pg_dump" --dbname="$DATABASE_URL" \
-            --format=custom --compress=9 --no-owner --no-privileges \
-            --schema=auth --file="login_${DATA}.dump"
+          if ! "/usr/lib/postgresql/${VERSAO_PG}/bin/pg_dump" --dbname="$DATABASE_URL" \
+              --format=custom --compress=9 --no-owner --no-privileges \
+              --schema=auth --file="login_${DATA}.dump"; then
+            rm -f login_*.dump          # nao deixa um arquivo pela metade entrar no backup
+            echo "::warning::A copia das contas de login (schema auth) falhou; a copia dos apps segue valendo."
+          fi
 
       - name: Confere que o backup dos apps saiu inteiro
         run: |
