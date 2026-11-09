@@ -117,7 +117,10 @@ with sync_playwright() as pw:
     m = page.evaluate(MEDE)
     top = page.evaluate("() => { const t = document.querySelector('.topbar'); const b = t.getBoundingClientRect(); return {y: b.y, w: Math.round(b.width)}; }")
     conf(top["y"] == 0 and top["w"] >= 388, "a barra de cima segue em cima, na largura toda", str(top))
-    conf(len(m["cards"]) == 4 and all(x["w"] >= 330 for x in m["cards"]) and len({x["x"] for x in m["cards"]}) == 1, "os 4 apps viram uma coluna de janelinhas, na largura toda", str(m["cards"]))
+    # celular (09/11/2026): no lugar das janelinhas, icones grandes, um embaixo do outro (teste_painel_celular.py cobre o resto)
+    icones = page.evaluate("() => [...document.querySelectorAll('.app-icone')].map(e => e.getBoundingClientRect().y)")
+    conf(page.evaluate("() => getComputedStyle(document.querySelector('.painel-cartoes')).display") == "none" and len(icones) == 4 and len(set(round(y) for y in icones)) == 4,
+         "no celular os 4 apps viram icones um embaixo do outro (sem as janelinhas)", str(icones))
     conf(not m["rolaDeLado"], "a pagina nao rola de lado")
     page.context.close()
     browser.close()

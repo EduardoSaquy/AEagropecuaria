@@ -406,6 +406,31 @@ document.addEventListener('click', e=>{
     render();
   }
 });
+// Menu do celular (☰) dos apps Pecuária, Cana, Cereais e Combustível (pedido do Eduardo, 09/11/2026: "coloca os 3 risquinhos
+// para clicar e abrir uma janela com as abas; quero todos com a mesma cara"). Até 760 px o menu fica escondido e o botão mostra
+// onde a pessoa está; tocar abre o menu inteiro (com a setinha das sub-abas), e escolher uma tela fecha. O aberto/fechado é uma
+// classe no <html> (sobrevive ao redesenho). O AE Matriz tem o dele (state.mobileNavAberto), com o mesmo desenho.
+let menuCelularAberto = false;
+function iconMenuCelular(){ return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>`; }
+function BotaoMenuCelular(){
+  const grupos = (typeof gruposAtuais === 'function') ? gruposAtuais() : (typeof GROUPS !== 'undefined' ? GROUPS : {});
+  const g = grupos[currentGroupKey()] || null;
+  const pagina = g && g.pages ? g.pages.find(p=>p.key === state.page) : null;
+  const rotulo = !g ? 'Menu' : (pagina && g.pages.length > 1 && pagina.label !== g.label) ? `${g.label} · ${pagina.label}` : g.label;
+  return `<button class="menu-celular" data-menu-celular="1" aria-expanded="${menuCelularAberto ? 'true' : 'false'}" aria-label="Abrir o menu">
+    <span class="menu-celular-rotulo">${iconMenuCelular()}<span>${esc(rotulo)}</span></span><span class="menu-celular-seta">${iconSetaMenu()}</span></button>`;
+}
+function definirMenuCelular(aberto){
+  menuCelularAberto = !!aberto;
+  document.documentElement.classList.toggle('menu-celular-aberto', menuCelularAberto);
+  document.querySelectorAll('[data-menu-celular]').forEach(b=>b.setAttribute('aria-expanded', menuCelularAberto ? 'true' : 'false'));
+}
+// Fase de captura: roda antes do clique do app (que redesenha), então o botão já nasce com o estado certo.
+document.addEventListener('click', e=>{
+  if(!e.target || !e.target.closest) return;
+  if(e.target.closest('[data-menu-celular]')){ definirMenuCelular(!menuCelularAberto); return; }
+  if(menuCelularAberto && e.target.closest('.nav-item, [data-menu-sub]')) definirMenuCelular(false);
+}, true);
 // Lê uma tabela inteira, de mil em mil, até a resposta vir incompleta (sinal de que acabou). O PostgREST corta cada resposta em
 // 1.000 linhas por conta própria (db-max-rows), então um .range(0, 19999) só parece trazer tudo: foi um teto, e os totais ficariam
 // errados sem aviso. A consulta tem que ter ordem ESTÁVEL (um .order('id') no fim): só 'data', por exemplo, repete ou perde linha

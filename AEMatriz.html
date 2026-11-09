@@ -298,6 +298,22 @@
   .app-card-stat .v{font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--grafite); font-size:17px;}
   .app-card-stat .l{font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--cinza);}
   .app-card-actions{display:flex; gap:8px; margin-top:auto; padding-top:6px;}
+  /* Painel no celular (pedido do Eduardo, 09/11/2026): os apps viram icones grandes, um embaixo do outro (icone + nome ao lado,
+     a linha inteira e o toque que abre o app), sem descricao, sem numeros e sem o aviso da copia de seguranca.
+     Do iPad para cima nada muda. */
+  .app-icones{display:none;}
+  @media (max-width:760px){
+    .painel-cartoes, .aviso-copia{display:none !important;}
+    .app-icones{display:flex; flex-direction:column; gap:12px; margin-top:4px;}
+    .app-icone{display:flex; align-items:center; gap:16px; padding:12px 14px; text-decoration:none; color:var(--grafite);
+               background:var(--branco); border:1px solid var(--cinza-claro); border-radius:18px; box-shadow:var(--shadow); min-width:0;}
+    .app-icone:active{background:var(--cinza-claro);}
+    .app-icone-img{width:76px; height:76px; border-radius:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+    .app-icone-img svg{width:38px; height:38px;}
+    .app-icone-nome{font-family:'Fraunces',serif; font-size:21px; font-weight:700; line-height:1.2; min-width:0; overflow-wrap:anywhere;}
+    .app-icone-breve{font-size:12px; color:var(--cinza); margin-left:auto;}
+    .app-icone.inativo{opacity:0.55;}
+  }
   .badge-em-breve{background:var(--cinza-claro); color:var(--cinza);}
 
   /* ---------- RESPONSIVO (celular) ---------- */
@@ -415,7 +431,8 @@
   .avatar{order:-1; width:36px; height:36px; font-size:14px;}
   .topbar-user-nome{flex:1 1 calc(100% - 52px); max-width:none; min-width:0; font-size:12.5px; line-height:1.3; white-space:normal;
                     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
-  .topbar-user .btn-sair{flex:1 1 calc(50% - 4px); text-align:center; padding:9px 8px;}
+  /* um botao por linha (08/11/2026): lado a lado, "Trocar senha" passava da borda do botao no iPad (Safari) */
+  .topbar-user .btn-sair{flex:1 1 100%; text-align:center; padding:9px 8px; white-space:normal; line-height:1.2;}
   .main{grid-area:conteudo; max-width:none; padding:32px 24px 60px 24px;}
   .main > *{max-width:1240px;}
 }
@@ -520,7 +537,7 @@
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=d49448aec7"></script>
+<script src="core.js?v=42001365dc"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -541,11 +558,8 @@ const db = supabase.createClient(
 // código do Painel.
 const dbPecuaria = db;
 
-// AE Combustível ainda não foi implantado com banco real — o card dele
-// fica "em breve" no Painel por enquanto (ver APPS_REGISTRO) e
-// carregarCombustivel() abaixo não faz nenhuma chamada de rede. Quando o
-// schema for desenhado, ele entra no mesmo projeto do Lavoura (db acima),
-// sem precisar de projeto Supabase novo.
+// AE Combustível está no mesmo banco (db acima). O Painel mostra os indicadores dele
+// (carregarIndicadoresCombustivel); o custo NÃO entra em Resultados (ver carregarCombustivel()).
 
 // Cadastro de fazenda foi centralizado aqui no Matriz (era espalhado entre
 // Lavoura e Pecuária) — este app agora é o único que cria/edita/exclui
@@ -1072,6 +1086,7 @@ async function loadAll(grupos){
     if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
     carregarResultadoCereais();
     carregarCombustivel();
+    if(temPermissao('matriz_painel_combustivel','visualizar')) carregarIndicadoresCombustivel();
     carregarLancamentosRateados();
   }
   if(quer('financiamentos')) carregarMovimentosFinanciamento();
@@ -1820,8 +1835,70 @@ function agregarPeriodo(resultado, meses){
 // se um dia quiserem ratear o custo por frente aqui no Painel/Resultados,
 // é aqui que a leitura de tanques/entradas/abastecimentos entraria.
 async function carregarCombustivel(){
-  state.indicadores.combustivel = {loading:false, erro:'', estoqueAtual:null, consumoMes:null, alertasAbertos:null};
   state.resultados.combustivelPorFrente = {loading:false, erro:'', mensal:[]};
+  renderCarga();
+}
+
+// Indicadores do AE Combustivel no Painel (pedido do Eduardo, 08/11/2026). Mesmas contas do Painel do proprio
+// AE Combustivel (PagePainel): estoque = entradas - abastecimentos + ajustes dos tanques ativos; consumo do mes =
+// litros abastecidos no mes (dia local, nao UTC); custo do mes = litros x custo medio ponderado das notas do tanque
+// ate o dia do abastecimento (abastecimento no posto nao tem tanque e fica sem custo, como la); alertas = abertos.
+// Cada numero so aparece para quem tem a permissao do modulo correspondente no AE Combustivel (sem ela o banco
+// devolveria vazio e o card mostraria 0 L, falso): sem permissao, "—". So informativo: NAO entra em despesa nem
+// Resultados (a compra do diesel ja e lancamento no Financeiro; somar o consumo contaria duas vezes).
+function dataLocalDeTimestamp(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(isNaN(d)) return String(ts).slice(0,10);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function indicadoresCombustivelDe(dados, hoje){
+  const {tanques, entradas, ajustes, abastecimentos, alertas} = dados;
+  const inicioMes = hoje.slice(0,7) + '-01';
+  const ativos = new Set(tanques.filter(t=>t.ativo!==false).map(t=>t.id));
+  const somaPor = (lista, campo) => lista.filter(x=>ativos.has(x.tanque_id)).reduce((a,x)=>a+Number(x[campo]||0),0);
+  const estoque = somaPor(entradas,'volume_litros') - somaPor(abastecimentos,'volume_litros') + somaPor(ajustes,'volume_ajuste_litros');
+  const custoMedio = (tanqueId, dia) => {
+    let vol = 0, valor = 0;
+    for(const e of entradas){ if(e.tanque_id===tanqueId && String(e.data||'').slice(0,10)<=dia){ vol += Number(e.volume_litros||0); valor += Number(e.valor_total||0); } }
+    return vol>0 ? valor/vol : null;
+  };
+  let consumoMes = 0, custoMes = 0;
+  for(const a of abastecimentos){
+    const dia = dataLocalDeTimestamp(a.data_hora);
+    if(dia < inicioMes || dia > hoje) continue;
+    const litros = Number(a.volume_litros||0);
+    consumoMes += litros;
+    if(a.tanque_id!=null){ const c = custoMedio(a.tanque_id, dia); if(c!=null) custoMes += c*litros; }
+  }
+  return {estoqueAtual: estoque, consumoMes, custoMes, alertasAbertos: alertas.filter(a=>a.status==='aberto').length};
+}
+async function carregarIndicadoresCombustivel(){
+  const pode = {
+    estoque: temPermissao('combustivel_estoque','visualizar'),
+    consumo: temPermissao('combustivel_abastecimento','visualizar'),
+    custo: temPermissao('combustivel_rateio','visualizar'),
+    alertas: temPermissao('combustivel_alertas','visualizar'),
+  };
+  state.indicadores.combustivel = {...state.indicadores.combustivel, loading:true, erro:'', pode};
+  renderCarga();
+  try{
+    const vazio = Promise.resolve({data:[], error:null});
+    const precisaTanques = pode.estoque || pode.custo;
+    const precisaAbast = pode.estoque || pode.consumo || pode.custo;
+    const [tq, en, aj, ab, al] = await Promise.all([
+      precisaTanques ? fetchAllRows(()=>db.from('tanques').select('id, ativo').order('id')) : vazio,
+      precisaTanques ? fetchAllRows(()=>db.from('entradas_estoque').select('id, tanque_id, data, volume_litros, valor_total').order('id')) : vazio,
+      pode.estoque ? fetchAllRows(()=>db.from('ajustes_estoque').select('id, tanque_id, volume_ajuste_litros').order('id')) : vazio,
+      precisaAbast ? fetchAllRows(()=>db.from('abastecimentos').select('id, tanque_id, data_hora, volume_litros').order('id')) : vazio,
+      pode.alertas ? fetchAllRows(()=>db.from('alertas').select('id, status').order('id')) : vazio,
+    ]);
+    for(const r of [tq, en, aj, ab, al]) if(r.error) throw r.error;
+    const ind = indicadoresCombustivelDe({tanques:tq.data||[], entradas:en.data||[], ajustes:aj.data||[], abastecimentos:ab.data||[], alertas:al.data||[]}, hojeStr());
+    state.indicadores.combustivel = {loading:false, erro:'', pode, ...ind};
+  } catch(e){
+    state.indicadores.combustivel = {loading:false, erro:'Não foi possível carregar agora.', pode, estoqueAtual:null, consumoMes:null, custoMes:null, alertasAbertos:null};
+  }
   renderCarga();
 }
 // Junta o custo mensal de combustível (por operação) com o resultado
@@ -2352,6 +2429,7 @@ function Header(){
     fazendas:{eyebrow:'Cadastro', title:'Fazendas', desc:'Cadastro único das fazendas da operação — nome, estado, área total e, pra cada atividade (grãos, cana, pecuária), quantos hectares dela tem ali. AE Lavoura e AE Pecuária só leem esses dados.'},
     centrosCusto:{eyebrow:'Cadastro', title:'Centros de Custo', desc:'O plano de contas usado em todo lançamento financeiro. Um centro global (sem fazenda) vale para todas — é o caso das contas do ERP, que atendem pecuária, cana e cereais ao mesmo tempo. A atividade é campo do lançamento, não do centro de custo.'},
     contas:{eyebrow:'Financeiro', title:'Contas a Pagar e a Receber', desc:'O boleto antes de virar dinheiro: quem, quanto, quando vence e onde pesa. Um título pode ser dividido entre fazendas e atividades. Só entra no Financeiro quando é baixado, com a data do pagamento.'},
+    financiamentos:{eyebrow:'Financeiro', title:'Financiamentos', desc:'Contratos de empréstimo e financiamento: parcelas, saldo devedor e juros. Só o juros vira despesa.'},
     funcionarios:{eyebrow:'Cadastro', title:'Funcionários', desc:'Cargo, em quais atividades cada pessoa participa (com % de alocação) e qual login de acesso ela usa. Sem CPF, salário ou Pix — esses dados não entram aqui.'},
     usuarios:{eyebrow:'Administração', title:'Usuários', desc:'Contas de acesso. Depois da unificação é um login só, que vale para Matriz, Lavoura e Pecuária.'},
   };
@@ -2369,9 +2447,9 @@ function Header(){
 
 /* ===================== PAINEL ===================== */
 function AppCard(a){
-  // "em breve" (Combustível hoje) não tem indicador nenhum ainda — nem
-  // tenta mostrar carregando/erro, só o selo "Em breve".
-  const ind = a.status!=='ativo' ? null : a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='cana' ? state.indicadores.cana : a.slug==='cereais' ? state.indicadores.cereais : null;
+  // app "em breve" não tem indicador nenhum — nem tenta mostrar carregando/erro, só o selo "Em breve".
+  const ind = a.status!=='ativo' ? null : a.slug==='pecuaria' ? state.indicadores.pecuaria : a.slug==='cana' ? state.indicadores.cana
+    : a.slug==='cereais' ? state.indicadores.cereais : a.slug==='combustivel' ? state.indicadores.combustivel : null;
   let stats = '';
   if(ind){
     if(ind.loading){
@@ -2395,6 +2473,14 @@ function AppCard(a){
         <div class="app-card-stat"><div class="v">${fmtInt(ind.talhoes)}</div><div class="l">Talhões</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.plantiosAtivos)}</div><div class="l">Plantios ativos</div></div>
         <div class="app-card-stat"><div class="v">${fmtInt(ind.sacasMes)} sc</div><div class="l">Colhido no mês</div></div>
+      </div>`;    } else if(a.slug==='combustivel'){
+      const p = ind.pode || {};
+      const nada = !p.estoque && !p.consumo && !p.custo && !p.alertas;
+      stats = nada ? `<p class="hint">Sem acesso aos módulos do AE Combustível (Estoque, Abastecimento, Rateio, Alertas).</p>` : `<div class="app-card-stats">
+        <div class="app-card-stat"><div class="v">${p.estoque ? fmtInt(Math.round(ind.estoqueAtual))+' L' : '—'}</div><div class="l">Estoque nos tanques</div></div>
+        <div class="app-card-stat"><div class="v">${p.consumo ? fmtInt(Math.round(ind.consumoMes))+' L' : '—'}</div><div class="l">Consumo no mês</div></div>
+        <div class="app-card-stat"><div class="v">${p.custo ? 'R$ '+fmtInt(Math.round(ind.custoMes)) : '—'}</div><div class="l">Custo no mês</div></div>
+        <div class="app-card-stat"><div class="v"${p.alertas && ind.alertasAbertos>0 ? ' style="color:var(--alerta);"' : ''}>${p.alertas ? fmtInt(ind.alertasAbertos) : '—'}</div><div class="l">Alertas abertos</div></div>
       </div>`;
     }
   }
@@ -2422,7 +2508,15 @@ function PagePainel(){
   if(state.apps.length===0) return Empty('Nenhum app cadastrado', 'Cadastre os apps que compõem a matriz (Pecuária, Combustível, Cana, Cereais...).');
   const visiveis = appsVisiveisNoPainel();
   if(visiveis.length===0) return Empty('Nenhum indicador liberado', 'Fale com o administrador para liberar o painel de algum app pra você.');
-  return `${AvisoCopiaDeSeguranca()}<div class="app-grid">${visiveis.map(AppCard).join('')}</div>`;
+  return `${AvisoCopiaDeSeguranca()}<div class="app-grid painel-cartoes">${visiveis.map(AppCard).join('')}</div>
+    <nav class="app-icones" aria-label="Apps">${visiveis.map(AppIcone).join('')}</nav>`;
+}
+// Celular: icone + nome curto; app "em breve" aparece apagado e sem link
+function AppIcone(a){
+  const nome = esc(a.nome.replace(/^AE\s+/, ''));
+  const img = `<span class="app-icone-img" style="background:${hexToRgba(a.cor,0.16)}; color:${a.cor};">${iconOperacao(a.slug, a.nome)}</span>`;
+  if(a.status==='ativo' && a.url) return `<a class="app-icone" href="${a.url}" data-app-icone="${esc(a.slug)}">${img}<span class="app-icone-nome">${nome}</span></a>`;
+  return `<span class="app-icone inativo" data-app-icone="${esc(a.slug)}">${img}<span class="app-icone-nome">${nome}</span><span class="app-icone-breve">Em breve</span></span>`;
 }
 
 /* ===================== FILTRO DE PERÍODO (Mês / Ano / Safra) ===================== */

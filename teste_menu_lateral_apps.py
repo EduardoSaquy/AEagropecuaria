@@ -114,7 +114,9 @@ with sync_playwright() as pw:
         page = abre(browser, "AECombustivel.html", DB_VAZIO, w, h, toque)
         m = page.evaluate(MEDE)
         conf(m["sidebar"]["x"] == 0 and 240 <= m["sidebar"]["w"] <= 250 and m["sidebar"]["h"] == m["alturaJanela"], f"{rotulo}: a barra e uma coluna a esquerda, na altura da tela", str(m["sidebar"]))
-        conf(m["nav"]["fonte"] >= 15 and m["nav"]["h"] >= 46, f"{rotulo}: o menu e grande (letra %.1f px, botao %d px)" % (m["nav"]["fonte"], m["nav"]["h"]))
+        # 09/11/2026: o Combustivel tem 10 itens; ate 900 px de altura o item fica com 44 px (minimo do toque) para o menu inteiro
+        # caber sem rolar com um item aberto (teste_combustivel_menu_cabe.py)
+        conf(m["nav"]["fonte"] >= 15 and m["nav"]["h"] >= 44, f"{rotulo}: o menu e grande (letra %.1f px, botao %d px)" % (m["nav"]["fonte"], m["nav"]["h"]))
         conf(all(m[k] and m[k]["bottom"] <= m["alturaJanela"] for k in ("sair", "senha", "painel")), f"{rotulo}: Sair, Trocar senha e ← Painel aparecem inteiros", str({k: m[k] for k in ("sair", "senha", "painel")}))
         conf(m["sair"]["y"] > m["nav"]["y"], f"{rotulo}: o usuario fica embaixo do menu")
         page.context.close()
