@@ -144,9 +144,12 @@
   .tabela-contas{table-layout:fixed;}
   .tabela-contas th, .tabela-contas td{padding:10px 8px; overflow-wrap:anywhere;}
   .tabela-contas td{font-size:13px;}
-  .tabela-contas .col-sel{width:34px;} .tabela-contas .col-venc{width:96px;} .tabela-contas .col-valor{width:112px;}
-  .tabela-contas .col-sit{width:92px;} .tabela-contas .col-acoes{width:96px;}
-  .tabela-contas .col-onde{width:24%;}
+  /* titulo de coluna: separa a palavra com hifen onde o navegador sabe (Safari do iPad), nunca no meio sem aviso se puder */
+  .tabela-contas th{letter-spacing:.3px; -webkit-hyphens:auto; hyphens:auto;}
+  .tabela-contas .col-sel{width:34px;} .tabela-contas .col-venc{width:100px;} .tabela-contas .col-valor{width:112px;}
+  .tabela-contas .col-sit{width:92px;} .tabela-contas .col-acoes{width:90px;}
+  .tabela-contas .col-onde{width:17%;}
+  .tabela-contas .ativ-faz + .ativ-faz{margin-top:6px;}
   .tabela-contas td.acoes{display:flex; flex-direction:column; align-items:stretch; gap:4px;}
   .tabela-contas td.acoes .btn-sm, .tabela-contas td.acoes button{margin:0; width:100%; justify-content:center;}
   .tabela-contas td.num{white-space:nowrap; overflow-wrap:normal;}
@@ -6442,6 +6445,20 @@ function PillSituacao(t){
 }
 function dataBr(iso){ return iso ? iso.split('-').reverse().join('/') : '—'; }
 
+// Atividade e fazenda de uma conta, pelas partes do rateio, sem repetir (09/11/2026, pedido do Eduardo: coluna própria no
+// Pagar/Receber). Parte sem fazenda = "Geral", como no Financeiro.
+// Nome curto para a coluna estreita (o resto da tela segue com rotuloAtividade).
+const ROTULO_CURTO_ATIVIDADE = {cana:'Cana', geral:'Geral (adm.)'};
+function atividadesFazendasDoTitulo(rat){
+  const vistos = new Set(), itens = [];
+  (rat||[]).forEach(r=>{
+    const chave = `${r.atividade}|${r.fazendaId||''}`;
+    if(vistos.has(chave)) return;
+    vistos.add(chave);
+    itens.push({atividade: ROTULO_CURTO_ATIVIDADE[r.atividade] || rotuloAtividade(r.atividade), fazenda: nomeFazendaLanc(r.fazendaId)});
+  });
+  return itens;
+}
 function titulosFiltrados(){
   const tipo = state.abaContas;
   const busca = (state.searchContas||'').trim().toLowerCase();
@@ -6467,6 +6484,7 @@ function titulosFiltrados(){
         t.descricao, t.documento, nomeEntidade(t.entidadeId),
         ...rat.map(r=>nomeCentroCusto(r.centroCustoId)),
         ...rat.map(r=>nomeFazendaLanc(r.fazendaId)),
+        ...rat.map(r=>rotuloAtividade(r.atividade)),
       ].join(' ').toLowerCase();
       return alvo.includes(busca);
     })
@@ -6554,12 +6572,12 @@ function PageContas(){
     ${lista.length===0 ? Empty('Nenhum título aqui', podeEditarContas()?'Use o botão acima para lançar. O filtro também pode estar escondendo linhas.':'O filtro pode estar escondendo linhas.') : `
     <table class="tabela-contas tabela-em-blocos tabela-cabecalho-quebra tabela-sem-fixar">
       <colgroup>
-        ${podeSelecionar ? '<col class="col-sel">' : ''}<col class="col-venc"><col><col><col class="col-onde"><col class="col-valor"><col class="col-valor"><col class="col-sit"><col class="col-acoes">
+        ${podeSelecionar ? '<col class="col-sel">' : ''}<col class="col-venc"><col><col><col class="col-ativ"><col class="col-onde"><col class="col-valor"><col class="col-valor"><col class="col-sit"><col class="col-acoes">
       </colgroup>
       <thead><tr>
         ${podeSelecionar ? `<th>${baixaveisDaLista.length>0 ? `<input type="checkbox" data-selecionar-todos="1" title="Selecionar todas as contas em aberto da lista" ${todosMarcados?'checked':''}/>` : ''}</th>` : ''}
         <th>Vencimento</th><th>${tipo==='pagar'?'Fornecedor':'Cliente'}</th><th>Descrição</th>
-        <th>Onde pesa</th><th>Valor</th><th>Saldo</th><th>Situação</th><th></th>
+        <th>Atividade / Fazenda</th><th>Onde pesa</th><th>Valor</th><th>Saldo</th><th>Situação</th><th></th>
       </tr></thead>
       <tbody>
         ${lista.map(t=>{
@@ -6573,8 +6591,15 @@ function PageContas(){
             <td data-rotulo="Descrição"><span><strong>${esc(t.descricao)}</strong>
               ${t.documento?`<div class="hint">doc ${esc(t.documento)}</div>`:''}
               ${t.previsao?`<div class="hint"><span class="pill pill-warn">Previsão</span></div>`:''}</span></td>
+            <td data-rotulo="Atividade / Fazenda" data-atividade-fazenda="1"><span>${rat.length===0
+                  ? '<span class="hint">—</span>'
+                  : atividadesFazendasDoTitulo(rat).map(x=>`<div class="ativ-faz"><strong>${esc(x.atividade)}</strong><div class="hint">${esc(x.fazenda)}</div></div>`).join('')}</span></td>
             <td data-rotulo="Onde pesa"><span>${rat.length===0
                   ? `<span class="pill pill-alerta">sem rateio</span>`
+                  : rat.length===1
+                  // uma parte só: atividade e fazenda já estão na coluna ao lado e o valor é o da conta
+                  ? `<div class="hint">${esc(nomeCentroCusto(rat[0].centroCustoId))} · ${esc(rat[0].competencia)}</div>`
+                  // dividida: cada parte com a atividade, a fazenda e o valor dela
                   : rat.map(r=>`<div class="hint">${esc(nomeCentroCusto(r.centroCustoId))} · ${rotuloAtividade(r.atividade)}${r.fazendaId?' · '+esc(nomeFazendaLanc(r.fazendaId)):''} · ${esc(r.competencia)} · R$ ${fmt(r.valor)}</div>`).join('')}</span></td>
             <td class="mono num" data-rotulo="Valor">R$ ${fmt(t.valor)}</td>
             <td class="mono num" data-rotulo="Saldo">${saldo>0?`R$ ${fmt(saldo)}`:'<span class="hint">—</span>'}</td>
@@ -6588,7 +6613,7 @@ function PageContas(){
           </tr>`;
         }).join('')}
         <tr class="linha-total">
-          <td colspan="${podeSelecionar?5:4}" style="text-align:right; font-weight:600;">Total listado</td>
+          <td colspan="${podeSelecionar?6:5}" style="text-align:right; font-weight:600;">Total listado</td>
           <td class="mono num" data-rotulo="Valor" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+Number(t.valor||0),0))}</td>
           <td class="mono num" data-rotulo="Saldo" style="font-weight:600;">R$ ${fmt(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td>
           <td colspan="2" class="vazio-bloco"></td>
