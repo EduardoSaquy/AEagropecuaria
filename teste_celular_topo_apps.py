@@ -2,12 +2,14 @@
 Topo dos apps no celular (pedido do Eduardo, 09/11/2026: "pode fazer o Combustivel igual aos outros"). No AE Combustivel a
 marca, os botoes e os 10 itens do menu ficavam numa faixa so de ~1.860 px: o menu comecava fora da tela (so arrastando a
 faixa azul) e o Sair saia cortado. Agora os quatro apps (Pecuaria, Cana, Cereais, Combustivel) tem o mesmo desenho no
-celular. Prova, em 320, 360 e 390 px:
+celular. Depois ele pediu (09/11/2026) o menu dos "3 risquinhos" (☰), como o do AE Matriz, nos quatro. Prova, em 320, 360 e
+390 px:
   - "← Painel", "Trocar senha" e "Sair" aparecem inteiros na tela;
   - a faixa de cima (marca e botoes) nao rola de lado;
-  - o primeiro item do menu aparece inteiro na tela, logo abaixo dos botoes;
-  - o menu fica numa faixa propria que se arrasta para o lado quando nao cabe;
-  - tocar num item do menu troca de tela;
+  - abaixo dos botoes, o botao ☰ na largura toda, com o nome da tela atual; o menu comeca fechado (nenhum item na tela);
+  - tocar no ☰ abre o menu numa coluna, todos os itens inteiros na largura da tela, e o botao diz que esta aberto;
+  - a setinha de um item abre as sub-abas sem fechar o menu nem trocar de tela;
+  - tocar num item troca de tela e fecha o menu; tocar no ☰ de novo fecha;
   - a pagina nao rola de lado.
 """
 import json
@@ -67,17 +69,38 @@ with sync_playwright() as pw:
             conf(all(inteiro(m[k]) for k in ("painel", "senha", "sair")), "← Painel, Trocar senha e Sair inteiros na tela",
                  str({k: m[k] for k in ("painel", "senha", "sair")}))
             conf(not m["topoRola"], "a faixa de cima nao rola de lado")
-            conf(inteiro(m["primeiro"]) and m["primeiro"]["y"] >= m["sair"]["bottom"] - 1, "o primeiro item do menu aparece inteiro, abaixo dos botoes", str(m["primeiro"]))
-            conf(m["menuCabe"] or m["menuRolavel"], "o menu cabe ou se arrasta para o lado na faixa propria")
-            conf(not m["paginaRola"], "a pagina nao rola de lado")
-            if m["nItens"] >= 2:
-                antes = page.evaluate("() => state.page")
-                menu = ".tabsrow .nav-item" if page.locator(".tabsrow").count() else ".sidebar nav .nav-item"
-                alvo = page.locator(menu).nth(1)
-                alvo.scroll_into_view_if_needed()
-                alvo.tap()
-                page.wait_for_timeout(300)
-                conf(page.evaluate("() => state.page") != antes, "tocar no 2o item do menu troca de tela")
+            botao = page.evaluate("""() => { const b = document.querySelector('[data-menu-celular]'); if(!b || !b.offsetParent) return null;
+              const r = b.getBoundingClientRect(); return {x: r.x, right: r.right, y: r.y, w: r.width, h: r.height, texto: b.textContent.trim(),
+              aberto: b.getAttribute('aria-expanded')}; }""")
+            conf(botao and botao["w"] >= m["largura"] - 2 and botao["h"] >= 44 and botao["y"] >= m["sair"]["bottom"] - 1,
+                 "botao ☰ na largura toda, abaixo dos botoes", str(botao))
+            conf(botao and botao["texto"] and botao["texto"] != "Menu", "o botao ☰ diz a tela atual", str(botao))
+            visiveis = lambda: page.evaluate("() => [...document.querySelectorAll('.nav-item')].filter(e => e.offsetParent).length")
+            conf(botao and botao["aberto"] == "false" and visiveis() == 0, "o menu comeca fechado")
+            page.tap("[data-menu-celular]")
+            page.wait_for_timeout(200)
+            itens = page.evaluate("""() => [...document.querySelectorAll('.nav-item')].filter(e => e.offsetParent).map(e => { const r = e.getBoundingClientRect();
+              return {x: r.x, right: r.right, y: Math.round(r.y)}; })""")
+            conf(len(itens) == m["nItens"] and all(inteiro(i) for i in itens) and len({i["y"] for i in itens}) == len(itens),
+                 "tocar no ☰ abre o menu numa coluna, todos os itens inteiros", str(itens))
+            conf(page.get_attribute("[data-menu-celular]", "aria-expanded") == "true", "o botao diz que o menu esta aberto")
+            antes = page.evaluate("() => state.page")
+            setas = page.locator("[data-nav-seta]")
+            if setas.count():
+                fechada = page.locator('[data-nav-seta][aria-expanded="false"]')
+                if fechada.count():
+                    fechada.first.tap()
+                    page.wait_for_timeout(200)
+                    conf(page.evaluate("() => document.documentElement.classList.contains('menu-celular-aberto')") and page.evaluate("() => state.page") == antes,
+                         "a setinha abre as sub-abas sem fechar o menu nem trocar de tela")
+            alvo = page.locator(".nav-item:not(.active)").filter(has=page.locator("svg")).first
+            alvo.tap()
+            page.wait_for_timeout(300)
+            conf(page.evaluate("() => state.page") != antes, "tocar num item troca de tela")
+            conf(visiveis() == 0 and page.get_attribute("[data-menu-celular]", "aria-expanded") == "false", "e fecha o menu")
+            page.tap("[data-menu-celular]"); page.wait_for_timeout(150); page.tap("[data-menu-celular]"); page.wait_for_timeout(150)
+            conf(visiveis() == 0, "tocar no ☰ de novo fecha o menu")
+            conf(not page.evaluate("() => document.documentElement.scrollWidth > document.documentElement.clientWidth"), "a pagina nao rola de lado")
             conf(not erros, "sem erro de JavaScript", str(erros))
             ctx.close()
     browser.close()
