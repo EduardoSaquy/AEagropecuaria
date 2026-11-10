@@ -694,6 +694,15 @@ Sem peso por animal, volta pela média. Vale para "GMD desde a anterior",
 Painel de Resultado dos Lotes, @ produzidas/Custo/@ (ganho = GMD × dias) e
 o GMD de cada animal no detalhe do lote. A tela diz qual método usou.
 `teste_gmd_boi_a_boi.py`.
+**Só compara peso do mesmo sexo (09/11/2026).** O número é único por sexo, e
+as novilhas 298 e 308 do "Bez. Conf. Fêmeas" (pesagem de 09/11/2026, 427 e
+371 kg) eram comparadas com os bois 298 e 308 dos Currais 1 e 2 (441 e 500 kg
+em 27/10): o lote aparecia perdendo ~5,5 kg/dia, quando ganhou (+0,36 kg/dia
+pela média, de 222,55 kg em 29/07 para 259,75 kg). Cada peso individual guarda
+o sexo do lote da pesagem (lote só de machos ou só de fêmeas; em lote misto, o
+do cadastro quando o número existe num sexo só) e `gmdBoiABoi`/
+`historicoPesoAnimal` só pareiam o mesmo sexo (`mesmoSexoDoPeso`; sem como
+saber de um lado, compara como antes).
 
 ### Contas a Pagar/Receber: conta repetida e baixa em lote
 
@@ -2030,7 +2039,7 @@ do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como re
 
 ## Testes
 
-78 arquivos `teste_*.py`, 3.006 checagens (09/11/2026; a tabela abaixo lista os
+78 arquivos `teste_*.py`, 3.011 checagens (09/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2060,7 +2069,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_sem_dados_sensiveis.py` | 14 | todo arquivo versionado (repositório público: sem CPF/CNPJ, número de conta, de contrato ou de documento; sem dumps de dados) |
 | `teste_site_fora_do_ar.py` | 12 | sw.js (site respondendo 404/503: o app abre da cópia guardada; endereço nunca guardado continua dando 404; online a versão nova entra na hora) |
 | `teste_sem_nome_do_erp.py` | 8 | todo arquivo versionado e o nome de cada um (o nome do ERP de origem não aparece em lugar nenhum) |
-| `teste_gmd_boi_a_boi.py` | 7 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média) |
+| `teste_gmd_boi_a_boi.py` | 12 | AEpecuaria.html (GMD boi a boi: lote apartado, histórico do animal entre currais, vaca com o mesmo número fora, sem peso por animal cai na média; novilha com o número de um boi de outro curral não é comparada com ele, nem em lote misto pelo cadastro) |
 | `teste_contas_lote.py` | 18 | AEMatriz.html (Contas: conta repetida bloqueada, inclusive já paga e em parcelado; seleção e baixa em lote com data do vencimento ou data única) |
 | `teste_layout_matriz.py` | 9 | AEMatriz.html (12 telas em 9 larguras, de 1920 a 320 px: nenhuma página ou card rola de lado) |
 | `teste_area_colhida_cana.py` | 10 | AECana.html, AEMatriz.html (área colhida na colheita de cana: TCH, histórico do talhão, trava de área, produtividade do Matriz) |

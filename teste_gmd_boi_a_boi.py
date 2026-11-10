@@ -23,6 +23,10 @@ LOTES = [
     {"id": 2, "nome": "Curral B", "destino": "confinamento", "numero_animais": 2, "data_inicio": "2026-09-02", "data_fim": None, "dieta_id": None, "sexo": "macho"},
     {"id": 3, "nome": "Vacas",    "destino": "cria",         "numero_animais": 1, "data_inicio": "2026-01-01", "data_fim": None, "dieta_id": None, "sexo": "femea"},
     {"id": 4, "nome": "Curral C", "destino": "confinamento", "numero_animais": 10, "data_inicio": "2026-08-01", "data_fim": None, "dieta_id": None, "sexo": "macho"},
+    # 09/11/2026: novilhas no confinamento com numero que ja foi de boi (201 do Curral A)
+    {"id": 5, "nome": "Novilhas", "destino": "confinamento", "numero_animais": 2, "data_inicio": "2026-08-01", "data_fim": None, "dieta_id": None, "sexo": "femea"},
+    # lote misto: o sexo vem do cadastro quando o numero existe num sexo so (202 so como femea no cadastro)
+    {"id": 6, "nome": "Misto", "destino": "confinamento", "numero_animais": 1, "data_inicio": "2026-08-01", "data_fim": None, "dieta_id": None, "sexo": None},
 ]
 PESAGENS = [
     {"id": 10, "lote_id": 1, "data": "2026-09-01", "peso_medio_kg": 450.0, "observacao": ""},
@@ -32,6 +36,9 @@ PESAGENS = [
     # lote so com media (sem peso por animal): continua pela media
     {"id": 14, "lote_id": 4, "data": "2026-09-01", "peso_medio_kg": 400.0, "observacao": ""},
     {"id": 15, "lote_id": 4, "data": "2026-10-01", "peso_medio_kg": 430.0, "observacao": ""},
+    {"id": 16, "lote_id": 5, "data": "2026-09-01", "peso_medio_kg": 250.0, "observacao": ""},
+    {"id": 17, "lote_id": 5, "data": "2026-10-01", "peso_medio_kg": 290.0, "observacao": ""},
+    {"id": 18, "lote_id": 6, "data": "2026-10-01", "peso_medio_kg": 310.0, "observacao": ""},
 ]
 PA = [
     # 01/09 no Curral A: 101=400, 102=400, 201=500, 202=500
@@ -48,12 +55,21 @@ PA = [
     {"id": 9, "pesagem_id": 12, "numero_animal": "999", "peso_kg": 430},
     # vaca 101 na Cria: nao entra no historico do boi 101
     {"id": 10, "pesagem_id": 13, "numero_animal": "101", "peso_kg": 300},
+    # novilhas: 777 de 250 para 280 (+1,0 kg/dia); a novilha 201 (300 kg) so tem esta pesagem
+    {"id": 11, "pesagem_id": 16, "numero_animal": "777", "peso_kg": 250},
+    {"id": 12, "pesagem_id": 17, "numero_animal": "777", "peso_kg": 280},
+    {"id": 13, "pesagem_id": 17, "numero_animal": "201", "peso_kg": 300},
+    # lote misto: 202 do cadastro e femea; o boi 202 do Curral A nao e ela
+    {"id": 14, "pesagem_id": 18, "numero_animal": "202", "peso_kg": 310},
 ]
 DB = {
     "lotes": LOTES, "pesagens": PESAGENS, "pesagens_animais": PA,
     "animais": [
         {"id": 1, "numero": "101", "lote_id": 2, "sexo": "macho", "raca": "nelore", "status": "ativo"},
         {"id": 2, "numero": "101", "lote_id": 3, "sexo": "femea", "raca": "nelore", "status": "ativo"},
+        {"id": 3, "numero": "201", "lote_id": 5, "sexo": "femea", "raca": "angus", "status": "ativo"},
+        {"id": 4, "numero": "777", "lote_id": 5, "sexo": "femea", "raca": "angus", "status": "ativo"},
+        {"id": 5, "numero": "202", "lote_id": 6, "sexo": "femea", "raca": "angus", "status": "ativo"},
     ],
     "dietas": [], "ingredientes": [],
     "fazendas": [{"id": 1, "nome": "Faz", "estado": "SP", "area_ha": 100, "ativo": True}],
@@ -105,6 +121,19 @@ with sync_playwright() as pw:
     r = ev("() => gmdDesdeAnterior(state.lotes.find(l=>l.id===2), state.pesagens.find(p=>p.id===12))")
     conf(r and r["animais"] == 1, "numero repetido na mesma pesagem fica de fora", str(r))
     ev("() => { state.pesagensAnimais = state.pesagensAnimais.filter(x=>x.id!==99); }")
+
+    # 09/11/2026: novilha com o numero de um boi de outro curral nao e comparada com ele
+    r = ev("() => gmdDesdeAnterior(state.lotes.find(l=>l.id===5), state.pesagens.find(p=>p.id===17))")
+    conf(r and r["boiABoi"] and r["animais"] == 1 and abs(r["gmd"] - 1.0) < 1e-9,
+         "novilha 201 nao e comparada com o boi 201 (so a 777 entra: +1,0 kg/dia; antes dava -2,83)", str(r))
+    h = ev("() => historicoPesoAnimal(state.lotes.find(l=>l.id===5), '201', 'femea')")
+    conf([x["pesoKg"] for x in h] == [300], "historico da novilha 201 nao herda os pesos do boi 201", str(h))
+    h = ev("() => historicoPesoAnimal(state.lotes.find(l=>l.id===1), '201', 'macho')")
+    conf([x["pesoKg"] for x in h] == [500, 530], "e o do boi 201 nao herda o peso da novilha", str(h))
+    r = ev("() => gmdDesdeAnterior(state.lotes.find(l=>l.id===6), state.pesagens.find(p=>p.id===18))")
+    conf(r is None, "lote misto: 202 so existe como femea no cadastro, nao pareia com o boi 202 (sem par, sem GMD)", str(r))
+    r = ev("() => ganhoDoLoteNaJanela(state.lotes.find(l=>l.id===5), state.pesagens.find(p=>p.id===16), state.pesagens.find(p=>p.id===17))")
+    conf(r["boiABoi"] and abs(r["ganhoKg"] - 30) < 1e-9, "janela das novilhas: +30 kg (so a 777), nunca negativo pelo boi", str(r))
 
     # tela: lista de pesagens do Confinamento mostra o metodo
     ev("() => { state.page='pesagemConfinamento'; state.listasExpandidas['pesagem-confinamento']=true; render(); }")

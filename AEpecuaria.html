@@ -3675,8 +3675,11 @@ function PageLotesGeral(){
 // e o GMD de quem mudou de curral sumia). Vaca com o mesmo número de um boi
 // fica de fora por estar em lote de outro tipo. Mesmo índice do ganho boi
 // a boi (indicePesosIndividuais).
-function historicoPesoAnimal(lote, numeroAnimal){
+function historicoPesoAnimal(lote, numeroAnimal, sexoAnimal){
+  // Só pesos do mesmo sexo: a novilha 298 não herda o histórico do boi 298 (09/11/2026).
+  const sexo = (sexoAnimal==='macho'||sexoAnimal==='femea') ? sexoAnimal : (sexoFixoDoLote(lote.id)||'');
   return (indicePesosIndividuais(loteTipo(lote)).porNumero.get(chaveNumeroAnimal(numeroAnimal))||[])
+    .filter(x=>mesmoSexoDoPeso(x.sexo, sexo))
     .map(x=>({data:x.data, pesoKg:x.pesoKg}));
 }
 // GMD do animal: da primeira à última pesagem individual dele -- mesmo
@@ -3772,7 +3775,7 @@ function PageLoteDetalhe(){
   const animais = [...state.animais.filter(a=>a.loteId===lote.id)].sort((a,b)=>String(a.numero).localeCompare(String(b.numero), undefined, {numeric:true}));
 
   const rows = animais.map(a=>{
-    const historico = historicoPesoAnimal(lote, a.numero);
+    const historico = historicoPesoAnimal(lote, a.numero, a.sexo);
     const ultima = historico[historico.length-1] || null;
     const gmd = gmdAnimal(historico);
     const reprod = (ehCria && a.sexo==='femea') ? situacaoReprodutivaVaca(lote.id, a.numero) : null;
@@ -5137,22 +5140,44 @@ function gmdEntre(pesoAnterior, pesoAtual, dataAnterior, dataAtual){
  * em lote de Cria/Pasto). Número que aparece duas vezes na mesma pesagem é
  * ambíguo e não entra. Sem nenhum animal com peso anterior (pesagem só com
  * média, como a "Entrada de animais"), cai na média do lote.
+ *
+ * MESMO SEXO (09/11/2026): o número do animal é único POR SEXO, e um lote de
+ * novilhas no confinamento tem números que já foram de bois de outro curral.
+ * As novilhas 298 e 308 do "Bez. Conf. Fêmeas" (427 e 371 kg) eram comparadas
+ * com os bois 298 e 308 dos Currais 1 e 2 (441 e 500 kg) e o lote aparecia
+ * perdendo ~5,5 kg/dia, quando tinha ganhado. Cada peso guarda o sexo do lote
+ * da pesagem (lote só de machos ou só de fêmeas; em lote misto, o do cadastro
+ * quando o número existe num sexo só) e só se compara peso do mesmo sexo.
+ * Sem como saber o sexo de um dos lados, compara como antes.
  */
 function chaveNumeroAnimal(numero){ return String(numero??'').trim().toLowerCase(); }
+function mesmoSexoDoPeso(a, b){ return !a || !b || a===b; }
 let cachePesosIndividuais = null;
 // Por tipo de lote: número do animal -> pesos individuais em ordem
 // cronológica, e pesagem -> pesos individuais dela. Refeito quando o
 // loadAll troca os arrays do state.
 function indicePesosIndividuais(tipo){
   const c = cachePesosIndividuais;
-  if(!c || c.pesagens!==state.pesagens || c.pesagensAnimais!==state.pesagensAnimais || c.lotes!==state.lotes){
-    cachePesosIndividuais = {pesagens:state.pesagens, pesagensAnimais:state.pesagensAnimais, lotes:state.lotes, porTipo:{}};
+  if(!c || c.pesagens!==state.pesagens || c.pesagensAnimais!==state.pesagensAnimais || c.lotes!==state.lotes || c.animais!==state.animais){
+    cachePesosIndividuais = {pesagens:state.pesagens, pesagensAnimais:state.pesagensAnimais, lotes:state.lotes, animais:state.animais, porTipo:{}};
   }
   const cache = cachePesosIndividuais.porTipo;
   if(cache[tipo]) return cache[tipo];
   const tipoDoLote = new Map(state.lotes.map(l=>[l.id, loteTipo(l)]));
-  const dataDaPesagem = new Map();
-  state.pesagens.forEach(p=>{ if(Number(p.pesoMedioKg)>0 && tipoDoLote.get(p.loteId)===tipo) dataDaPesagem.set(p.id, p.data); });
+  const dataDaPesagem = new Map(), sexoDaPesagem = new Map();
+  const sexoDoLote = new Map(state.lotes.map(l=>[l.id, (l.sexo==='macho'||l.sexo==='femea') ? l.sexo : '']));
+  state.pesagens.forEach(p=>{
+    if(Number(p.pesoMedioKg)>0 && tipoDoLote.get(p.loteId)===tipo){ dataDaPesagem.set(p.id, p.data); sexoDaPesagem.set(p.id, sexoDoLote.get(p.loteId)||''); }
+  });
+  // Em lote misto: o sexo do cadastro, quando o número existe num sexo só.
+  const sexosDoNumero = new Map();
+  (state.animais||[]).forEach(a=>{
+    if(a.sexo!=='macho' && a.sexo!=='femea') return;
+    const k = chaveNumeroAnimal(a.numero);
+    if(!sexosDoNumero.has(k)) sexosDoNumero.set(k, new Set());
+    sexosDoNumero.get(k).add(a.sexo);
+  });
+  const sexoDoNumero = k=>{ const s = sexosDoNumero.get(k); return s && s.size===1 ? [...s][0] : ''; };
   const repeticoes = new Map();
   state.pesagensAnimais.forEach(pa=>{
     if(!dataDaPesagem.has(pa.pesagemId)) return;
@@ -5165,7 +5190,7 @@ function indicePesosIndividuais(tipo){
     const numero = chaveNumeroAnimal(pa.numeroAnimal);
     if(!data || !numero || !(Number(pa.pesoKg)>0)) return;
     if(repeticoes.get(pa.pesagemId+'|'+numero)>1) return;
-    const item = {numero, data, pesoKg:Number(pa.pesoKg), pesagemId:pa.pesagemId};
+    const item = {numero, data, pesoKg:Number(pa.pesoKg), pesagemId:pa.pesagemId, sexo: sexoDaPesagem.get(pa.pesagemId) || sexoDoNumero(numero)};
     if(!porNumero.has(numero)) porNumero.set(numero, []);
     porNumero.get(numero).push(item);
     if(!porPesagem.has(pa.pesagemId)) porPesagem.set(pa.pesagemId, []);
@@ -5184,7 +5209,7 @@ function gmdBoiABoi(atual, tipo, desde){
   const {porNumero, porPesagem} = indicePesosIndividuais(tipo);
   const gmds = [];
   (porPesagem.get(atual.id)||[]).forEach(item=>{
-    const antes = (porNumero.get(item.numero)||[]).filter(x=>x.data<atual.data && (!desde || x.data>=desde));
+    const antes = (porNumero.get(item.numero)||[]).filter(x=>x.data<atual.data && (!desde || x.data>=desde) && mesmoSexoDoPeso(x.sexo, item.sexo));
     if(antes.length===0) return;
     const ref = desde ? antes[0] : antes[antes.length-1];
     const gmd = gmdEntre(ref.pesoKg, item.pesoKg, ref.data, atual.data);
