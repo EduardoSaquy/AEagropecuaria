@@ -1277,6 +1277,32 @@ animais, 43 partos, 103 pesagens e 24 inseminações sem o zero, nenhum mantido,
 0 número com zero sobrando no banco.
 `teste_qual_animal.py`.
 
+### Pecuária: animal vendido sai do cadastro ativo (11/11/2026)
+
+Achado da revisão geral de 10/11/2026: a venda baixava só a contagem do lote (`lotes.numero_animais`) e o cadastro individual ficava
+"ativo" para sempre (202 bois dos Currais 1 e 2, lotes vendidos e encerrados em 27/10; todos os 830 cadastros estavam "ativo").
+- **Banco** (`pecuaria_animal_vendido_01.sql`): `animais.status` aceita `'vendido'`, coluna nova `animais.data_saida` (vendido exige a data,
+  `animais_vendido_tem_data`) e o gatilho **`trg_lote_baixa_animais`** em `lotes`: quando o lote zera e fica com `data_fim` **e tem venda em
+  `abates`**, os animais ainda `'ativo'` nele viram `'vendido'` com `data_saida = data_fim`; lote reaberto (venda excluída/editada) volta a
+  `'ativo'` só quem saiu naquela data; mudar a `data_fim` leva a `data_saida` junto. Lote zerado **sem** venda (o Manejo levou todos) não vira
+  vendido. É **no banco** de propósito: cobre os quatro caminhos de venda (Pecuária na hora e pela fila sem internet, edição, exclusão e
+  `registrar_venda_animais` do Matriz) sem mexer neles, e é `security definer` porque quem vende (permissão `vendas`) não pode mexer em
+  `animais` pela RLS e a baixa sairia vazia sem erro. Ensaiado num Postgres 16 descartável com a função de venda real: 9 caminhos como um
+  vendedor sem permissão em animais, rodar duas vezes, desfazer (no fim do arquivo) e rodar de novo.
+- **Venda parcial não baixa ninguém** (a venda não diz quais números saíram); os que sobrarem saem quando o lote zerar. Curral 2: 111
+  numerados x 106 vendidos (duas vendas sem número; 42 não foram pesados no dia da venda): os 5 a mais não têm como ser identificados pelos
+  dados e saem como vendidos; se algum continua na fazenda, **"Não foi vendido"** no lote dele.
+- **App** (`AEpecuaria.html`, `teste_animal_vendido.py` 17, falha no código anterior): pílula "Vendido em dd/mm/aaaa"; cabeçalho do lote
+  separa cabeças (contagem do lote) de animais com número, vendidos e mortos (`resumoAnimaisDoLote`; o texto antigo chamava a contagem de
+  "cadastrados"); **lançar o número de um vendido não o traz de volta** (`upsertAnimal` devolve `mensagemAnimalVendido`, que aparece no aviso
+  de cada lançamento e na prévia da planilha de manejo): o número é único por sexo e o histórico de pesagem é pelo número, então reaproveitar
+  misturaria dois animais (mesma regra do 512); "Não foi vendido" (`data-reverter-venda-animal`) volta a ativo e abre o Editar; Editar de um
+  vendido não muda o lote sem desfazer antes. Antes do SQL o app funciona como antes (sem `data_saida`, sem `'vendido'`).
+- **Estoque negativo zerado (operação, 11/11/2026, pedido dele: "pode zerar com o último valor lançado")**: milho −15.891,9 kg, milheto
+  −1.418,3 kg e ureia −166,6 kg viraram 0 com uma entrada de ajuste cada (`movimentos` 10252 a 10254, `ajuste=true`, data 11/11/2026, preço
+  da última entrada com preço: milho R$ 0,80, ureia R$ 4,38; milheto R$ 0,50 do cadastro, a última entrada não tinha preço), como o
+  "Ajustar estoque" do app faz. A causa é compra não lançada como entrada; sem lançar as próximas, volta a ficar negativo.
+
 ### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
 
 Regra da fazenda (Eduardo, 02/11/2026): não há touro, só IATF; até **3
@@ -2039,7 +2065,7 @@ do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como re
 
 ## Testes
 
-78 arquivos `teste_*.py`, 3.011 checagens (09/11/2026; a tabela abaixo lista os
+79 arquivos `teste_*.py`, 3.028 checagens (11/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2078,6 +2104,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_financiamentos_periodicidade.py` | 39 | AEMatriz.html (Financiamentos: parcelas anuais/semestrais e 1º vencimento, valor e juros de cada parcela digitados, Excluir contrato, contrato que já existia fora do empréstimo recebido) |
 | `teste_parto_aborto_lote_numero.py` | 89 | AEpecuaria.html (toque em Salvar logo depois de mexer no número não se perde, com mouse e toque, no parto e no Manejo; lista de partos atualiza sem esperar o histórico; update sem linha avisa; lote em branco e obrigatório em 11 lançamentos; número só com algarismos e número antigo com texto ainda editável; campo Nome do animal; app antes do SQL não manda as colunas novas; aborto; óbito do bezerro; nasceu morto; data do parto em branco e aviso de parto repetido; resumo do lote sem o bezerro morto nos vivos) |
 | `teste_matriz_reproducao_operacional.py` | 15 | AEMatriz.html (Resultados > Operacional > Reprodução (Cria): custo por bezerro desmamado = inseminação + ração/pasto dos lotes de Cria + fatia do fixo sem a compra de ração; taxa de prenhez; desmamados machos/fêmeas; sem rolar de lado) |
+| `teste_animal_vendido.py` | 17 | AEpecuaria.html (animal vendido: "Vendido em dd/mm" no lote, cabeças x numerados, lançar o número de um vendido avisa e não o move, "Não foi vendido" volta a ativo e abre o Editar, Editar não move vendido; antes do SQL nada muda) |
 | `teste_qual_animal.py` | 25 | AEpecuaria.html ("Qual animal é?": 11 x 11099 · ES pergunta antes de gravar inseminação/diagnóstico/parto; 57 = 057 não pergunta e usa o cadastro; o campo tira zero à esquerda; sem parecido ou editando sem mexer no número não pergunta; Voltar não grava; regra das 3 IATF: crias, IA desde o último parto, 1ª/2ª/3ª automática, aviso na 4ª que não bloqueia) |
 | `teste_lavoura_texto_escapado.py` | 8 | AECana.html, AECereais.html (nome com aspas, `<` e `&`: aparece inteiro na lista, não vira HTML e volta inteiro no campo de edição) |
 | `teste_fila_sem_duplicar.py` | 18 | AEpecuaria.html (resposta perdida depois de gravar: saída de ração, baixa de estoque, parto, inseminação, diagnóstico, cocho, venda e pesagem voltam da fila sem duplicar e completam só o que faltou; sem a coluna `client_uuid` grava como antes) |

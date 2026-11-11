@@ -627,7 +627,7 @@ function protocoloInseminacaoToRow(p){ return {manejo_id:p.manejoId, lote_id:p.l
 // 27/10/2026, o número ficou só com dígitos e o que era escrito junto dele
 // ("721 abortou", "512 2S") passa a ir aqui. Só é mandado ao banco quando
 // tem valor ou o animal já tinha a coluna (o app novo funciona antes do SQL).
-function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', status:r.status||'ativo', dataMorte:r.data_morte||null, criadoPor:r.criado_por||'', nome:r.nome||'', _temNome:('nome' in r)}; }
+function rowToAnimal(r){ return {id:r.id, numero:r.numero, loteId:r.lote_id, sexo:r.sexo||'', raca:r.raca||'', status:r.status||'ativo', dataMorte:r.data_morte||null, dataSaida:r.data_saida||null, criadoPor:r.criado_por||'', nome:r.nome||'', _temNome:('nome' in r)}; }
 function animalToRow(a){
   const row = {numero:a.numero, lote_id:a.loteId, sexo:a.sexo||null, raca:a.raca||null};
   if(a.nome || a._temNome) row.nome = (a.nome||'').trim() || null;
@@ -661,6 +661,21 @@ function animalCadastrado(numero, sexo){
   const numeroNorm = String(numero||'').trim();
   if(!numeroNorm) return null;
   return state.animais.find(a=>a.numero.toLowerCase()===numeroNorm.toLowerCase() && (!sexo || a.sexo===sexo)) || null;
+}
+// ANIMAL VENDIDO (Eduardo, 11/11/2026). Quando a venda zera e encerra o lote,
+// o banco marca os animais que ainda estavam nele como 'vendido', com a data
+// (gatilho trg_lote_baixa_animais, pecuaria_animal_vendido_01.sql); excluir a
+// venda reabre o lote e desfaz. Vale para a venda feita aqui, pela fila sem
+// internet e pelo AE Matriz. O número continua sendo do animal vendido (o
+// histórico de pesagem é pelo número e o número é único por sexo): lançar o
+// mesmo número de novo NÃO pode trazê-lo de volta para um lote ativo.
+function animalVendido(a){ return !!a && a.status==='vendido'; }
+function dataBrAnimal(d){ return d ? String(d).split('-').reverse().join('/') : ''; }
+function mensagemAnimalVendido(a){
+  const lote = state.lotes.find(l=>l.id===a.loteId);
+  const sexo = a.sexo==='femea' ? 'fêmea' : (a.sexo==='macho' ? 'macho' : '');
+  return `O número ${a.numero}${sexo ? ' ('+sexo+')' : ''} é de um animal vendido${a.dataSaida ? ' em '+dataBrAnimal(a.dataSaida) : ''}${lote ? ' (lote '+lote.nome+')' : ''}, e o cadastro dele não foi mexido. `
+    + `Se é outro animal, use outro número (por exemplo ${numeroSemZeros(a.numero)}099). Se esse animal não foi vendido, abra o lote ${lote ? lote.nome : 'dele'} e toque em "Não foi vendido".`;
 }
 // Raça já conhecida desse número+sexo, se ele já tiver cadastro -- usado pra
 // pré-preencher o campo de raça nos formulários que referenciam um animal
@@ -808,6 +823,7 @@ async function upsertAnimal(numero, loteId, extra, criadosNestaLeva){
     }
   }
   const existente = jaNestaLeva || animalCadastrado(numeroNorm, extra.sexo);
+  if(existente && animalVendido(existente)) return {error:{message: mensagemAnimalVendido(existente)}};
   const row = {numero: numeroNorm, lote_id: loteId};
   if(extra.sexo) row.sexo = extra.sexo;
   if(extra.raca) row.raca = extra.raca;
@@ -3217,6 +3233,8 @@ function montarPlanoManejo(XLSX, cru){
           const outros = animaisParecidos(numero, sexoFixo || undefined).filter(x=>numeroSemZeros(x.numero) !== numeroSemZeros(numero)).map(x=>x.numero);
           if(outros.length) av(`Existe também o animal ${outros.join(', ')} (mesmo brinco com 099/000). Foi usado o ${numero}; confira.`);
         }
+        const jaVendido = animalCadastrado(numero, sexoFixo || undefined);
+        if(animalVendido(jaVendido)) e(mensagemAnimalVendido(jaVendido));
         if(visto.has(numero)) av(`O número ${numero} aparece também na linha ${visto.get(numero)}.`);
         else visto.set(numero, a.linha);
       }
@@ -3764,6 +3782,18 @@ function situacaoReprodutivaVaca(loteId, numero){
   return {ultimoDiagnostico, ultimaInseminacao, status, detalheStatus};
 }
 
+// Cabeças (contagem do lote) x animais com número cadastrado. Não são a mesma
+// coisa: o lote conta todos; o número só existe para quem foi numerado
+// (entrada, inseminação, pesagem por animal, Manejo). 11/11/2026.
+function resumoAnimaisDoLote(lote, animais){
+  const ativos = animais.filter(a=>a.status!=='morto' && !animalVendido(a)).length;
+  const vendidos = animais.filter(animalVendido).length;
+  const mortos = animais.filter(a=>a.status==='morto').length;
+  const partes = [`${fmtInt(lote.numeroAnimais)} cabeça(s) no lote`, `${fmtInt(ativos)} com número cadastrado`];
+  if(vendidos) partes.push(`${fmtInt(vendidos)} vendido(s)`);
+  if(mortos) partes.push(`${fmtInt(mortos)} morto(s)`);
+  return partes.join(' · ');
+}
 function PageLoteDetalhe(){
   const lote = state.lotes.find(l=>l.id===state.loteDetalheId);
   const voltarBtn = `<button class="btn btn-ghost btn-sm" data-voltar-lote-detalhe="1">← Voltar</button>`;
@@ -3785,7 +3815,7 @@ function PageLoteDetalhe(){
   return `
   <div class="toolbar">
     ${voltarBtn}
-    <span class="hint">${esc(lote.nome)} · ${DESTINO_LOTE_LABEL[lote.destino]||lote.destino||'—'} · ${fmtInt(lote.numeroAnimais)} animal(is) cadastrado(s) no lote</span>
+    <span class="hint" data-resumo-lote-animais="1">${esc(lote.nome)} · ${DESTINO_LOTE_LABEL[lote.destino]||lote.destino||'—'} · ${resumoAnimaisDoLote(lote, animais)}</span>
   </div>
   ${ContextoLoteDetalhe(lote, state.loteDetalheContexto)}
   <div class="card">
@@ -3798,11 +3828,11 @@ function PageLoteDetalhe(){
       </tr></thead>
       <tbody>
         ${rows.map(r=>`
-          <tr${r.a.status==='morto'?' style="opacity:.6;"':''}>
+          <tr${r.a.status==='morto'||animalVendido(r.a)?' style="opacity:.6;"':''}>
             <td class="mono"><strong>${esc(r.a.numero)}</strong>${r.a.nome ? `<div class="hint" style="font-family:inherit;">${esc(r.a.nome)}</div>` : ''}</td>
             <td>${SEXO_BEZERRO_LABEL[r.a.sexo]||'<span class="hint">—</span>'}</td>
             <td>${RACA_TOURO_LABEL[r.a.raca]||'<span class="hint">—</span>'}</td>
-            <td>${r.a.status==='morto' ? `<span class="pill pill-cat">Morto${r.a.dataMorte?' em '+r.a.dataMorte.split('-').reverse().join('/'):''}</span>` : `<span class="pill pill-ok">Ativo</span>`}</td>
+            <td>${r.a.status==='morto' ? `<span class="pill pill-cat">Morto${r.a.dataMorte?' em '+r.a.dataMorte.split('-').reverse().join('/'):''}</span>` : animalVendido(r.a) ? `<span class="pill pill-cat" data-animal-vendido="${r.a.id}">Vendido${r.a.dataSaida?' em '+dataBrAnimal(r.a.dataSaida):''}</span>` : `<span class="pill pill-ok">Ativo</span>`}</td>
             <td class="mono">${r.ultima ? `${fmt(r.ultima.pesoKg,1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span>` : '—'}</td>
             <td class="mono">${r.gmd!==null ? (r.gmd>=0?'+':'')+fmt(r.gmd,2)+' kg/dia' : '—'}</td>
             ${ehCria ? `
@@ -3814,7 +3844,9 @@ function PageLoteDetalhe(){
               <button class="btn-ghost btn-sm" data-edit-animal="${r.a.id}">Editar</button>
               ${r.a.status==='morto'
                 ? (!souColaborador() ? `<button class="btn-ghost btn-sm" data-reverter-morte="${r.a.id}">Reverter morte</button>` : '')
-                : `<button class="btn-ghost btn-sm" data-registrar-morte="${r.a.id}">Registrar morte</button>`}
+                : animalVendido(r.a)
+                  ? (!souColaborador() ? `<button class="btn-ghost btn-sm" data-reverter-venda-animal="${r.a.id}">Não foi vendido</button>` : '')
+                  : `<button class="btn-ghost btn-sm" data-registrar-morte="${r.a.id}">Registrar morte</button>`}
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-animal="${r.a.id}">Excluir</button>` : ''}
             </td>
             ` : ''}
@@ -7890,6 +7922,19 @@ function attachEvents(){
       render();
     };
   });
+  document.querySelectorAll('[data-reverter-venda-animal]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = Number(el.dataset.reverterVendaAnimal);
+      const animal = state.animais.find(a=>a.id===id);
+      if(!animal) return;
+      if(!confirm(`O animal ${animal.numero} não saiu na venda e continua na fazenda? Ele volta a ficar ativo; depois toque em Editar e escolha o lote em que ele está.`)) return;
+      const {error} = await db.from('animais').update({status:'ativo', data_saida:null}).eq('id', id);
+      if(error){ alert('Não foi possível desfazer: ' + error.message); return; }
+      await loadAll();
+      const atualizado = state.animais.find(a=>a.id===id);
+      if(atualizado){ editDraft = {...atualizado, _editId: atualizado.id}; state.modal = {type:'animal'}; render(); }
+    };
+  });
   document.querySelectorAll('[data-reverter-morte]').forEach(el=>{
     el.onclick = async ()=>{
       const id = Number(el.dataset.reverterMorte);
@@ -9067,6 +9112,10 @@ function attachEvents(){
         const nomeAnimalVal = (document.getElementById('f-nomeanimal')?.value||'').trim();
         if(!validarObrigatorios([[numeroAnimalVal,'Número do animal'],[loteAnimalVal,'Lote'],[sexoAnimalVal,'Sexo'],[racaAnimalVal,'Raça']])) return;
         const animalOriginal = editDraft._editId ? state.animais.find(a=>a.id===editDraft._editId) : null;
+        if(animalVendido(animalOriginal) && Number(loteAnimalVal)!==animalOriginal.loteId){
+          alert(`O animal ${animalOriginal.numero} está marcado como vendido${animalOriginal.dataSaida ? ' em '+dataBrAnimal(animalOriginal.dataSaida) : ''}. Se ele continua na fazenda, toque antes em "Não foi vendido" no lote dele; depois mude o lote.`);
+          return;
+        }
         const erroNumeroCadastro = erroNumeroAnimal(numeroAnimalVal, animalOriginal?.numero);
         if(erroNumeroCadastro){ alert(erroNumeroCadastro); return; }
         const animalComEsseNumero = animalCadastrado(numeroAnimalVal, sexoAnimalVal);
