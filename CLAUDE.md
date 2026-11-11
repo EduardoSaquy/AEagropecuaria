@@ -1288,7 +1288,7 @@ Achado da revisão geral de 10/11/2026: a venda baixava só a contagem do lote (
   vendido. É **no banco** de propósito: cobre os quatro caminhos de venda (Pecuária na hora e pela fila sem internet, edição, exclusão e
   `registrar_venda_animais` do Matriz) sem mexer neles, e é `security definer` porque quem vende (permissão `vendas`) não pode mexer em
   `animais` pela RLS e a baixa sairia vazia sem erro. Ensaiado num Postgres 16 descartável com a função de venda real: 9 caminhos como um
-  vendedor sem permissão em animais, rodar duas vezes, desfazer (no fim do arquivo) e rodar de novo.
+  vendedor sem permissão em animais, rodar duas vezes, desfazer (no fim do arquivo) e rodar de novo. **RODADO em 11/11/2026** (pelo conector, com o OK dele): 8 itens OK; Curral 1: 91 e Curral 2: 111 vendidos, 0 ativo em lote encerrado pela venda, 628 animais ativos.
 - **Venda parcial não baixa ninguém** (a venda não diz quais números saíram); os que sobrarem saem quando o lote zerar. Curral 2: 111
   numerados x 106 vendidos (duas vendas sem número; 42 não foram pesados no dia da venda): os 5 a mais não têm como ser identificados pelos
   dados e saem como vendidos; se algum continua na fazenda, **"Não foi vendido"** no lote dele.
