@@ -1653,17 +1653,16 @@ compra de animais e as travas do banco.
     CSS do bloco "SETINHA COM AS SUB-ABAS" copiado nos 5 apps (`core.css` segue sendo uma etapa futura): quem mexer num, mexa nos cinco.
 - **Política de segurança de conteúdo (CSP, 06/11/2026; `teste_csp.py` 43 checagens)**: `<meta http-equiv=Content-Security-Policy>`
   no `<head>` dos cinco apps. Cada app só pode falar com o Supabase do projeto (`connect-src` https e wss
-  `kmkystqgpvmzrccxvyaz.supabase.co`), carregar script da `cdn.jsdelivr.net` (a biblioteca fixa em 2.118.0), css do
+  `kmkystqgpvmzrccxvyaz.supabase.co`), carregar script **só do próprio site** (desde 12/11/2026 a biblioteca vem de `vendor/`; antes era da
+  `cdn.jsdelivr.net`), css do
   `fonts.googleapis.com` e fonte do `fonts.gstatic.com`; `default-src 'none'`, `object-src 'none'`, `base-uri` e
   `form-action` 'self'. **Sem `'unsafe-eval'`** (script injetado não manda dado para fora, não faz eval); `'unsafe-inline'`
   continua em script e estilo porque cada app é um arquivo só com tudo embutido. **Se um dia o app precisar de outro
   serviço (mapa, clima, WhatsApp API...), o endereço entra nessa política nos cinco apps.** Provado: página de controle sem
   política deixa passar fetch/imagem/script/eval de outra origem, e o app barra os quatro com a violação registrada pelo
-  navegador; os cinco apps percorrem as telas sem violar a própria política; e, com a biblioteca REAL do supabase-js 2.118.0
-  (baixada só para esse teste, fora do repo), `createClient`, `auth.getSession`, consulta e `rpc` funcionam dentro da política.
-  **Decidido por ele em 07/11/2026: a senha fica com mínimo de 6 caracteres** (não mudar para 10); o mínimo é 6 em 4 telas por app, e o mínimo
-  do Auth do Supabase é uma configuração do painel dele (Authentication > Policies). SRI/auto-hospedar o supabase-js: não
-  feito (mexeria no cache offline do service worker e nos ~50 testes).
+  navegador; os cinco apps percorrem as telas sem violar a própria política; e a biblioteca REAL do supabase-js 2.118.0, servida
+  pelo próprio site (`vendor/`), carrega com `createClient`, `auth.getSession`, consulta e `rpc` funcionando dentro da política.
+  A senha passou a ter **mínimo de 10** em 12/11/2026 (decisão dele; ver "Segurança de 12/11/2026").
 - **Compra de animais (decisões dele, 06/11/2026)**: matriz só é reconhecida no DESCARTE (sem depreciar: "ela vale o
   valor dela em carne"); o formulário de compra ganha lote e nº de cabeças (colunas `lote_id` e `quantidade` já
   existem); ele pediu a LISTA das compras para separar matriz de giro: `compra_animais_01_lista.sql` (só leitura,
@@ -1958,6 +1957,40 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
   errado ou conta a pagar/receber EM ABERTO com rateio do lado errado (a baixa criaria lançamento do lado errado e seria barrada). **Se o ERP for reimportado, receita em centro de saída será
   recusada**: a importação precisa usar o centro de entrada. Desfazer no fim do arquivo. Os fluxos do app que gravam lançamento com centro fixo seguem do lado certo: o juros das parcelas ("Juros e Encargos de Financiamento", `saida`) e a venda de animais ("Vendas", `entrada`); as telas de lançamento e de contas já filtram o lado.
 
+### Segurança de 12/11/2026: biblioteca no próprio site, registro, 20 minutos e senha de 10
+
+Pedido do Eduardo ("quero deixar muito seguro para colocar contas bancárias, notas fiscais e livro caixa"). Ele decidiu
+não assinar o Supabase Pro por enquanto; o que dá para fazer sem pagar:
+- **Biblioteca do Supabase pelo próprio site** (`vendor/`, ver "Armadilhas"): a CSP não libera mais script de fora.
+- **Registro de alterações em mais 6 tabelas** (`auditoria_06_registro_contas_e_financiamentos.sql`, **rodado em 12/11/2026**
+  pelo conector): `titulos`, `titulo_rateios`, `titulo_baixas`, `parcelas_financiamento`, `movimentos_financiamento` e
+  `contas_bancarias`, além das 5 de antes (11 no total). O gatilho é o mesmo `registrar_alteracao` (dono `postgres`, que passa
+  pela RLS; a política de duas etapas não o barra).
+- **AE Matriz sai sozinho depois de 20 min sem uso** (`MINUTOS_SEM_USO_PARA_SAIR`): confere ao abrir, ao voltar para a aba e a cada
+  30 s; encerra só a sessão deste aparelho (`signOut({scope:'local'})`, com limite de 4 s e apagando `CHAVE_SESSAO_SUPABASE`) e
+  mostra o aviso na tela de login. A hora do último uso é do APARELHO (`horaDoUltimoUso`, `core.js`, chave `ae_ultimo_uso_v1`):
+  toque, tecla ou rolagem em qualquer dos 5 apps conta, então quem usa a Pecuária no mesmo navegador não perde o login. Só o
+  Matriz sai sozinho (no campo, sem internet, atrapalharia). Como os apps dividem o login no navegador, sair no Matriz também
+  desloga um app técnico aberto no mesmo navegador.
+- **Senha de 10+ e troca obrigatória** (decisão dele: "Todos"): `seguranca_05_troca_de_senha.sql` cria
+  `profiles.precisa_trocar_senha` (todos começam marcados) e `senha_trocada_em`, um gatilho em `auth.users` que desmarca quando a
+  senha muda de verdade (`senha_foi_trocada`) e uma trava em `profiles` (`trava_desmarcar_troca_de_senha`): pela API ninguém
+  desmarca sem trocar a senha (o administrador pode marcar). O `core.js` (`exigirSenhaNova`, `MIN_SENHA` = 10) mostra a tela cheia
+  "crie uma senha nova" logo depois do perfil vir do banco e o app não abre antes; sem internet (perfil guardado) não pede. Antes
+  do SQL a coluna não existe e nada muda. Perfil criado depois nasce marcado: a senha que o administrador dá é provisória.
+- **Trocar senha** passou a conferir a senha atual num cliente à parte (`senhaAtualConfere`, `storageKey` próprio, sem guardar
+  nada): antes entrava de novo no próprio cliente e, para quem tem o código do celular, a sessão confirmada (aal2) virava só de
+  senha (aal1) e o banco parava de responder no meio da troca. `USER_UPDATED` não recarrega mais o app.
+- **"Nova senha" em Usuários** (só admin): senha provisória para quem esqueceu (os logins usam e-mail inventado, não há
+  recuperação por e-mail). Chama `criar-usuario-cana` com `acao: 'redefinir_senha'` (**versão 5**, mínimo 10 também para criar
+  usuário): troca a senha (o gatilho desmarca) e marca a pessoa de novo.
+- **Painel do Supabase (Authentication > Sign In / Providers > Email)**: "Secure password change" e "Require current password when
+  updating" estão DESLIGADOS (conferido em 12/11/2026). A troca obrigatória depende disso: ligados, `updateUser` pediria nova
+  confirmação por e-mail, e os e-mails são inventados. Não ligar.
+- **Ainda sem fazer** (decisões dele de 12/11/2026, próximas partes): financeiro só para ele e os proprietários (secretária vê
+  Pagar/Receber e o que ela lança; nos apps técnicos, R$ só para eles; operador vê kg, litros e cabeças); limpar as `zz_backup_*` e
+  o projeto antigo pausado (só depois de conferir que nada se perde); repositório privado; Supabase Pro.
+
 ### Backup automático do banco (09/11/2026; LIGADO em 12/11/2026)
 
 O plano gratuito do Supabase não guarda cópia do banco (a própria documentação deles manda exportar com `pg_dump` e guardar fora). Em `backup_banco/` (`backup.yml` e `LEIA-ME.md`) está a tarefa
@@ -2039,15 +2072,19 @@ Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connec
   - O histórico do git (commits antigos) ainda guarda o nome em arquivos e
     mensagens; só some recriando o repositório de novo.
 
-- **supabase-js com versão FIXA (2.118.0), nunca `@2`.** Em 05/11/2026 o `@2` do
+- **supabase-js com versão FIXA (2.118.0), servida pelo próprio site.** Em 05/11/2026 o `@2` do
   CDN passou a servir a 2.119.0 um dia depois de lançada, sem ninguém testar: a
   biblioteca cuida do login e de toda leitura/gravação, então uma versão nova
   pode quebrar os 5 apps da noite para o dia sem nenhum deploy nosso. Fixou-se na
-  2.118.0 (de 15/10/2026, a que serviu o uso diário de 3 semanas). O endereço
-  está nos 5 apps e em `CDN_SUPABASE` do `sw.js` (`grep supabase-js@`): trocar
-  nos seis de uma vez, e só depois de testar o login, uma carga e a fila offline
-  com a versão nova. Os testes trocam a biblioteca por um stub, então não pegam
-  quebra dela.
+  2.118.0 (de 15/10/2026, a que serviu o uso diário de 3 semanas). **Desde 12/11/2026
+  o arquivo fica em `vendor/supabase-js-2.118.0.js`** (o `dist/umd/supabase.js` do
+  pacote npm, sha256 `ee3be8de…`, com a licença MIT ao lado): um CDN invadido não
+  troca mais o código que lê o login. O endereço está nos 5 apps, no `SHELL` do
+  `sw.js` e em `SUPABASE_TAG` do `atualiza_nucleo.py` (`grep supabase-js-`): trocar
+  nos sete de uma vez, e só depois de testar o login, uma carga e a fila offline
+  com a versão nova. Os testes trocam a biblioteca por um stub (o stub fica no
+  lugar mesmo se a de verdade carregar por `file://`; os testes com service worker
+  interceptam `**/vendor/supabase-js-*.js`); só o `teste_csp.py` carrega a de verdade.
 - **Campo de formulário com menos de 16px no celular.** O iPhone dá zoom ao tocar
   num campo com fonte menor que 16px e a tela fica ampliada (o Android não).
   Os 5 apps têm, logo depois de `.perm-matrix select`, um
@@ -2093,7 +2130,7 @@ Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connec
 
 ## Testes
 
-79 arquivos `teste_*.py`, 3.028 checagens (11/11/2026; a tabela abaixo lista os
+81 arquivos `teste_*.py`, 3.144 checagens (12/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2173,6 +2210,8 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_rodinha_numero.py` | 53 | os 5 apps e Adubacao.html (rodinha do mouse em cima de campo numérico selecionado não muda o valor e rola a página; teclado e digitação iguais; rodinha em outro lugar não tira o foco; nº de parcelas da conta a pagar e do financiamento) |
 | `teste_contas_atividade_fazenda.py` | 28 | AEMatriz.html (Pagar/Receber: coluna Atividade / Fazenda em A Pagar e A Receber, uma linha por par atividade/fazenda, "Geral" sem fazenda, nome curto, Onde pesa só com centro e competência numa parte e com cada parte na conta dividida, "—" sem rateio, busca pela atividade, total embaixo de Valor, sem rolar de lado de 1920 a 320 px, nenhuma palavra cortada no meio de 1100 a 1920 px) |
 | `teste_pagamento_parcela_data_safra.py` | 23 | AEMatriz.html (pagamento de parcela: vencida abre/paga com a data do vencimento, a vencer com hoje; safra do juros sugerida para custeio (soja 25/26 → 2025, pré-custeio 26/27 → 2026), em branco para investimento e capital de giro, escolhida na tela vale nos 3 do capital de giro; aviso a mais de 30 dias do vencimento e confirmação quando é depois, cancelar não grava; "Marcar como paga" com data e "estimado" na pergunta; sem rolar de lado no celular) |
+| `teste_matriz_sai_sem_uso.py` | 30 | AEMatriz.html e os outros 4 (sai sozinho depois de 20 min sem uso: ao abrir, ao voltar para a aba; só a sessão deste aparelho; aviso; usar qualquer app conta como uso; os apps técnicos não saem; entrar de novo) |
+| `teste_senha_nova.py` | 86 | os 5 apps (senha nova obrigatória para quem está marcado, 10+, as duas iguais, erro do servidor em português, Sair; sem marca ou sem a coluna nada muda; sem internet não trava; Trocar senha com mínimo 10 e senha atual conferida num cliente à parte; Nova senha provisória pelo administrador) |
 | `teste_datas_brasil.py` | 58 | os 5 apps num navegador em inglês (campos de data viram texto dd/mm/aaaa, mm/aaaa e dd/mm/aaaa hh:mm com `value` no formato do banco; digitar só números, 9/9/26 ao sair, data impossível vazia e vermelha, Backspace na barra, colar; change uma vez; calendário invisível de 44 px sobre o ícone, sincronizado, no toque recebe o foco, desabilitado junto; Financiamentos e Pagar/Receber sem data crua; rótulo ligado; sem rolar de lado no celular) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
