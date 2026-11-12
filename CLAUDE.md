@@ -1901,7 +1901,7 @@ O Supabase já traz o TOTP ligado (conferido por ele no painel). Os 5 apps (`cor
 - **Quem não ativou entra como sempre.** Funcionário de campo não muda nada.
 - O stub dos testes tem uma API de fator falsa (`window.__MFA__`, `window.__MFA_CODIGO__` = 123456, `window.__jwt('aal1'|'aal2')`).
 
-**A trava no banco: `seguranca_04_segundo_fator_no_banco.sql` (12/11/2026, ensaiado, AINDA NÃO RODADO).** Sem ela a tela é só aviso: com a senha
+**A trava no banco: `seguranca_04_segundo_fator_no_banco.sql` (12/11/2026, ensaiado e RODADO no mesmo dia, pelo conector, com o OK dele).** Sem ela a tela é só aviso: com a senha
 roubada dava para ler e gravar o banco por fora do app. O script:
 - `segundo_fator_ok()` (`security definer`, lê `auth.mfa_factors`): verdadeiro se a sessão é `aal2` **ou** a pessoa não tem celular confirmado. Quem não
   ativou segue como hoje; celular cadastrado pela metade (não confirmado) não conta.
@@ -1920,12 +1920,16 @@ roubada dava para ler e gravar o banco por fora do app. O script:
   real): 31 casos com 6 usuários (admin sem celular; admin com celular só com senha e com código; operador; colaborador com Funcionários editar;
   financeiro da Pecuária com celular; celular não confirmado; o editor como `postgres`). **Antes** do script 14 deles mostram o buraco; **depois** os
   31 passam; rodar duas vezes dá igual; o desfazer (fim do arquivo) devolve os mesmos 14 buracos; rodar de novo depois de desfazer volta aos 31.
-- **Função de criar usuário** (`supabase/functions/criar-usuario-cana`, **versão 4, ainda não publicada**): quem tem celular cadastrado e chama sem o
+- **Função de criar usuário** (`supabase/functions/criar-usuario-cana`, **versão 4, publicada em 12/11/2026**): quem tem celular cadastrado e chama sem o
   código (`aal` do token diferente de `aal2`) recebe 403. Sem isso, a senha roubada do admin criava um usuário novo sem código e entrava por ele.
 - **AE Combustível** criava usuário chamando `criar-usuario-combustivel`, que nunca foi publicada no projeto único (só existe `criar-usuario-cana`):
   passou a chamar a `criar-usuario-cana`, como os outros 4 apps.
 - **Ordem**: o script não muda nada para ninguém enquanto ninguém tiver celular cadastrado (em 12/11/2026: 0). Depois de rodado, quem ativar passa
   a precisar do código também no banco. Se o app falhar na hora do código, o desbloqueio é o mesmo de perder o celular (abaixo), pelo editor do Supabase.
+- **Rodado em 12/11/2026, os 7 itens da conferência OK**: 107 de 107 tabelas com a política, a visão filtrada pela mesma regra, nenhuma tabela aberta
+  a qualquer logado, `dblink`/`postgres_fdw` apagadas, 0 pessoas com celular cadastrado. Conferido entrando no banco como o admin e como um operador do
+  curral (papel `authenticated` + o id de cada um, só senha): veem lotes, animais, dietas, saídas de ração, partos, lançamentos e a visão rateada como antes.
+  **Ninguém ficou travado**: a regra só passa a valer para quem ativar o código no celular.
 **Se alguém perder o celular**: o Supabase não dá códigos de recuperação; o dono do projeto remove o fator no SQL Editor (`delete from auth.mfa_factors where user_id =
 '<uuid da pessoa>';`, a conferir quando for preciso) e a pessoa cadastra de novo.
 
