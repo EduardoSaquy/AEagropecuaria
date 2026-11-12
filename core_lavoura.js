@@ -19,15 +19,16 @@ function PageEstoqueInsumos(frente){
   });
   const valorTotalEstoque = linhas.reduce((a,l)=> a + (l.precoMedio!=null ? l.saldo*l.precoMedio : 0), 0);
   const alertas = linhas.filter(l=>l.baixo).length;
+  const comValor = veValores();   // valor em estoque e preço médio: só acesso total (12/11/2026)
   return `
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Insumos cadastrados</div><div class="stat-value">${insumos.length}</div></div>
-    <div class="stat-card"><div class="stat-label">Valor aprox. em estoque</div><div class="stat-value">R$ ${fmt(valorTotalEstoque)}</div></div>
+    ${comValor ? `<div class="stat-card"><div class="stat-label">Valor aprox. em estoque</div><div class="stat-value">R$ ${fmt(valorTotalEstoque)}</div></div>` : ''}
     <div class="stat-card"><div class="stat-label">Alertas de estoque baixo</div><div class="stat-value ${alertas>0?'alerta':''}">${alertas}</div></div>
   </div>
   <div class="card">
     <table>
-      <thead><tr><th>Nível</th><th>Insumo</th><th>Categoria</th><th>Saldo</th><th>Preço médio</th><th>Status</th></tr></thead>
+      <thead><tr><th>Nível</th><th>Insumo</th><th>Categoria</th><th>Saldo</th>${comValor?'<th>Preço médio</th>':''}<th>Status</th></tr></thead>
       <tbody>
         ${linhas.map(l=>{
           const pct = pctEstoque(l.saldo, l.i.estoqueMinimo);
@@ -37,7 +38,7 @@ function PageEstoqueInsumos(frente){
             <td><strong>${esc(l.i.nome)}</strong></td>
             <td>${(categoriasOpt.find(o=>o.value===l.i.categoria)||{}).label || '—'}</td>
             <td class="mono">${fmt(l.saldo)} ${l.i.unidade} ${l.i.estoqueMinimo?`<span class="hint">/ mín. ${fmt(l.i.estoqueMinimo)} ${l.i.unidade}</span>`:''}</td>
-            <td class="mono">${l.precoMedio==null ? '—' : `R$ ${fmt(l.precoMedio,4)}/${l.i.unidade}`}</td>
+            ${comValor ? `<td class="mono">${l.precoMedio==null ? '—' : `R$ ${fmt(l.precoMedio,4)}/${l.i.unidade}`}</td>` : ''}
             <td>${l.baixo ? '<span class="pill pill-alerta">Estoque baixo</span>' : '<span class="pill pill-ok">Normal</span>'}</td>
           </tr>`;
         }).join('')}

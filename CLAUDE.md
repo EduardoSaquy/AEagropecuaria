@@ -1986,10 +1986,56 @@ não assinar o Supabase Pro por enquanto; o que dá para fazer sem pagar:
   usuário): troca a senha (o gatilho desmarca) e marca a pessoa de novo.
 - **Painel do Supabase (Authentication > Sign In / Providers > Email)**: "Secure password change" e "Require current password when
   updating" estão DESLIGADOS (conferido em 12/11/2026). A troca obrigatória depende disso: ligados, `updateUser` pediria nova
-  confirmação por e-mail, e os e-mails são inventados. Não ligar.
-- **Ainda sem fazer** (decisões dele de 12/11/2026, próximas partes): financeiro só para ele e os proprietários (secretária vê
-  Pagar/Receber e o que ela lança; nos apps técnicos, R$ só para eles; operador vê kg, litros e cabeças); limpar as `zz_backup_*` e
-  o projeto antigo pausado (só depois de conferir que nada se perde); repositório privado; Supabase Pro.
+  confirmação por e-mail, e os e-mails são inventados. Não ligar. **Mudado com o OK dele em 12/11/2026** (conferido depois de
+  recarregar o painel): "Minimum password length" de 6 para **10** (o servidor recusa senha menor, mesmo por fora do app) e "Allow
+  new users to sign up" **DESLIGADO** (estava ligado: qualquer um com um e-mail de verdade podia se cadastrar pela chave pública e
+  ler as tabelas abertas a quem está logado; havia só os 14 usuários da casa). Criar usuário continua funcionando: a função
+  `criar-usuario-cana` usa `auth.admin.createUser` (chave de serviço), que não depende do cadastro aberto.
+- **Ainda sem fazer** (decisões dele de 12/11/2026, próximas partes): limpar as `zz_backup_*` e o projeto antigo pausado (só depois
+  de conferir que nada se perde); repositório privado; Supabase Pro. O financeiro só para ele e os proprietários está na seção abaixo.
+
+### Financeiro só para administrador e proprietários (12/11/2026)
+
+Decisão do Eduardo ("o financeiro só quem tem acesso deve ser eu e os proprietários; a secretária só lança contas; os apps técnicos
+deixá-los só para o operacional"), com as respostas dele às perguntas do mesmo dia: a secretária vê **Pagar/Receber e o que ela
+lança**; nos apps técnicos **R$ só para eles**; quem registra compra digita o preço **só no formulário de entrada**; o consultor
+vê **custo da dieta e preço dos ingredientes, só nas dietas**; a venda de animais fica com quem tem Vendas.
+- **Achado antes de mudar**: em 09/11 ele tirou o Financeiro da secretária de contas e deixou o Pagar/Receber, mas as regras de `titulos`,
+  `titulo_rateios`, `titulo_baixas`, `entidades` e `contas_bancarias` exigiam os dois: desde 09/11 a tela dela abria vazia (o banco
+  devolvia 0 contas, conferido entrando como ela). O comentário de 01/09/2026 no `loadAll` já dizia "Pagar/Receber usa só a chave
+  `contas`"; o banco nunca acompanhou.
+- **Banco, `seguranca_06_financeiro_so_para_quem_pode.sql`** (ensaiado num Postgres descartável com o desenho do banco real, 58
+  checagens: antes, depois, rodar duas vezes, desfazer e aplicar de novo):
+  - `lancamentos_financeiros.criado_por_id` (uuid de quem gravou): o padrão é `auth.uid()` e o gatilho `trg_lancamento_autor`
+    (função `lancamento_guarda_autor`, com os direitos de quem chama) força o autor em insert pela API e não deixa trocar em update.
+    Dentro de função do banco com direitos do dono (a baixa de conta, `baixa_gera_lancamento`) fica o padrão da coluna, que já é quem
+    está logado; no editor do Supabase fica o que o script mandar. Os 13 lançamentos antigos feitos no app ganham o autor pelo
+    `log_alteracoes`; os do ERP e dos scripts ficam sem autor (só quem tem acesso total os vê).
+  - Lançamentos: veem e editam tudo só `acesso_total()`; quem tem `matriz_financeiro` vê e edita **só os seus**; quem tem `vendas`
+    lança, vê e corrige **só a receita ligada a uma venda** (`abate_id`), inclusive pela `registrar_venda_animais`. As permissões
+    `pec_financeiro`/`pec_resultados` deixaram de abrir lançamento.
+  - Visão `lancamentos_rateados`: `ve_todo_o_financeiro()` = editor ou (`segundo_fator_ok()` e `acesso_total()`);
+    `ve_financeiro_da_pecuaria()` passou a ser a mesma coisa (o operador do curral via 9.968 linhas do financeiro da Pecuária pela API).
+  - Contas a pagar e receber: só a permissão `contas` (sem o Financeiro); quem tem `contas` também lê fazendas, talhões, culturas e
+    centros de custo (regra `ler para contas`).
+  - Financiamentos, parcelas, movimentos de financiamento e preço da @: só `acesso_total()`.
+- **Apps** (`teste_financeiro_so_acesso_total.py`, 77; quebra no código anterior): `veValores()` (= `acessoTotal()`) e
+  `veValorDeVenda()` em `core.js`.
+  - Matriz: Resultados e Financiamentos só acesso total (`soAcessoTotal` na lista de páginas; os carregadores de resultado nem rodam
+    para os outros); o Financeiro avisa "só os lançamentos que você fez" e perde "Custo por hectare" (tela e setinha do menu); custo do
+    diesel no Painel só acesso total; na tela de acesso, Resultados, Financiamentos e Financeiro/Resultados da Pecuária aparecem como
+    "Só administrador e proprietários" (terceiro item `true` em `MODULOS_PERMISSAO`, sem seletor).
+  - Pecuária: grupos Financeiro e Resultados só acesso total; ações de dinheiro (`ACOES_SO_ACESSO_TOTAL`: despesa, receita, preço da @,
+    meta, investimento) idem; estoque, saída de ração e pasto, inseminação (lista) e Custo/@ da pesagem com R$ só acesso total;
+    `podeVerPrecoInsumo()` (acesso total ou consultor) ficou só em Ingredientes, Dietas e no preço atual da entrada; Vendas mostra
+    valor a quem tem Vendas (quem vê a tela pelo Confinamento/Pasto/Cria vê cabeças). O formulário de entrada de insumo e o de
+    inseminação continuam pedindo o preço/custo (decisão dele).
+  - Cana e Cereais: estoque de insumos sem valor nem preço médio; campos com `soValores:true` (preço pago da entrada, custo da aplicação)
+    saem da lista e ficam no formulário.
+  - Combustível: estoque sem valor; nota (`valorTotal`, `soValores`) fora da lista; manutenção sem custo na lista; Rateio só com litros,
+    consumo e horas; Painel com traço no custo; relatório e CSV sem as colunas de R$ (`colunasDoRelatorio`).
+- **Limite**: o preço de ingrediente, de dieta, da nota de diesel, do protocolo e o valor da venda (`abates`) ficam nas tabelas da
+  operação e são escondidos só na tela; trancar no banco pede separar essas colunas (fica para depois, se ele quiser).
 
 ### Backup automático do banco (09/11/2026; LIGADO em 12/11/2026)
 
@@ -2130,7 +2176,7 @@ Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connec
 
 ## Testes
 
-81 arquivos `teste_*.py`, 3.159 checagens (12/11/2026; a tabela abaixo lista os
+82 arquivos `teste_*.py`, 3.236 checagens (12/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2213,6 +2259,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_matriz_sai_sem_uso.py` | 30 | AEMatriz.html e os outros 4 (sai sozinho depois de 20 min sem uso: ao abrir, ao voltar para a aba; só a sessão deste aparelho; aviso; usar qualquer app conta como uso; os apps técnicos não saem; entrar de novo) |
 | `teste_senha_nova.py` | 86 | os 5 apps (senha nova obrigatória para quem está marcado, 10+, as duas iguais, erro do servidor em português, Sair; sem marca ou sem a coluna nada muda; sem internet não trava; Trocar senha com mínimo 10 e senha atual conferida num cliente à parte; Nova senha provisória pelo administrador) |
 | `teste_datas_brasil.py` | 58 | os 5 apps num navegador em inglês (campos de data viram texto dd/mm/aaaa, mm/aaaa e dd/mm/aaaa hh:mm com `value` no formato do banco; digitar só números, 9/9/26 ao sair, data impossível vazia e vermelha, Backspace na barra, colar; change uma vez; calendário invisível de 44 px sobre o ícone, sincronizado, no toque recebe o foco, desabilitado junto; Financiamentos e Pagar/Receber sem data crua; rótulo ligado; sem rolar de lado no celular) |
+| `teste_financeiro_so_acesso_total.py` | 77 | os 5 apps (financeiro e R$ só para administrador e proprietário: Resultados e Financiamentos fora do menu, Financeiro só com os lançamentos da pessoa e sem custo por hectare, tela de acesso com "Só administrador e proprietários"; Pecuária sem Financeiro/Resultados e sem R$ no estoque, ração, inseminação e Custo/@, Vendas com valor só para quem tem Vendas, consultor com custo da dieta; Cana, Cereais e Combustível sem valor nas listas, no rateio, no painel e no relatório; os formulários de compra continuam pedindo o preço) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
@@ -2277,6 +2324,9 @@ Medido na primeira rodada boa: **61 de 61 testes passaram, cada parte em 1 a 2 m
   1 se algo estiver aberto. Em 16/10/2026: 89 nomes testados (75 existem), nenhum
   aberto; depois do `seguranca_03` todos respondem "acesso negado" (antes, as
   tabelas com RLS respondiam vazio).
+  - **Desde 12/11/2026 a view é só de administrador e proprietário** (`seguranca_06`, ver "Financeiro só para administrador e
+    proprietários"): o que segue descreve a regra de 16/10/2026, que valeu até então; as funções e a forma de embrulhar a view
+    continuam as mesmas.
   - **Quem está logado lê o quê na view**
     (`seguranca_02_view_so_para_quem_tem_permissao.sql`, rodado pelo Eduardo em
     16/10/2026): sem isso todo usuário logado lia o Financeiro inteiro pela

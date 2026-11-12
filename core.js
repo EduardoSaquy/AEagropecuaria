@@ -386,6 +386,18 @@ function temPermissao(modulo, nivel){
 // onde antes aparecia junto com o Editar. Não afeta "Remover da fila"
 // (item ainda não sincronizado, local só desse aparelho).
 function souOperador(){ return state.perfil?.papel === 'operador'; }
+/* ---------- Dinheiro (R$) só para quem tem acesso total (12/11/2026) ----------
+ * Decisão do Eduardo: o financeiro é só dele e dos proprietários. Nos apps da operação (Pecuária, Cana, Cereais, Combustível) e no
+ * Painel do Matriz, valor, custo, preço médio e resultado aparecem só para administrador e proprietário; quem trabalha na operação vê
+ * kg, litros, cabeças e ganho de peso. Três exceções, decididas por ele:
+ *  - quem registra uma compra (insumo, nota de diesel) ou o custo de um protocolo digita o preço no formulário de entrada, mas não vê
+ *    totais, custo médio nem valor em estoque nas listas;
+ *  - quem vende animais (permissão Vendas) vê o valor na tela de Vendas (veValorDeVenda);
+ *  - o consultor que formula as dietas vê o custo da dieta e o preço dos ingredientes (podeVerPrecoInsumo, no AE Pecuária).
+ * O banco tranca de verdade o que é financeiro (lançamentos, visão rateada, contas, financiamentos: seguranca_06); preço de ingrediente,
+ * de dieta e de nota fica nas tabelas da operação e é escondido só na tela. */
+function veValores(){ return acessoTotal(); }
+function veValorDeVenda(){ return acessoTotal() || temPermissao('vendas','visualizar'); }
 
 /* ---------- Senha: no minimo 10 caracteres e troca obrigatoria (12/11/2026) ----------
  * Decisao do Eduardo: todos trocam para uma senha de 10 ou mais caracteres na proxima entrada com internet, e quem for

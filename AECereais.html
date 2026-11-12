@@ -407,8 +407,8 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=de521e3bf7"></script>
-<script src="core_lavoura.js?v=852b937013"></script>
+<script src="core.js?v=043f1d5f63"></script>
+<script src="core_lavoura.js?v=f933703b22"></script>
 <script>
 /* ===================== SUPABASE =====================
  * AE Lavoura reaproveita o MESMO projeto Supabase que hoje é o do AE
@@ -600,7 +600,7 @@ const CADASTROS = {
       {key:'insumoId', label:'Insumo', type:'fk', refEntity:'insumosGraos', required:true},
       {key:'data', label:'Data', type:'date', required:true},
       {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
-      {key:'precoPago', label:'Preço pago (R$/unidade)', type:'number', step:'0.0001'},
+      {key:'precoPago', label:'Preço pago (R$/unidade)', type:'number', step:'0.0001', soValores:true},
       {key:'fornecedor', label:'Fornecedor', type:'text'},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
@@ -622,7 +622,7 @@ const CADASTROS = {
       {key:'data', label:'Data', type:'date', required:true},
       {key:'tipoOperacao', label:'Tipo de operação', type:'select', options:OPCOES.TIPOS_OPERACAO_GRAOS, required:true},
       {key:'quantidade', label:'Quantidade', type:'number', step:'0.01', required:true},
-      {key:'custo', label:'Custo', type:'computed', compute:item=>{ const p=precoMedioInsumo('Graos',item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
+      {key:'custo', label:'Custo', type:'computed', soValores:true, compute:item=>{ const p=precoMedioInsumo('Graos',item.insumoId); return p==null ? '—' : `R$ ${fmt(item.quantidade*p)}`; }},
       {key:'observacao', label:'Observação', type:'textarea', list:false},
     ],
   },
@@ -841,7 +841,8 @@ function PageCadastro(key){
     base = base.filter(item => cfg.filtroCultura(item, cultAberta));
   }
   const list = cfg.semBusca ? base : base.filter(item => !termo || (item.nome||'').toLowerCase().includes(termo));
-  const colunas = cfg.fields.filter(f=>f.list!==false);
+  // Coluna de dinheiro (soValores) só para acesso total; o campo continua no formulário de quem lança (12/11/2026).
+  const colunas = cfg.fields.filter(f=>f.list!==false && (!f.soValores || veValores()));
   const colspanTotal = colunas.length + (cfg.semStatus?0:1) + 1;
   return `
   <div class="toolbar">
