@@ -543,7 +543,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=07cd7f7e35"></script>
+<script src="core.js?v=b340b1c7fb"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -9638,7 +9638,47 @@ function attachEvents(){
   });
 }
 
-initAuth();
+/* ---------- Sai sozinho depois de 20 minutos sem uso (12/11/2026) ----------
+ * Decisão do Eduardo: o AE Matriz pede a senha (e o código do celular, para quem cadastrou) de novo depois de
+ * MINUTOS_SEM_USO_PARA_SAIR sem nenhum toque, tecla ou rolagem em nenhum dos apps deste navegador (horaDoUltimoUso, no
+ * core.js). Vale também ao reabrir: fechou com o login aberto e voltou 1 hora depois, entra de novo. Usando, não interrompe.
+ * Encerra só a sessão DESTE aparelho (scope 'local'): os outros aparelhos da pessoa seguem logados. Como os 5 apps dividem
+ * o login no mesmo navegador, um app técnico aberto nesse mesmo navegador também volta para a tela de login. */
+const MINUTOS_SEM_USO_PARA_SAIR = 20;
+const AVISO_SAIU_SEM_USO = `Por segurança, o AE Matriz saiu depois de ${MINUTOS_SEM_USO_PARA_SAIR} minutos sem uso. Entre de novo.`;
+function paradoHaMuitoTempo(){
+  const u = horaDoUltimoUso();
+  return u > 0 && Date.now() - u > MINUTOS_SEM_USO_PARA_SAIR * 60000;
+}
+async function encerrarSessaoDesteAparelho(){
+  // sem rede e com o login vencido a biblioteca pode demorar ~25 s: espera no máximo 4 s e apaga a sessão guardada de qualquer jeito
+  try{ await Promise.race([db.auth.signOut({scope: 'local'}), new Promise(r=>setTimeout(r, 4000))]); }catch(e){ /* sem rede */ }
+  try{ localStorage.removeItem(CHAVE_SESSAO_SUPABASE); }catch(e){ /* nada guardado */ }
+}
+let saindoPorFaltaDeUso = false;
+async function sairPorFaltaDeUso(){
+  if(saindoPorFaltaDeUso || !state.session || state.mfaEmAndamento) return;
+  saindoPorFaltaDeUso = true;
+  state.modal = null;
+  await encerrarSessaoDesteAparelho();
+  state.session = null;
+  state.perfil = null;
+  state.loginError = AVISO_SAIU_SEM_USO;
+  state.loginDraft = {usuario: (state.loginDraft && state.loginDraft.usuario) || '', senha: ''};
+  saindoPorFaltaDeUso = false;
+  render();
+}
+function conferirTempoSemUso(){ if(state.session && paradoHaMuitoTempo()) sairPorFaltaDeUso(); }
+setInterval(conferirTempoSemUso, 30000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') conferirTempoSemUso(); });
+
+(async ()=>{
+  if(paradoHaMuitoTempo() && sessaoGuardadaNoAparelho()){
+    await encerrarSessaoDesteAparelho();
+    state.loginError = AVISO_SAIU_SEM_USO;
+  }
+  initAuth();
+})();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}));

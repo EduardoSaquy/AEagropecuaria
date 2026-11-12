@@ -61,6 +61,25 @@ document.addEventListener('wheel', e=>{
   if(campoQueARodinhaMudaria(foco) && (e.target === foco || (foco.contains && foco.contains(e.target)))) foco.blur();
 }, {capture: true, passive: true});
 
+/* ---------- Hora do último uso do aparelho (12/11/2026) ----------
+ * Pedido do Eduardo: o AE Matriz (financeiro) pede o login de novo depois de 20 minutos sem uso, para um computador do
+ * escritório esquecido aberto não deixar o financeiro à mostra. Os cinco apps dividem o mesmo login no mesmo navegador,
+ * então qualquer toque, tecla ou rolagem em QUALQUER um deles marca a hora aqui (no máximo uma gravação a cada 15 s);
+ * só o AE Matriz confere e sai (MINUTOS_SEM_USO_PARA_SAIR, lá). Quem está usando a Pecuária no mesmo navegador não
+ * perde o login por estar fora do Matriz. */
+const CHAVE_ULTIMO_USO = 'ae_ultimo_uso_v1';
+let ultimoUsoGravadoAqui = 0;
+function marcarUso(forcar){
+  const agora = Date.now();
+  if(!forcar && agora - ultimoUsoGravadoAqui < 15000) return;
+  ultimoUsoGravadoAqui = agora;
+  try{ localStorage.setItem(CHAVE_ULTIMO_USO, String(agora)); }catch(e){ /* sem espaço: o Matriz só não sai sozinho */ }
+}
+function horaDoUltimoUso(){
+  try{ const v = Number(localStorage.getItem(CHAVE_ULTIMO_USO)); return Number.isFinite(v) && v > 0 ? v : 0; }catch(e){ return 0; }
+}
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev=>document.addEventListener(ev, ()=>marcarUso(), {capture: true, passive: true}));
+
 
 /* ---------- Datas no formato do Brasil, em qualquer navegador (09/11/2026) ----------
  * Pedido do Eduardo: "as datas têm aparecido tipo data americana". O campo de data do navegador (<input type="date">,
