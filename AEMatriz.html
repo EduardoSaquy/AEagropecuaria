@@ -543,7 +543,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=de521e3bf7"></script>
+<script src="core.js?v=043f1d5f63"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -1086,15 +1086,14 @@ async function loadAll(grupos){
     // Indicadores do Painel só buscam o app se a pessoa tiver a permissão
     // daquele app específico — evita chamar o banco de outro app sem
     // necessidade (e sem permissão) só pra descartar o resultado depois.
+    // Resultados é só de quem tem acesso total (12/11/2026): para os outros nem busca (o banco devolveria vazio).
+    const resultados = acessoTotal();
     if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
-    carregarResultadoPecuaria();
-    carregarReproducaoPecuaria();
-    carregarEstoquePecuaria();
+    if(resultados){ carregarResultadoPecuaria(); carregarReproducaoPecuaria(); carregarEstoquePecuaria(); }
     if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
-    carregarResultadoCana();
+    if(resultados) carregarResultadoCana();
     if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
-    carregarResultadoCereais();
-    carregarCombustivel();
+    if(resultados){ carregarResultadoCereais(); carregarCombustivel(); }
     if(temPermissao('matriz_painel_combustivel','visualizar')) carregarIndicadoresCombustivel();
     carregarLancamentosRateados();
   }
@@ -1140,6 +1139,7 @@ async function atualizarLancamentos(ids){
   leituraRateados = Promise.resolve({data: visao, error: null});
   if(temPermissao('matriz_resultados','visualizar')) state.lancamentosRateados = visao.map(rowToLancamento);
   render();
+  if(!acessoTotal()) return;
   carregarResultadoPecuaria();
   carregarResultadoCana();
   carregarResultadoCereais();
@@ -1886,7 +1886,7 @@ async function carregarIndicadoresCombustivel(){
   const pode = {
     estoque: temPermissao('combustivel_estoque','visualizar'),
     consumo: temPermissao('combustivel_abastecimento','visualizar'),
-    custo: temPermissao('combustivel_rateio','visualizar'),
+    custo: temPermissao('combustivel_rateio','visualizar') && veValores(),   // R$ só acesso total (12/11/2026)
     alertas: temPermissao('combustivel_alertas','visualizar'),
   };
   state.indicadores.combustivel = {...state.indicadores.combustivel, loading:true, erro:'', pode};
@@ -2230,7 +2230,8 @@ const PAGES = [
   // cada card só aparece de verdade se a pessoa tiver a permissão
   // daquele app específico (ver PagePainel/AppCard).
   {key:'painel', label:'Painel', moduloAny:PAINEL_MODULOS_POR_APP},
-  {key:'resultados', label:'Resultados', modulo:'matriz_resultados'},
+  // Resultados e Financiamentos: só administrador e proprietário (decisão do Eduardo, 12/11/2026; o banco também tranca).
+  {key:'resultados', label:'Resultados', modulo:'matriz_resultados', soAcessoTotal:true},
   {key:'financeiro', label:'Financeiro', modulo:'matriz_financeiro'},
   {key:'fazendas', label:'Fazendas', modulo:'matriz_fazendas'},
   // Centro de custo é cadastro financeiro, então mora junto com o
@@ -2243,13 +2244,13 @@ const PAGES = [
   // financeiro.sql): decisão do Eduardo, quem só mexe em boleto não
   // precisa enxergar todos os lançamentos e recebimentos do Financeiro.
   {key:'contas', label:'Pagar/Receber', modulo:'contas'},
-  {key:'financiamentos', label:'Financiamentos', modulo:'matriz_financiamentos'},
+  {key:'financiamentos', label:'Financiamentos', modulo:'matriz_financiamentos', soAcessoTotal:true},
   {key:'funcionarios', label:'Funcionários', modulo:'matriz_funcionarios'},
   {key:'usuarios', label:'Usuários', adminOnly:true},
 ];
 
 function paginasVisiveis(){
-  return PAGES.filter(p => p.adminOnly ? souAdmin() : p.moduloAny ? p.moduloAny.some(m=>temPermissao(m,'visualizar')) : temPermissao(p.modulo, 'visualizar'));
+  return PAGES.filter(p => p.adminOnly ? souAdmin() : p.soAcessoTotal ? acessoTotal() : p.moduloAny ? p.moduloAny.some(m=>temPermissao(m,'visualizar')) : temPermissao(p.modulo, 'visualizar'));
 }
 
 const PERFIL_CACHE_KEY = 'aematriz_perfil_cache_v1';
@@ -2338,12 +2339,12 @@ const MODULOS_PERMISSAO = [
     ['matriz_painel_cana','Painel — indicadores da Cana'],
     ['matriz_painel_cereais','Painel — indicadores dos Cereais'],
     ['matriz_painel_combustivel','Painel — indicadores do Combustível'],
-    ['matriz_resultados','Resultados (lucro, custo e receita consolidados)'],
-    ['matriz_financeiro','Financeiro (lançar despesa, receita e investimento)'],
+    ['matriz_resultados','Resultados (lucro, custo e receita consolidados)', true],
+    ['matriz_financeiro','Financeiro (lançar despesa, receita e investimento; vê só os que lançou)'],
     ['contas','Contas a Pagar e a Receber'],
     ['matriz_fazendas','Fazendas (cadastro e área por atividade)'],
     ['matriz_funcionarios','Funcionários (cadastro, cargo e alocação)'],
-    ['matriz_financiamentos','Financiamentos (empréstimos, juros e parcelas)'],
+    ['matriz_financiamentos','Financiamentos (empréstimos, juros e parcelas)', true],
   ]],
   // Cana e Cereais são dois apps separados desde a divisão do AE Lavoura —
   // operações em estados diferentes (SP e TO), com equipes e cadastros
@@ -2368,8 +2369,8 @@ const MODULOS_PERMISSAO = [
     ['insumos','Insumos'], ['dietas','Dietas'],
     ['lotesGeral','Lotes (visão geral)'],
     ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
-    ['vendas','Vendas'],
-    ['pec_financeiro','Financeiro'], ['pec_resultados','Resultados'],
+    ['vendas','Vendas (com o valor da venda)'],
+    ['pec_financeiro','Financeiro', true], ['pec_resultados','Resultados', true],
   ]],
   ['Combustível', [
     ['combustivel_cadastros','Cadastros (Produtos, Fornecedores, Equipamentos, Operadores, Tanques)'],
@@ -2410,13 +2411,13 @@ function TabsRow(){
   <div class="tabsrow ${state.mobileNavAberto?'aberto':''}">
     ${paginasVisiveis().map(p=>ItemDoMenu({chave:p.key, rotulo:p.label.replace('/', '/<wbr>'), ativo:state.page===p.key, botao:`data-nav="${p.key}"`,
       icone:p.key==='painel'?iconPainel():p.key==='resultados'?iconResultados():p.key==='fazendas'?iconFazenda():p.key==='funcionarios'?iconFuncionarios():p.key==='financiamentos'?iconFinanciamento():p.key==='financeiro'?iconFinanceiroNav():p.key==='centrosCusto'?iconCentros():p.key==='contas'?iconContas():p.key==='usuarios'?iconUsuarios():iconAdmin(),
-      subs:(SUBABAS_DO_MENU[p.key]||[]).map(([k,l])=>({rotulo:l, valor:p.key+'|'+k, ativo:state.page===p.key && subAbaAtualDoMenu(p.key)===k}))})).join('')}
+      subs:(SUBABAS_DO_MENU[p.key]||[]).filter(([,,so])=>!so || acessoTotal()).map(([k,l])=>({rotulo:l, valor:p.key+'|'+k, ativo:state.page===p.key && subAbaAtualDoMenu(p.key)===k}))})).join('')}
   </div>`;
 }
 // Sub-abas que cada item do menu mostra na setinha (as mesmas abas que ja existem dentro de cada tela).
 const SUBABAS_DO_MENU = {
   resultados: [['geral','Geral'], ['operacional','Operacional'], ['relatorios','Relatórios'], ['empresa','Empresa']],
-  financeiro: [['despesa','Despesas'], ['receita','Receitas'], ['investimento','Investimentos'], ['custoha','Custo por hectare']],
+  financeiro: [['despesa','Despesas'], ['receita','Receitas'], ['investimento','Investimentos'], ['custoha','Custo por hectare', 'soAcessoTotal']],
   contas: [['pagar','A Pagar'], ['receber','A Receber']],
 };
 function subAbaAtualDoMenu(pagina){
@@ -5964,7 +5965,9 @@ function blocoPermissoes(perfilId){
   if(!perfilId) return '';
   const p = state.perfis.find(x=>x.id===perfilId);
   if(!p) return '';
-  const linhasDoGrupo = (modulos)=> modulos.map(([key,label])=>`
+  // Terceiro item true: módulo só de administrador e proprietário desde 12/11/2026 (dinheiro); a permissão não abre nada para os outros.
+  const linhasDoGrupo = (modulos)=> modulos.map(([key,label,soAcessoTotal])=> soAcessoTotal ? `
+    <tr><td>${label}</td><td><span class="hint" data-perm-so-acesso-total="${key}">Só administrador e proprietários</span></td></tr>` : `
     <tr><td>${label}</td><td>
       <select data-perm-modulo="${key}">
         <option value="nenhum" ${(!p.permissoes?.[key]||p.permissoes[key]==='nenhum')?'selected':''}>Nenhum</option>
@@ -7942,7 +7945,10 @@ function faltandoNaVenda(d){
 }
 
 function PageFinanceiro(){
-  const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos'],['custoha','Custo por hectare']];
+  // Sem acesso total a pessoa só vê os lançamentos que ela fez (o banco filtra, seguranca_06): custo por hectare da empresa não
+  // faz sentido com uma parte dos lançamentos, então a aba some (12/11/2026).
+  const abas = [['despesa','Despesas'],['receita','Receitas'],['investimento','Investimentos'],['custoha','Custo por hectare']].filter(([k])=>k!=='custoha' || acessoTotal());
+  if(state.abaFinanceiro==='custoha' && !acessoTotal()) state.abaFinanceiro = 'despesa';
   if(state.abaFinanceiro==='custoha'){
     return `
     <div class="toolbar" style="gap:8px;">
@@ -7973,6 +7979,7 @@ function PageFinanceiro(){
     </div>
     ${podeEditarFinanceiro() ? `<button class="btn btn-primary btn-sm" data-novo-lancamento="${state.abaFinanceiro}">+ Nova ${TIPO_LABEL[state.abaFinanceiro]}</button>` : ''}
   </div>
+  ${acessoTotal() ? '' : `<p class="hint" data-aviso-so-os-seus="1" style="margin:-4px 0 14px;">Aqui aparecem só os lançamentos que você fez. O Financeiro completo é do administrador e dos proprietários.</p>`}
 
   ${ehDespesa ? `
   <div class="card" style="margin-bottom:14px;">

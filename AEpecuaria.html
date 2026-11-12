@@ -536,7 +536,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=de521e3bf7"></script>
+<script src="core.js?v=043f1d5f63"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // Projeto único: Pecuária, Lavoura e Matriz dividem o mesmo banco desde a
@@ -1429,12 +1429,16 @@ function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 // Eduardo em 01/09/2026 -- agora as duas realmente criam/editam lote e
 // animal sozinhas, sem precisar da permissão do módulo do lote também.
 function podeCriarLote(){ return acessoTotal() || state.perfil?.papel === 'consultor' || temPermissao('lotesGeral','editar') || temPermissao('cadastro','editar'); }
-// Consultor formula dieta e precisa saber/lançar preço de insumo, custo de
-// dieta/ração/pasto e valor em estoque pra isso -- mas não deve ver o
-// financeiro geral da fazenda (custo por curral, receitas/despesas,
-// investimentos etc.), que continua só admin/proprietário via acessoTotal().
+// Consultor formula dieta e precisa do preço dos ingredientes e do custo da
+// dieta (Ingredientes e Formulação de Dietas). Desde 12/11/2026 (decisão do
+// Eduardo: "só nas dietas") é só isso: valor em estoque, custo da saída de
+// ração e do pasto, custo do protocolo, Custo/@ e o financeiro ficam com
+// veValores() (administrador e proprietário).
 function podeVerPrecoInsumo(){ return acessoTotal() || state.perfil?.papel === 'consultor'; }
+// Ações de dinheiro (despesa, receita, preço da @, meta de margem, investimento): só acesso total (12/11/2026).
+const ACOES_SO_ACESSO_TOTAL = new Set(['custoFixo','precoArroba','receita','metaMargem','investimento']);
 function podeEditarAcao(type){
+  if(ACOES_SO_ACESSO_TOTAL.has(type)) return acessoTotal();
   // "Manejo: Editar" libera as ações de manejo (ver MANEJO_ACAO_TYPES)
   // sozinho -- não as de Insumos/Dietas/Financeiro, que continuam exigindo
   // a permissão própria delas.
@@ -1454,6 +1458,9 @@ function podeRegistrarVenda(tipo){
 }
 function grupoVisivel(key){
   if(key==='admin') return acessoTotal();
+  // Financeiro e Resultados só para administrador e proprietário (decisão do Eduardo, 12/11/2026): os apps da operação ficam só
+  // com o operacional. As permissões pec_financeiro e pec_resultados de quem não tem acesso total deixaram de abrir algo.
+  if(key==='financeiro' || key==='resultados') return acessoTotal();
   // Cada regra de cargo abaixo (consultor, podeCriarLote, editar em alguma
   // área) continua valendo como ATALHO adicional -- só o admin liberando a
   // permissão explícita do módulo (tabela em Administração > Usuários) nunca
@@ -2590,7 +2597,7 @@ function PageEstoque(){
   });
   const valorTotal = rows.reduce((a,r)=>a+r.valor,0);
   const alertas = rows.filter(r=>r.baixo).length;
-  const verValor = podeVerPrecoInsumo();
+  const verValor = veValores();   // valor e custo: só acesso total (12/11/2026)
   const podeAjustar = temPermissao('insumos','editar');
 
   const buscaMov = state.searchMovimentos.toLowerCase();
@@ -3892,7 +3899,7 @@ function ContextoLoteDetalhe(lote, contexto){
     <div class="card" style="margin-bottom:22px;">
       ${itens.length===0 ? Empty('Nenhuma inseminação registrada neste lote','Registre uma inseminação na aba Inseminação.') : `
       <table>
-        <thead><tr><th>Data</th><th>Número da vaca</th><th>Raça do touro</th><th>Inseminação</th><th>Custo</th></tr></thead>
+        <thead><tr><th>Data</th><th>Número da vaca</th><th>Raça do touro</th><th>Inseminação</th>${veValores()?'<th>Custo</th>':''}</tr></thead>
         <tbody>
           ${itens.map(r=>`
           <tr>
@@ -3900,7 +3907,7 @@ function ContextoLoteDetalhe(lote, contexto){
             <td class="mono">${esc(r.numeroVaca)||'—'}</td>
             <td>${RACA_TOURO_LABEL[r.racaTouro]||'—'}</td>
             <td>${QUAL_INSEMINACAO_LABEL[r.qualInseminacao]||'—'}</td>
-            <td class="mono">R$ ${fmt(custoReproducao(r))}</td>
+            ${veValores()?`<td class="mono">R$ ${fmt(custoReproducao(r))}</td>`:''}
           </tr>`).join('')}
         </tbody>
       </table>
@@ -3995,6 +4002,8 @@ function PageVendasGeral(){
   const totalAnimais = vendas.reduce((acc,v)=>acc+Number(v.quantidade||0),0);
   const totalValor = vendas.reduce((acc,v)=>acc+valorVenda(v),0);
   const rv = listaVisivelHoje('vendas', vendas);
+  // Quem vê a tela pelo Confinamento/Pasto/Cria, sem a permissão Vendas, vê cabeças e lotes, sem valor (12/11/2026).
+  const comValor = veValorDeVenda();
   return `
   <div class="toolbar">
     <span class="hint">${vendas.length} venda(s) registrada(s)${rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`}</span>
@@ -4003,12 +4012,12 @@ function PageVendasGeral(){
   </div>
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Animais vendidos</div><div class="stat-value">${fmtInt(totalAnimais)}</div></div>
-    <div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(totalValor)}</div></div>
+    ${comValor ? `<div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(totalValor)}</div></div>` : ''}
   </div>
   <div class="card">
     ${rv.itens.length===0 ? (vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Pasto ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : Empty('Nenhuma venda hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
-      <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Categoria</th><th>Sexo</th><th>Tipo</th><th>Qtd. animais</th><th>Preço</th><th>Valor total</th><th>Lançado por</th><th></th></tr></thead>
+      <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Categoria</th><th>Sexo</th><th>Tipo</th><th>Qtd. animais</th>${comValor ? '<th>Preço</th><th>Valor total</th>' : ''}<th>Lançado por</th><th></th></tr></thead>
       <tbody>
         ${rv.itens.map(v=>{
           const lote = state.lotes.find(l=>l.id===v.loteId);
@@ -4021,8 +4030,8 @@ function PageVendasGeral(){
             <td>${v.sexo==='macho'?'Macho':v.sexo==='femea'?'Fêmea':'—'}</td>
             <td><span class="pill pill-ok">${TIPO_VENDA_LABEL[v.tipoVenda]||'Abate'}</span></td>
             <td class="mono">${fmtInt(v.quantidade)}</td>
-            <td class="mono">${detalhePrecoVenda(v)}</td>
-            <td class="mono">R$ ${fmt(valorVenda(v))}</td>
+            ${comValor ? `<td class="mono">${detalhePrecoVenda(v)}</td>
+            <td class="mono">R$ ${fmt(valorVenda(v))}</td>` : ''}
             <td>${esc(v.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${(tipo ? podeRegistrarVenda(tipo) : acessoTotal()) ? `
@@ -4053,7 +4062,7 @@ function agruparPorDiaLote(lista){
   return ordem.map(key=>grupos[key]);
 }
 function PageSaidaRacao(tipo){
-  const verValor = podeVerPrecoInsumo();
+  const verValor = veValores();   // valor e custo: só acesso total (12/11/2026)
   const filtro = state.filtrosSaidaRacao[tipo] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.saidasRacao
     .filter(s=>{ const lote = state.lotes.find(l=>l.id===s.loteId); return lote && loteTipo(lote)===tipo; });
@@ -4213,7 +4222,7 @@ function custoPasto(p){
   return dieta ? calcDieta(dieta).custoKg * p.quantidade : 0;
 }
 function PagePasto(){
-  const verValor = podeVerPrecoInsumo();
+  const verValor = veValores();   // valor e custo: só acesso total (12/11/2026)
   const filtro = state.filtrosSaidaRacao['pasto'] || {mes:'', loteId:'', dietaId:''};
   const listaTipo = state.pasto
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; });
@@ -4386,7 +4395,7 @@ function PageReproducao(){
     ${rv.itens.length===0 ? (list.length===0 ? Empty('Nenhuma inseminação registrada','Registre as inseminações feitas em cada vaca, com a raça do touro e o custo do protocolo.') : Empty('Nenhuma inseminação hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Nº da vaca</th><th>Raça do touro</th><th>Inseminação</th><th>Custo do protocolo</th><th>Lançado por</th><th></th>
+        <th>Data</th><th>Lote</th><th>Nº da vaca</th><th>Raça do touro</th><th>Inseminação</th>${veValores()?'<th>Custo do protocolo</th>':''}<th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${rv.itens.map(r=>{
@@ -4397,7 +4406,7 @@ function PageReproducao(){
             <td class="mono">${esc(r.numeroVaca)||'—'}</td>
             <td>${RACA_TOURO_LABEL[r.racaTouro]||'—'}</td>
             <td>${QUAL_INSEMINACAO_LABEL[r.qualInseminacao]||'—'}</td>
-            <td class="mono">R$ ${fmt(custoReproducao(r))}</td>
+            ${veValores()?`<td class="mono">R$ ${fmt(custoReproducao(r))}</td>`:''}
             <td>${esc(r.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
               ${temPermissao('cria','editar') ? `
@@ -4736,28 +4745,28 @@ function PainelResultadoLotes(lotesTipo){
   <div class="card">
     <table>
       <thead><tr>
-        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@/animal</th><th>@ produzidas</th><th>Custo/@</th>
+        <th>Lote</th><th>Nº animais</th><th>Peso inicial</th><th>Peso atual</th><th>Ganho no período</th><th>GMD médio</th><th>@/animal</th><th>@ produzidas</th>${veValores()?'<th>Custo/@</th>':''}
       </tr></thead>
       <tbody>
         ${linhas.map(r=>`
           <tr>
             <td><button class="link-nome" data-ver-lote="${r.lote.id}">${esc(r.lote.nome)}</button></td>
             <td class="mono">${fmtInt(r.lote.numeroAnimais)}</td>
-            ${r.semDados ? `<td class="mono" colspan="7">Nenhuma pesagem registrada ainda</td>` : `
+            ${r.semDados ? `<td class="mono" colspan="${veValores()?7:6}">Nenhuma pesagem registrada ainda</td>` : `
             <td class="mono">${fmt(Number(r.primeira.pesoMedioKg),1)} kg <span class="hint">(${r.primeira.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${fmt(Number(r.ultima.pesoMedioKg),1)} kg <span class="hint">(${r.ultima.data.split('-').reverse().join('/')})</span></td>
             <td class="mono">${r.ganhoTotal>=0?'+':''}${fmt(r.ganhoTotal,1)} kg</td>
             <td class="mono">${fmtGmd(r.janela, 3)}</td>
             <td class="mono">${fmt(r.arrobaPorAnimal,2)} @</td>
             <td class="mono">${fmt(r.arrobaTotal,1)} @</td>
-            <td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>
+            ${veValores()?`<td class="mono">${r.custoPorArroba!==null ? 'R$ '+fmt(r.custoPorArroba,2) : '—'}</td>`:''}
             `}
           </tr>
         `).join('')}
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin:10px 0 18px;">Ganho, @/animal, @ produzidas e Custo/@ contam desde a primeira pesagem lançada de cada lote até a mais recente. Quando a pesagem tem peso por animal, o GMD é boi a boi (média dos animais pesados no começo e no fim do período, mesmo vindos de outro curral) e o ganho é esse GMD × dias; sem peso por animal, é a diferença das médias do lote. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. "@/animal" é o ganho por cabeça (ganho no período ÷ 30 kg); "@ produzidas" é o total do lote (@/animal × nº de animais). Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.</p>`;
+  <p class="hint" style="margin:10px 0 18px;">Ganho, @/animal, @ produzidas${veValores()?' e Custo/@':''} contam desde a primeira pesagem lançada de cada lote até a mais recente. Quando a pesagem tem peso por animal, o GMD é boi a boi (média dos animais pesados no começo e no fim do período, mesmo vindos de outro curral) e o ganho é esse GMD × dias; sem peso por animal, é a diferença das médias do lote. 1 @ ≈ ${KG_POR_ARROBA} kg de peso vivo ganho. "@/animal" é o ganho por cabeça (ganho no período ÷ 30 kg); "@ produzidas" é o total do lote (@/animal × nº de animais). ${veValores()?' Custo/@ soma ração+pasto+cria lançados no período a uma fatia de custo fixo (taxa de hoje, aplicada aos dias do período) -- mesma lógica do Custo/@ do Confinamento na tela Financeiro, agora nas três áreas.':''}</p>`;
 }
 
 function PagePesagem(tipo){
@@ -6426,10 +6435,11 @@ const MODULOS_PERMISSAO = [
   ['insumos','Insumos'], ['dietas','Dietas'],
   ['lotesGeral','Lotes (visão geral)'],
   ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
-  ['vendas','Vendas'],
+  ['vendas','Vendas (com o valor da venda)'],
   // pec_ nos dois últimos: no banco unificado o Lavoura também tem
   // 'financeiro' e 'resultados', com outro significado. Ver MODULOS_GROUP.
-  ['pec_financeiro','Financeiro'], ['pec_resultados','Resultados'],
+  // Terceiro item true: só administrador e proprietário desde 12/11/2026 (dinheiro); a permissão não abre nada para os outros.
+  ['pec_financeiro','Financeiro', true], ['pec_resultados','Resultados', true],
 ];
 const PAPEL_LABELS = {admin:'Administrador', proprietario:'Proprietário', colaborador:'Colaborador', consultor:'Consultor'};
 
@@ -6451,7 +6461,8 @@ function ModalPermissoes(){
         <table class="perm-matrix">
           <thead><tr><th>Módulo</th><th>Permissão</th></tr></thead>
           <tbody>
-            ${MODULOS_PERMISSAO.map(([key,label])=>`
+            ${MODULOS_PERMISSAO.map(([key,label,soAcessoTotal])=> soAcessoTotal ? `
+              <tr><td>${label}</td><td><span class="hint" data-perm-so-acesso-total="${key}">Só administrador e proprietários</span></td></tr>` : `
               <tr>
                 <td>${label}</td>
                 <td>
@@ -6575,7 +6586,7 @@ function ModalMovimento(){
         </div>
         <div class="field"><label>Quantidade (em ${ing?.unidade || 'kg'})</label><input id="f-qtd" type="number" step="0.1" value="${d.quantidade}"/></div>
         ${d.tipo==='entrada' ? `
-        <div class="field"><label>Preço pago (R$/kg, opcional)</label><input id="f-precoentrada" type="number" step="0.01" value="${d.precoKg||''}" placeholder="${ing ? 'Preço atual: R$ '+fmt(ing.precoKg,2) : ''}"/></div>
+        <div class="field"><label>Preço pago (R$/kg, opcional)</label><input id="f-precoentrada" type="number" step="0.01" value="${d.precoKg||''}" placeholder="${ing && podeVerPrecoInsumo() ? 'Preço atual: R$ '+fmt(ing.precoKg,2) : ''}"/></div>
         <p class="hint">Se informar o preço dessa compra, o preço por kg do ingrediente é recalculado automaticamente pela média ponderada entre o estoque que já tinha e o que está entrando — assim a dieta calcula o custo já considerando o novo valor. Deixe em branco pra manter o preço do ingrediente sem alteração.</p>
         ` : ''}
       </div>
