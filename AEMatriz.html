@@ -543,7 +543,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=b340b1c7fb"></script>
+<script src="core.js?v=de521e3bf7"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -6033,7 +6033,7 @@ function ModalFuncionario(){
             <span class="hint">Cria a conta de acesso (mesma Edge Function usada na tela de Usuários).</span>
             <input id="f-nomeacessolavoura" placeholder="Nome" value="${esc(d.nome||'')}" autocomplete="off"/>
             <input id="f-usuarioacessolavoura" placeholder="usuário (login)" autocomplete="off"/>
-            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password"/>
+            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. ${MIN_SENHA} caracteres)" autocomplete="new-password"/>
             <div style="display:flex; gap:8px;">
               <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-lavoura="1" ${state.acessoLavouraLoading?'disabled':''}>${state.acessoLavouraLoading?'Criando...':'Criar'}</button>
               <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-lavoura="1">Cancelar</button>
@@ -8351,7 +8351,7 @@ function PageUsuarios(){
             <td class="mono" data-rotulo="Usuário">${esc(p.usuario)}</td>
             <td data-rotulo="Perfil">${papelPill(p.papel)}</td>
             <td data-rotulo="Status"><span><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</span></td>
-            <td class="acoes">${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>` : ''}</td>
+            <td class="acoes">${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button> <button class="btn-ghost btn-sm" data-redefinir-senha="${p.id}">Nova senha</button>` : ''}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -9113,8 +9113,8 @@ function attachEvents(){
     const nome = document.getElementById('f-nomeacessolavoura').value.trim();
     const usuario = document.getElementById('f-usuarioacessolavoura').value.trim();
     const senha = document.getElementById('f-senhaacessolavoura').value;
-    if(!nome || !usuario || !senha || senha.length<6){
-      state.acessoLavouraError = 'Preencha nome, usuário e senha (mín. 6 caracteres).';
+    if(!nome || !usuario || !senha || senha.length<MIN_SENHA){
+      state.acessoLavouraError = `Preencha nome, usuário e senha (mín. ${MIN_SENHA} caracteres).`;
       render(); return;
     }
     state.acessoLavouraLoading = true; state.acessoLavouraError = ''; render();
@@ -9175,6 +9175,7 @@ function attachEvents(){
       const usuario = document.getElementById('f-usuario').value.trim();
       const senha = document.getElementById('f-senhausuario').value;
       if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
+      if(senha.length < MIN_SENHA){ state.usuarioError = `A senha precisa ter pelo menos ${MIN_SENHA} caracteres.`; render(); return; }
       state.usuarioLoading = true; state.usuarioError = ''; render();
       // Reaproveita a mesma Edge Function do AE Lavoura — não faz sentido
       // publicar uma "criar-usuario-matriz" própria só pra isso, já que os
@@ -9503,13 +9504,13 @@ function attachEvents(){
         const novaSenha = document.getElementById('f-novasenha').value;
         const confirmarSenha = document.getElementById('f-confirmarsenha').value;
         if(!senhaAtual || !novaSenha || !confirmarSenha){ alert('Preencha todos os campos.'); return; }
-        if(novaSenha.length<6){ alert('A nova senha precisa ter pelo menos 6 caracteres.'); return; }
+        if(novaSenha.length<MIN_SENHA){ alert(`A nova senha precisa ter pelo menos ${MIN_SENHA} caracteres.`); return; }
         if(novaSenha!==confirmarSenha){ alert('A confirmação não bate com a nova senha.'); return; }
-        const email = `${state.perfil.usuario}@${DOMINIO_LOGIN}`;
-        const { error: erroSenhaAtual } = await db.auth.signInWithPassword({ email, password: senhaAtual });
-        if(erroSenhaAtual){ alert('Senha atual incorreta.'); return; }
+        const conferida = await senhaAtualConfere(senhaAtual);
+        if(conferida === false){ alert('Senha atual incorreta.'); return; }
+        if(conferida === null){ alert('Sem conexão com o servidor: a senha não foi trocada. Tente de novo com sinal.'); return; }
         ({error} = await db.auth.updateUser({ password: novaSenha }));
-        if(error){ alert('Não foi possível trocar a senha: ' + error.message); return; }
+        if(error){ alert(textoErroSenhaNova(error)); return; }
         state.modal = null; editDraft = null;
         alert('Senha alterada com sucesso.');
         render();
