@@ -1901,11 +1901,35 @@ O Supabase já traz o TOTP ligado (conferido por ele no painel). Os 5 apps (`cor
 - **Quem não ativou entra como sempre.** Funcionário de campo não muda nada.
 - O stub dos testes tem uma API de fator falsa (`window.__MFA__`, `window.__MFA_CODIGO__` = 123456, `window.__jwt('aal1'|'aal2')`).
 
-**O que AINDA falta (nada disto protege o banco hoje):** a tela sozinha é aviso, não proteção — com a senha roubada alguém ainda lê o banco por fora do app. A proteção
-é um SQL de RLS (`seguranca_04`, a escrever e ensaiar): política **restritiva** em toda tabela com RLS e a mesma regra nas funções/visões de permissão (a visão
-`lancamentos_rateados` roda com direitos do dono e filtra por `tem_permissao`, então a RLS das tabelas não a cobre) que, para quem TEM fator confirmado, exija `aal2`; quem
-não tem fator segue com `aal1`. **Ordem obrigatória:** (1) telas no ar ✓; (2) ele ativa o dele (de preferência 2 celulares) e testa entrar, fechar e abrir, abrir sem sinal;
-(3) só então o SQL. Ligar o SQL antes de ele conseguir ativar pode trancá-lo para fora.
+**A trava no banco: `seguranca_04_segundo_fator_no_banco.sql` (12/11/2026, ensaiado e RODADO no mesmo dia, pelo conector, com o OK dele).** Sem ela a tela é só aviso: com a senha
+roubada dava para ler e gravar o banco por fora do app. O script:
+- `segundo_fator_ok()` (`security definer`, lê `auth.mfa_factors`): verdadeiro se a sessão é `aal2` **ou** a pessoa não tem celular confirmado. Quem não
+  ativou segue como hoje; celular cadastrado pela metade (não confirmado) não conta.
+- **Política RESTRITIVA `exige_segundo_fator`** (`for all to authenticated`, `(select public.segundo_fator_ok())`, avaliada uma vez por consulta) em **toda**
+  tabela do `public` com RLS (107 em 12/11/2026, inclusive as `zz_backup_*`). Restritiva = vale junto com as outras e nunca abre nada. **Tabela nova com
+  RLS: rodar o script de novo** (ele põe nas que faltarem; o item 3 da conferência lista as que estão sem).
+- A visão `lancamentos_rateados` roda com os direitos do dono (a RLS das tabelas não a cobre): a mesma regra entrou em `ve_todo_o_financeiro()` e
+  `ve_financeiro_da_pecuaria()` (com `search_path` fixo, que o aviso do Supabase pedia). `postgres`/`service_role` continuam vendo tudo.
+- **Achados no mesmo mapeamento e fechados no mesmo script**: (a) `funcionarios`, `funcionario_atividades` e `fazenda_atividades` aceitavam inserir,
+  alterar e apagar de **qualquer** usuário logado (política `auth.role() = 'authenticated'` para tudo, até operador de campo); a leitura segue aberta a
+  quem está logado (o Combustível lê funcionários; Pecuária, Cana e Cereais leem a área por atividade) e gravar passa a pedir `is_admin()` ou
+  `tem_permissao('matriz_funcionarios'|'matriz_fazendas','editar')`, a mesma permissão que a tela do Matriz já pede (inclusive o Excluir funcionário e
+  o upsert/delete da alocação); (b) apaga as extensões `dblink` e `postgres_fdw` (sem uso: nenhum servidor externo, nenhuma função cita; com elas
+  qualquer logado podia abrir conexão do banco para fora); se o Supabase não deixar, o resto vale e a conferência avisa.
+- **Ensaio** (Postgres 16 descartável com `auth.jwt()`/`auth.uid()`/`auth.mfa_factors` como os do Supabase e as funções de permissão copiadas do banco
+  real): 31 casos com 6 usuários (admin sem celular; admin com celular só com senha e com código; operador; colaborador com Funcionários editar;
+  financeiro da Pecuária com celular; celular não confirmado; o editor como `postgres`). **Antes** do script 14 deles mostram o buraco; **depois** os
+  31 passam; rodar duas vezes dá igual; o desfazer (fim do arquivo) devolve os mesmos 14 buracos; rodar de novo depois de desfazer volta aos 31.
+- **Função de criar usuário** (`supabase/functions/criar-usuario-cana`, **versão 4, publicada em 12/11/2026**): quem tem celular cadastrado e chama sem o
+  código (`aal` do token diferente de `aal2`) recebe 403. Sem isso, a senha roubada do admin criava um usuário novo sem código e entrava por ele.
+- **AE Combustível** criava usuário chamando `criar-usuario-combustivel`, que nunca foi publicada no projeto único (só existe `criar-usuario-cana`):
+  passou a chamar a `criar-usuario-cana`, como os outros 4 apps.
+- **Ordem**: o script não muda nada para ninguém enquanto ninguém tiver celular cadastrado (em 12/11/2026: 0). Depois de rodado, quem ativar passa
+  a precisar do código também no banco. Se o app falhar na hora do código, o desbloqueio é o mesmo de perder o celular (abaixo), pelo editor do Supabase.
+- **Rodado em 12/11/2026, os 7 itens da conferência OK**: 107 de 107 tabelas com a política, a visão filtrada pela mesma regra, nenhuma tabela aberta
+  a qualquer logado, `dblink`/`postgres_fdw` apagadas, 0 pessoas com celular cadastrado. Conferido entrando no banco como o admin e como um operador do
+  curral (papel `authenticated` + o id de cada um, só senha): veem lotes, animais, dietas, saídas de ração, partos, lançamentos e a visão rateada como antes.
+  **Ninguém ficou travado**: a regra só passa a valer para quem ativar o código no celular.
 **Se alguém perder o celular**: o Supabase não dá códigos de recuperação; o dono do projeto remove o fator no SQL Editor (`delete from auth.mfa_factors where user_id =
 '<uuid da pessoa>';`, a conferir quando for preciso) e a pessoa cadastra de novo.
 

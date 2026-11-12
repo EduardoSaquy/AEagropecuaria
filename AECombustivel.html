@@ -2544,7 +2544,7 @@ function attachEvents(){
       const senha = document.getElementById('f-senhausuario').value;
       if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
       state.usuarioLoading = true; state.usuarioError = ''; render();
-      const { data, error } = await db.functions.invoke('criar-usuario-combustivel', { body: { nome, usuario, senha } });
+      const { data, error } = await db.functions.invoke('criar-usuario-cana', { body: { nome, usuario, senha } }); // a 'criar-usuario-combustivel' nunca foi publicada no projeto unico (12/11/2026)
       state.usuarioLoading = false;
       if(error || data?.error){
         let msg = data?.error || error?.message || 'Falha ao criar usuário.';

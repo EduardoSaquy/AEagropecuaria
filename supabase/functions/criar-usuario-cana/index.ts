@@ -1,4 +1,4 @@
-// Edge Function: criar-usuario-cana
+// Edge Function: criar-usuario-cana  (versao 4, 12/11/2026: exige o codigo de duas etapas de quem tem celular cadastrado)
 //
 // Cria uma conta (login + senha) e o perfil correspondente em `profiles`,
 // no projeto Supabase do AE Cana. Só pode ser chamada por quem já está
@@ -30,6 +30,18 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Nivel da sessao que chamou: 'aal2' = entrou com senha + codigo de duas
+// etapas. O token ja foi validado por getUser() antes de ler isto.
+function aalDoToken(jwt: string): string {
+  try {
+    const parte = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const json = JSON.parse(atob(parte + '='.repeat((4 - (parte.length % 4)) % 4)))
+    return String(json.aal || 'aal1')
+  } catch {
+    return 'aal1'
+  }
+}
+
 function resposta(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -58,6 +70,21 @@ Deno.serve(async (req) => {
 
     if (erroPerfil || !perfilChamador || perfilChamador.papel !== 'admin' || !perfilChamador.ativo) {
       return resposta({ error: 'Apenas administradores podem criar usuários' }, 403)
+    }
+
+    // Duas etapas (12/11/2026, seguranca_04): admin com celular cadastrado so
+    // cria usuario com a sessao confirmada pelo codigo. Sem isto, com a senha
+    // roubada do admin dava para criar um usuario novo, sem codigo, e entrar
+    // por ele. Quem nao tem celular cadastrado segue como antes.
+    if (aalDoToken(jwt) !== 'aal2') {
+      let fatores: Array<{ status?: string }> = chamador.user.factors || []
+      try {
+        const r = await admin.auth.admin.mfa.listFactors({ userId: chamador.user.id })
+        if (!r.error && r.data?.factors) fatores = r.data.factors
+      } catch (_) { /* fica com os fatores que vieram no usuario */ }
+      if (fatores.some((f) => f.status === 'verified')) {
+        return resposta({ error: 'Confirme o código de duas etapas antes de criar usuários: saia e entre de novo no app.' }, 403)
+      }
     }
 
     const { usuario, senha, nome, papel, permissoes } = await req.json()
