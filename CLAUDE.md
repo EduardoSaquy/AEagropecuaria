@@ -1934,7 +1934,7 @@ e o ERP tem a conta dos dois lados. A tela de lançamento e a de contas **já** 
   errado ou conta a pagar/receber EM ABERTO com rateio do lado errado (a baixa criaria lançamento do lado errado e seria barrada). **Se o ERP for reimportado, receita em centro de saída será
   recusada**: a importação precisa usar o centro de entrada. Desfazer no fim do arquivo. Os fluxos do app que gravam lançamento com centro fixo seguem do lado certo: o juros das parcelas ("Juros e Encargos de Financiamento", `saida`) e a venda de animais ("Vendas", `entrada`); as telas de lançamento e de contas já filtram o lado.
 
-### Backup automático do banco (09/11/2026): pronto no repositório, AINDA NÃO LIGADO
+### Backup automático do banco (09/11/2026; LIGADO em 12/11/2026)
 
 O plano gratuito do Supabase não guarda cópia do banco (a própria documentação deles manda exportar com `pg_dump` e guardar fora). Em `backup_banco/` (`backup.yml` e `LEIA-ME.md`) está a tarefa
 do GitHub Actions que faz `pg_dump` (formato custom) do schema `public` e, a parte e sem derrubar o resto se falhar, do `auth`, confere o arquivo (conta as tabelas com dados e o tamanho) e guarda
@@ -1943,6 +1943,10 @@ roda aqui. Precisa do segredo `DATABASE_URL` (URI do **Session pooler**, a conex
 a vejo nem a digito). `VERSAO_PG` tem de ser a do banco (`select version();`); GitHub gratuito dá 2.000 min/mês e 500 MB de artefatos (por isso o tamanho do banco decide os dias guardados).
 Ensaiado num Postgres descartável (dump dos dois schemas, `--list`, restauração num banco novo: linhas, RLS, visão, função e contas voltam). **Não testado**: a conexão real pelo pooler e o `pg_dump`
 do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como restaurar: `backup_banco/LEIA-ME.md`.
+**Ligado pelo Eduardo em 12/11/2026** no repositório privado `EduardoSaquy/AEagropecuaria-backup` (`.github/workflows/backup.yml`, segredo
+`DATABASE_URL` com o Session pooler `aws-0-sa-east-1.pooler.supabase.com:5432`, Postgres 17). 1ª execução (manual) verde em 2 min 14 s: **107 tabelas com
+dados** no `public` (2,56 MB) e o `auth` também saiu (112 KB); artefato `backup-banco` de 2,03 MB. Nesse tamanho, 14 dias ocupam ~40 MB dos 500 MB grátis.
+Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connection string) → Connection Method: Session pooler → Type: URI.
 
 ## Armadilhas que já custaram caro
 
