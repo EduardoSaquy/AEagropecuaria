@@ -53,7 +53,11 @@ O projeto antigo da Pecuária (`leojfqlbdtlriemdgnyw`) tinha leitura anônima em
 `profiles` com a chave de serviço sem checar quem chamou) publicada lá — órfã
 (nenhum app mais chama), mas exposta a quem tivesse a anon key antiga,
 recuperável no histórico do git. **Pausado pelo Eduardo em 30/08/2026** —
-projeto parado no painel do Supabase, risco fechado.
+projeto parado no painel do Supabase, risco fechado. **Não apagar** (decisão dele,
+12/11/2026: "não gostaria que apagasse coisas importantes antigas"). O painel
+deixa retomar até 03/10/2027; a cópia do banco (backup diário de 29/08/2026, o
+último antes de pausar, completa, 27 tabelas do `public` mais o `auth`) foi
+baixada para o computador dele em 12/11/2026 e fica fora do git.
 
 ### Registro de alterações
 
@@ -1991,8 +1995,11 @@ não assinar o Supabase Pro por enquanto; o que dá para fazer sem pagar:
   new users to sign up" **DESLIGADO** (estava ligado: qualquer um com um e-mail de verdade podia se cadastrar pela chave pública e
   ler as tabelas abertas a quem está logado; havia só os 14 usuários da casa). Criar usuário continua funcionando: a função
   `criar-usuario-cana` usa `auth.admin.createUser` (chave de serviço), que não depende do cadastro aberto.
-- **Ainda sem fazer** (decisões dele de 12/11/2026, próximas partes): limpar as `zz_backup_*` e o projeto antigo pausado (só depois
-  de conferir que nada se perde); repositório privado; Supabase Pro. O financeiro só para ele e os proprietários está na seção abaixo.
+- **Ainda sem fazer** (decisões dele de 12/11/2026, próximas partes): repositório privado; Supabase Pro. O financeiro só para ele e
+  os proprietários está na seção abaixo.
+- **As cópias `zz_backup_*` e o projeto antigo pausado FICAM** (ele cancelou a limpeza em 12/11/2026: "não gostaria que apagasse coisas
+  importantes antigas"). Onde este arquivo diz "a apagar quando ele confirmar", vale isto: não proponha apagar. Elas estão fechadas
+  (RLS ligado, sem regra, `anon` sem acesso) e com a política do segundo fator.
 
 ### Financeiro só para administrador e proprietários (12/11/2026)
 
