@@ -1986,7 +1986,11 @@ não assinar o Supabase Pro por enquanto; o que dá para fazer sem pagar:
   usuário): troca a senha (o gatilho desmarca) e marca a pessoa de novo.
 - **Painel do Supabase (Authentication > Sign In / Providers > Email)**: "Secure password change" e "Require current password when
   updating" estão DESLIGADOS (conferido em 12/11/2026). A troca obrigatória depende disso: ligados, `updateUser` pediria nova
-  confirmação por e-mail, e os e-mails são inventados. Não ligar.
+  confirmação por e-mail, e os e-mails são inventados. Não ligar. **Mudado com o OK dele em 12/11/2026** (conferido depois de
+  recarregar o painel): "Minimum password length" de 6 para **10** (o servidor recusa senha menor, mesmo por fora do app) e "Allow
+  new users to sign up" **DESLIGADO** (estava ligado: qualquer um com um e-mail de verdade podia se cadastrar pela chave pública e
+  ler as tabelas abertas a quem está logado; havia só os 14 usuários da casa). Criar usuário continua funcionando: a função
+  `criar-usuario-cana` usa `auth.admin.createUser` (chave de serviço), que não depende do cadastro aberto.
 - **Ainda sem fazer** (decisões dele de 12/11/2026, próximas partes): financeiro só para ele e os proprietários (secretária vê
   Pagar/Receber e o que ela lança; nos apps técnicos, R$ só para eles; operador vê kg, litros e cabeças); limpar as `zz_backup_*` e
   o projeto antigo pausado (só depois de conferir que nada se perde); repositório privado; Supabase Pro.
