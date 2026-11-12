@@ -160,3 +160,9 @@ window.supabase = {
 };
 window.__ESCRITAS__ = [];
 window.__CHAMADAS_RPC__ = [];
+// (12/11/2026) A biblioteca de verdade passou a vir do proprio site (vendor/supabase-js-*.js), que o teste nao intercepta
+// quando abre o app por file://. Ela faz `var supabase = ...` ao carregar: o stub fica no lugar e essa atribuicao e ignorada.
+(function () {
+  const stub = window.supabase;
+  try { Object.defineProperty(window, 'supabase', { get() { return stub; }, set() {}, configurable: false }); } catch (e) { /* ja protegido */ }
+})();

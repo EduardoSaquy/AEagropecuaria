@@ -61,6 +61,25 @@ document.addEventListener('wheel', e=>{
   if(campoQueARodinhaMudaria(foco) && (e.target === foco || (foco.contains && foco.contains(e.target)))) foco.blur();
 }, {capture: true, passive: true});
 
+/* ---------- Hora do último uso do aparelho (12/11/2026) ----------
+ * Pedido do Eduardo: o AE Matriz (financeiro) pede o login de novo depois de 20 minutos sem uso, para um computador do
+ * escritório esquecido aberto não deixar o financeiro à mostra. Os cinco apps dividem o mesmo login no mesmo navegador,
+ * então qualquer toque, tecla ou rolagem em QUALQUER um deles marca a hora aqui (no máximo uma gravação a cada 15 s);
+ * só o AE Matriz confere e sai (MINUTOS_SEM_USO_PARA_SAIR, lá). Quem está usando a Pecuária no mesmo navegador não
+ * perde o login por estar fora do Matriz. */
+const CHAVE_ULTIMO_USO = 'ae_ultimo_uso_v1';
+let ultimoUsoGravadoAqui = 0;
+function marcarUso(forcar){
+  const agora = Date.now();
+  if(!forcar && agora - ultimoUsoGravadoAqui < 15000) return;
+  ultimoUsoGravadoAqui = agora;
+  try{ localStorage.setItem(CHAVE_ULTIMO_USO, String(agora)); }catch(e){ /* sem espaço: o Matriz só não sai sozinho */ }
+}
+function horaDoUltimoUso(){
+  try{ const v = Number(localStorage.getItem(CHAVE_ULTIMO_USO)); return Number.isFinite(v) && v > 0 ? v : 0; }catch(e){ return 0; }
+}
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev=>document.addEventListener(ev, ()=>marcarUso(), {capture: true, passive: true}));
+
 
 /* ---------- Datas no formato do Brasil, em qualquer navegador (09/11/2026) ----------
  * Pedido do Eduardo: "as datas têm aparecido tipo data americana". O campo de data do navegador (<input type="date">,
@@ -368,6 +387,91 @@ function temPermissao(modulo, nivel){
 // (item ainda não sincronizado, local só desse aparelho).
 function souOperador(){ return state.perfil?.papel === 'operador'; }
 
+/* ---------- Senha: no minimo 10 caracteres e troca obrigatoria (12/11/2026) ----------
+ * Decisao do Eduardo: todos trocam para uma senha de 10 ou mais caracteres na proxima entrada com internet, e quem for
+ * criado depois tambem troca a senha provisoria no primeiro acesso. profiles.precisa_trocar_senha (seguranca_05) diz quem
+ * ainda precisa; o banco desmarca sozinho quando a senha muda de verdade (gatilho em auth.users), entao nao da para
+ * pular a troca chamando a API. Antes do SQL a coluna nao existe e nada muda. */
+const MIN_SENHA = 10;
+function textoErroSenhaNova(error){
+  const c = (error && error.code) || '', m = String((error && error.message) || '');
+  if(c === 'same_password' || /different from the old/i.test(m)) return 'A senha nova tem que ser diferente da atual.';
+  if(c === 'weak_password' || /at least|weak|characters/i.test(m)) return `Senha fraca: use pelo menos ${MIN_SENHA} caracteres, misturando letras e números.`;
+  if(c === 'reauthentication_needed' || /reauthenticat/i.test(m)) return 'O servidor pediu para entrar de novo antes de trocar a senha: saia, entre e troque de novo.';
+  if(pareceErroDeRede(error)) return 'Sem conexão com o servidor: a senha não foi trocada. Tente de novo com sinal.';
+  return 'Não foi possível trocar a senha: ' + m;
+}
+// Confere a senha atual SEM mexer na sessao do app (um cliente a parte, que nao guarda nada no aparelho). Antes a tela
+// entrava de novo com a senha no proprio cliente: para quem tem o codigo do celular, isso trocava a sessao confirmada
+// (aal2) por uma so de senha (aal1), e o banco parava de responder no meio da troca.
+// true = confere; false = senha errada; null = sem conexao.
+async function senhaAtualConfere(senha){
+  if(aparelhoSemRede()) return null;
+  try{
+    const avulso = supabase.createClient(db.supabaseUrl, db.supabaseKey,
+      {auth: {persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'ae-confere-senha'}});
+    const { data, error } = await avulso.auth.signInWithPassword({ email: `${state.perfil.usuario}@${DOMINIO_LOGIN}`, password: senha });
+    if(error) return pareceErroDeRede(error) ? null : false;
+    if(data && data.session){ try{ await avulso.auth.signOut({scope: 'local'}); }catch(e){ /* a sessao avulsa vence sozinha */ } }
+    return true;
+  }catch(e){ return pareceErroDeRede(e) ? null : false; }
+}
+// Tela cheia: "crie uma senha nova". Resolve true quando a senha foi trocada no servidor; false se a pessoa sair.
+// Uma tela so: se o perfil for carregado de novo enquanto ela esta aberta, a mesma promessa e devolvida.
+let senhaNovaEmAndamento = null;
+function exigirSenhaNova(){
+  if(senhaNovaEmAndamento) return senhaNovaEmAndamento;
+  senhaNovaEmAndamento = new Promise(resolve=>{
+    const fundo = document.createElement('div');
+    fundo.id = 'senha-nova';
+    fundo.style.cssText = 'position:fixed; inset:0; z-index:10000; overflow:auto; background:' + (getComputedStyle(document.body).backgroundColor || '#fff');
+    fundo.innerHTML = `
+      <div class="login-wrap">
+        <div class="login-card">
+          <div class="login-brand">
+            ${brandMark()}
+            <div class="brand-name">${esc(NOME_DO_APP)}</div>
+          </div>
+          <p style="color:var(--cinza); font-size:13.5px; line-height:1.6; margin-bottom:16px;">Por segurança, crie uma senha nova antes de continuar. Ela precisa ter pelo menos ${MIN_SENHA} caracteres. Uma frase curta fácil de lembrar, com números, funciona bem. Vale para todos os apps.</p>
+          <div class="login-error" id="senha-nova-erro" style="display:none;"></div>
+          <form id="senha-nova-form">
+            <div class="login-field">
+              <label for="senha-nova-1">Senha nova</label>
+              <input id="senha-nova-1" type="password" autocomplete="new-password" />
+            </div>
+            <div class="login-field">
+              <label for="senha-nova-2">Repita a senha nova</label>
+              <input id="senha-nova-2" type="password" autocomplete="new-password" />
+            </div>
+            <button type="submit" class="btn btn-primary login-btn" id="senha-nova-ok">Salvar e entrar</button>
+          </form>
+          <button type="button" class="btn btn-ghost login-btn" id="senha-nova-sair" style="margin-top:10px;">Sair</button>
+        </div>
+      </div>`;
+    document.body.appendChild(fundo);
+    const c1 = fundo.querySelector('#senha-nova-1'), c2 = fundo.querySelector('#senha-nova-2');
+    const botao = fundo.querySelector('#senha-nova-ok'), caixaErro = fundo.querySelector('#senha-nova-erro');
+    const mostraErro = t=>{ caixaErro.textContent = t; caixaErro.style.display = 'block'; };
+    let ocupado = false;
+    fundo.querySelector('#senha-nova-form').onsubmit = async e=>{
+      e.preventDefault();
+      if(ocupado) return;
+      const nova = c1.value;
+      if(nova.length < MIN_SENHA){ mostraErro(`A senha precisa ter pelo menos ${MIN_SENHA} caracteres (tem ${nova.length}).`); return; }
+      if(nova !== c2.value){ mostraErro('As duas senhas não são iguais.'); return; }
+      if(aparelhoSemRede()){ mostraErro('Sem internet: a senha só pode ser trocada com sinal.'); return; }
+      ocupado = true; botao.disabled = true; botao.textContent = 'Salvando...';
+      const { error } = await db.auth.updateUser({ password: nova });
+      ocupado = false; botao.disabled = false; botao.textContent = 'Salvar e entrar';
+      if(error){ mostraErro(textoErroSenhaNova(error)); return; }
+      fundo.remove();
+      resolve(true);
+    };
+    fundo.querySelector('#senha-nova-sair').onclick = ()=>{ fundo.remove(); resolve(false); };
+  }).finally(()=>{ senhaNovaEmAndamento = null; });
+  return senhaNovaEmAndamento;
+}
+
 /* ---------- Telas comuns ---------- */
 function ModalTrocarSenha(){
   const d = editDraft;
@@ -379,7 +483,7 @@ function ModalTrocarSenha(){
         <div class="field"><label>Senha atual</label><input id="f-senhaatual" type="password" autocomplete="current-password" value="${d.senhaAtual}"/></div>
         <div class="field"><label>Nova senha</label><input id="f-novasenha" type="password" autocomplete="new-password" value="${d.novaSenha}"/></div>
         <div class="field"><label>Confirmar nova senha</label><input id="f-confirmarsenha" type="password" autocomplete="new-password" value="${d.confirmarSenha}"/></div>
-        <p class="hint">A nova senha precisa ter pelo menos 6 caracteres.</p>
+        <p class="hint">A nova senha precisa ter pelo menos ${MIN_SENHA} caracteres.</p>
         ${acessoTotal() ? `<div class="field" style="margin-top:18px; padding-top:14px; border-top:1px solid rgba(0,0,0,.1);">
           <label>Verificação em duas etapas</label>
           <button type="button" class="btn btn-ghost" data-mfa-abrir="1">Ativar ou gerenciar</button>
@@ -563,7 +667,7 @@ function ModalUsuario(){
         ${state.usuarioError ? `<div class="login-error">${esc(state.usuarioError)}</div>` : ''}
         <div class="field"><label>Nome completo</label><input id="f-nomeusuario" value="${esc(d.nome)}" placeholder="Ex: João Silva" autocomplete="off"/></div>
         <div class="field"><label>Usuário (login)</label><input id="f-usuario" value="${esc(d.usuario)}" placeholder="Ex: joao.silva" autocomplete="off"/><span class="hint">Sem espaços ou acentos. É o que a pessoa vai digitar para entrar.</span></div>
-        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${esc(d.senha)}" autocomplete="new-password"/><span class="hint">Mínimo 6 caracteres. Pode ser trocada depois pela pessoa.</span></div>
+        <div class="field"><label>Senha</label><input id="f-senhausuario" type="password" value="${esc(d.senha)}" autocomplete="new-password"/><span class="hint">Mínimo ${MIN_SENHA} caracteres. É provisória: a pessoa cria a dela no primeiro acesso.</span></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
@@ -572,6 +676,55 @@ function ModalUsuario(){
     </div>
   </div>`;
 }
+// Senha provisoria para quem esqueceu (12/11/2026). Os logins usam e-mail inventado (usuario@aeagropecuaria.local), entao
+// nao existe "esqueci a senha" por e-mail: o administrador poe uma senha provisoria (10+) pela funcao criar-usuario-cana
+// (acao redefinir_senha, so admin) e a pessoa e marcada para criar a dela no proximo acesso (precisa_trocar_senha).
+async function mensagemDaFuncao(data, error, padrao){
+  let msg = (data && data.error) || (error && error.message) || padrao;
+  if(error && error.context && typeof error.context.json === 'function'){
+    try{ const corpo = await error.context.json(); if(corpo && corpo.error) msg = corpo.error; }catch(e){ /* corpo nao e JSON */ }
+  }
+  return msg;
+}
+function abrirRedefinirSenha(id){
+  const p = (state.perfis || []).find(x=>String(x.id) === String(id));
+  if(!p || document.getElementById('redefinir-senha')) return;
+  const caixa = document.createElement('div');
+  caixa.id = 'redefinir-senha'; caixa.className = 'overlay'; caixa.style.zIndex = '9000';
+  caixa.innerHTML = `
+    <div class="modal">
+      <div class="modal-head"><h3>Senha provisória para ${esc(p.nome)}</h3><button class="modal-close" data-rs-fechar="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="login-error" id="rs-erro" style="display:none;"></div>
+        <p class="hint">Use quando a pessoa esqueceu a senha. Ela entra com esta senha e o app pede para criar a dela na hora.</p>
+        <div class="field"><label for="rs-senha-1">Senha provisória</label><input id="rs-senha-1" type="password" autocomplete="new-password"/><span class="hint">Mínimo ${MIN_SENHA} caracteres.</span></div>
+        <div class="field"><label for="rs-senha-2">Repita a senha provisória</label><input id="rs-senha-2" type="password" autocomplete="new-password"/></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-rs-fechar="1">Cancelar</button>
+        <button class="btn btn-primary" id="rs-ok">Salvar senha provisória</button>
+      </div>
+    </div>`;
+  document.body.appendChild(caixa);
+  const erro = t=>{ const c = caixa.querySelector('#rs-erro'); c.textContent = t; c.style.display = 'block'; };
+  caixa.addEventListener('click', e=>{ if(e.target === caixa || (e.target.closest && e.target.closest('[data-rs-fechar]'))) caixa.remove(); });
+  const ok = caixa.querySelector('#rs-ok');
+  ok.onclick = async ()=>{
+    const s1 = caixa.querySelector('#rs-senha-1').value, s2 = caixa.querySelector('#rs-senha-2').value;
+    if(s1.length < MIN_SENHA){ erro(`A senha precisa ter pelo menos ${MIN_SENHA} caracteres.`); return; }
+    if(s1 !== s2){ erro('As duas senhas não são iguais.'); return; }
+    ok.disabled = true; ok.textContent = 'Salvando...';
+    const { data, error } = await db.functions.invoke('criar-usuario-cana', { body: { acao: 'redefinir_senha', usuario_id: p.id, senha: s1 } });
+    ok.disabled = false; ok.textContent = 'Salvar senha provisória';
+    if(error || (data && data.error)){ erro(await mensagemDaFuncao(data, error, 'Não foi possível salvar a senha.')); return; }
+    caixa.remove();
+    alert(`Senha provisória salva. Passe para ${p.nome}: no primeiro acesso o app pede para criar a senha dela.`);
+  };
+}
+document.addEventListener('click', e=>{
+  const b = e.target && e.target.closest && e.target.closest('[data-redefinir-senha]');
+  if(b) abrirRedefinirSenha(b.getAttribute('data-redefinir-senha'));
+});
 function PageAdminUsuarios(){
   return `
   <div class="toolbar">
@@ -589,7 +742,10 @@ function PageAdminUsuarios(){
             <td class="mono">${esc(p.usuario)}</td>
             <td>${papelPill(p.papel)}</td>
             <td><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</td>
-            <td><button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button></td>
+            <td><div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end;">
+              <button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>
+              <button class="btn-ghost btn-sm" data-redefinir-senha="${p.id}">Nova senha</button>
+            </div></td>
           </tr>
         `).join('')}
       </tbody>
@@ -717,7 +873,7 @@ function pareceErroDeRede(err){
   const msg = String((err && err.message) || err || '').toLowerCase();
   return msg.includes('failed to fetch') || msg.includes('network') || msg.includes('load failed') || msg.includes('conexão');
 }
-function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, frentes:r.frentes||[], ativo:r.ativo}; }
+function rowToPerfil(r){ return {id:r.id, nome:r.nome, usuario:r.usuario, papel:r.papel, permissoes:r.permissoes||{}, frentes:r.frentes||[], ativo:r.ativo, precisaTrocarSenha: r.precisa_trocar_senha === true}; }
 async function loadPerfil(){
   const uid = state.session?.user?.id;
   if(!uid){ state.perfil = null; state.perfilErroRede = false; return; }
@@ -725,6 +881,12 @@ async function loadPerfil(){
   state.perfilErroRede = false;
   if(data){
     state.perfil = rowToPerfil(data);
+    // Senha nova obrigatoria (12/11/2026): so com o perfil vindo do banco (com internet); o app nao abre antes da troca.
+    if(state.perfil.precisaTrocarSenha && state.perfil.ativo){
+      const trocou = await exigirSenhaNova();
+      if(!trocou){ await fazerLogout(); return; }
+      state.perfil.precisaTrocarSenha = false;
+    }
     salvarPerfilCache(uid, state.perfil);
   } else if(error && pareceErroDeRede(error)){
     // sem rede: o último perfil conhecido deste usuário; se nunca abriu online neste aparelho, avisa "sem conexão" (não "sem acesso")
@@ -771,6 +933,8 @@ async function initAuth(){
       }
       return;
     }
+    // troca de senha (updateUser) avisa USER_UPDATED: e a mesma sessao, nao recarrega nada
+    if(event==='USER_UPDATED'){ if(newSession) state.session = newSession; return; }
     if(event==='SIGNED_IN' && state.session?.access_token===newSession?.access_token) return;
     state.session = newSession;
     if(newSession){

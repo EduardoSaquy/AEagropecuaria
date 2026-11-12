@@ -70,6 +70,8 @@ with sync_playwright() as pw:
     online = {"v": True}
     ctx.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=STUB, headers={
         "content-type": "application/javascript", "access-control-allow-origin": "*"}) if online["v"] else r.abort("internetdisconnected"))
+    ctx.route("**/vendor/supabase-js-*.js", lambda r: r.fulfill(status=200, body=STUB, headers={
+        "content-type": "application/javascript", "access-control-allow-origin": "*"}) if online["v"] else r.abort("internetdisconnected"))
     ctx.route("**/fonts.g*apis.com/**", lambda r: r.fulfill(status=200, body="", headers={"content-type": "text/css"}) if online["v"] else r.abort())
     ctx.add_init_script(f"window.__DB__ = {json.dumps(DB)}; window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};")
     page = ctx.new_page()

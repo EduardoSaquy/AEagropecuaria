@@ -78,7 +78,7 @@ for app in APPS:
     srcs = re.findall(r'<script src="([^"]+)"></script>', html)
     ordem = [s.split("?")[0] for s in srcs if s.split("?")[0].startswith("core")]
     conf(ordem == esperados, f"{app}: carrega {esperados} nessa ordem", f"achei {ordem}")
-    pos_supabase = html.find("supabase-js@")
+    pos_supabase = html.find('src="vendor/supabase-js-')
     pos_core = html.find('<script src="core.js')
     primeiro_inline = min((m.start() for m in re.finditer(r"<script(?![^>]*\bsrc=)[^>]*>", html)), default=-1)
     conf(0 < pos_supabase < pos_core < primeiro_inline, f"{app}: core.js vem depois do Supabase e antes do script do app")

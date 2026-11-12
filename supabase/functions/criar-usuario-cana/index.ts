@@ -1,4 +1,5 @@
-// Edge Function: criar-usuario-cana  (versao 4, 12/11/2026: exige o codigo de duas etapas de quem tem celular cadastrado)
+// Edge Function: criar-usuario-cana  (versao 5, 12/11/2026: senha com 10+ caracteres e acao redefinir_senha)
+// versao 4 (12/11/2026): exige o codigo de duas etapas de quem tem celular cadastrado
 //
 // Cria uma conta (login + senha) e o perfil correspondente em `profiles`,
 // no projeto Supabase do AE Cana. Só pode ser chamada por quem já está
@@ -12,6 +13,8 @@
 //   POST /functions/v1/criar-usuario-cana
 //   Authorization: Bearer <access_token do admin logado>
 //   Body: { usuario: "joao.silva", senha: "******", nome: "João Silva", papel: "operador", permissoes: {...} }
+//   Senha provisoria para quem esqueceu: { acao: "redefinir_senha", usuario_id: "<uuid>", senha: "******" }
+//   (troca a senha e marca profiles.precisa_trocar_senha: a pessoa cria a dela no proximo acesso)
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -23,6 +26,7 @@ const DOMINIO_LOGIN = 'aeagropecuaria.local'
 // consultor por esta funcao devolvia um OPERADOR, calado - ver o motivo
 // logo abaixo.
 const PAPEIS_VALIDOS = ['admin', 'proprietario', 'gestor', 'encarregado', 'colaborador', 'consultor', 'operador']
+const MIN_SENHA = 10
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -87,12 +91,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { usuario, senha, nome, papel, permissoes } = await req.json()
+    const corpo = await req.json()
+
+    // Senha provisoria para quem esqueceu (12/11/2026): os logins usam e-mail inventado, nao ha recuperacao por e-mail.
+    if (corpo.acao === 'redefinir_senha') {
+      const alvo = String(corpo.usuario_id || '')
+      if (!alvo || !corpo.senha) return resposta({ error: 'Pessoa e senha são obrigatórias' }, 400)
+      if (String(corpo.senha).length < MIN_SENHA) {
+        return resposta({ error: `A senha precisa ter pelo menos ${MIN_SENHA} caracteres` }, 400)
+      }
+      const { data: perfilAlvo } = await admin.from('profiles').select('id').eq('id', alvo).maybeSingle()
+      if (!perfilAlvo) return resposta({ error: 'Pessoa não encontrada' }, 404)
+      const { error: erroSenha } = await admin.auth.admin.updateUserById(alvo, { password: String(corpo.senha) })
+      if (erroSenha) return resposta({ error: erroSenha.message }, 400)
+      // depois de trocar (o gatilho do banco desmarca quem troca a senha): marca de novo, a senha e provisoria
+      await admin.from('profiles').update({ precisa_trocar_senha: true }).eq('id', alvo)
+      return resposta({ ok: true })
+    }
+
+    const { usuario, senha, nome, papel, permissoes } = corpo
     if (!usuario || !senha || !nome) {
       return resposta({ error: 'Usuário, senha e nome são obrigatórios' }, 400)
     }
-    if (String(senha).length < 6) {
-      return resposta({ error: 'A senha precisa ter pelo menos 6 caracteres' }, 400)
+    if (String(senha).length < MIN_SENHA) {
+      return resposta({ error: `A senha precisa ter pelo menos ${MIN_SENHA} caracteres` }, 400)
     }
     // Papel desconhecido vira ERRO, e nao mais 'operador' silencioso.
     //

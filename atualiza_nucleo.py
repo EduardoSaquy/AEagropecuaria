@@ -23,7 +23,7 @@ NUCLEOS = {
     "core.js": ["AEMatriz.html", "AEpecuaria.html", "AECana.html", "AECereais.html", "AECombustivel.html"],
     "core_lavoura.js": ["AECana.html", "AECereais.html"],
 }
-SUPABASE_TAG = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>'
+SUPABASE_TAG = '<script src="vendor/supabase-js-2.118.0.js"></script>'
 TAG_NUCLEO = re.compile(r'<script src="(core[a-z_]*\.js)(?:\?v=[0-9a-f]+)?"></script>\r?\n')
 
 

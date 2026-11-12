@@ -73,6 +73,7 @@ with sync_playwright() as pw:
             else:
                 route.abort("internetdisconnected")
         ctx.route("**/cdn.jsdelivr.net/**", cdn)
+        ctx.route("**/vendor/supabase-js-*.js", cdn)
         ctx.route("**/fonts.googleapis.com/**", lambda r: r.abort() if not online["v"] else r.fulfill(status=200, body="", headers={"content-type": "text/css"}))
         ctx.route("**/fonts.gstatic.com/**", lambda r: r.abort())
         # stub so define window.supabase se o CDN nao tiver definido (no

@@ -54,15 +54,17 @@ const CACHE = 'ae-v5';
 // resposta da rede, se chegar depois, ainda atualiza o cache).
 const TEMPO_REDE_MS = 4000;
 
-// Bibliotecas e fontes de fora (o app nao roda sem a do Supabase).
-// Versao FIXA (05/11/2026): com @2 o CDN passou a servir a 2.119.0 um dia depois de lancada,
-// sem ninguem testar. Trocar aqui e nos 5 apps (grep supabase-js@) so depois de testar.
-const CDN_SUPABASE = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0';
-const HOSTS_ESTATICOS = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+// Fontes de fora (o app abre sem elas, mas fica com a letra certa).
+// (12/11/2026, sem trocar a versao do cache) A biblioteca do Supabase deixou de vir do CDN (jsdelivr): fica no proprio site,
+// em vendor/ (entra no SHELL abaixo). Um CDN invadido poderia mandar codigo que le o login de quem usa o app; do proprio
+// site, so quem publica no repositorio muda o arquivo. Versao FIXA no nome do arquivo: trocar nos 5 apps, aqui e em
+// atualiza_nucleo.py (grep supabase-js-) so depois de testar login, carga e fila offline com a versao nova.
+const HOSTS_ESTATICOS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 // (07/11/2026, sem trocar a versao do cache) core.js e core_lavoura.js: as funcoes que os apps tinham copiadas passaram
 // para esses arquivos. Entram aqui para o app abrir offline; o ?v= que os HTML usam e ignorado ao achar a copia guardada.
 const SHELL = [
+  './vendor/supabase-js-2.118.0.js',
   './core.js', './core_lavoura.js',
   './AEMatriz.html',      './manifest_matriz.json',
   './AEpecuaria.html',    './manifest.json',
@@ -84,7 +86,7 @@ self.addEventListener('install', (e) => {
       // Um por vez, com catch: addAll rejeita tudo se UM arquivo faltar, e
       // ai a instalacao inteira falha e o app fica sem offline nenhum por
       // causa de um icone que nao existe.
-      Promise.all(SHELL.concat([CDN_SUPABASE]).map((url) =>
+      Promise.all(SHELL.map((url) =>
         // cache: 'reload' forca buscar da rede, ignorando o cache HTTP do
         // navegador. Sem isso a instalacao da versao nova poderia guardar
         // de novo a copia velha que o navegador ainda tivesse em maos.
@@ -139,8 +141,8 @@ function redePrimeiro(req) {
   });
 }
 
-// CDN e fontes: usa o guardado na hora e atualiza por tras. Sao arquivos
-// que quase nunca mudam, e sem eles offline o app nao abre.
+// Fontes: usa o guardado na hora e atualiza por tras. Sao arquivos
+// que quase nunca mudam.
 function cachePrimeiro(req) {
   return caches.open(CACHE).then((c) =>
     c.match(req).then((guardada) => {

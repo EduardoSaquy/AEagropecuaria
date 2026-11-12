@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <!-- Seguranca (06/11/2026): o app so pode falar com o proprio Supabase, a biblioteca do jsDelivr e as fontes do Google.
      Script injetado nao consegue mandar dado para outro endereco. Se um dia precisar de outro servico, entra aqui. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://kmkystqgpvmzrccxvyaz.supabase.co wss://kmkystqgpvmzrccxvyaz.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://kmkystqgpvmzrccxvyaz.supabase.co wss://kmkystqgpvmzrccxvyaz.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AE Matriz</title>
 <link rel="manifest" href="manifest_matriz.json">
@@ -542,8 +542,8 @@
 <body>
 <div id="root"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
-<script src="core.js?v=07cd7f7e35"></script>
+<script src="vendor/supabase-js-2.118.0.js"></script>
+<script src="core.js?v=de521e3bf7"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -6033,7 +6033,7 @@ function ModalFuncionario(){
             <span class="hint">Cria a conta de acesso (mesma Edge Function usada na tela de Usuários).</span>
             <input id="f-nomeacessolavoura" placeholder="Nome" value="${esc(d.nome||'')}" autocomplete="off"/>
             <input id="f-usuarioacessolavoura" placeholder="usuário (login)" autocomplete="off"/>
-            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password"/>
+            <input id="f-senhaacessolavoura" type="password" placeholder="Senha (mín. ${MIN_SENHA} caracteres)" autocomplete="new-password"/>
             <div style="display:flex; gap:8px;">
               <button type="button" class="btn btn-primary btn-sm" data-confirmar-acesso-lavoura="1" ${state.acessoLavouraLoading?'disabled':''}>${state.acessoLavouraLoading?'Criando...':'Criar'}</button>
               <button type="button" class="btn-ghost btn-sm" data-cancelar-acesso-lavoura="1">Cancelar</button>
@@ -8351,7 +8351,7 @@ function PageUsuarios(){
             <td class="mono" data-rotulo="Usuário">${esc(p.usuario)}</td>
             <td data-rotulo="Perfil">${papelPill(p.papel)}</td>
             <td data-rotulo="Status"><span><span class="status-dot ${p.ativo?'ativo':'inativo'}"></span>${p.ativo?'Ativo':'Inativo'}</span></td>
-            <td class="acoes">${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button>` : ''}</td>
+            <td class="acoes">${souAdmin() ? `<button class="btn-ghost btn-sm" data-editar-usuario="${p.id}">Editar acesso</button> <button class="btn-ghost btn-sm" data-redefinir-senha="${p.id}">Nova senha</button>` : ''}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -9113,8 +9113,8 @@ function attachEvents(){
     const nome = document.getElementById('f-nomeacessolavoura').value.trim();
     const usuario = document.getElementById('f-usuarioacessolavoura').value.trim();
     const senha = document.getElementById('f-senhaacessolavoura').value;
-    if(!nome || !usuario || !senha || senha.length<6){
-      state.acessoLavouraError = 'Preencha nome, usuário e senha (mín. 6 caracteres).';
+    if(!nome || !usuario || !senha || senha.length<MIN_SENHA){
+      state.acessoLavouraError = `Preencha nome, usuário e senha (mín. ${MIN_SENHA} caracteres).`;
       render(); return;
     }
     state.acessoLavouraLoading = true; state.acessoLavouraError = ''; render();
@@ -9175,6 +9175,7 @@ function attachEvents(){
       const usuario = document.getElementById('f-usuario').value.trim();
       const senha = document.getElementById('f-senhausuario').value;
       if(!nome || !usuario || !senha){ state.usuarioError = 'Preencha nome, usuário e senha.'; render(); return; }
+      if(senha.length < MIN_SENHA){ state.usuarioError = `A senha precisa ter pelo menos ${MIN_SENHA} caracteres.`; render(); return; }
       state.usuarioLoading = true; state.usuarioError = ''; render();
       // Reaproveita a mesma Edge Function do AE Lavoura — não faz sentido
       // publicar uma "criar-usuario-matriz" própria só pra isso, já que os
@@ -9503,13 +9504,13 @@ function attachEvents(){
         const novaSenha = document.getElementById('f-novasenha').value;
         const confirmarSenha = document.getElementById('f-confirmarsenha').value;
         if(!senhaAtual || !novaSenha || !confirmarSenha){ alert('Preencha todos os campos.'); return; }
-        if(novaSenha.length<6){ alert('A nova senha precisa ter pelo menos 6 caracteres.'); return; }
+        if(novaSenha.length<MIN_SENHA){ alert(`A nova senha precisa ter pelo menos ${MIN_SENHA} caracteres.`); return; }
         if(novaSenha!==confirmarSenha){ alert('A confirmação não bate com a nova senha.'); return; }
-        const email = `${state.perfil.usuario}@${DOMINIO_LOGIN}`;
-        const { error: erroSenhaAtual } = await db.auth.signInWithPassword({ email, password: senhaAtual });
-        if(erroSenhaAtual){ alert('Senha atual incorreta.'); return; }
+        const conferida = await senhaAtualConfere(senhaAtual);
+        if(conferida === false){ alert('Senha atual incorreta.'); return; }
+        if(conferida === null){ alert('Sem conexão com o servidor: a senha não foi trocada. Tente de novo com sinal.'); return; }
         ({error} = await db.auth.updateUser({ password: novaSenha }));
-        if(error){ alert('Não foi possível trocar a senha: ' + error.message); return; }
+        if(error){ alert(textoErroSenhaNova(error)); return; }
         state.modal = null; editDraft = null;
         alert('Senha alterada com sucesso.');
         render();
@@ -9638,7 +9639,47 @@ function attachEvents(){
   });
 }
 
-initAuth();
+/* ---------- Sai sozinho depois de 20 minutos sem uso (12/11/2026) ----------
+ * Decisão do Eduardo: o AE Matriz pede a senha (e o código do celular, para quem cadastrou) de novo depois de
+ * MINUTOS_SEM_USO_PARA_SAIR sem nenhum toque, tecla ou rolagem em nenhum dos apps deste navegador (horaDoUltimoUso, no
+ * core.js). Vale também ao reabrir: fechou com o login aberto e voltou 1 hora depois, entra de novo. Usando, não interrompe.
+ * Encerra só a sessão DESTE aparelho (scope 'local'): os outros aparelhos da pessoa seguem logados. Como os 5 apps dividem
+ * o login no mesmo navegador, um app técnico aberto nesse mesmo navegador também volta para a tela de login. */
+const MINUTOS_SEM_USO_PARA_SAIR = 20;
+const AVISO_SAIU_SEM_USO = `Por segurança, o AE Matriz saiu depois de ${MINUTOS_SEM_USO_PARA_SAIR} minutos sem uso. Entre de novo.`;
+function paradoHaMuitoTempo(){
+  const u = horaDoUltimoUso();
+  return u > 0 && Date.now() - u > MINUTOS_SEM_USO_PARA_SAIR * 60000;
+}
+async function encerrarSessaoDesteAparelho(){
+  // sem rede e com o login vencido a biblioteca pode demorar ~25 s: espera no máximo 4 s e apaga a sessão guardada de qualquer jeito
+  try{ await Promise.race([db.auth.signOut({scope: 'local'}), new Promise(r=>setTimeout(r, 4000))]); }catch(e){ /* sem rede */ }
+  try{ localStorage.removeItem(CHAVE_SESSAO_SUPABASE); }catch(e){ /* nada guardado */ }
+}
+let saindoPorFaltaDeUso = false;
+async function sairPorFaltaDeUso(){
+  if(saindoPorFaltaDeUso || !state.session || state.mfaEmAndamento) return;
+  saindoPorFaltaDeUso = true;
+  state.modal = null;
+  await encerrarSessaoDesteAparelho();
+  state.session = null;
+  state.perfil = null;
+  state.loginError = AVISO_SAIU_SEM_USO;
+  state.loginDraft = {usuario: (state.loginDraft && state.loginDraft.usuario) || '', senha: ''};
+  saindoPorFaltaDeUso = false;
+  render();
+}
+function conferirTempoSemUso(){ if(state.session && paradoHaMuitoTempo()) sairPorFaltaDeUso(); }
+setInterval(conferirTempoSemUso, 30000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') conferirTempoSemUso(); });
+
+(async ()=>{
+  if(paradoHaMuitoTempo() && sessaoGuardadaNoAparelho()){
+    await encerrarSessaoDesteAparelho();
+    state.loginError = AVISO_SAIU_SEM_USO;
+  }
+  initAuth();
+})();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}));
