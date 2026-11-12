@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <!-- Seguranca (06/11/2026): o app so pode falar com o proprio Supabase, a biblioteca do jsDelivr e as fontes do Google.
      Script injetado nao consegue mandar dado para outro endereco. Se um dia precisar de outro servico, entra aqui. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://kmkystqgpvmzrccxvyaz.supabase.co wss://kmkystqgpvmzrccxvyaz.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://kmkystqgpvmzrccxvyaz.supabase.co wss://kmkystqgpvmzrccxvyaz.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AE Combustível</title>
 <link rel="manifest" href="manifest_combustivel.json">
@@ -373,7 +373,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <body>
 <div id="root"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0"></script>
+<script src="vendor/supabase-js-2.118.0.js"></script>
 <script src="core.js?v=07cd7f7e35"></script>
 <script>
 /* ===================== SUPABASE =====================

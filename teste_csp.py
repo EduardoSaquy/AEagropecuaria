@@ -1,7 +1,8 @@
 """
 Politica de seguranca de conteudo (CSP) nos cinco apps (revisao geral de 05/11/2026, seguranca: um script
 injetado na pagina podia mandar os dados para qualquer endereco). Cada app so pode falar com:
-  . o proprio Supabase do projeto (dados e login) e a biblioteca fixa do jsDelivr;
+  . o proprio Supabase do projeto (dados e login); a biblioteca do Supabase vem do proprio site (vendor/, 12/11/2026),
+    entao nenhum script de fora e liberado;
   . as fontes do Google (css e arquivos de fonte).
 Prova (servindo os arquivos por HTTP, como no site, porque em file:// o 'self' nao vale):
   - a politica esta no <head> dos cinco apps, sem 'unsafe-eval' e sem curinga em connect-src;
@@ -73,8 +74,10 @@ for app in APPS:
     conn = pol.get("connect-src", [])
     conf(SUPABASE in conn and not any(c in ("*", "https:", "http:", "data:") for c in conn), f"{app}: connect-src so o Supabase do projeto", str(conn))
     conf(pol.get("default-src") == ["'none'"] and pol.get("object-src") == ["'none'"], f"{app}: default-src e object-src 'none'")
-    conf("https://cdn.jsdelivr.net" in pol.get("script-src", []) and "https://fonts.googleapis.com" in pol.get("style-src", []),
-         f"{app}: libera so a biblioteca e as fontes")
+    conf(pol.get("script-src") == ["'self'", "'unsafe-inline'"] and "https://fonts.googleapis.com" in pol.get("style-src", []),
+         f"{app}: nenhum script de fora (nem CDN); so as fontes do Google", str(pol.get("script-src")))
+    conf('<script src="vendor/supabase-js-2.118.0.js"></script>' in html and "cdn.jsdelivr" not in html,
+         f"{app}: a biblioteca do Supabase vem do proprio site")
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
@@ -128,6 +131,29 @@ with sync_playwright() as pw:
                  "no app, fetch, imagem, script de fora e eval sao barrados", str(rp))
             conf(any("Content Security Policy" in v or "Refused" in v for v in violacoes),
                  "e o navegador registra a violacao da politica (foi ela que barrou, nao a rede)", str(violacoes[:2]))
+        page.close()
+
+    print("== a biblioteca DE VERDADE, servida pelo proprio site, carrega dentro da politica")
+    for app in APPS:
+        page = browser.new_context(service_workers="block").new_page()
+        violacoes = []
+        page.on("console", lambda m: violacoes.append(m.text) if ("Content Security Policy" in m.text or "Refused to" in m.text) else None)
+        page.route("**/kmkystqgpvmzrccxvyaz.supabase.co/**", lambda r: r.abort())
+        page.route("**/fonts.g*/**", lambda r: r.abort())
+        page.goto(f"http://127.0.0.1:{porta}/{app}")
+        page.wait_for_timeout(1200)
+        r = page.evaluate("""async () => {
+          const out = { tem: typeof supabase === 'object' && typeof supabase.createClient === 'function' };
+          try {
+            const c = supabase.createClient('https://kmkystqgpvmzrccxvyaz.supabase.co', 'chave-de-teste', { auth: { persistSession: false } });
+            const s = await c.auth.getSession();
+            out.sessao = !s.error && s.data && s.data.session === null;
+            out.consulta = typeof c.from('x').select === 'function' && typeof c.rpc === 'function';
+          } catch (e) { out.erro = String(e); }
+          return out;
+        }""")
+        conf(r.get("tem") and r.get("sessao") and r.get("consulta"), f"{app}: supabase-js real carrega; createClient, getSession, from e rpc funcionam", str(r))
+        conf(not violacoes, f"{app}: nenhuma violacao da politica com a biblioteca real", "; ".join(violacoes[:2])[:300])
         page.close()
     browser.close()
 servidor.shutdown()

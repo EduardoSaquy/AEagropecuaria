@@ -73,6 +73,8 @@ with sync_playwright() as pw:
         ctx = browser.new_context()
         ctx.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=STUB, headers={
             "content-type": "application/javascript", "access-control-allow-origin": "*"}))
+        ctx.route("**/vendor/supabase-js-*.js", lambda r: r.fulfill(status=200, body=STUB, headers={
+            "content-type": "application/javascript", "access-control-allow-origin": "*"}))
         ctx.route("**/fonts.googleapis.com/**", lambda r: r.fulfill(status=200, body="", headers={"content-type": "text/css"}))
         ctx.route("**/fonts.gstatic.com/**", lambda r: r.abort())
         ctx.add_init_script(f"window.__DB__ = {json.dumps(DB)}; window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};")
