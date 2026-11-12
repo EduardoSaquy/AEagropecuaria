@@ -2130,7 +2130,7 @@ Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connec
 
 ## Testes
 
-81 arquivos `teste_*.py`, 3.144 checagens (12/11/2026; a tabela abaixo lista os
+81 arquivos `teste_*.py`, 3.159 checagens (12/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2191,7 +2191,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_painel_combustivel.py` | 18 | AEMatriz.html (indicadores do AE Combustivel no Painel: estoque dos tanques ativos, consumo e custo do mes com custo medio das notas ate o dia, alertas abertos; traco sem a permissao do modulo; custo fora de Resultados; sem rolar de lado em 1180 e 390 px) |
 | `teste_botoes_rodape_menu.py` | 160 | os 5 apps (rodape do menu lateral: ← Painel, Trocar senha e Sair cabem na coluna e o texto cabe no botao com 16 px de folga, em 1180/1194/1280/1440, toque e mouse; nos apps de grade um botao por linha, porque lado a lado "Trocar senha" saia da borda no Safari do iPad, 08/11/2026) |
 | `teste_menu_setinha.py` | 173 | os 5 apps (setinha com as sub-abas de cada item do menu: abre uma lista por vez, não troca de tela, vai direto na sub-aba, Matriz escolhe tela e aba, guarda o que ficou aberto, escondida na barra de cima e no celular dos outros apps, painel do celular do Matriz) |
-| `teste_csp.py` | 43 | os 5 apps (política de segurança de conteúdo: hosts liberados, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
+| `teste_csp.py` | 58 | os 5 apps (política de segurança de conteúdo: nenhum script de fora, biblioteca real do próprio site funcionando, sem unsafe-eval, barra fetch/imagem/script/eval de fora com página de controle, nenhuma violação ao percorrer as telas) |
 | `teste_campo_toque.py` | 49 | os 5 apps (alvos de toque de 44 px em tablet/celular, mouse do desktop intacto, rótulos ligados, contraste do texto, manifestos aceitam qualquer orientação, Pecuária sem rolagem lateral) |
 | `teste_venda_atomica.py` | 19 | AEMatriz.html (venda de animais por uma função do banco: uma chamada, sem gravações soltas, saldo novo na tela, recusa do banco mostrada, caminho antigo se a função não existe) |
 | `teste_titulo_atomico.py` | 23 | AEMatriz.html (conta a pagar/receber por uma função do banco: parcelas e partes juntas, editar com id, recusa mostrada, caminho antigo) |
