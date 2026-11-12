@@ -2005,7 +2005,11 @@ vê **custo da dieta e preço dos ingredientes, só nas dietas**; a venda de ani
   devolvia 0 contas, conferido entrando como ela). O comentário de 01/09/2026 no `loadAll` já dizia "Pagar/Receber usa só a chave
   `contas`"; o banco nunca acompanhou.
 - **Banco, `seguranca_06_financeiro_so_para_quem_pode.sql`** (ensaiado num Postgres descartável com o desenho do banco real, 58
-  checagens: antes, depois, rodar duas vezes, desfazer e aplicar de novo):
+  checagens: antes, depois, rodar duas vezes, desfazer e aplicar de novo; **RODADO em 12/11/2026 pelo conector, com o OK dele, logo
+  depois de publicar o app**: os 8 itens da conferência OK, 13 lançamentos com autor). Conferido entrando como cada uma das 14 pessoas
+  ativas: administrador e os 3 proprietários veem tudo (10.457 lançamentos, 27.823 linhas da visão, 133 contas, 7 financiamentos); a
+  secretária de contas vê as 133 contas e os fornecedores e nenhum lançamento; a pessoa com Financeiro e Vendas vê só as 11 receitas de
+  venda; consultor, colaboradores e operadores, nenhum lançamento, nenhuma linha da visão, conta, financiamento ou preço da @:
   - `lancamentos_financeiros.criado_por_id` (uuid de quem gravou): o padrão é `auth.uid()` e o gatilho `trg_lancamento_autor`
     (função `lancamento_guarda_autor`, com os direitos de quem chama) força o autor em insert pela API e não deixa trocar em update.
     Dentro de função do banco com direitos do dono (a baixa de conta, `baixa_gera_lancamento`) fica o padrão da coluna, que já é quem
