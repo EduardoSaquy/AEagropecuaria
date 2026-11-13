@@ -739,6 +739,17 @@ talhão; com mais de um corte no período, a maior) usam esse número
 Na Palmito (21/10/2026) os talhões "Histórico 2023/2024/2025" foram apagados
 (as 3 colheitas deles divididas pela área dos Talhões 1 a 5) e a colheita de
 20/10/2026 (11.483,74 t) ficou em 112,41 ha colhidos de 152,41 ha.
+**Conferência por fazenda na tela de Colheita (13/11/2026, `CardConferenciaColheita`, `conferenciaColheitaSafra`).** Ele não achava por
+que a área colhida da safra não dava os ~340 ha. Eram lançamentos: a colheita de 31/08 da Mata Verde estava no Talhão 4 e era do
+**Talhão 5** (TCH 160 virou 124,5; corrigido pelo conector, colheita 21 → talhão 34); o **Talhão 3 do Palmito** estava com 37,55 ha
+(mudado em 05/11, quando as colheitas foram relançadas) e o mapa e o `cana_corrige_talhoes_mapas_kmz.sql` dizem **31,41** (corrigido;
+a soma dos talhões voltou a 152,41); o **Talhão 2 do Palhadão** (22,80 ha) foi colhido e não tem colheita lançada. Cópia
+`zz_backup_cana_mapas_2026_11_13`. A tela de Colheita do AE Cana ganhou, em cima da lista, a tabela por fazenda: área de cana
+(Matriz > Fazendas), soma dos talhões (amarelo quando não fecha), área colhida na safra (mesma regra do Matriz: cada talhão uma vez,
+pela maior área; safra do campo "Safra" ou maio a abril), toneladas, TCH e talhões sem colheita na safra, com seletor das 3 últimas
+safras; talhão "Histórico..." e inativo ficam fora. A lista ganhou a coluna "Área colhida (ha)" ("(inteiro)" = campo em branco).
+`teste_conferencia_colheita_cana.py` (21). **Ficou com ele**: data e toneladas do Talhão 2 do Palhadão, e a área colhida de cada
+talhão do Palmito (com o Talhão 3 em 31,41 o Palmito soma 107,65 ha, e ele diz que foram 113).
 
 ### Resultados > Empresa: a empresa como uma atividade só
 

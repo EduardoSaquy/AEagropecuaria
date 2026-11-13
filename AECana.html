@@ -447,6 +447,13 @@ const CADASTROS = {
       // branco = o talhao inteiro foi colhido, como sempre foi.
       {key:'areaColhida', label:'Área colhida (ha)', type:'number', step:'0.01', list:false,
        hint:'Só se parte do talhão não foi colhida (ex: cana planta do ano). Em branco = o talhão inteiro.'},
+      // Area que entra na conta, na lista (13/11/2026): o Eduardo nao achava onde a area colhida da safra nao batia,
+      // e a lista so mostrava toneladas e TCH. "(inteiro)" = campo em branco, vale a area toda do talhao.
+      {key:'areaUsada', label:'Área colhida (ha)', type:'computed', compute:item=>{
+        const area = areaDaColheita(item);
+        if(!area) return '—';
+        return fmt(area) + (Number(item.areaColhida) > 0 ? '' : ' <span class="hint">(inteiro)</span>');
+      }},
       {key:'tch', label:'TCH (t/ha)', type:'computed', compute:item=>{
         const area = areaDaColheita(item);
         return area ? fmt(Number(item.toneladas||0)/area) : '—';
@@ -638,7 +645,75 @@ function Header(){
 }
 
 /* ===================== PÁGINA GENÉRICA DE CADASTRO ===================== */
+// Conferencia da colheita por fazenda na safra (13/11/2026). Pedido do Eduardo: a area colhida da safra (~340 ha) nao batia
+// com a do app e ele nao achava onde. Os erros eram de lancamento: colheita no talhao errado, talhao colhido sem colheita
+// lancada e area de talhao diferente do mapa. Esta tabela mostra, por fazenda: area de cana da fazenda (Matriz > Fazendas),
+// soma dos talhoes cadastrados, area colhida na safra (mesma regra do AE Matriz: cada talhao conta uma vez, pela maior area
+// colhida; a safra e a do campo "Safra" ou, em branco, a de maio a abril da data) e os talhoes sem colheita na safra.
+// Talhao "Historico ..." (cargas antigas) fica fora da conferencia.
+function safraDaColheita(c){
+  if(c.anoSafra!=null && c.anoSafra!=='') return Number(c.anoSafra);
+  if(!c.data) return null;
+  const ano = Number(c.data.slice(0,4)), mes = Number(c.data.slice(5,7));
+  return mes >= 5 ? ano : ano - 1;
+}
+function safraCorrenteCana(){ const h = hojeStr(); const ano = Number(h.slice(0,4)), mes = Number(h.slice(5,7)); return mes >= 5 ? ano : ano - 1; }
+function conferenciaColheitaSafra(safra){
+  const ehHistorico = t => /^hist[oó]rico/i.test(String(t.nome||'').trim());
+  const talhoes = (state.talhoes||[]).filter(t=>t.ativo !== false && !ehHistorico(t));
+  const colheitas = (state.colheitasCana||[]).filter(c=>safraDaColheita(c)===safra);
+  const fazendaIds = [...new Set(talhoes.map(t=>t.fazendaId).filter(x=>x!=null))];
+  return fazendaIds.map(fid=>{
+    const doTalhao = talhoes.filter(t=>t.fazendaId===fid);
+    const areaFazenda = Number(((state.fazendaAtividades||[]).find(a=>a.fazenda_id===fid && a.atividade===ATIVIDADE)||{}).area_ha || 0);
+    const somaTalhoes = doTalhao.reduce((a,t)=>a+Number(t.areaHa||0),0);
+    let colhida = 0, toneladas = 0; const semColheita = [];
+    doTalhao.forEach(t=>{
+      const cs = colheitas.filter(c=>c.talhaoId===t.id);
+      if(cs.length===0){ semColheita.push(t); return; }
+      colhida += Math.max(...cs.map(c=>areaDaColheita(c)||0));
+      toneladas += cs.reduce((a,c)=>a+Number(c.toneladas||0),0);
+    });
+    return {fazendaId:fid, nome:fkNome('fazendas', fid), areaFazenda, somaTalhoes, colhida, toneladas, semColheita,
+            difCadastro: areaFazenda>0 ? somaTalhoes - areaFazenda : 0};
+  }).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+}
+function CardConferenciaColheita(){
+  const safra = state.safraConferencia ?? safraCorrenteCana();
+  const linhas = conferenciaColheitaSafra(safra);
+  if(linhas.length===0) return '';
+  const tot = linhas.reduce((a,l)=>({fazenda:a.fazenda+l.areaFazenda, talhoes:a.talhoes+l.somaTalhoes, colhida:a.colhida+l.colhida, ton:a.ton+l.toneladas}), {fazenda:0, talhoes:0, colhida:0, ton:0});
+  const opcoes = [safraCorrenteCana(), safraCorrenteCana()-1, safraCorrenteCana()-2];
+  return `
+  <div class="card" style="margin-bottom:16px; overflow-x:auto;" data-conferencia-colheita="1">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+      <strong>Conferência da colheita por fazenda</strong>
+      <select data-safra-conferencia="1">${opcoes.map(a=>`<option value="${a}" ${a===safra?'selected':''}>Safra ${a}/${String(a+1).slice(2)}</option>`).join('')}</select>
+    </div>
+    <table>
+      <thead><tr><th>Fazenda</th><th>Área de cana</th><th>Soma dos talhões</th><th>Área colhida</th><th>Toneladas</th><th>TCH</th><th>Talhões sem colheita na safra</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>`<tr data-fazenda-conferencia="${l.fazendaId}">
+          <td><strong>${esc(l.nome)}</strong></td>
+          <td class="mono">${l.areaFazenda>0 ? fmt(l.areaFazenda)+' ha' : '—'}</td>
+          <td class="mono">${fmt(l.somaTalhoes)} ha${Math.abs(l.difCadastro)>0.05 ? ` <span class="pill pill-warn" data-aviso-cadastro="1">${l.difCadastro>0?'+':''}${fmt(l.difCadastro)} ha</span>` : ''}</td>
+          <td class="mono">${fmt(l.colhida)} ha</td>
+          <td class="mono">${fmt(l.toneladas)} t</td>
+          <td class="mono">${l.colhida>0 ? fmt(l.toneladas/l.colhida) : '—'}</td>
+          <td>${l.semColheita.length===0 ? '—' : l.semColheita.map(t=>`${esc(t.nome)} (${fmt(t.areaHa)} ha)`).join(', ')}</td>
+        </tr>`).join('')}
+        <tr><td><strong>Total</strong></td><td class="mono">${fmt(tot.fazenda)} ha</td><td class="mono">${fmt(tot.talhoes)} ha</td><td class="mono"><strong>${fmt(tot.colhida)} ha</strong></td><td class="mono">${fmt(tot.ton)} t</td><td class="mono">${tot.colhida>0?fmt(tot.ton/tot.colhida):'—'}</td><td></td></tr>
+      </tbody>
+    </table>
+    <p class="hint" style="margin-top:8px;">Área colhida: cada talhão conta uma vez, pela área colhida informada (em branco = talhão inteiro). A safra é a do campo "Safra" da colheita ou, em branco, a de maio a abril da data. Um valor amarelo em "Soma dos talhões" quer dizer que os talhões cadastrados não fecham com a área de cana da fazenda: confira a área de cada talhão com o mapa.</p>
+  </div>`;
+}
+
 function PageCadastro(key){
+  if(key==='colheitasCana') return CardConferenciaColheita() + PageCadastroLista(key);
+  return PageCadastroLista(key);
+}
+function PageCadastroLista(key){
   const cfg = CADASTROS[key];
   const podeEditar = !cfg.somenteLeitura
     && (temPermissao(cfg.modulo||'cana_cadastros','editar')
@@ -862,6 +937,9 @@ function ModalHistoricoTalhao(){
 
 /* ===================== EVENTOS ===================== */
 function attachEvents(){
+  document.querySelectorAll('[data-safra-conferencia]').forEach(el=>{
+    el.addEventListener('change', ()=>{ state.safraConferencia = Number(el.value); render(); });
+  });
   const loginForm = document.querySelector('[data-login-form]');
   if(loginForm){
     loginForm.onsubmit = (e)=>{ e.preventDefault(); fazerLogin(); };
