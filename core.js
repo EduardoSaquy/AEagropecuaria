@@ -1236,3 +1236,22 @@ document.addEventListener('click', e=>{
     abrirSegundoFator();
   }
 }, true);
+
+/* Mes "2026-07" -> "Jul/2026" (13/11/2026: era copiado no Matriz e na Pecuaria). */
+const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function mesLabel(mesStr){
+  if(!mesStr) return '—';
+  const [ano, m] = mesStr.split('-');
+  return `${NOMES_MES[Number(m)-1]}/${ano}`;
+}
+
+/* Erro do banco em portugues (13/11/2026: eram duas versoes, Combustivel e Cana/Cereais). O app pode definir
+   mensagemErroDoApp(error) para os casos so dele (o Combustivel usa); se ela devolver texto, vale esse. */
+function mensagemErroSupabase(error){
+  if(typeof mensagemErroDoApp === 'function'){ const m = mensagemErroDoApp(error); if(m) return m; }
+  if(error?.code==='23505') return 'Já existe um registro com esse nome (talvez nesta fazenda). Use outro nome ou edite o existente.';
+  if(error?.code==='23503') return 'Não é possível excluir: existem outros cadastros vinculados a este registro.';
+  if(error?.code==='23514') return 'Verifique os valores informados.';
+  if(error?.code==='42501') return 'Sem permissão para esse registro.';
+  return error?.message || 'Erro desconhecido.';
+}

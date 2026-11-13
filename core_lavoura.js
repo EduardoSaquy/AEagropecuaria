@@ -281,12 +281,6 @@ async function excluirCadastro(key, id){
   if(error){ alert('Não foi possível excluir: ' + mensagemErroSupabase(error)); return; }
   await loadAll();
 }
-function mensagemErroSupabase(error){
-  if(error?.code==='23505') return 'Já existe um registro com esse nome (talvez nesta fazenda). Use outro nome ou edite o existente.';
-  if(error?.code==='23503') return 'Não é possível excluir: existem outros cadastros vinculados a este registro.';
-  if(error?.code==='23514') return 'Verifique os valores informados.';
-  return error?.message || 'Erro desconhecido.';
-}
 function campoHtml(f, d){
   if(f.type==='fixed' || f.type==='computed') return '';
   const val = d[f.key] ?? '';
