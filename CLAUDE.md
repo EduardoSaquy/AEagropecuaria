@@ -1340,6 +1340,20 @@ recusa, desfazer devolve o banco idêntico; cópias fechadas `zz_backup_racao01_
   recusada. Edição que não mexe nos dois passa (as antigas continuam editáveis) e apagar um lote ou uma dieta (`on delete set null`)
   não é barrado (`pg_trigger_depth() > 1`). O app já exigia os dois no formulário desde 27/10.
 
+### Editar ração, recria e produção troca a baixa de estoque numa transação só (13/11/2026)
+
+Item "gravações atômicas na Pecuária" da lista de melhorias. Lançamento NOVO já era seguro (fila com `client_uuid` completa o que
+faltou); a falha estava na EDIÇÃO: a de **Recria** (tabela `pasto`) e a de **Produção de ração** apagavam a baixa de estoque antiga
+antes de gravar a nova, e se a gravação nova falhasse (sinal caindo) o consumo sumia do estoque sem aviso.
+- **Banco** (`pecuaria_editar_com_estoque_01.sql`, ensaiado num Postgres descartável: 12 checagens com operador e consultor, falha no
+  meio desfaz tudo, rodar de novo, desfazer e aplicar de novo; **ainda não rodado**): `editar_consumo_com_estoque(tabela, id, campos,
+  movimentos)`, `security invoker` (as regras das tabelas valem como hoje), aceita só `saidas_racao`, `pasto` e `producoes_racao`: muda
+  o lançamento, apaga a baixa antiga e grava a nova, tudo ou nada.
+- **AE Pecuária**: `movimentosDaDieta` e `editarConsumoComEstoque` (chama a função; sem ela, `funcaoDoBancoNaoExiste`, caminho antigo
+  na **ordem segura** nos três: muda o lançamento, grava a baixa nova e só então apaga a antiga; no pior caso a baixa fica em dobro,
+  nunca some). `funcaoDoBancoNaoExiste` passou do Matriz para o `core.js`. O stub ganhou `.not(col,'in'|'eq',...)`.
+- `teste_pecuaria_editar_estoque.py` (17, falha no código anterior em 8).
+
 ### Compra de ração dá entrada no estoque junto (13/11/2026)
 
 Decisão do Eduardo (opção "a", nos dois lugares): a compra de insumo da Pecuária lançada no AE Matriz já dá a entrada no
@@ -2341,7 +2355,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-88 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
+89 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2429,6 +2443,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_compra_estoque.py` | 39 | AEMatriz.html, AEpecuaria.html (compra de ração com entrada no estoque: bloco só em despesa/conta a pagar de Nutrição animal e Insumos pecuários; grava depois do lançamento com o id dele; valor em branco = total; itens acima da compra barrados; editar traz e desmarcar tira; conta parcelada na 1ª parcela pelo total; falha só da entrada avisa; Pecuária mostra de onde veio e não deixa editar) |
 | `teste_precos_trancados.py` | 21 | os 5 apps (preços trancados: nenhuma leitura de tabela com preço fora da visão `_leitura`, inclusive a cópia de segurança; quem não vê preço edita ingrediente, entrada de estoque, inseminação, nota de diesel e entrada de insumo sem apagar o preço; preço médio fica com o banco; venda só editável com o valor à vista) |
 | `teste_rebanho_economico.py` | 27 | AEMatriz.html, AEpecuaria.html (foto mensal do rebanho: resultado econômico = caixa + variação do rebanho entre as fotos do dia 1º, mês/ano/safra, aviso quando falta foto ou lote sem valor; Rebanho estocado pelo peso de referência; campo Peso de referência do lote grava, limpa, não manda a coluna sem valor e barra fora de 20 a 1000 kg) |
+| `teste_pecuaria_editar_estoque.py` | 17 | AEpecuaria.html (editar saída de ração, recria e produção: uma chamada da função do banco com a baixa pela dieta, nada gravado direto, dieta pronta manda baixa vazia, recusa do banco na tela; sem a função, baixa trocada sem dobrar e, se a nova falhar, a antiga continua) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

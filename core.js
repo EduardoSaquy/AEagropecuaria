@@ -1334,3 +1334,8 @@ function mensagemErroSupabase(error){
   if(error?.code==='42501') return 'Sem permissão para esse registro.';
   return error?.message || 'Erro desconhecido.';
 }
+
+// Função do banco (rpc) que ainda não foi criada (SQL não rodou): o app cai no caminho antigo.
+function funcaoDoBancoNaoExiste(e){
+  return !!e && (e.code==='PGRST202' || e.code==='42883' || /could not find the function/i.test(e.message||''));
+}
