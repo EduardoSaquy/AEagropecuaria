@@ -442,8 +442,16 @@ function OrigemDaCompra(m){
 function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade, preco_kg:m.precoKg||null, ajuste:!!m.ajuste}; }
 function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0, consumoDireto:!!r.consumo_direto}; }
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento', estoque_min_pronta:d.estoqueMinPronta||0, consumo_direto:!!d.consumoDireto}; }
-function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino, dietaId:r.dieta_id, sexo:r.sexo||''}; }
-function loteToRow(l){ return {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino, dieta_id:l.dietaId||null, sexo:l.sexo||null}; }
+function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino, dietaId:r.dieta_id, sexo:r.sexo||'',
+  pesoReferencia: r.peso_referencia_kg!=null ? Number(r.peso_referencia_kg) : null}; }
+// Peso de referência (13/11/2026): peso médio ESTIMADO para lote que não é pesado de rotina (vacas, novilhas). Só serve para dar valor
+// ao rebanho (foto mensal e Rebanho estocado do AE Matriz); a pesagem real, quando existe, manda. A coluna só vai ao banco com valor ou
+// para limpar um que existia (o app funciona antes de rodar rebanho_inventario_01.sql).
+function loteToRow(l){
+  const row = {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino, dieta_id:l.dietaId||null, sexo:l.sexo||null};
+  if(l.pesoReferencia!=null || l._tinhaPesoReferencia) row.peso_referencia_kg = l.pesoReferencia!=null ? l.pesoReferencia : null;
+  return row;
+}
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||'', criadoEm:r.criado_em||null}; }
 function rowToLeituraCocho(r){ return {id:r.id, data:r.data, loteId:r.lote_id, nota:r.nota, observacao:r.observacao||'', criadoPor:r.criado_por||''}; }
 function leituraCochoToRow(l){ return {data:l.data, lote_id:l.loteId, nota:l.nota, observacao:l.observacao||''}; }
@@ -6635,6 +6643,8 @@ function ModalLote(){
           <div class="field"><label>Nº de animais</label><input id="f-numanimais" type="number" step="1" value="${d.numeroAnimais}"/></div>
           <div class="field"><label>Data de início</label><input id="f-datainicio" type="date" value="${d.dataInicio}"/></div>
         </div>
+        <div class="field"><label>Peso de referência (kg, opcional)</label><input id="f-pesoreferencia" type="number" step="1" min="0" value="${d.pesoReferencia!=null?d.pesoReferencia:''}" placeholder="Ex: 420" data-peso-referencia="1"/></div>
+        <p class="hint">Para lote que não é pesado de rotina (vacas, novilhas): peso médio estimado, usado só para dar valor ao rebanho no AE Matriz. Quando o lote tiver pesagem, vale a pesagem.</p>
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
         <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130" data-numeros-animais="1">${esc(d.numerosAnimais||'')}</textarea></div>
@@ -8953,7 +8963,11 @@ function attachEvents(){
             destino: document.getElementById('f-destino').value,
             dietaId: document.getElementById('f-dietalote').value ? Number(document.getElementById('f-dietalote').value) : null,
             sexo: document.getElementById('f-sexolote').value || null,
+            pesoReferencia: (()=>{ const v = Number(document.getElementById('f-pesoreferencia')?.value); return v>0 ? v : null; })(),
+            _tinhaPesoReferencia: editDraft._editId ? editDraft.pesoReferencia!=null : false,
           };
+          const pesoRefDigitado = document.getElementById('f-pesoreferencia')?.value;
+          if(pesoRefDigitado && !(Number(pesoRefDigitado)>=20 && Number(pesoRefDigitado)<=1000)){ alert('Peso de referência fora do normal: informe entre 20 e 1000 kg, ou deixe em branco.'); return; }
           const row = loteToRow(campos);
           if(editDraft._editId){
             ({error} = await db.from('lotes').update(row).eq('id', editDraft._editId));
