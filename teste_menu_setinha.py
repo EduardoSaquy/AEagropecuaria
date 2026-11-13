@@ -5,7 +5,7 @@ direto"), nos cinco apps (o HTML vem do ItemDoMenu(), em core.js). Prova:
   - ao abrir o app, a lista do item da tela atual ja esta aberta; a dos outros esta fechada;
   - a setinha de OUTRO item abre a lista dele e fecha a que estava aberta (um por vez), sem trocar de tela;
   - clicar numa sub-aba vai direto para ela (no Matriz: a tela E a aba de dentro dela: Resultados, Financeiro, Pagar/Receber);
-  - a setinha do item aberto fecha a lista; o que ficou aberto e guardado no aparelho;
+  - a setinha do item aberto fecha a lista; o que ficou aberto vale ate fechar o app (nao fica guardado);
   - onde o menu e a barra de cima (tablet em pe) e na barra rolavel dos outros apps no celular a setinha e a lista ficam escondidas
     e a barra se desenha como antes; no celular do Matriz (painel que abre) a setinha funciona e escolher uma sub-aba fecha o painel.
 """
@@ -76,6 +76,21 @@ GRUPOS = """() => [...document.querySelectorAll('.nav-grupo')].map(g => {
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path="/opt/pw-browsers/chromium")
+    # Pedido do Eduardo (13/11/2026): ao abrir o Matriz no Painel, a lista de Resultados vinha aberta (ficava guardada no aparelho).
+    print("\n== AEMatriz.html: abrir o app no Painel com uma lista guardada de antes")
+    ctx0 = browser.new_context(viewport={"width": 1180, "height": 820}, has_touch=True, is_mobile=True)
+    p0 = ctx0.new_page()
+    p0.route("**/cdn.jsdelivr.net/**", lambda r: r.fulfill(status=200, body=""))
+    p0.add_init_script(STUB)
+    p0.add_init_script(f"localStorage.setItem('ae_menu_aberto_v1_AE Matriz','resultados'); localStorage.setItem('ae_menu_aberto_v1_AEMatriz','resultados'); window.__DB__ = {json.dumps(DB_MATRIZ)}; window.__SESSAO__ = {{user:{{id:'u1'}}, access_token:'x'}};")
+    p0.goto("file://" + str(REPO / "AEMatriz.html"))
+    p0.wait_for_function("() => document.querySelector('.nav-item') !== null && typeof state !== 'undefined' && state.perfil", timeout=30000)
+    p0.wait_for_timeout(600)
+    g0 = p0.evaluate(GRUPOS)
+    conf(p0.evaluate("() => state.page") == "painel", "abre no Painel", p0.evaluate("() => state.page"))
+    conf(len(g0) > 0 and not any(g["aberto"] for g in g0), "no Painel nenhuma lista de sub-abas vem aberta", str([g["chave"] for g in g0 if g["aberto"]]))
+    conf(p0.evaluate("() => Object.keys(localStorage).filter(k => k.indexOf('ae_menu_aberto_v1_') === 0).length") == 0, "a lista guardada de antes foi apagada do aparelho")
+    ctx0.close()
     for arq, db in APPS:
         for rotulo, w, h, toque in (("iPad 1180x820 (toque)", 1180, 820, True), ("desktop 1440x860 (mouse)", 1440, 860, False)):
             print(f"== {arq} {rotulo}")
@@ -103,8 +118,8 @@ with sync_playwright() as pw:
             conf(o2["aberto"] and o2["subVisivel"] and o2["expandido"] == "true", "a setinha de outro item abre a lista dele", str(o2))
             conf(sum(1 for x in g2 if x["aberto"]) == 1, "so um item fica aberto por vez (a lista que estava aberta fecha)")
             conf(page.evaluate("() => state.page") == pagina_antes, "so abrir a lista nao troca de tela")
-            guardado = page.evaluate("() => localStorage.getItem('ae_menu_aberto_v1_' + NOME_DO_APP)")
-            conf(guardado == outro["chave"], "o que ficou aberto e guardado no aparelho", str(guardado))
+            guardado = page.evaluate("() => menuAbertoMemoria")
+            conf(guardado == outro["chave"], "o que ficou aberto vale enquanto o app esta aberto", str(guardado))
             # clicar numa sub-aba vai direto
             alvo = o2["subs"][-1]
             page.locator(f"[data-menu-sub='{alvo}']").click()
@@ -132,7 +147,7 @@ with sync_playwright() as pw:
             page.wait_for_timeout(200)
             g4 = page.evaluate(GRUPOS)
             conf(not any(x["aberto"] for x in g4), "a setinha do item aberto fecha a lista (nenhum aberto)")
-            conf(page.evaluate("() => localStorage.getItem('ae_menu_aberto_v1_' + NOME_DO_APP)") == "", "e o 'tudo fechado' tambem fica guardado")
+            conf(page.evaluate("() => menuAbertoMemoria") == "", "e o 'tudo fechado' tambem fica guardado")
             # clicar no nome de um item sem lista: continua funcionando e fecha as listas
             page.context.close()
 
