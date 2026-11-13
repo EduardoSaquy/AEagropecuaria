@@ -105,7 +105,7 @@ with sync_playwright() as pw:
          str(linhas_de(page, "lancamentos_financeiros")))
     conf(linhas_de(page, "lancamentos_rateados") == N + 3, "visao rateada lida UMA vez, nao quatro (%d linhas)" % (N + 3),
          str(linhas_de(page, "lancamentos_rateados")))
-    conf(consultas_de(page, "lancamentos_rateados") == 3, "visao rateada em 3 paginas de ate 1000",
+    conf(consultas_de(page, "lancamentos_rateados") == 5, "visao rateada: 1a pagina e depois uma onda de 4 em paralelo (fetchAllRows em ondas, 13/11/2026)",
          str(consultas_de(page, "lancamentos_rateados")))
     desenhos = page.evaluate("() => window.__RENDERS__")
     conf(desenhos <= 4, "a carga completa redesenha ate 4 vezes (eram 18)", str(desenhos))

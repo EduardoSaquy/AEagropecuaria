@@ -951,17 +951,32 @@ document.addEventListener('click', e=>{
 // 1.000 linhas por conta própria (db-max-rows), então um .range(0, 19999) só parece trazer tudo: foi um teto, e os totais ficariam
 // errados sem aviso. A consulta tem que ter ordem ESTÁVEL (um .order('id') no fim): só 'data', por exemplo, repete ou perde linha
 // na fronteira entre páginas. Quem chama passa a consulta já montada, em função: fetchAllRows(()=>db.from('x').select('*').order('id')).
+// Páginas em ONDAS (13/11/2026): a 1ª página vai sozinha (tabela pequena continua com uma ida só); se ela vier cheia, as seguintes
+// saem de PAGINAS_POR_ONDA em PAGINAS_POR_ONDA ao mesmo tempo, e o resultado é juntado na ordem. Antes era uma página depois da outra:
+// os 10 mil lançamentos eram 11 idas em fila e a visão rateada 28, e com sinal fraco cada ida custa caro. Na última onda podem sair
+// até 3 páginas a mais, que voltam vazias. Erro em qualquer página devolve o que veio antes dela e o erro, como antes.
+const PAGINAS_POR_ONDA = 4;
 async function fetchAllRows(consulta){
   const PAGINA = 1000;
-  let todas = [], de = 0;
+  const primeira = await consulta().range(0, PAGINA - 1);
+  if(primeira.error) return { data: [], error: primeira.error };
+  let todas = primeira.data || [];
+  if(todas.length < PAGINA) return { data: todas, error: null };
+  let proxima = 1;
   while(true){
-    const { data, error } = await consulta().range(de, de + PAGINA - 1);
-    if(error) return { data: todas, error };
-    todas = todas.concat(data || []);
-    if(!data || data.length < PAGINA) break;
-    de += PAGINA;
+    const onda = [];
+    for(let i = 0; i < PAGINAS_POR_ONDA; i++){
+      const de = (proxima + i) * PAGINA;
+      onda.push(consulta().range(de, de + PAGINA - 1));
+    }
+    const respostas = await Promise.all(onda);
+    for(const { data, error } of respostas){
+      if(error) return { data: todas, error };
+      todas = todas.concat(data || []);
+      if(!data || data.length < PAGINA) return { data: todas, error: null };
+    }
+    proxima += PAGINAS_POR_ONDA;
   }
-  return { data: todas, error: null };
 }
 
 /* ---------- Abertura do app, sessão e perfil (iguais nos cinco apps desde 07/11/2026) ----------

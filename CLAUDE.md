@@ -2346,6 +2346,10 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
   `schema_real.txt` é a referência.
 - **O Supabase trunca em 1000 linhas sem avisar.** Há 2.759 lançamentos. Toda
   consulta que pode passar de mil linhas usa `fetchAllRows(...)`.
+  Desde 13/11/2026 o `fetchAllRows` (core.js) lê em **ondas**: a 1ª página sozinha (tabela pequena = uma ida) e, se vier cheia, as
+  seguintes de 4 em 4 ao mesmo tempo (`PAGINAS_POR_ONDA`), juntadas na ordem; antes eram todas em fila (10 mil lançamentos = 11 idas,
+  visão rateada = 28). Com 100 ms por ida, 8.500 linhas foram de ~900 ms para ~300 ms. Pede a mesma ordem estável de antes (o
+  `.order('id')` no fim). `teste_paginas_em_ondas.py` (15).
 - **Nada de acentos em comentário de SQL.** O separador de statements do editor
   do Supabase não ignora comentários e quebra o arquivo.
 - **Uma consulta por arquivo de conferência.** O editor do Supabase mostra
@@ -2368,7 +2372,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-89 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
+90 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2457,6 +2461,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_precos_trancados.py` | 21 | os 5 apps (preços trancados: nenhuma leitura de tabela com preço fora da visão `_leitura`, inclusive a cópia de segurança; quem não vê preço edita ingrediente, entrada de estoque, inseminação, nota de diesel e entrada de insumo sem apagar o preço; preço médio fica com o banco; venda só editável com o valor à vista) |
 | `teste_rebanho_economico.py` | 27 | AEMatriz.html, AEpecuaria.html (foto mensal do rebanho: resultado econômico = caixa + variação do rebanho entre as fotos do dia 1º, mês/ano/safra, aviso quando falta foto ou lote sem valor; Rebanho estocado pelo peso de referência; campo Peso de referência do lote grava, limpa, não manda a coluna sem valor e barra fora de 20 a 1000 kg) |
 | `teste_pecuaria_editar_estoque.py` | 17 | AEpecuaria.html (editar saída de ração, recria e produção: uma chamada da função do banco com a baixa pela dieta, nada gravado direto, dieta pronta manda baixa vazia, recusa do banco na tela; sem a função, baixa trocada sem dobrar e, se a nova falhar, a antiga continua) |
+| `teste_paginas_em_ondas.py` | 15 | core.js (fetchAllRows em ondas: todas as linhas na ordem sem repetir de 0 a 27.823, tabela pequena com uma ida só, até 4 páginas em paralelo, tempo menor que em fila, erro no meio devolve o que veio antes e o erro) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
