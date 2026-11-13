@@ -1890,8 +1890,11 @@ ficou **vazia**). O que não era igual foi decidido assim (só o que não muda o
 - Login: o texto digitado e a mensagem de erro entram escapados nos 5 (antes só na Pecuária). Visual: o texto da tela "aguardando liberação" é o da Pecuária em todos
   (o Matriz tinha outro tamanho/cor e dizia "administrador da matriz"). O `rowToPerfil` do Matriz e da Pecuária passou a guardar `frentes` (só o Combustível usa).
 - O stub dos testes (`teste_stub_supabase.js`) guarda os ouvintes de `onAuthStateChange` em `window.__authCallbacks` para o teste disparar `TOKEN_REFRESHED`.
-**Ainda diferentes de verdade** (cada app tem a sua, nada decidido): `loadAll`, `Header`, `Topbar`, `brandMark`, `Modal`, `attachEvents`, `PageCadastro`/`salvarCadastro`
-(Cana, Cereais, Combustível), `mensagemErroSupabase`, `mesLabel`. `loadAll` e o menu são o desenho de cada app; o resto pede comparar e decidir.
+**Ainda diferentes de verdade** (cada app tem a sua): `loadAll`, `Header`, `Topbar`, `brandMark`, `Modal`, `attachEvents`, `PageCadastro`/`salvarCadastro`
+(Cana, Cereais, Combustível). São o desenho e o conteúdo de cada app, não cópias. **`mesLabel` e `NOMES_MES`** (Matriz e Pecuária) e
+**`mensagemErroSupabase`** (Combustível e Cana/Cereais) passaram ao `core.js` em 13/11/2026; o que é só do Combustível (coluna de custo
+faltando, 23514 e 42501 com o texto dele) fica em `mensagemErroDoApp(error)`, que o núcleo consulta primeiro. Cana e Cereais passaram a
+dizer "Sem permissão para esse registro." no erro 42501 (antes mostravam a mensagem crua do banco, em inglês).
 
 **CSS comum (13/11/2026)**: `core.css` (os avisos na tela, nos 5 apps) e `core_grade.css` (menu lateral, setinha e menu do celular de
 Pecuária, Cana e Cereais, que eram idênticos nos três) vêm por `<link rel="stylesheet" href="core.css?v=...">` logo depois do primeiro

@@ -533,7 +533,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=7fe5cf78f7"></script>
+<script src="core.js?v=5923b0e0de"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -652,12 +652,6 @@ function lerCargo(id, idOutro){
    receitas_cana, despesas_graos e receitas_graos, com um seletor de
    operação em cima.
    ==================================================================== */
-const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-function mesLabel(mesStr){
-  if(!mesStr) return '—';
-  const [ano, m] = mesStr.split('-');
-  return `${NOMES_MES[Number(m)-1]}/${ano}`;
-}
 const AREA_LABEL = {confinamento:'Confinamento', pasto:'Recria', cria:'Cria'};
 function rowToLancamento(r){
   return {id:r.id, tipo:r.tipo, atividade:r.atividade, fazendaId:r.fazenda_id, centroCustoId:r.centro_custo_id,

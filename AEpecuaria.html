@@ -410,7 +410,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=7fe5cf78f7"></script>
+<script src="core.js?v=5923b0e0de"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // Projeto único: Pecuária, Lavoura e Matriz dividem o mesmo banco desde a
@@ -5220,7 +5220,6 @@ function precoArrobaAtual(sexo){
   return [...lista].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id)[0];
 }
 
-const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 // Mesmo filtro de racaoLoteTipo que dadosFinanceiro() usa pro mês --
 // saidasRacao só conta pra Confinamento/Cria (Recria tem seu próprio custo
@@ -6260,10 +6259,6 @@ function PageFinanceiroCustosFixos(){
     </table>`}
   </div>
   <p class="hint" style="margin:14px 0 0;">"Recorrente" é o valor mensal atual, usado em qualquer mês que não tenha um custo fixo próprio cadastrado. Cadastrar um custo fixo com um mês específico (ex: a partir de um relatório histórico) substitui o recorrente só naquele mês, para refletir o gasto real.</p>`;
-}
-function mesLabel(mesStr){
-  const [ano, m] = mesStr.split('-');
-  return `${NOMES_MES[Number(m)-1]}/${ano}`;
 }
 
 /* ---- Financeiro: Investimentos ---- */
