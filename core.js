@@ -398,6 +398,24 @@ function souOperador(){ return state.perfil?.papel === 'operador'; }
  * de dieta e de nota fica nas tabelas da operação e é escondido só na tela. */
 function veValores(){ return acessoTotal(); }
 function veValorDeVenda(){ return acessoTotal() || temPermissao('vendas','visualizar'); }
+// Preços trancados no banco (seguranca_07a/07b, 12/11/2026): quem está logado não lê mais estas
+// colunas direto da tabela. A leitura vai pela visão <tabela>_leitura, que só preenche o preço para
+// quem pode (insumo: acesso total e consultor; venda: acesso total e Vendas; o resto: acesso total).
+// Gravar continua na tabela de sempre. Tabela nova com preço: entra aqui e no SQL.
+const TABELAS_COM_PRECO = {
+  ingredientes:['preco_kg'], movimentos:['preco_kg'], abates:['valor_arroba','valor_por_animal','valor_kg'],
+  reproducao_custos:['custo'], entradas_estoque:['valor_total'], manutencoes:['custo'],
+  entradas_insumo_cana:['preco_pago'], entradas_insumo_graos:['preco_pago'],
+};
+function tabelaDeLeitura(t){ return TABELAS_COM_PRECO[t] ? t + '_leitura' : t; }
+// Ao EDITAR, quem não vê o preço recebe o campo vazio; gravar o vazio apagaria o preço de
+// verdade. Tira do update a coluna de preço que veio vazia de quem não pode vê-la.
+function semPrecoApagado(row, colunas, podeVer){
+  if(podeVer) return row;
+  const r = {...row};
+  colunas.forEach(c=>{ if(r[c]===null || r[c]===undefined || r[c]==='' || (typeof r[c]==='number' && isNaN(r[c]))) delete r[c]; });
+  return r;
+}
 
 /* ---------- Senha: no minimo 10 caracteres e troca obrigatoria (12/11/2026) ----------
  * Decisao do Eduardo: todos trocam para uma senha de 10 ou mais caracteres na proxima entrada com internet, e quem for

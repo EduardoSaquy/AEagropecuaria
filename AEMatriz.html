@@ -543,7 +543,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=043f1d5f63"></script>
+<script src="core.js?v=6200878fd1"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -881,10 +881,12 @@ function baixarArquivo(nome, partes, tipo){
 }
 async function lerTabelaParaCopia(nome, ordens){
   const ordenar = (q, cols)=>cols.reduce((acc, c)=>acc.order(c), q);
-  let r = await fetchAllRows(()=>ordenar(db.from(nome).select('*'), ordens || ['id']));
+  // Tabela com preço trancado (seguranca_07): lê pela visão, que traz o preço para quem pode.
+  const fonte = tabelaDeLeitura(nome);
+  let r = await fetchAllRows(()=>ordenar(db.from(fonte).select('*'), ordens || ['id']));
   // tabela sem a coluna de ordem (42703): uma página só, sem ordem, serve para tabela pequena
   if(r.error && /42703|does not exist|column/i.test(String(r.error.code||'') + ' ' + String(r.error.message||''))){
-    r = await fetchAllRows(()=>db.from(nome).select('*'));
+    r = await fetchAllRows(()=>db.from(fonte).select('*'));
   }
   return r;
 }
@@ -1327,13 +1329,13 @@ async function carregarResultadoPecuaria(){
   renderCarga();
   try{
     const [ingRes, dietRes, srRes, ptRes, rcRes, lancRes, vendasRes] = await Promise.all([
-      dbPecuaria.from('ingredientes').select('id, preco_kg'),
+      dbPecuaria.from(tabelaDeLeitura('ingredientes')).select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg').order('id')),
       // paginado: passa de 1000 linhas e o Supabase corta calado (o consumo
       // gerencial da Pecuária saía menor sem aviso)
       fetchAllRows(()=>dbPecuaria.from('pasto').select('data, dieta_id, quantidade').order('id')),
-      fetchAllRows(()=>dbPecuaria.from('reproducao_custos').select('data, custo').order('id')),
+      fetchAllRows(()=>dbPecuaria.from(tabelaDeLeitura('reproducao_custos')).select('data, custo').order('id')),
       rateadosDaAtividade('pecuaria'),
       // abates: só pra calcular arrobas VENDIDAS/ha na aba Operacional dos
       // Resultados — a pedido do Eduardo, é @ de venda (evento de saída),
@@ -1542,12 +1544,12 @@ function CardEstoquePecuaria(){
 async function carregarReproducaoPecuaria(){
   try{
     const [ingRes, dietRes, lotRes, srRes, ptRes, rcRes, partRes, desmRes, dgRes] = await Promise.all([
-      dbPecuaria.from('ingredientes').select('id, preco_kg'),
+      dbPecuaria.from(tabelaDeLeitura('ingredientes')).select('id, preco_kg'),
       dbPecuaria.from('dietas').select('id, itens'),
       dbPecuaria.from('lotes').select('id, nome, destino, numero_animais, data_fim'),
       fetchAllRows(()=>dbPecuaria.from('saidas_racao').select('data, dieta_id, quantidade_kg, lote_id').order('id')),
       fetchAllRows(()=>dbPecuaria.from('pasto').select('data, dieta_id, quantidade, lote_id').order('id')),
-      fetchAllRows(()=>dbPecuaria.from('reproducao_custos').select('data, custo, lote_id').order('id')),
+      fetchAllRows(()=>dbPecuaria.from(tabelaDeLeitura('reproducao_custos')).select('data, custo, lote_id').order('id')),
       fetchAllRows(()=>dbPecuaria.from('partos').select('*').order('id')),
       fetchAllRows(()=>dbPecuaria.from('desmamas').select('id, parto_id, data, peso_kg').order('id')),
       fetchAllRows(()=>dbPecuaria.from('diagnosticos_gestacionais').select('data, resultado').order('id')),
@@ -1897,7 +1899,7 @@ async function carregarIndicadoresCombustivel(){
     const precisaAbast = pode.estoque || pode.consumo || pode.custo;
     const [tq, en, aj, ab, al] = await Promise.all([
       precisaTanques ? fetchAllRows(()=>db.from('tanques').select('id, ativo').order('id')) : vazio,
-      precisaTanques ? fetchAllRows(()=>db.from('entradas_estoque').select('id, tanque_id, data, volume_litros, valor_total').order('id')) : vazio,
+      precisaTanques ? fetchAllRows(()=>db.from(tabelaDeLeitura('entradas_estoque')).select('id, tanque_id, data, volume_litros, valor_total').order('id')) : vazio,
       pode.estoque ? fetchAllRows(()=>db.from('ajustes_estoque').select('id, tanque_id, volume_ajuste_litros').order('id')) : vazio,
       precisaAbast ? fetchAllRows(()=>db.from('abastecimentos').select('id, tanque_id, data_hora, volume_litros').order('id')) : vazio,
       pode.alertas ? fetchAllRows(()=>db.from('alertas').select('id, status').order('id')) : vazio,

@@ -374,7 +374,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=043f1d5f63"></script>
+<script src="core.js?v=6200878fd1"></script>
 <script>
 /* ===================== SUPABASE =====================
  * Mesmo projeto unificado do AEMatriz.html/AEpecuaria.html/AECana.html/
@@ -645,7 +645,7 @@ async function loadAll(){
       // linhas com o mesmo orderBy (ex: mesma data) podem sair duplicadas
       // ou sumir na fronteira entre páginas de 1000 — mesmo bug já
       // corrigido em lancamentos_rateados, no AE Matriz.
-      return fetchAllRows(()=>db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc}).order('id'));
+      return fetchAllRows(()=>db.from(tabelaDeLeitura(cfg.table)).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc}).order('id'));
     }),
     fetchAllRows(()=>db.from('profiles').select('*').order('nome').order('id')),
     fetchAllRows(()=>db.from('alertas').select('*').order('data_hora', {ascending:false}).order('id')),
@@ -2437,6 +2437,9 @@ async function salvarCadastro(key){
   let erro = '';
   cfg.fields.forEach(f=>{
     const raw = lerCampoDOM(f);
+    // Preço que a pessoa não vê (seguranca_07: o banco não o devolve a ela): ao editar, o campo vem
+    // vazio. Não exige nem manda: fica o valor gravado.
+    if(f.soValores && !veValores() && editDraft._editId && (raw===''||raw===undefined||raw===null)) return;
     if(f.required && (raw===''||raw===undefined||raw===null)) erro = erro || `Preencha o campo "${f.label}".`;
     let val = raw;
     if(f.type==='number') val = (raw===''||raw===undefined||raw===null) ? null : Number(raw);
