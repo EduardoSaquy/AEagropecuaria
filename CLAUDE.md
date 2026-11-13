@@ -1346,7 +1346,8 @@ Item "gravações atômicas na Pecuária" da lista de melhorias. Lançamento NOV
 faltou); a falha estava na EDIÇÃO: a de **Recria** (tabela `pasto`) e a de **Produção de ração** apagavam a baixa de estoque antiga
 antes de gravar a nova, e se a gravação nova falhasse (sinal caindo) o consumo sumia do estoque sem aviso.
 - **Banco** (`pecuaria_editar_com_estoque_01.sql`, ensaiado num Postgres descartável: 12 checagens com operador e consultor, falha no
-  meio desfaz tudo, rodar de novo, desfazer e aplicar de novo; **ainda não rodado**): `editar_consumo_com_estoque(tabela, id, campos,
+  meio desfaz tudo, rodar de novo, desfazer e aplicar de novo; **RODADO em 13/11/2026 pelo conector, com o OK dele**: 2 itens OK;
+  entrando como um operador do curral, editar a saída 1821 trocou as 6 baixas por 6 novas, numa transação que foi desfeita no fim): `editar_consumo_com_estoque(tabela, id, campos,
   movimentos)`, `security invoker` (as regras das tabelas valem como hoje), aceita só `saidas_racao`, `pasto` e `producoes_racao`: muda
   o lançamento, apaga a baixa antiga e grava a nova, tudo ou nada.
 - **AE Pecuária**: `movimentosDaDieta` e `editarConsumoComEstoque` (chama a função; sem ela, `funcaoDoBancoNaoExiste`, caminho antigo
