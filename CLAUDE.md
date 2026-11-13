@@ -1369,6 +1369,29 @@ estoque. Antes eram dois lançamentos e, quando o segundo era esquecido, o estoq
   secretária de contas recebe a lista e continua sem ler o estoque; quem lia os movimentos continua lendo os mesmos 10.012; o
   administrador (que tem o código no celular) só com a sessão confirmada.
 
+### Foto mensal do rebanho e resultado econômico da Pecuária (13/11/2026)
+
+Decisões do Eduardo: **resultado econômico = resultado de caixa + (rebanho no fim do período − rebanho no começo)**; o rebanho é
+fotografado **todo dia 1º, automático**; valor pela mesma conta do "Rebanho estocado" (peso × 50% de carcaça ÷ 15 × preço da @ do
+dia, fêmea para lote de fêmeas); **lote sem pesagem usa o peso de referência do lote** (vacas e novilhas, ~43% das cabeças em
+13/11/2026, não são pesadas de rotina).
+- **Banco** (`rebanho_inventario_01.sql`, ensaiado num Postgres descartável com pg_cron falso: 18 checagens, rodar de novo, desfazer
+  e aplicar de novo; **ainda não rodado**): coluna `lotes.peso_referencia_kg` (opcional, 20 a 1000 kg); tabela `rebanho_inventario`
+  (data, lote, cabeças, peso médio, data da pesagem, `origem_peso` 'pesagem'/'referencia', @, preço da @, valor), leitura só
+  `acesso_total()` + segundo fator, ninguém grava pela API; `fotografar_rebanho(data)` (definer, fechada a quem está logado; refazer
+  o mesmo dia troca a foto) com a última pesagem **até o dia** (0 kg não conta) ou a referência, e o último preço da @ **até o dia**;
+  **pg_cron** `ae-foto-do-rebanho` às 03:05 UTC do dia 1º (00:05 em Brasília). Lote encerrado ou com 0 cabeças fica fora. A
+  primeira foto é de **01/12/2026**: o resultado econômico de dezembro aparece em 01/01/2027.
+- **AE Pecuária**: campo "Peso de referência (kg, opcional)" no lote (novo e editar). Só vai ao banco com valor ou para limpar um que
+  existia (`_tinhaPesoReferencia`): o app funciona antes do SQL.
+- **AE Matriz**: Rebanho estocado usa a referência quando o lote não tem pesagem e diz quais lotes foram por ela (lê `lotes` com `*`,
+  para não quebrar antes da coluna existir). Resultados > Operacional > Pecuária ganha o bloco **"Resultado econômico"**
+  (`carregarFotosRebanho`, `variacaoRebanhoNoPeriodo`, `BlocoResultadoEconomicoPecuaria`): começo = foto do dia 1º do primeiro mês do
+  período, fim = foto do dia 1º do mês seguinte ao último (mês, ano e safra); sem as duas fotos diz qual falta e não mostra número.
+  Caixa = resultado − investimentos (o mesmo do bloco de investimentos). A variação inclui a mudança do preço da @. Lote sem valor na
+  foto é avisado. As fotos entram na cópia de segurança.
+- `teste_rebanho_economico.py` (27).
+
 ### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
 
 Regra da fazenda (Eduardo, 02/11/2026): não há touro, só IATF; até **3
@@ -2317,7 +2340,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-87 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
+88 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2404,6 +2427,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_recorrente_regra_unica.py` | 15 | AEMatriz.html, AEpecuaria.html (regra do recorrente só no core.js: nenhum app a redefine; a Pecuária dá a mesma resposta e ordem da versão antiga; Matriz e Pecuária escolhem as mesmas despesas em todo mês; áreas em outra ordem são a mesma conta; lista que cresce não devolve resposta velha) |
 | `teste_compra_estoque.py` | 39 | AEMatriz.html, AEpecuaria.html (compra de ração com entrada no estoque: bloco só em despesa/conta a pagar de Nutrição animal e Insumos pecuários; grava depois do lançamento com o id dele; valor em branco = total; itens acima da compra barrados; editar traz e desmarcar tira; conta parcelada na 1ª parcela pelo total; falha só da entrada avisa; Pecuária mostra de onde veio e não deixa editar) |
 | `teste_precos_trancados.py` | 21 | os 5 apps (preços trancados: nenhuma leitura de tabela com preço fora da visão `_leitura`, inclusive a cópia de segurança; quem não vê preço edita ingrediente, entrada de estoque, inseminação, nota de diesel e entrada de insumo sem apagar o preço; preço médio fica com o banco; venda só editável com o valor à vista) |
+| `teste_rebanho_economico.py` | 27 | AEMatriz.html, AEpecuaria.html (foto mensal do rebanho: resultado econômico = caixa + variação do rebanho entre as fotos do dia 1º, mês/ano/safra, aviso quando falta foto ou lote sem valor; Rebanho estocado pelo peso de referência; campo Peso de referência do lote grava, limpa, não manda a coluna sem valor e barra fora de 20 a 1000 kg) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela

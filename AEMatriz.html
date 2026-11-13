@@ -826,7 +826,7 @@ const TABELAS_COPIA = [
   ['plantios_graos'], ['colheitas_graos'], ['aplicacoes_graos'], ['entradas_insumo_graos'], ['insumos_graos'], ['operacoes_graos'],
   ['lotes'], ['animais'], ['abates'], ['pesagens'], ['pesagens_animais'], ['partos'], ['desmamas'], ['diagnosticos_gestacionais'],
   ['reproducao_custos'], ['protocolos_inseminacao'], ['manejos'], ['ingredientes'], ['dietas'], ['movimentos'], ['saidas_racao'],
-  ['producoes_racao'], ['leituras_cocho'], ['pasto'], ['precos_arroba'], ['config_financeiro'], ['abastecimentos'],
+  ['producoes_racao'], ['leituras_cocho'], ['pasto'], ['precos_arroba'], ['rebanho_inventario'], ['config_financeiro'], ['abastecimentos'],
 ];
 const COPIA_ULTIMA_KEY = 'ae_matriz_ultima_copia_v1';
 function quandoUltimaCopia(){
@@ -1076,7 +1076,7 @@ async function loadAll(grupos){
     // Resultados é só de quem tem acesso total (12/11/2026): para os outros nem busca (o banco devolveria vazio).
     const resultados = acessoTotal();
     if(temPermissao('matriz_painel_pecuaria','visualizar')) carregarIndicadoresPecuaria();
-    if(resultados){ carregarResultadoPecuaria(); carregarReproducaoPecuaria(); carregarEstoquePecuaria(); }
+    if(resultados){ carregarResultadoPecuaria(); carregarReproducaoPecuaria(); carregarEstoquePecuaria(); carregarFotosRebanho(); }
     if(temPermissao('matriz_painel_cana','visualizar')) carregarIndicadoresCana();
     if(resultados) carregarResultadoCana();
     if(temPermissao('matriz_painel_cereais','visualizar')) carregarIndicadoresCereais();
@@ -1423,7 +1423,7 @@ function diasDesde(dataStr){
 async function carregarEstoquePecuaria(){
   try{
     const [lotRes, pesRes, preRes] = await Promise.all([
-      dbPecuaria.from('lotes').select('id, nome, destino, sexo, numero_animais, data_fim'),
+      dbPecuaria.from('lotes').select('*'),
       fetchAllRows(()=>dbPecuaria.from('pesagens').select('id, lote_id, data, peso_medio_kg').order('id')),
       fetchAllRows(()=>dbPecuaria.from('precos_arroba').select('id, data, valor, sexo').order('id')),
     ]);
@@ -1433,6 +1433,69 @@ async function carregarEstoquePecuaria(){
     state.estoquePec = {erro:'Não foi possível carregar o rebanho agora.'};
   }
   renderCarga();
+}
+// ===== Foto mensal do rebanho e resultado econômico da Pecuária (13/11/2026) =====
+// O banco tira, todo dia 1º, uma foto de cada lote ativo (rebanho_inventario_01.sql: cabeças, peso da última pesagem ou o peso de
+// referência do lote, @ e valor pelo preço da @ do dia). Decisão do Eduardo: resultado econômico = resultado de caixa + (rebanho no
+// fim do período − rebanho no começo). "Começo" = foto do dia 1º do primeiro mês do período; "fim" = foto do dia 1º do mês seguinte ao
+// último. Só aparece com as duas fotos; a primeira foto é de 01/12/2026. Tabela só legível por administrador e proprietário.
+async function carregarFotosRebanho(){
+  try{
+    const res = await fetchAllRows(()=>dbPecuaria.from('rebanho_inventario').select('id, data, lote_id, lote_nome, cabecas, peso_medio, origem_peso, valor').order('data').order('id'));
+    if(res.error) throw res.error;
+    state.fotosRebanho = {erro:'', linhas: res.data||[]};
+  } catch(e){
+    state.fotosRebanho = {erro:'Não foi possível carregar as fotos do rebanho.', linhas:[]};
+  }
+  renderCarga();
+}
+function proximoMesStr(mes){ const [a,m] = mes.split('-').map(Number); return m===12 ? `${a+1}-01` : `${a}-${String(m+1).padStart(2,'0')}`; }
+function fotoDoRebanho(data){
+  const linhas = (state.fotosRebanho?.linhas||[]).filter(f=>f.data===data);
+  if(!linhas.length) return null;
+  const semValor = linhas.filter(f=>f.valor==null);
+  return {data, valor: linhas.reduce((a,f)=>a+Number(f.valor||0),0), cabecas: linhas.reduce((a,f)=>a+Number(f.cabecas||0),0),
+    cabecasSemValor: semValor.reduce((a,f)=>a+Number(f.cabecas||0),0), lotesSemValor: semValor.map(f=>f.lote_nome)};
+}
+function variacaoRebanhoNoPeriodo(periodo=state.periodo){
+  const meses = periodoMeses(periodo);
+  const dataInicio = meses[0]+'-01', dataFim = proximoMesStr(meses[meses.length-1])+'-01';
+  const inicio = fotoDoRebanho(dataInicio), fim = fotoDoRebanho(dataFim);
+  return {dataInicio, dataFim, inicio, fim, variacao: inicio && fim ? fim.valor - inicio.valor : null};
+}
+function BlocoResultadoEconomicoPecuaria(r){
+  const fr = state.fotosRebanho;
+  if(!fr) return '';
+  const dataBr = d => d.split('-').reverse().join('/');
+  const inv = investimentosPecuariaNoPeriodo();
+  const caixa = r.resultado - (inv ? inv.total : 0);
+  const v = variacaoRebanhoNoPeriodo();
+  const tit = `<p class="hint" style="margin-bottom:6px;"><strong>Resultado econômico</strong> (caixa + variação do rebanho)</p>`;
+  const casca = corpo => `<div data-bloco-resultado-economico="1" style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cinza-claro);">${tit}${corpo}</div>`;
+  if(fr.erro) return casca(`<p class="hint">${esc(fr.erro)}</p>`);
+  if(!v.inicio || !v.fim){
+    const falta = [!v.inicio ? dataBr(v.dataInicio) : null, !v.fim ? dataBr(v.dataFim) : null].filter(Boolean);
+    return casca(`<p class="hint" data-falta-foto-rebanho="1">Aparece quando houver a foto do rebanho do começo e do fim do período (o banco tira uma todo dia 1º; a primeira é de 01/12/2026). Falta a foto de ${falta.join(' e de ')}.</p>`);
+  }
+  const economico = caixa + v.variacao;
+  const semValor = [v.inicio, v.fim].filter(f=>f.cabecasSemValor>0)
+    .map(f=>`${fmtInt(f.cabecasSemValor)} cabeças sem peso nem peso de referência em ${dataBr(f.data)} (${esc(f.lotesSemValor.join(', '))})`);
+  return casca(`
+    <table style="font-size:12.5px;"><tbody>
+      <tr><td>Resultado de caixa (resultado − investimentos)</td><td class="mono" style="text-align:right;" data-caixa-economico="1">R$ ${fmt(caixa)}</td></tr>
+      <tr><td>Rebanho em ${dataBr(v.dataInicio)} (${fmtInt(v.inicio.cabecas)} cab)</td><td class="mono" style="text-align:right;" data-rebanho-inicio="1">R$ ${fmt(v.inicio.valor)}</td></tr>
+      <tr><td>Rebanho em ${dataBr(v.dataFim)} (${fmtInt(v.fim.cabecas)} cab)</td><td class="mono" style="text-align:right;" data-rebanho-fim="1">R$ ${fmt(v.fim.valor)}</td></tr>
+      <tr><td>Variação do rebanho</td><td class="mono" style="text-align:right;" data-variacao-rebanho="1">R$ ${fmt(v.variacao)}</td></tr>
+    </tbody></table>
+    <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); margin-top:12px;">
+      <div class="stat-card">
+        <div class="stat-label">Resultado econômico</div>
+        <div class="stat-value ${economico>=0?'bom':'alerta'}" style="font-size:19px;" data-resultado-economico-pecuaria="1">R$ ${fmt(economico)}</div>
+        <div class="hint" style="margin-top:4px;">Caixa + o que o rebanho ganhou (ou perdeu) de valor no período: animais que nasceram, engordaram ou foram comprados e ainda estão na fazenda.</div>
+      </div>
+    </div>
+    ${semValor.length ? `<p class="hint" style="margin-top:8px; color:var(--alerta);" data-rebanho-sem-valor="1">${semValor.join('; ')}: ficaram fora do valor do rebanho. Informe o peso de referência do lote no AE Pecuária.</p>` : ''}
+    <p class="hint" style="margin-top:8px;">Valor do rebanho = peso (última pesagem; sem pesagem, o peso de referência do lote) × 50% de carcaça ÷ 15 × preço da @ do dia da foto. A variação inclui a mudança do preço da @.</p>`);
 }
 function ultimoPrecoArroba(precos, sexo){
   const lista = precos.filter(p=>p.sexo===sexo && Number(p.valor)>0)
@@ -1455,11 +1518,12 @@ function estoquePecuaria(){
     .map(l=>{
       const cabecas = Number(l.numero_animais);
       const pes = ultimaPesagem.get(l.id) || null;
-      const pesoMedio = pes ? Number(pes.peso_medio_kg) : null;
+      const pesoRef = Number(l.peso_referencia_kg) > 0 ? Number(l.peso_referencia_kg) : null;
+      const pesoMedio = pes ? Number(pes.peso_medio_kg) : pesoRef;
       const pesoVivo = pesoMedio!=null ? cabecas*pesoMedio : null;
       const arrobas = pesoVivo!=null ? pesoVivo*RENDIMENTO_CARCACA_ESTOQUE/KG_POR_ARROBA_ESTOQUE : null;
       const preco = l.sexo==='femea' ? (precoFemea || precoMacho) : (precoMacho || precoFemea);
-      return {lote:l, cabecas, pesoMedio, dataPesagem: pes ? pes.data : null, pesoVivo,
+      return {lote:l, cabecas, pesoMedio, dataPesagem: pes ? pes.data : null, porReferencia: !pes && pesoRef!=null, pesoVivo,
         ua: pesoVivo!=null ? pesoVivo/KG_POR_UA : null, arrobas,
         valor: arrobas!=null && preco ? arrobas*Number(preco.valor) : null};
     })
@@ -1472,6 +1536,7 @@ function estoquePecuaria(){
   const valor = comPeso.some(x=>x.valor!=null) ? soma(comPeso,'valor') : null;
   return {linhas, ha, cabecas, cabecasComPeso, cabecasSemPeso: cabecas-cabecasComPeso,
     lotesSemPeso: linhas.filter(x=>x.pesoVivo==null).map(x=>x.lote.nome),
+    lotesPorReferencia: linhas.filter(x=>x.porReferencia).map(x=>x.lote.nome),
     pesoVivo, ua, arrobas, valor,
     uaPorHa: ha>0 ? ua/ha : null, arrobasPorHa: ha>0 ? arrobas/ha : null,
     cabecasPorHa: ha>0 ? cabecas/ha : null, valorPorHa: ha>0 && valor!=null ? valor/ha : null,
@@ -1516,8 +1581,9 @@ function CardEstoquePecuaria(){
     </div>
     ${!r.precoMacho && !r.precoFemea ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);" data-aviso-preco-arroba="1">Nenhum preço da @ cadastrado: lance o preço no AE Pecuária para o valor em carne aparecer.</p>` : ''}
     ${r.precoVelho.length ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);" data-aviso-preco-arroba="1">Preço da @ desatualizado: ${r.precoVelho.map(p=>(p.sexo==='femea'?'fêmea':'macho')+' de '+dataBr(p.data)+' ('+p.dias+' dias)').join(', ')}. Atualize no AE Pecuária para o valor em carne refletir o mercado.</p>` : ''}
-    ${r.cabecasSemPeso>0 ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);">${fmtInt(r.cabecasSemPeso)} de ${fmtInt(r.cabecas)} cabeças estão em lote sem pesagem e ficaram fora de UA, @ e valor: ${esc(r.lotesSemPeso.join(', '))}. Pese esses lotes (ou lance a pesagem) para entrarem na conta.</p>` : ''}
-    <p class="hint" style="margin-top:12px;">Peso vivo = soma, lote a lote, das cabeças × peso médio da última pesagem do lote. UA = peso vivo ÷ 450 kg. @ = peso vivo × 50% de rendimento de carcaça ÷ 15 kg. Valor = @ × último preço da @ cadastrado no AE Pecuária (fêmea para lote de fêmeas). Por hectare: área de pecuária cadastrada em Fazendas. Pesagem antiga subestima o peso de hoje.</p>
+    ${r.cabecasSemPeso>0 ? `<p class="hint" style="margin:0 0 10px; color:var(--alerta);">${fmtInt(r.cabecasSemPeso)} de ${fmtInt(r.cabecas)} cabeças estão em lote sem pesagem e ficaram fora de UA, @ e valor: ${esc(r.lotesSemPeso.join(', '))}. Pese esses lotes ou informe o peso de referência deles no AE Pecuária (editar o lote) para entrarem na conta.</p>` : ''}
+    ${r.lotesPorReferencia.length ? `<p class="hint" style="margin:0 0 10px;" data-lotes-por-referencia="1">Pelo peso de referência (sem pesagem): ${esc(r.lotesPorReferencia.join(', '))}.</p>` : ''}
+    <p class="hint" style="margin-top:12px;">Peso vivo = soma, lote a lote, das cabeças × peso médio da última pesagem do lote (sem pesagem, o peso de referência do lote). UA = peso vivo ÷ 450 kg. @ = peso vivo × 50% de rendimento de carcaça ÷ 15 kg. Valor = @ × último preço da @ cadastrado no AE Pecuária (fêmea para lote de fêmeas). Por hectare: área de pecuária cadastrada em Fazendas. Pesagem antiga subestima o peso de hoje.</p>
   </div>`;
 }
 
@@ -1946,6 +2012,7 @@ const state = {
   colheitasGraos: [],  // {data, sacas} — sacas/ha
   vendasPec: [],       // {data, quantidade, tipoVenda, pesoMedioKg} — arrobas vendidas/ha
   reproducaoPec: null, // Resultados > Operacional, bloco Reprodução (Cria): ver carregarReproducaoPecuaria()
+  fotosRebanho: null,  // Resultados > Operacional > Pecuária: resultado econômico. Ver carregarFotosRebanho()
   estoquePec: null,    // Resultados > Operacional, bloco Rebanho estocado: ver carregarEstoquePecuaria()
   lancamentosRateados: [], // TODAS as atividades (inclusive 'geral'), pra Balancete/Fluxo de Caixa (aba Relatórios)
   movimentosFinanciamento: [], // entrada de empréstimo / amortização (principal) — NÃO são despesa nem receita; aba Empresa
@@ -3639,7 +3706,7 @@ function CardResultadoOperacional(slug){
         ${r.despesaDetalhe.map(d=>`<tr><td>${esc(d.label)}</td><td class="mono" style="text-align:right;">R$ ${fmt(d.valor)}</td></tr>`).join('')}
       </tbody>
     </table>` : ''}
-    ${slug==='pecuaria' ? BlocoInvestimentosPecuaria(r) + BlocoCustoAnimaisPorLote() : ''}
+    ${slug==='pecuaria' ? BlocoInvestimentosPecuaria(r) + BlocoResultadoEconomicoPecuaria(r) + BlocoCustoAnimaisPorLote() : ''}
     `}
   </div>`;
 }
