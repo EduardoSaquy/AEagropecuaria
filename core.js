@@ -795,22 +795,19 @@ function gruposVisiveis(){
 }
 /* ---------- Menu lateral: a setinha que abre as sub-abas de cada item (08/11/2026) ----------
  * Pedido do Eduardo: uma setinha nos itens do menu que têm sub-abas; ela abre a lista ali mesmo e dá para ir direto numa sub-aba,
- * sem passar antes pela tela do item. Um item aberto por vez (sanfona), para o menu não crescer demais. O que ficou aberto é
- * guardado neste aparelho; sem nada guardado, abre o item da tela atual. Item com uma página só não tem setinha (o botão sozinho,
+ * sem passar antes pela tela do item. Um item aberto por vez (sanfona), para o menu não crescer demais. O que ficou aberto vale
+ * enquanto o app está aberto (não fica guardado: ao abrir de novo, só o item da tela atual vem aberto; no Painel, nenhum). Item com uma página só não tem setinha (o botão sozinho,
  * como sempre foi). O desenho é só CSS de cada app: a setinha e a lista só aparecem onde o menu é uma coluna (tela larga) ou o painel
  * do celular do Matriz; na barra de cima (tablet em pé) e na barra rolável dos outros apps ficam escondidas.
  * it = {chave, rotulo, icone, ativo, botao: 'data-nav-group="x"', subs: [{rotulo, valor, ativo}]}; o app que precisa de mais que
  * "state.page = valor" na sub-aba define irParaSubAbaDoApp(valor) (o Matriz: sub-aba de Resultados, Financeiro e Contas). */
-let menuAbertoMemoria = null;
-function chaveMenuAberto(){ return 'ae_menu_aberto_v1_' + (typeof NOME_DO_APP !== 'undefined' ? NOME_DO_APP : ''); }
+let menuAbertoMemoria = null;   // so na memoria (13/11/2026): ao abrir o app nenhuma lista vem aberta, so a do item da tela atual
+try{ Object.keys(localStorage).filter(k=>k.indexOf('ae_menu_aberto_v1_') === 0).forEach(k=>localStorage.removeItem(k)); }catch(e){ /* sem armazenamento */ }
 function menuAbertoAgora(){
-  if(menuAbertoMemoria !== null) return menuAbertoMemoria;
-  try{ const v = localStorage.getItem(chaveMenuAberto()); if(v !== null) menuAbertoMemoria = v; }catch(e){ /* sem armazenamento: fica só na memória */ }
-  return menuAbertoMemoria;   // null = ainda não mexeu: abre o item da tela atual
+  return menuAbertoMemoria;   // null = ainda nao mexeu: abre o item da tela atual (no Painel, nenhum)
 }
 function guardarMenuAberto(chave){
   menuAbertoMemoria = String(chave);
-  try{ localStorage.setItem(chaveMenuAberto(), menuAbertoMemoria); }catch(e){ /* idem */ }
 }
 function iconSetaMenu(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`; }
 function ItemDoMenu(it){

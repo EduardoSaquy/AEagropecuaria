@@ -1642,8 +1642,9 @@ compra de animais e as travas do banco.
   opção de clicar nas sub abas direto". `ItemDoMenu({chave, rotulo, icone, ativo, botao, subs})` em `core.js` desenha o item do menu: com **2 ou
   mais sub-abas** vira `.nav-grupo` > `.nav-linha` (o botão do item, que continua com o mesmo `data-nav-group`/`data-nav` de sempre, e a setinha
   `[data-nav-seta]`) + `.nav-sub` com um `[data-menu-sub]` por sub-aba; com uma página só devolve o botão sozinho, como era. **Sanfona: um item
-  aberto por vez**; sem nada guardado abre o item da tela atual; o que ficou aberto (ou `''` = tudo fechado) vai para o `localStorage`
-  (`ae_menu_aberto_v1_<NOME_DO_APP>`). Clicar no **nome** do item guarda aquele item como aberto (ouvinte de captura, antes do clique do app, que
+  aberto por vez**; ao abrir o app abre só o item da tela atual (no Painel, nenhum); o que ficou aberto (ou `''` = tudo fechado) vale **só enquanto o
+  app está aberto** (`menuAbertoMemoria`). Até 13/11/2026 ficava no `localStorage` e o Matriz abria no Painel com Resultados aberto (o
+  Eduardo pediu para corrigir); a chave antiga `ae_menu_aberto_v1_*` é apagada ao abrir. Clicar no **nome** do item guarda aquele item como aberto (ouvinte de captura, antes do clique do app, que
   já redesenha); a setinha só abre/fecha a lista e **não troca de tela**; clicar numa sub-aba vai direto (ouvinte delegado em `core.js`:
   `state.page = valor`, ou `irParaSubAbaDoApp(valor)` se o app definir). **Atributo próprio `data-menu-sub`, não `data-subnav`**: os testes e
   os botões de dentro da tela usam `[data-subnav="x"]` e uma segunda cópia quebraria o modo estrito do Playwright.
