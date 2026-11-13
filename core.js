@@ -594,6 +594,64 @@ function mesAtualStr(){
 // Campos de peso/valor da Venda aceitam vírgula decimal (padrão brasileiro) —
 // Number('480,5') dá NaN, então esses campos passam por aqui em vez de Number()
 // direto. Valores já numéricos (vindos do banco) passam direto, sem mudança.
+/* ---- Despesa recorrente: a regra numa versão só (Matriz e Pecuária) ----
+ * Uma despesa recorrente (sem mês) vale em todo mês que NÃO tenha um lançamento próprio da
+ * mesma conta: se tem o do mês, ele SUBSTITUI o recorrente em vez de somar com ele.
+ *
+ * "A mesma conta" é a chave abaixo: descrição + centro de custo + atividade + fazenda + áreas.
+ *   centro    sem ele, duas contas de nome igual em centros diferentes se apagavam.
+ *   atividade não mistura Insumos Pecuários indireto com o da Cria.
+ *   fazenda   sem ela, a energia lançada da Palhadão em agosto APAGAVA a recorrente da Santa
+ *             Alice naquele mês (o custo sumia sem aviso e voltava no mês seguinte).
+ *   áreas     separa os Insumos Pecuários do confinamento dos da cria.
+ * Até 13/11/2026 o Matriz e a Pecuária tinham cada um a sua cópia (a Pecuária comparava o NOME
+ * do centro); foi uma segunda cópia divergindo que fez um mês de R$ 43.928,73 virar
+ * R$ 1.230.390,69. Não reescreva esta regra num app: chame vigentesNoMes.
+ *
+ * `campos(l)` traduz a linha do app para {descricao, centroCustoId, atividade, fazendaId, areas,
+ * mes}; sem ele a linha já tem esses nomes (lançamento do Matriz).
+ *
+ * Desempenho (06/11/2026): Relatórios e Empresa chamam até 47 vezes com a MESMA lista de 21 mil
+ * despesas; o agrupamento é feito uma vez por lista (guardado pela identidade da lista e da
+ * função de campos) e cada mês só escolhe dentro dos grupos. Ordem: grupos na ordem em que
+ * aparecem e, dentro de cada um, os do mês ou, se não houver, os recorrentes. */
+function camposDoLancamento(l){ return l; }
+function chaveDoRecorrente(f){
+  const areas = (f.areas||[]).slice().sort().join(',');
+  return `${f.descricao}||${f.centroCustoId}||${f.atividade}||${f.fazendaId ?? ''}||${areas}`;
+}
+const gruposDeVigentesCache = new WeakMap();
+function gruposDeVigentes(despesas, campos = camposDoLancamento){
+  let porFuncao = gruposDeVigentesCache.get(despesas);
+  if(!porFuncao){ porFuncao = new Map(); gruposDeVigentesCache.set(despesas, porFuncao); }
+  const guardado = porFuncao.get(campos);
+  if(guardado && guardado.n === despesas.length) return guardado.grupos;
+  const mapa = new Map();
+  despesas.forEach(l=>{
+    const f = campos(l);
+    const chave = chaveDoRecorrente(f);
+    let g = mapa.get(chave);
+    if(!g){ g = {porMes: new Map(), recorrentes: []}; mapa.set(chave, g); }
+    if(f.mes){
+      const doMes = g.porMes.get(f.mes);
+      if(doMes) doMes.push(l); else g.porMes.set(f.mes, [l]);
+    } else {
+      g.recorrentes.push(l);
+    }
+  });
+  const grupos = [...mapa.values()];
+  porFuncao.set(campos, {n: despesas.length, grupos});
+  return grupos;
+}
+function vigentesNoMes(despesas, mesStr, campos = camposDoLancamento){
+  const out = [];
+  for(const g of gruposDeVigentes(despesas, campos)){
+    const escolhidas = g.porMes.get(mesStr) || g.recorrentes;
+    for(let i = 0; i < escolhidas.length; i++) out.push(escolhidas[i]);
+  }
+  return out;
+}
+
 function numDecimal(v){
   if(typeof v === 'number') return v;
   if(v==null || v==='') return 0;

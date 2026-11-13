@@ -533,7 +533,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=c5ed180df7"></script>
+<script src="core.js?v=38c7cbd92a"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -6140,62 +6140,6 @@ function lancamentosDoTipo(tipo){
       return x < y ? -1 : x > y ? 1 : 0;
     });
 }
-// Despesa com mês próprio substitui a recorrente naquele mês. Agrupa por
-// descrição + centro de custo + atividade para não misturar duas contas que
-// só coincidem de nome.
-/* Uma despesa recorrente (sem mês) vale em todo mês que NÃO tenha um
- * lançamento próprio do mesmo grupo — se tem o do mês, ele substitui o
- * recorrente em vez de somar com ele.
- *
- * Esta regra mora aqui, num lugar só, e é chamada pelo Financeiro, pelo
- * custo por hectare e pelo Resultados. Ela estar escrita em dois lugares
- * foi exatamente o que fez o Resultados e o Financeiro mostrarem números
- * diferentes da mesma despesa. Quem for mexer nela: é uma função pura de
- * propósito, recebe a lista em vez de ler o state, justamente para o
- * Resultados poder usá-la com dados que ele mesmo buscou. */
-// A CHAVE DO GRUPO define o que conta como "a mesma conta" — e é o que
-// decide se o lançamento do mês SUBSTITUI o recorrente ou SOMA com ele.
-//
-// Ela precisa incluir tudo que distingue duas contas de verdade:
-//
-//   fazenda   sem ela, lançar a energia da Palhadão em agosto APAGAVA a
-//             recorrente de energia da Santa Alice naquele mês. O custo
-//             sumia sem aviso e voltava sozinho no mês seguinte.
-//   áreas     a Pecuária sempre incluiu (é o que separa "Insumos Pecuários"
-//             do confinamento dos da cria). Sem ela aqui, as duas telas
-//             chegavam a totais diferentes do mesmo mês — e marcar uma
-//             caixinha de área no Matriz mudava o número da Pecuária.
-//
-// Esta função é a ÚNICA implementação desta regra nos quatro apps. Foi uma
-// segunda cópia divergindo da original que produziu o erro do custo mensal.
-//
-// DESEMPENHO (06/11/2026): Relatórios e Empresa chamam esta função uma vez por mês (até 47x) com
-// a MESMA lista de 21 mil despesas, e cada chamada reagrupava tudo montando uma chave de texto
-// por lançamento (2 s no PC, ~10 s no tablet). Agora o agrupamento é feito uma vez por lista
-// (guardado por identidade da lista) e cada mês só escolhe dentro dos grupos. O resultado e a
-// ordem são exatamente os de antes: grupos na ordem em que aparecem, e dentro de cada um os do
-// mês ou, se não houver, os recorrentes.
-const gruposDeVigentesCache = new WeakMap();
-function gruposDeVigentes(despesas){
-  const guardado = gruposDeVigentesCache.get(despesas);
-  if(guardado && guardado.n === despesas.length) return guardado.grupos;
-  const mapa = new Map();
-  despesas.forEach(l=>{
-    const areas = (l.areas||[]).slice().sort().join(',');
-    const chave = `${l.descricao}||${l.centroCustoId}||${l.atividade}||${l.fazendaId ?? ''}||${areas}`;
-    let g = mapa.get(chave);
-    if(!g){ g = {porMes: new Map(), recorrentes: []}; mapa.set(chave, g); }
-    if(l.mes){
-      const doMes = g.porMes.get(l.mes);
-      if(doMes) doMes.push(l); else g.porMes.set(l.mes, [l]);
-    } else {
-      g.recorrentes.push(l);
-    }
-  });
-  const grupos = [...mapa.values()];
-  gruposDeVigentesCache.set(despesas, {n: despesas.length, grupos});
-  return grupos;
-}
 // Filtro por tipo feito uma vez por lista: a lista vem do state e só é trocada (nunca alterada no
 // lugar) quando recarrega, então devolver sempre o mesmo array também faz o agrupamento acima
 // valer para todos os períodos que a tela calcula (a aba Empresa pede ~10).
@@ -6205,14 +6149,7 @@ function doTipo(lista, tipo){
   if(!e || e.n !== lista.length){ e = {n: lista.length}; porTipoCache.set(lista, e); }
   return e[tipo] || (e[tipo] = lista.filter(l=>l.tipo===tipo));
 }
-function vigentesNoMes(despesas, mesStr){
-  const out = [];
-  for(const g of gruposDeVigentes(despesas)){
-    const escolhidas = g.porMes.get(mesStr) || g.recorrentes;
-    for(let i = 0; i < escolhidas.length; i++) out.push(escolhidas[i]);
-  }
-  return out;
-}
+// A regra do recorrente (vigentesNoMes) mora no core.js, igual para o Matriz e a Pecuária.
 function despesasVigentesNoMes(mesStr){
   return vigentesNoMes(state.lancamentos.filter(l=>l.tipo==='despesa'), mesStr);
 }
