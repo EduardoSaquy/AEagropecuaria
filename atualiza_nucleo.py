@@ -7,7 +7,7 @@ POR QUE O ?v=
   muda sempre que o arquivo muda, entao HTML novo e nucleo novo andam juntos.
 
 QUANDO RODAR
-  Depois de mexer em core.js ou core_lavoura.js:   python atualiza_nucleo.py
+  Depois de mexer em core.js, core_lavoura.js, core.css ou core_grade.css:   python atualiza_nucleo.py
   So conferir (o teste_nucleo.py faz isso):         python atualiza_nucleo.py --confere
 
 Quais apps carregam qual nucleo esta em NUCLEOS (e a unica lista: o teste usa a mesma). A ordem dos arquivos aqui e a
@@ -23,6 +23,12 @@ NUCLEOS = {
     "core.js": ["AEMatriz.html", "AEpecuaria.html", "AECana.html", "AECereais.html", "AECombustivel.html"],
     "core_lavoura.js": ["AECana.html", "AECereais.html"],
 }
+# CSS comum (13/11/2026): <link> logo depois do primeiro </style> do app, nesta ordem.
+NUCLEOS_CSS = {
+    "core.css": ["AEMatriz.html", "AEpecuaria.html", "AECana.html", "AECereais.html", "AECombustivel.html"],
+    "core_grade.css": ["AEpecuaria.html", "AECana.html", "AECereais.html"],
+}
+TAG_CSS = re.compile(r'<link rel="stylesheet" href="(core[a-z_]*\.css)(?:\?v=[0-9a-f]+)?">\r?\n')
 SUPABASE_TAG = '<script src="vendor/supabase-js-2.118.0.js"></script>'
 TAG_NUCLEO = re.compile(r'<script src="(core[a-z_]*\.js)(?:\?v=[0-9a-f]+)?"></script>\r?\n')
 
@@ -44,13 +50,21 @@ def ajusta(html, app):
     if html.count(SUPABASE_TAG) != 1:
         raise SystemExit(f"{app}: esperava exatamente uma tag da biblioteca do Supabase, achei {html.count(SUPABASE_TAG)}")
     novas = "".join(t + eol for t in tags_do_app(app))
-    return html.replace(SUPABASE_TAG + eol, SUPABASE_TAG + eol + novas, 1)
+    html = html.replace(SUPABASE_TAG + eol, SUPABASE_TAG + eol + novas, 1)
+    html = TAG_CSS.sub("", html)
+    links = "".join(f'<link rel="stylesheet" href="{arq}?v={impressao(arq)}">' + eol
+                    for arq, apps in NUCLEOS_CSS.items() if app in apps)
+    if links:
+        if "</style>" + eol not in html:
+            raise SystemExit(f"{app}: nao achei o </style> para por o CSS comum depois")
+        html = html.replace("</style>" + eol, "</style>" + eol + links, 1)
+    return html
 
 
 def confere():
     """Lista de problemas (vazia = tudo em dia)."""
     problemas = []
-    for arq in NUCLEOS:
+    for arq in list(NUCLEOS) + list(NUCLEOS_CSS):
         if not (REPO / arq).exists():
             problemas.append(f"{arq} nao existe")
     if problemas:
@@ -69,14 +83,14 @@ def main():
         for p in problemas:
             print(p)
         return 1 if problemas else 0
-    apps = sorted({a for lista in NUCLEOS.values() for a in lista})
+    apps = sorted({a for lista in list(NUCLEOS.values()) + list(NUCLEOS_CSS.values()) for a in lista})
     for app in apps:
         caminho = REPO / app
         html = caminho.read_bytes().decode("utf-8")
         novo = ajusta(html, app)
         if novo != html:
             caminho.write_bytes(novo.encode("utf-8"))
-            usadas = ", ".join(re.findall(r"core[a-z_]*\.js\?v=[0-9a-f]+", novo))
+            usadas = ", ".join(re.findall(r"core[a-z_]*\.(?:js|css)\?v=[0-9a-f]+", novo))
             print(f"{app}: atualizado -> {usadas}")
         else:
             print(f"{app}: ja estava em dia")

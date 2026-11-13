@@ -8,7 +8,8 @@ Prova:
   - TRAVA CONTRA A VOLTA DA COPIA: nenhuma funcao de nivel superior aparece com o mesmo texto em dois apps, fora a lista
     DIVIDA_CONHECIDA (as que ainda tem versoes diferentes entre os apps e esperam ser reconciliadas). Copia nova falha o
     teste e diz qual: ela deve ir para o nucleo (ver CLAUDE.md, "Nucleo comum");
-  - o service worker guarda os dois nucleos (senao o app nao abre offline);
+  - o service worker guarda os nucleos e o CSS comum (senao o app nao abre offline);
+  - core.css (5 apps) e core_grade.css (Pecuaria, Cana, Cereais) vem depois do <style> do app e o bloco nao volta a ser copiado;
   - os nucleos sao carregados pelos apps de verdade: a pagina de cada app enxerga as funcoes do nucleo.
 """
 import re
@@ -129,8 +130,22 @@ conf(not sumiram, "a lista de divida conhecida nao tem item que ja foi resolvido
 
 print("== service worker")
 sw = (REPO / "sw.js").read_text(encoding="utf-8")
-for arq in nuc.NUCLEOS:
+for arq in list(nuc.NUCLEOS) + list(nuc.NUCLEOS_CSS):
     conf(f"'./{arq}'" in sw, f"sw.js guarda ./{arq} para abrir offline")
+
+print("== CSS comum (core.css, core_grade.css)")
+for app in APPS:
+    html = (REPO / app).read_text(encoding="utf-8")
+    esperados = [a for a, apps in nuc.NUCLEOS_CSS.items() if app in apps]
+    hrefs = [h.split("?")[0] for h in re.findall(r'<link rel="stylesheet" href="(core[^"]+)">', html)]
+    conf(hrefs == esperados, f"{app}: carrega {esperados} nessa ordem", f"achei {hrefs}")
+    pos_style = html.find("</style>")
+    pos_link = html.find('<link rel="stylesheet" href="core.css')
+    conf(0 < pos_style < pos_link, f"{app}: o CSS comum vem depois do <style> do app (vale por cima)")
+    estilo = "".join(re.findall(r"<style>(.*?)</style>", html, re.S))
+    for arq in esperados:
+        for cab in re.findall(r"/\* -{6,} ([^\n(]{6,40})", (REPO / arq).read_text(encoding="utf-8")):
+            conf(cab not in estilo, f"{app}: nao copia de novo o bloco '{cab.strip()}' de {arq}")
 
 print("== os apps enxergam o nucleo")
 from playwright.sync_api import sync_playwright

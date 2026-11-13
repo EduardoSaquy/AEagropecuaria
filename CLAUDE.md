@@ -18,7 +18,8 @@ aberto direto no navegador ou instalado como PWA.
 | `sw.js` | service worker único de todos os apps (cache `ae-v5`). Página do site: rede primeiro (revalida sempre, cai pro cache após 4 s sem resposta **ou se o site responder erro, 404/5xx**: com o GitHub Pages fora do ar quem já usa o app continua abrindo) e atualiza o cache a cada abertura online; CDN do Supabase e fontes: cache primeiro. Sem a biblioteca do Supabase no cache o app não abre offline — foi o bug até a v4 |
 | `core.js` | **núcleo comum** dos cinco apps (Matriz, Pecuária, Cana, Cereais, Combustível): avisos na tela, sessão e perfil guardado no aparelho, ícones, datas e números, `esc`/`fmt`, telas comuns. Carregado por `<script src="core.js?v=...">` antes do script do app. Ver "Núcleo comum dos apps" |
 | `core_lavoura.js` | núcleo só do **AE Cana e do AE Cereais** (as funções que os dois tinham idênticas: login, carga de dados, telas de usuários e permissões, cadastros, estoque de insumos) |
-| `atualiza_nucleo.py` | troca o `?v=` (impressão digital) das tags `core*.js` nos apps; rodar depois de mexer em `core.js`/`core_lavoura.js`. `--confere` só confere |
+| `core.css` / `core_grade.css` | CSS comum: os avisos na tela (5 apps) e o menu lateral, a setinha e o menu do celular dos apps de grade (Pecuária, Cana, Cereais). `<link>` logo depois do `<style>` do app |
+| `atualiza_nucleo.py` | troca o `?v=` (impressão digital) das tags `core*.js` e `core*.css` nos apps; rodar depois de mexer em qualquer um deles. `--confere` só confere |
 | `gerar_apps_lavoura.py` | gera AECana e AECereais a partir de `AELavoura_app_completo.html.bak` |
 
 Cana e Cereais são propositalmente separados: ficam em estados diferentes do
@@ -1676,7 +1677,7 @@ compra de animais e as travas do banco.
   - **Onde aparece**: só onde o menu é coluna (1160 px para cima; Combustível de 761 px) e no painel do celular do Matriz (claro, fecha ao escolher).
     Na barra de cima (tablet em pé) e na barra rolável dos outros apps no celular a setinha e a lista ficam escondidas e os envoltórios são
     `display:contents` (a barra se desenha como antes). O item ativo e a setinha formam uma pílula só (cor do app: verde; azul no Combustível).
-    CSS do bloco "SETINHA COM AS SUB-ABAS" copiado nos 5 apps (`core.css` segue sendo uma etapa futura): quem mexer num, mexa nos cinco.
+    CSS do bloco "SETINHA COM AS SUB-ABAS": nos apps de grade está em `core_grade.css`; o Matriz e o Combustível têm a sua versão própria no app.
 - **Política de segurança de conteúdo (CSP, 06/11/2026; `teste_csp.py` 43 checagens)**: `<meta http-equiv=Content-Security-Policy>`
   no `<head>` dos cinco apps. Cada app só pode falar com o Supabase do projeto (`connect-src` https e wss
   `kmkystqgpvmzrccxvyaz.supabase.co`), carregar script **só do próprio site** (desde 12/11/2026 a biblioteca vem de `vendor/`; antes era da
@@ -1892,8 +1893,15 @@ ficou **vazia**). O que não era igual foi decidido assim (só o que não muda o
 **Ainda diferentes de verdade** (cada app tem a sua, nada decidido): `loadAll`, `Header`, `Topbar`, `brandMark`, `Modal`, `attachEvents`, `PageCadastro`/`salvarCadastro`
 (Cana, Cereais, Combustível), `mensagemErroSupabase`, `mesLabel`. `loadAll` e o menu são o desenho de cada app; o resto pede comparar e decidir.
 
-**Falta** (próximas etapas): as "ainda diferentes" acima; o CSS dos avisos ainda está copiado nos 5
-apps (`core.css`); `attachEvents` tem 909 a 2.206 linhas por app (separar por tela); apagar os `sw_*.js` aposentados. `Adubacao.html` não usa o núcleo (sem login,
+**CSS comum (13/11/2026)**: `core.css` (os avisos na tela, nos 5 apps) e `core_grade.css` (menu lateral, setinha e menu do celular de
+Pecuária, Cana e Cereais, que eram idênticos nos três) vêm por `<link rel="stylesheet" href="core.css?v=...">` logo depois do primeiro
+`</style>` do app, então valem por cima do CSS do app, como quando eram o fim do `<style>`. A Pecuária tem, depois deles, um `<style>` só
+seu (a faixa do aviso com o âmbar fixo, porque ela não define `--ambar`, e a prévia da planilha de manejo). `atualiza_nucleo.py`
+(`NUCLEOS_CSS`) põe e atualiza o `?v=`; `sw.js` guarda os dois no `SHELL`; `teste_nucleo.py` confere a ordem e que o bloco não volta a
+ser copiado no app. Nada mudou na tela: 173 capturas dos 5 apps (1440, 1180, 900 e 390 px, cada tela, os avisos e o menu do celular)
+byte a byte iguais antes e depois. O Matriz e o Combustível seguem com o menu e a setinha próprios (são outro desenho).
+
+**Falta** (próximas etapas): as "ainda diferentes" acima; `attachEvents` tem 909 a 2.206 linhas por app (separar por tela); apagar os `sw_*.js` aposentados. `Adubacao.html` não usa o núcleo (sem login,
 `esc`/`fmt` próprios e diferentes).
 
 ### Verificação em duas etapas (TOTP, 07/11/2026) — telas no ar, EXIGÊNCIA NO BANCO ainda não

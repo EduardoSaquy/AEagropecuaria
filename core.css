@@ -1,0 +1,14 @@
+/* core.css (13/11/2026): CSS igual nos 5 apps (Matriz, Pecuaria, Cana, Cereais, Combustivel). Carregado por
+   <link href="core.css?v=..."> logo depois do <style> do app (vale por cima dele). Mexeu aqui: python atualiza_nucleo.py */
+
+/* ---------- AVISOS NA PAGINA (07/11/2026): no lugar do alert() que travava a tela ---------- */
+.avisos{position:fixed; z-index:10050; left:50%; top:12px; transform:translateX(-50%); width:min(600px, calc(100vw - 24px));
+        display:flex; flex-direction:column; gap:10px; pointer-events:none;}
+.aviso{pointer-events:auto; display:flex; align-items:flex-start; gap:10px; background:var(--branco); color:var(--grafite);
+       border:1px solid var(--cinza-claro); border-left:6px solid var(--ambar); border-radius:12px; padding:14px 8px 14px 16px;
+       box-shadow:0 10px 24px rgba(15,42,74,0.12), 0 2px 6px rgba(15,42,74,0.08); font-size:14px; line-height:1.45;}
+.aviso-erro{border-left-color:var(--alerta); background:var(--alerta-bg);}
+.aviso-texto{flex:1; min-width:0; white-space:pre-line; overflow-wrap:anywhere; max-height:50vh; overflow-y:auto;}
+.aviso-fechar{flex-shrink:0; width:36px; height:36px; border:none; background:transparent; color:var(--cinza); font-size:26px; line-height:1; cursor:pointer; border-radius:8px;}
+.aviso-fechar:hover{background:rgba(0,0,0,0.07);}
+@media print{ .avisos{display:none;} }

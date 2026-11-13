@@ -65,7 +65,7 @@ const HOSTS_ESTATICOS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 // para esses arquivos. Entram aqui para o app abrir offline; o ?v= que os HTML usam e ignorado ao achar a copia guardada.
 const SHELL = [
   './vendor/supabase-js-2.118.0.js',
-  './core.js', './core_lavoura.js',
+  './core.js', './core_lavoura.js', './core.css', './core_grade.css',
   './AEMatriz.html',      './manifest_matriz.json',
   './AEpecuaria.html',    './manifest.json',
   './AECana.html',        './manifest_cana.json',
