@@ -661,6 +661,18 @@ repositório por causa disso.
 título de Cana ou Pecuária com competência (`mes`) a partir de 2026-01
 entrar de novo sem checar contra o que já foi lançado à mão primeiro.
 
+**Trava no banco desde 13/11/2026** (`erp_reimportacao_01_trava.sql`, ensaiado num Postgres descartável com 15 checagens; **RODADO em
+13/11/2026 pelo conector, com o OK dele**: 4 itens OK; testado no banco real numa transação desfeita: título apagado recusado,
+Pecuária 2026 do ERP recusada, lançamento do app entra). Os apps nunca gravam `erp_id`, então todo lançamento com ele é importação:
+- `erp_nao_reimportar` (fechada a quem está logado): os títulos do ERP apagados de propósito. Começou com **86 (R$ 968.124,77)**, os que o
+  `log_alteracoes` viu apagar em 05 a 07/11; o gatilho `trg_erp_anota_apagado` acrescenta sozinho todo lançamento com `erp_id` apagado daqui
+  para a frente. **Não cobre** as ~900 importações apagadas em agosto (`erp_dashboard_6`, antes do registro de alterações): essas a regra (b)
+  abaixo segura, porque eram de Cana/Pecuária de 2026.
+- `trg_erp_trava_reimportacao` (antes de gravar ou de trocar o `erp_id`): (a) título da lista é recusado, com a mensagem de como filtrar
+  (`where erp_id not in (select erp_id from erp_nao_reimportar)`); (b) Cana ou Pecuária com competência ou data de 2026-01 em diante é
+  recusada, a menos que a importação declare na mesma transação `select set_config('ae.importacao_conferida','sim',true);` depois de conferir
+  contra o que já foi lançado à mão. Editar um lançamento do ERP que já existe passa. Tirar uma linha da lista libera aquele título.
+
 ### O custo da Pecuária NÃO se divide por categoria de venda
 
 As despesas fixas (mão de obra, energia, manutenção…) são 81% do custo da
