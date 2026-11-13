@@ -468,19 +468,19 @@ sem par**: não são duplicata (o acerto casou título a título). Pedido dele:
   sem partes de rateio (backup 6 / 0); 0 lançamentos com rateio que não fecha; visão rateada =
   Financeiro (diferença R$ 0,00). Cópias `zz_backup_dup4_*_2026_11_07` a apagar quando ele confirmar.
 
-### A regra do recorrente tem uma implementação só (na intenção — hoje tem duas)
+### A regra do recorrente tem uma implementação só (`core.js`, desde 13/11/2026)
 
-`vigentesNoMes(despesas, mesStr)` no AEMatriz.html. Um recorrente vale no mês
-**a menos que** exista lançamento próprio com a mesma chave:
+`vigentesNoMes(despesas, mesStr, campos)` no `core.js`. Um recorrente vale no mês
+**a menos que** exista lançamento próprio com a mesma chave (`chaveDoRecorrente`):
 `` `${descricao}||${centroCustoId}||${atividade}||${fazendaId ?? ''}||${areas}` ``
-Se precisar da mesma lógica em outro lugar, chame a função. Não reescreva.
-
-`AEpecuaria.html` reimplementa essa regra localmente em `custosFixosDoMes()`
-(chave `${nome}||${nomeDoCentro}||pecuaria||${fazendaId}||${areas}` — usa o
-*nome* do centro de custo em vez do id, mas dá a mesma partição hoje porque
-nome de centro é único). Confirmado equivalente em 25/08/2026, mas é
-duplicação frágil: mudar a regra num app sem replicar no outro reintroduz o
-bug do R$ 1,2 milhão em silêncio. Se for mexer nessa regra, mexa nos dois.
+(áreas em ordem alfabética). O Matriz chama com os lançamentos como estão; a Pecuária
+(`custosFixosDoMes`) passa `camposDoCustoFixo`, que traduz a linha dela (`nome` → descrição).
+Até 13/11/2026 a Pecuária tinha uma cópia própria que comparava o **nome** do centro
+(mesmo resultado, porque nome de centro é único, mas duplicação frágil: foi uma cópia
+divergindo que produziu o bug do R$ 1,2 milhão). Precisa da regra em outro lugar: chame
+a função, não reescreva. `teste_recorrente_regra_unica.py` falha se algum app voltar a
+definir `vigentesNoMes`/`gruposDeVigentes`/`chaveDoRecorrente` e prova que Matriz e
+Pecuária escolhem as mesmas despesas em todo mês.
 
 ### `ano_safra`: safra de produção, independente do mês da transação
 
@@ -2288,7 +2288,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-83 arquivos `teste_*.py`, 3.257 checagens (13/11/2026; a tabela abaixo lista os
+86 arquivos `teste_*.py`, mais de 3.270 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2372,6 +2372,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_senha_nova.py` | 86 | os 5 apps (senha nova obrigatória para quem está marcado, 10+, as duas iguais, erro do servidor em português, Sair; sem marca ou sem a coluna nada muda; sem internet não trava; Trocar senha com mínimo 10 e senha atual conferida num cliente à parte; Nova senha provisória pelo administrador) |
 | `teste_datas_brasil.py` | 58 | os 5 apps num navegador em inglês (campos de data viram texto dd/mm/aaaa, mm/aaaa e dd/mm/aaaa hh:mm com `value` no formato do banco; digitar só números, 9/9/26 ao sair, data impossível vazia e vermelha, Backspace na barra, colar; change uma vez; calendário invisível de 44 px sobre o ícone, sincronizado, no toque recebe o foco, desabilitado junto; Financiamentos e Pagar/Receber sem data crua; rótulo ligado; sem rolar de lado no celular) |
 | `teste_financeiro_so_acesso_total.py` | 77 | os 5 apps (financeiro e R$ só para administrador e proprietário: Resultados e Financiamentos fora do menu, Financeiro só com os lançamentos da pessoa e sem custo por hectare, tela de acesso com "Só administrador e proprietários"; Pecuária sem Financeiro/Resultados e sem R$ no estoque, ração, inseminação e Custo/@, Vendas com valor só para quem tem Vendas, consultor com custo da dieta; Cana, Cereais e Combustível sem valor nas listas, no rateio, no painel e no relatório; os formulários de compra continuam pedindo o preço) |
+| `teste_recorrente_regra_unica.py` | 15 | AEMatriz.html, AEpecuaria.html (regra do recorrente só no core.js: nenhum app a redefine; a Pecuária dá a mesma resposta e ordem da versão antiga; Matriz e Pecuária escolhem as mesmas despesas em todo mês; áreas em outra ordem são a mesma conta; lista que cresce não devolve resposta velha) |
 | `teste_precos_trancados.py` | 21 | os 5 apps (preços trancados: nenhuma leitura de tabela com preço fora da visão `_leitura`, inclusive a cópia de segurança; quem não vê preço edita ingrediente, entrada de estoque, inseminação, nota de diesel e entrada de insumo sem apagar o preço; preço médio fica com o banco; venda só editável com o valor à vista) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
