@@ -1340,6 +1340,31 @@ recusa, desfazer devolve o banco idêntico; cópias fechadas `zz_backup_racao01_
   recusada. Edição que não mexe nos dois passa (as antigas continuam editáveis) e apagar um lote ou uma dieta (`on delete set null`)
   não é barrado (`pg_trigger_depth() > 1`). O app já exigia os dois no formulário desde 27/10.
 
+### Compra de ração dá entrada no estoque junto (13/11/2026)
+
+Decisão do Eduardo (opção "a", nos dois lugares): a compra de insumo da Pecuária lançada no AE Matriz já dá a entrada no
+estoque. Antes eram dois lançamentos e, quando o segundo era esquecido, o estoque ficava negativo (milho −15,9 t em 11/11).
+**Insumo produzido pela própria empresa (milho da lavoura, silagem) continua entrando pela tela de Entrada do AE Pecuária**
+(não tem compra no Financeiro; o preço por kg dele só serve ao custo por animal).
+- **Banco** (`estoque_compra_01.sql`, ensaiado num Postgres descartável: 36 casos com 6 perfis, rodar duas vezes, desfazer e
+  aplicar de novo): `movimentos.lancamento_id` e `movimentos.titulo_id` (FK com `on delete cascade`: apagar a compra apaga a
+  entrada; os dois nunca juntos), as duas colunas na visão `movimentos_leitura`; `ingredientes_para_compra()` (lista sem preço
+  para quem tem Financeiro, Contas ou Insumos), `entradas_da_compra(lanc, conta)` e `gravar_entradas_da_compra(lanc, conta,
+  data, itens)` (definer: troca as entradas da compra numa transação, preço/kg = valor ÷ quantidade, ton ×1000, refaz o preço
+  médio de cada ingrediente mexido, recusa itens que passam do valor da compra; conta parcelada vale o total do grupo); quem
+  pode é o mesmo das tabelas (`pode_mexer_na_compra`: lançamento = acesso total ou autor com Financeiro; conta = dono ou
+  Contas; sempre com o código do celular). Trava `trg_movimento_da_compra`: entrada de compra só muda pela função (o curral não
+  edita nem apaga; a cascata passa). **Coluna nova em `movimentos`: rodar o 07a/07b de novo, como sempre.**
+- **AE Matriz**: bloco "Este insumo entrou no estoque da Pecuária" (`BlocoEntradaEstoque`) na despesa e na conta a pagar cujo
+  centro é NUTRIÇÃO ANIMAL ou INSUMOS PECUÁRIOS (`CENTROS_COMPRA_ESTOQUE`, pelo nome sem acento), com data (a do lançamento;
+  hoje na conta) e um ou mais ingredientes (quantidade e valor; com um só, valor em branco = total). Não aparece em receita,
+  conta a receber, divisão entre atividades, lançamento que veio de baixa de conta (a entrada fica na conta), parcela 2 em
+  diante (fica na 1ª) nem quando o banco não tem a função (`state.ingredientesCompra` vazio). Grava depois do lançamento/da
+  conta (`gravarEstoqueDaCompra`); se só a entrada falhar, o aviso diz que a compra foi salva e a entrada não. Editar traz o que
+  entrou (`carregarEntradasDaCompra`); desmarcar e salvar tira.
+- **AE Pecuária**: a entrada que veio de compra mostra "Compra: lançamento Nº X" (ou conta a pagar) e não tem Editar/Excluir.
+- `teste_compra_estoque.py` (39, falha no código anterior).
+
 ### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
 
 Regra da fazenda (Eduardo, 02/11/2026): não há touro, só IATF; até **3
@@ -2288,7 +2313,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-86 arquivos `teste_*.py`, mais de 3.270 checagens (13/11/2026; a tabela abaixo lista os
+87 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2373,6 +2398,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_datas_brasil.py` | 58 | os 5 apps num navegador em inglês (campos de data viram texto dd/mm/aaaa, mm/aaaa e dd/mm/aaaa hh:mm com `value` no formato do banco; digitar só números, 9/9/26 ao sair, data impossível vazia e vermelha, Backspace na barra, colar; change uma vez; calendário invisível de 44 px sobre o ícone, sincronizado, no toque recebe o foco, desabilitado junto; Financiamentos e Pagar/Receber sem data crua; rótulo ligado; sem rolar de lado no celular) |
 | `teste_financeiro_so_acesso_total.py` | 77 | os 5 apps (financeiro e R$ só para administrador e proprietário: Resultados e Financiamentos fora do menu, Financeiro só com os lançamentos da pessoa e sem custo por hectare, tela de acesso com "Só administrador e proprietários"; Pecuária sem Financeiro/Resultados e sem R$ no estoque, ração, inseminação e Custo/@, Vendas com valor só para quem tem Vendas, consultor com custo da dieta; Cana, Cereais e Combustível sem valor nas listas, no rateio, no painel e no relatório; os formulários de compra continuam pedindo o preço) |
 | `teste_recorrente_regra_unica.py` | 15 | AEMatriz.html, AEpecuaria.html (regra do recorrente só no core.js: nenhum app a redefine; a Pecuária dá a mesma resposta e ordem da versão antiga; Matriz e Pecuária escolhem as mesmas despesas em todo mês; áreas em outra ordem são a mesma conta; lista que cresce não devolve resposta velha) |
+| `teste_compra_estoque.py` | 39 | AEMatriz.html, AEpecuaria.html (compra de ração com entrada no estoque: bloco só em despesa/conta a pagar de Nutrição animal e Insumos pecuários; grava depois do lançamento com o id dele; valor em branco = total; itens acima da compra barrados; editar traz e desmarcar tira; conta parcelada na 1ª parcela pelo total; falha só da entrada avisa; Pecuária mostra de onde veio e não deixa editar) |
 | `teste_precos_trancados.py` | 21 | os 5 apps (preços trancados: nenhuma leitura de tabela com preço fora da visão `_leitura`, inclusive a cópia de segurança; quem não vê preço edita ingrediente, entrada de estoque, inseminação, nota de diesel e entrada de insumo sem apagar o preço; preço médio fica com o banco; venda só editável com o valor à vista) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
