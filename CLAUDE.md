@@ -2048,6 +2048,42 @@ vê **custo da dieta e preço dos ingredientes, só nas dietas**; a venda de ani
 - **Limite**: o preço de ingrediente, de dieta, da nota de diesel, do protocolo e o valor da venda (`abates`) ficam nas tabelas da
   operação e são escondidos só na tela; trancar no banco pede separar essas colunas (fica para depois, se ele quiser).
 
+### Preços trancados no banco (13/11/2026)
+
+Item 9 da lista de 12/11 ("resolva"): até aqui o preço de ingrediente, de entrada de estoque, o valor da venda, o custo da
+inseminação, o valor da nota de diesel, o custo da manutenção e o preço pago da entrada de insumo (Cana/Grãos) eram escondidos só na
+tela. Agora o banco também tranca:
+- **`seguranca_07a_precos_visoes_de_leitura.sql`** (RODADO em 13/11/2026 pelo conector): para cada tabela com preço
+  (`zz_config_precos_trancados`: tabela, colunas, regra), a função `precos_<tabela>()` (definer; devolve id e preço só a quem pode,
+  `pode_ver_preco(tipo)`) e a visão **`<tabela>_leitura`** (`security_invoker`, mesmas colunas e mesmas linhas da RLS da tabela; o
+  preço vem vazio para quem não pode). Regras: `insumo` (ingredientes, movimentos) = acesso total e consultor; `venda` (abates) =
+  acesso total e quem tem Vendas; `total` (inseminação, nota de diesel, manutenção, entradas de insumo) = acesso total; sempre com
+  `segundo_fator_ok()`. O editor do Supabase sem JWT vê tudo; com o JWT de alguém ("entrando como") vale a regra da pessoa.
+  Também passou ao banco o **preço médio do ingrediente** (gatilho `trg_movimento_recalcula_preco`, `recalcula_preco_ingrediente`,
+  a mesma conta do app: entrada com preço refaz a média; editar movimento refaz; saída e ajuste sem preço não mexem): quem não vê
+  preço calcularia errado, por isso o app só refaz a conta para quem vê.
+- **`seguranca_07b_precos_trancados.sql`** (RODADO em 13/11/2026 pelo conector, depois de publicar os apps; 3 itens OK): tira de `authenticated` o SELECT da tabela e devolve o SELECT só das colunas sem preço
+  (gravar segue liberado). Inclui as 4 tabelas antigas sem uso (`receitas_cana/graos`, `despesas_cana/graos`). **Coluna nova numa
+  dessas tabelas: rode o 07a e o 07b de novo** (sem isso a coluna nova não é legível e não entra na visão).
+- **Apps**: `TABELAS_COM_PRECO` e `tabelaDeLeitura(t)` em `core.js`. Toda LEITURA dessas tabelas vai pela visão
+  (`db.from(tabelaDeLeitura('ingredientes'))...`); gravar continua na tabela. `insert/update ... .select()` nessas tabelas pede só
+  `'id'` (devolver `*` pediria a coluna de preço e daria erro de permissão). Quem não vê o preço edita sem apagá-lo:
+  `semPrecoApagado(row, colunas, podeVer)` (movimento), o ingrediente sem o campo de preço não manda `preco_kg`, a inseminação editada
+  por quem não vê o custo não exige nem manda o custo, e o `salvarCadastro` do Combustível, da Cana e dos Grãos pula campo `soValores`
+  vazio ao editar. Venda só se edita com o valor à vista (`veValorDeVenda()`).
+- **Testes**: o stub (`teste_stub_supabase.js`) tranca essas colunas por padrão (`window.__PRECOS_TRANCADOS__`): ler a tabela com
+  `'*'` ou com a coluna de preço dá erro e fica em `window.__LEITURAS_BARRADAS__`; `<tabela>_leitura` devolve as linhas, com o
+  preço vazio quando o teste manda (`window.__SEM_PRECO__`). Leitura nova de uma dessas tabelas sem a visão quebra os testes.
+  `teste_precos_trancados.py` (21, falha no código anterior). Ensaio no Postgres descartável (conectando como `authenticator`, como o
+  PostgREST): 81 checagens, 5 perfis, rodar de novo, coluna nova e desfazer.
+- **Conferido no banco real (13/11/2026, entrando como cada pessoa)**: os 3 proprietários veem todos os preços; o consultor, os 9
+  preços de ingrediente e os 15 movimentos com preço (nada de venda nem inseminação); quem tem Vendas, os 11 valores de venda; os
+  outros, nenhum preço (mas as mesmas linhas de antes). O administrador, que tem o código no celular, só vê com a sessão confirmada.
+- **Achado no caminho, não mexido**: as regras de leitura de `movimentos` (e de outras tabelas da Pecuária) chamam
+  `tem_permissao(...)` linha a linha (sem `(select ...)` em volta): ler os 9.838 movimentos leva ~2 s por página de 1000 no banco,
+  antes e depois desta mudança. Embrulhar as chamadas em `(select ...)` (como o `exige_segundo_fator`) deve encurtar muito a carga da
+  Pecuária no campo.
+
 ### Backup automático do banco (09/11/2026; LIGADO em 12/11/2026)
 
 O plano gratuito do Supabase não guarda cópia do banco (a própria documentação deles manda exportar com `pg_dump` e guardar fora). Em `backup_banco/` (`backup.yml` e `LEIA-ME.md`) está a tarefa
@@ -2187,7 +2223,7 @@ Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connec
 
 ## Testes
 
-82 arquivos `teste_*.py`, 3.236 checagens (12/11/2026; a tabela abaixo lista os
+83 arquivos `teste_*.py`, 3.257 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2271,6 +2307,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_senha_nova.py` | 86 | os 5 apps (senha nova obrigatória para quem está marcado, 10+, as duas iguais, erro do servidor em português, Sair; sem marca ou sem a coluna nada muda; sem internet não trava; Trocar senha com mínimo 10 e senha atual conferida num cliente à parte; Nova senha provisória pelo administrador) |
 | `teste_datas_brasil.py` | 58 | os 5 apps num navegador em inglês (campos de data viram texto dd/mm/aaaa, mm/aaaa e dd/mm/aaaa hh:mm com `value` no formato do banco; digitar só números, 9/9/26 ao sair, data impossível vazia e vermelha, Backspace na barra, colar; change uma vez; calendário invisível de 44 px sobre o ícone, sincronizado, no toque recebe o foco, desabilitado junto; Financiamentos e Pagar/Receber sem data crua; rótulo ligado; sem rolar de lado no celular) |
 | `teste_financeiro_so_acesso_total.py` | 77 | os 5 apps (financeiro e R$ só para administrador e proprietário: Resultados e Financiamentos fora do menu, Financeiro só com os lançamentos da pessoa e sem custo por hectare, tela de acesso com "Só administrador e proprietários"; Pecuária sem Financeiro/Resultados e sem R$ no estoque, ração, inseminação e Custo/@, Vendas com valor só para quem tem Vendas, consultor com custo da dieta; Cana, Cereais e Combustível sem valor nas listas, no rateio, no painel e no relatório; os formulários de compra continuam pedindo o preço) |
+| `teste_precos_trancados.py` | 21 | os 5 apps (preços trancados: nenhuma leitura de tabela com preço fora da visão `_leitura`, inclusive a cópia de segurança; quem não vê preço edita ingrediente, entrada de estoque, inseminação, nota de diesel e entrada de insumo sem apagar o preço; preço médio fica com o banco; venda só editável com o valor à vista) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
