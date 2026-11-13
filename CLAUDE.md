@@ -1307,6 +1307,22 @@ Achado da revisão geral de 10/11/2026: a venda baixava só a contagem do lote (
   da última entrada com preço: milho R$ 0,80, ureia R$ 4,38; milheto R$ 0,50 do cadastro, a última entrada não tinha preço), como o
   "Ajustar estoque" do app faz. A causa é compra não lançada como entrada; sem lançar as próximas, volta a ficar negativo.
 
+### Pecuária: saídas de ração sem lote e a trava de lote e dieta (13/11/2026)
+
+21 saídas de ração estavam sem lote (8.903 kg). Decisões do Eduardo, aplicadas com `racao_01_saidas_sem_lote_e_trava.sql` (**RODADO
+em 13/11/2026 pelo conector, com o OK dele; os 8 itens da conferência OK**; ensaiado num Postgres descartável: travas, rodar de novo
+recusa, desfazer devolve o banco idêntico; cópias fechadas `zz_backup_racao01_*`, desfazer no fim do arquivo):
+- 11, 18 e 23 (23/07, sem dieta, sem lote e sem baixa de estoque, 1.443 kg) foram lançadas por engano e saíram.
+- 49 (ADAP 01, 520 kg) dividida meio a meio entre Curral 1 e Curral 2.
+- 14 saídas da dieta Sequestro (24 a 29/07, 6.440 kg) "são dos bezerros": divididas em 3 partes iguais entre Bez. Conf. Fêmeas,
+  Bezerros venda e Bezerros machos (2.146,7 kg cada). Cada parte é uma saída com a sua fração da baixa de estoque: o total baixado
+  por ingrediente não mudou.
+- Ficam sem lote as 3 de pasto (703, 1317, 1318, Proteinado, 500 kg) até ele dizer o lote. Seguem também 14 saídas de 23/07 COM lote
+  e SEM dieta (sem baixa de estoque), do primeiro dia de uso.
+- **Trava no banco** `trg_saida_racao_exige_lote_e_dieta`: saída nova (ou edição que mexe em lote/dieta) sem lote ou sem dieta é
+  recusada. Edição que não mexe nos dois passa (as antigas continuam editáveis) e apagar um lote ou uma dieta (`on delete set null`)
+  não é barrado (`pg_trigger_depth() > 1`). O app já exigia os dois no formulário desde 27/10.
+
 ### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
 
 Regra da fazenda (Eduardo, 02/11/2026): não há touro, só IATF; até **3
