@@ -1364,6 +1364,10 @@ estoque. Antes eram dois lançamentos e, quando o segundo era esquecido, o estoq
   entrou (`carregarEntradasDaCompra`); desmarcar e salvar tira.
 - **AE Pecuária**: a entrada que veio de compra mostra "Compra: lançamento Nº X" (ou conta a pagar) e não tem Editar/Excluir.
 - `teste_compra_estoque.py` (39, falha no código anterior).
+- **RODADO em 13/11/2026 pelo conector, com o OK dele**: os 6 itens da conferência OK, 10.012 movimentos antigos intocados.
+  Conferido entrando como cada uma das 14 pessoas ativas: quem tem Contas, Financeiro ou Insumos recebe os 9 ingredientes; a
+  secretária de contas recebe a lista e continua sem ler o estoque; quem lia os movimentos continua lendo os mesmos 10.012; o
+  administrador (que tem o código no celular) só com a sessão confirmada.
 
 ### Pecuária: só IATF, no máximo 3 inseminações (zera no parto)
 
