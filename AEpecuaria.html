@@ -410,7 +410,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=38c7cbd92a"></script>
+<script src="core.js?v=4304b53479"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // Projeto único: Pecuária, Lavoura e Matriz dividem o mesmo banco desde a
@@ -1909,6 +1909,34 @@ function loteElegivelParaParto(lote){
 // ser convertidas para kg antes de multiplicar pelo preço.
 function qtdEmKg(qtd, unidade){ return unidade==='ton' ? Number(qtd||0)*1000 : Number(qtd||0); }
 function kgParaUnidade(qtdKg, unidade){ return unidade==='ton' ? qtdKg/1000 : qtdKg; }
+// Baixa de estoque de uma dieta (só o que vai para `movimentos`; tipo e a ligação com o lançamento vêm depois).
+function movimentosDaDieta(dieta, quantidadeKg, data){
+  if(!dieta) return [];
+  return (dieta.itens||[]).filter(it=>it.ingredienteId).map(it=>{
+    const ing = getIng(it.ingredienteId);
+    return {data, ingrediente_id: it.ingredienteId, quantidade: kgParaUnidade(quantidadeKg*it.pct/100, ing?.unidade)};
+  });
+}
+// Editar saída de ração, saída de recria (tabela pasto) ou produção de ração troca a baixa de estoque dela. Pela função do banco
+// (pecuaria_editar_com_estoque_01.sql) é tudo ou nada; sem a função, caminho antigo na ordem segura: muda o lançamento, grava a
+// baixa nova e só então apaga a antiga (no pior caso a baixa fica em dobro, que se vê e corrige; nunca some).
+async function editarConsumoComEstoque(tabela, fkCol, id, row, movs){
+  const r = await db.rpc('editar_consumo_com_estoque', {p_tabela: tabela, p_id: id, p_campos: row, p_movimentos: movs});
+  if(!r.error) return {error: null};
+  if(!funcaoDoBancoNaoExiste(r.error)) return {error: r.error};
+  const up = await db.from(tabela).update(row).eq('id', id);
+  if(up.error) return {error: up.error};
+  let novos = [];
+  if(movs.length){
+    const ins = await db.from('movimentos').insert(movs.map(m=>({...m, tipo:'saida', [fkCol]: id}))).select('id');
+    if(ins.error) return {error: ins.error};
+    novos = (ins.data||[]).map(m=>m.id);
+  }
+  let del = db.from('movimentos').delete().eq(fkCol, id);
+  if(novos.length) del = del.not('id', 'in', `(${novos.join(',')})`);
+  const d = await del;
+  return {error: d.error || null};
+}
 
 function saldoIngrediente(id){
   let saldo = 0;
@@ -9058,49 +9086,11 @@ function attachEvents(){
         if(editDraft._editId){
           const row = {data, dieta_id: dietaId, lote_id: loteId, quantidade_kg: quantidadeKg};
           const saidaId = editDraft._editId;
-          ({error} = await db.from('saidas_racao').update(row).eq('id', saidaId));
-          // Quem decide se desconta o ingrediente cru é a dieta escolhida
-          // (consumo direto), não mais o tipo (Confinamento/Cria) -- refaz
-          // os movimentos dessa saída do zero com os valores novos (limpa
-          // antes de tudo, pro caso de ter trocado pra uma dieta "produzida
-          // e guardada" e não sobrar movimento antigo órfão).
+          // Quem decide se desconta o ingrediente cru é a dieta escolhida (consumo direto). Dieta produzida e guardada: a baixa
+          // antiga sai e nenhuma entra.
           const dieta = state.dietas.find(x=>x.id===dietaId);
-          // ORDEM IMPORTA: insere os movimentos novos ANTES de apagar os
-          // antigos, e só apaga se o insert tiver dado certo.
-          //
-          // Na ordem inversa, uma falha no insert (rede caindo no meio,
-          // RLS) deixava a saída salva com a quantidade nova e ZERO
-          // movimentos de estoque: o saldo do ingrediente subia como se o
-          // consumo não tivesse acontecido, sem nenhum aviso além do alert
-          // genérico. Assim, o pior caso é um desconto duplicado que ainda
-          // dá para ver e corrigir — melhor que um consumo que sumiu.
-          if(!error && dieta && dieta.consumoDireto){
-            const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
-              const ing = getIng(it.ingredienteId);
-              const consumoKg = quantidadeKg*it.pct/100;
-              return {
-                data, ingrediente_id: it.ingredienteId, tipo: 'saida',
-                quantidade: kgParaUnidade(consumoKg, ing?.unidade), saida_racao_id: saidaId,
-              };
-            });
-            if(movs.length){
-              const res = await db.from('movimentos').insert(movs).select('id');
-              error = res.error;
-              if(!error){
-                // apaga só os ANTIGOS: os recém-inseridos ficam de fora
-                const novos = (res.data||[]).map(m=>m.id);
-                let del = db.from('movimentos').delete().eq('saida_racao_id', saidaId);
-                if(novos.length) del = del.not('id', 'in', `(${novos.join(',')})`);
-                await del;
-              }
-            } else if(!error){
-              await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
-            }
-          } else if(!error){
-            // dieta produzida e guardada: não desconta ingrediente cru,
-            // então é só limpar o que tiver sobrado da dieta anterior
-            await db.from('movimentos').delete().eq('saida_racao_id', saidaId);
-          }
+          const movs = dieta && dieta.consumoDireto ? movimentosDaDieta(dieta, quantidadeKg, data) : [];
+          ({error} = await editarConsumoComEstoque('saidas_racao', 'saida_racao_id', saidaId, row, movs));
         } else {
           const resultado = await salvarOuEnfileirar(type, {dietaId, loteId, data, quantidadeKg});
           if(resultado.enfileirado){
@@ -9149,22 +9139,9 @@ function attachEvents(){
         if(editDraft._editId){
           const row = {data, lote_id: loteId, dieta_id: dietaId, quantidade};
           const pastoId = editDraft._editId;
-          ({error} = await db.from('pasto').update(row).eq('id', pastoId));
-          // Mesma lógica da Saída de Ração: quem decide se desconta o
-          // ingrediente cru é a dieta escolhida (consumo direto) -- refaz
-          // os movimentos do zero com os valores novos.
           const dietaPasto = state.dietas.find(x=>x.id===dietaId);
-          if(!error) await db.from('movimentos').delete().eq('pasto_id', pastoId);
-          if(!error && dietaPasto && dietaPasto.consumoDireto){
-            const movs = dietaPasto.itens.filter(it=>it.ingredienteId).map(it=>{
-              const ing = getIng(it.ingredienteId);
-              const consumoKg = quantidade*it.pct/100;
-              return {data, ingrediente_id: it.ingredienteId, tipo: 'saida', quantidade: kgParaUnidade(consumoKg, ing?.unidade), pasto_id: pastoId};
-            });
-            if(movs.length){
-              ({error} = await db.from('movimentos').insert(movs));
-            }
-          }
+          const movs = dietaPasto && dietaPasto.consumoDireto ? movimentosDaDieta(dietaPasto, quantidade, data) : [];
+          ({error} = await editarConsumoComEstoque('pasto', 'pasto_id', pastoId, row, movs));
         } else {
           const resultado = await salvarOuEnfileirar(type, {loteId, dietaId, data, quantidade});
           if(resultado.enfileirado){
@@ -9190,21 +9167,7 @@ function attachEvents(){
           const dieta = state.dietas.find(x=>x.id===dietaId);
           const row = {data, dieta_id: dietaId, quantidade_kg: quantidadeKg};
           const producaoId = editDraft._editId;
-          ({error} = await db.from('producoes_racao').update(row).eq('id', producaoId));
-          if(!error) await db.from('movimentos').delete().eq('producao_racao_id', producaoId);
-          if(!error && dieta){
-            const movs = dieta.itens.filter(it=>it.ingredienteId).map(it=>{
-              const ing = getIng(it.ingredienteId);
-              const consumoKg = quantidadeKg*it.pct/100;
-              return {
-                data, ingrediente_id: it.ingredienteId, tipo: 'saida',
-                quantidade: kgParaUnidade(consumoKg, ing?.unidade), producao_racao_id: producaoId,
-              };
-            });
-            if(movs.length){
-              ({error} = await db.from('movimentos').insert(movs));
-            }
-          }
+          ({error} = await editarConsumoComEstoque('producoes_racao', 'producao_racao_id', producaoId, row, movimentosDaDieta(dieta, quantidadeKg, data)));
         } else {
           const resultado = await salvarOuEnfileirar(type, {dietaId, data, quantidadeKg});
           if(resultado.enfileirado){

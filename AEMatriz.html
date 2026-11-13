@@ -533,7 +533,7 @@
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=38c7cbd92a"></script>
+<script src="core.js?v=4304b53479"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // AE Matriz não tem projeto Supabase próprio (limite do plano gratuito
@@ -7840,9 +7840,6 @@ function BlocoVendaAnimais(d){
  * Mesma sequencia do AE Pecuaria - portada, nao reinventada.
  */
 // PostgREST responde PGRST202 (ou 42883 do Postgres) quando a função chamada não existe no banco.
-function funcaoDoBancoNaoExiste(e){
-  return !!e && (e.code==='PGRST202' || e.code==='42883' || /could not find the function/i.test(e.message||''));
-}
 async function salvarVendaAnimais(campos, row){
   const lote = state.lotesPec.find(l=>String(l.id)===String(campos.loteId));
   const qtd = Number(campos.qtdAnimais||0);

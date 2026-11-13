@@ -69,6 +69,12 @@ window.supabase = {
         },
         eq(col, val) { this._filtros.push(r => String(r[col]) === String(val)); return this; },
         in(col, vals) { const s = new Set((vals || []).map(String)); this._filtros.push(r => s.has(String(r[col]))); return this; },
+        // not(col, 'in', '(1,2,3)') como no PostgREST; outros operadores: so 'eq'.
+        not(col, op, val) {
+          if (op === 'in') { const s = new Set(String(val).replace(/^\(|\)$/g, '').split(',').map(x => x.trim())); this._filtros.push(r => !s.has(String(r[col]))); }
+          else if (op === 'eq') this._filtros.push(r => String(r[col]) !== String(val));
+          return this;
+        },
         order() { return this; },
         limit(n) { this._limit = n; return this; },
         range(de, ate) {
