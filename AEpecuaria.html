@@ -536,7 +536,7 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=043f1d5f63"></script>
+<script src="core.js?v=6200878fd1"></script>
 <script>
 /* ===================== SUPABASE ===================== */
 // Projeto único: Pecuária, Lavoura e Matriz dividem o mesmo banco desde a
@@ -1014,7 +1014,7 @@ async function carregarTudo(jaRenovouSessao){
   }
   const demorou = new Promise(res=>setTimeout(()=>res('demorou'), LIMITE_CARGA_ESSENCIAL_MS));
   const essenciais = Promise.all([
-    fetchAllRows(()=>db.from('ingredientes').select('*').order('id')),
+    fetchAllRows(()=>db.from(tabelaDeLeitura('ingredientes')).select('*').order('id')),
     fetchAllRows(()=>db.from('dietas').select('*').order('id')),
     fetchAllRows(()=>db.from('lotes').select('*').order('id')),
     fetchAllRows(()=>db.from('animais').select('*').order('id')),
@@ -1069,11 +1069,11 @@ async function carregarTudo(jaRenovouSessao){
   redesenhar();
 
   const [mov, sr, lc, pt, rc, lanc, cCusto, pa, cfg, faz, prt, pesag, prod, abt, dg, desm, pesagAnim, manj, protIA] = await Promise.all([
-    fetchAllRows(()=>db.from('movimentos').select('*').order('id')),
+    fetchAllRows(()=>db.from(tabelaDeLeitura('movimentos')).select('*').order('id')),
     fetchAllRows(()=>db.from('saidas_racao').select('*').order('id')),
     fetchAllRows(()=>db.from('leituras_cocho').select('*').order('id')),
     fetchAllRows(()=>db.from('pasto').select('*').order('id')),
-    fetchAllRows(()=>db.from('reproducao_custos').select('*').order('id')),
+    fetchAllRows(()=>db.from(tabelaDeLeitura('reproducao_custos')).select('*').order('id')),
     // Financeiro agora vem de lancamentos_financeiros, no AE Matriz. Este
     // app so LE — quem lanca despesa, receita avulsa e investimento e o
     // Matriz. A excecao e a receita gerada por uma venda, que continua
@@ -1092,7 +1092,7 @@ async function carregarTudo(jaRenovouSessao){
     fetchAllRows(()=>db.from('partos').select('*').order('id')),
     fetchAllRows(()=>db.from('pesagens').select('*').order('id')),
     fetchAllRows(()=>db.from('producoes_racao').select('*').order('id')),
-    fetchAllRows(()=>db.from('abates').select('*').order('id')),
+    fetchAllRows(()=>db.from(tabelaDeLeitura('abates')).select('*').order('id')),
     fetchAllRows(()=>db.from('diagnosticos_gestacionais').select('*').order('id')),
     fetchAllRows(()=>db.from('desmamas').select('*').order('id')),
     fetchAllRows(()=>db.from('pesagens_animais').select('*').order('id')),
@@ -1612,10 +1612,10 @@ function erroColunaChaveFalta(err){ return !!err && err.code!=='23505' && /clien
 // {data, novo:false} = já tinha entrado num envio anterior (resposta perdida).
 async function inserirUmaVez(tabela, row, chave){
   if(chave && !tabelasSemChave.has(tabela)){
-    const res = await db.from(tabela).insert({...row, client_uuid: chave}).select().single();
+    const res = await db.from(tabela).insert({...row, client_uuid: chave}).select(TABELAS_COM_PRECO[tabela] ? 'id' : '*').single();
     if(!res.error) return {data: res.data, novo: true, error: null};
     if(erroChaveRepetida(res.error)){
-      const ja = await db.from(tabela).select('*').eq('client_uuid', chave).limit(1);
+      const ja = await db.from(tabelaDeLeitura(tabela)).select('*').eq('client_uuid', chave).limit(1);
       if(ja.error) return {error: ja.error};
       if(ja.data && ja.data[0]) return {data: ja.data[0], novo: false, error: null};
       return {error: res.error};
@@ -1623,7 +1623,7 @@ async function inserirUmaVez(tabela, row, chave){
     if(!erroColunaChaveFalta(res.error)) return {error: res.error};
     tabelasSemChave.add(tabela);   // SQL ainda não rodou: grava como antes
   }
-  const res = await db.from(tabela).insert(row).select().single();
+  const res = await db.from(tabela).insert(row).select(TABELAS_COM_PRECO[tabela] ? 'id' : '*').single();
   return res.error ? {error: res.error} : {data: res.data, novo: true, error: null};
 }
 async function jaExisteLinha(tabela, coluna, valor){
@@ -1831,7 +1831,7 @@ const ERRO_FILA_INDISPONIVEL = {message:'Sem conexão, e não foi possível guar
 // acesso do banco recusou) volta sem erro e sem linha nenhuma: sem esta
 // checagem a janela fechava como se tivesse salvo e nada mudava.
 async function atualizarUmaLinha(tabela, row, id){
-  const res = await db.from(tabela).update(row).eq('id', id).select();
+  const res = await db.from(tabela).update(row).eq('id', id).select(TABELAS_COM_PRECO[tabela] ? 'id' : '*');
   if(res.error) return {error: res.error};
   if(!res.data || res.data.length===0){
     return {error:{message:'nada foi gravado: o lançamento não foi encontrado no banco ou seu usuário não tem permissão de editar. Recarregue a tela e confira.'}};
@@ -1849,7 +1849,7 @@ async function recarregarReproducao(){
     fetchAllRows(()=>db.from('partos').select('*').order('id')),
     fetchAllRows(()=>db.from('desmamas').select('*').order('id')),
     fetchAllRows(()=>db.from('diagnosticos_gestacionais').select('*').order('id')),
-    fetchAllRows(()=>db.from('reproducao_custos').select('*').order('id')),
+    fetchAllRows(()=>db.from(tabelaDeLeitura('reproducao_custos')).select('*').order('id')),
   ]);
   if(!prt.error) state.partos = (prt.data||[]).map(rowToParto);
   if(!desm.error) state.desmamas = (desm.data||[]).map(rowToDesmama);
@@ -3051,7 +3051,7 @@ async function gravarAnimalDoManejo(m, d){
     if(resMediaManejo.error) return falha('Não foi possível atualizar a média de peso: ' + resMediaManejo.error.message, resMediaManejo.error);
   }
   if(acoesAtivas.includes('inseminacao')){
-    const resInsemManejo = await db.from('reproducao_custos').insert(reproducaoCustoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, racaTouro:racaTouroVal, qualInseminacao:String(Math.min(cicloReprodutivoVaca(numero, m.data).proxima, 4)), custo:null, manejoId:m.id})).select().single();
+    const resInsemManejo = await db.from('reproducao_custos').insert(reproducaoCustoToRow({data:m.data, loteId:m.loteId, numeroVaca:numero, racaTouro:racaTouroVal, qualInseminacao:String(Math.min(cicloReprodutivoVaca(numero, m.data).proxima, 4)), custo:null, manejoId:m.id})).select('id').single();
     if(resInsemManejo.error) return falha('Não foi possível salvar a inseminação: ' + resInsemManejo.error.message, resInsemManejo.error);
     escreveu = true;
     feitoNestaLeva.reproducaoId = resInsemManejo.data.id;
@@ -4034,7 +4034,7 @@ function PageVendasGeral(){
             <td class="mono">R$ ${fmt(valorVenda(v))}</td>` : ''}
             <td>${esc(v.criadoPor) || '—'}</td>
             <td style="display:flex; gap:6px;">
-              ${(tipo ? podeRegistrarVenda(tipo) : acessoTotal()) ? `
+              ${(comValor && (tipo ? podeRegistrarVenda(tipo) : acessoTotal())) ? `
               <button class="btn-ghost btn-sm" data-edit-venda="${v.id}">Editar</button>
               ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-venda="${v.id}">Excluir</button>` : ''}
               ` : ''}
@@ -8871,6 +8871,9 @@ function attachEvents(){
           estoqueMin: Number(document.getElementById('f-min').value)||0,
         };
         const row = ingredienteToRow(campos);
+        // Sem o campo de preço (quem não vê preço), não manda o preço: o banco não o devolve a essa
+        // pessoa (seguranca_07), e mandar 0 apagaria o preço de verdade.
+        if(!precoInput) delete row.preco_kg;
         if(editDraft._editId){
           ({error} = await db.from('ingredientes').update(row).eq('id', editDraft._editId));
         } else {
@@ -8893,14 +8896,17 @@ function attachEvents(){
         };
         const row = movimentoToRow(campos);
         if(editDraft._editId){
-          ({error} = await db.from('movimentos').update(row).eq('id', editDraft._editId));
+          // Quem não vê preço edita com o campo de preço vazio: não apaga o preço que está gravado.
+          ({error} = await db.from('movimentos').update(semPrecoApagado(row, ['preco_kg'], podeVerPrecoInsumo())).eq('id', editDraft._editId));
           // Corrigir uma entrada (quantidade, preço ou o PRÓPRIO ingrediente
           // errados) precisa refletir no preço médio do ingrediente --
           // recalcula do zero, repetindo a média ponderada sobre TODAS as
           // movimentações dele em ordem cronológica (não só "empurra" o
           // preço de novo, senão o valor de antes da correção continua
           // contaminando o preço atual).
-          if(!error){
+          // O banco recalcula o preço médio sozinho (gatilho trg_movimento_recalcula_preco, seguranca_07a).
+          // Quem não vê preço não tem os preços na memória e calcularia errado: só quem vê refaz aqui.
+          if(!error && podeVerPrecoInsumo()){
             // editDraft.ingredienteId nunca é reescrito por um onchange do
             // campo "Ingrediente" (só f-tipo tem um) -- continua com o valor
             // ORIGINAL da movimentação até aqui, então dá pra comparar com o
@@ -8944,7 +8950,7 @@ function attachEvents(){
           // saldo de hoje" -- as duas fórmulas podiam divergir (ex: uma
           // entrada nova com data retroativa não deveria se misturar com o
           // preço de HOJE, e sim com o preço de quando ela aconteceu).
-          if(!error && campos.tipo==='entrada' && campos.precoKg){
+          if(!error && campos.tipo==='entrada' && campos.precoKg && podeVerPrecoInsumo()){
             const ing = getIng(campos.ingredienteId);
             if(ing){
               const movsIngrediente = state.movimentos
@@ -9451,14 +9457,17 @@ function attachEvents(){
         const qualInsemVal = document.getElementById('f-qualinsem').value;
         const custoVal = document.getElementById('f-custoreproducao').value;
         if(!exigirLote(Number(document.getElementById('f-lote').value))) return;
-        if(!validarObrigatorios([[dataReprodVal,'Data'],[numVacaVal,'Número da vaca'],[racaTouroVal,'Raça do touro'],[custoVal,'Custo do protocolo']])) return;
+        // Quem não vê o custo (só acesso total vê, seguranca_07) e está editando recebe o campo vazio:
+        // não exige nem regrava o custo (fica o que já estava gravado).
+        const custoOculto = !!editDraft._editId && !veValores() && custoVal==='';
+        if(!validarObrigatorios([[dataReprodVal,'Data'],[numVacaVal,'Número da vaca'],[racaTouroVal,'Raça do touro']].concat(custoOculto ? [] : [[custoVal,'Custo do protocolo']]))) return;
         const numeroOriginalInsem = editDraft._editId ? state.reproducao.find(r=>r.id===editDraft._editId)?.numeroVaca : null;
         const erroNumeroInsem = erroNumeroAnimal(numVacaVal, numeroOriginalInsem);
         if(erroNumeroInsem){ alert(erroNumeroInsem); return; }
         // Número antigo com texto, sem mexer: salva o resto e não cria nem
         // move cadastro de animal com esse número.
         const legadoInsem = !numeroAnimalSoDigitos(numVacaVal);
-        if(Number(custoVal)<=0){ alert('O custo precisa ser maior que zero.'); return; }
+        if(!custoOculto && Number(custoVal)<=0){ alert('O custo precisa ser maior que zero.'); return; }
         // Vaca ainda não cadastrada -- não dá pra lançar sem a raça dela
         // (sexo já é sempre fêmea, isso o próprio lançamento já garante).
         const erroAnimalVaca = legadoInsem ? null : validarAnimalNovo(numVacaVal, 'femea', racaVacaVal);
@@ -9473,7 +9482,9 @@ function attachEvents(){
           custo: Number(custoVal),
         };
         if(editDraft._editId){
-          ({error} = await atualizarUmaLinha('reproducao_custos', reproducaoCustoToRow(campos), editDraft._editId));
+          const rowInsem = reproducaoCustoToRow(campos);
+          if(custoOculto) delete rowInsem.custo;
+          ({error} = await atualizarUmaLinha('reproducao_custos', rowInsem, editDraft._editId));
           // A vaca inseminada entra (ou é movida) na composição do lote --
           // é sempre fêmea. Não bloqueia o save (best-effort, mesmo motivo
           // do gancho de entrada de animais). No caminho de criação isso já

@@ -407,8 +407,8 @@ a.btn-sair{display:inline-flex; align-items:center; justify-content:center;}
 <div id="root"></div>
 
 <script src="vendor/supabase-js-2.118.0.js"></script>
-<script src="core.js?v=043f1d5f63"></script>
-<script src="core_lavoura.js?v=f933703b22"></script>
+<script src="core.js?v=6200878fd1"></script>
+<script src="core_lavoura.js?v=2d33843c5b"></script>
 <script>
 /* ===================== SUPABASE =====================
  * AE Lavoura reaproveita o MESMO projeto Supabase que hoje é o do AE
@@ -891,6 +891,9 @@ async function salvarCadastro(key){
   cfg.fields.forEach(f=>{
     if(f.type==='computed') return;
     const raw = lerCampoDOM(f);
+    // Preço que a pessoa não vê (seguranca_07: o banco não o devolve a ela): ao editar, o campo vem
+    // vazio. Não exige nem manda: fica o valor gravado.
+    if(f.soValores && !veValores() && editDraft._editId && (raw===''||raw===undefined||raw===null)) return;
     if(f.required && (raw===''||raw===undefined||raw===null)) erro = erro || `Preencha o campo "${f.label}".`;
     let val = raw;
     if(f.type==='number') val = (raw===''||raw===undefined||raw===null) ? null : Number(raw);

@@ -19,6 +19,12 @@ function semRede() {
 }
 // JWT de mentira so com o que o app le (aal): window.__jwt('aal1' | 'aal2')
 window.__jwt = (aal) => 'e30.' + btoa(JSON.stringify({ aal, sub: 'u1', exp: 9999999999 })).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_') + '.assinatura';
+// Como no banco depois do seguranca_07b: as colunas de preco nao saem direto da tabela.
+window.__PRECOS_TRANCADOS__ = window.__PRECOS_TRANCADOS__ || {
+  ingredientes: ['preco_kg'], movimentos: ['preco_kg'], abates: ['valor_arroba', 'valor_por_animal', 'valor_kg'],
+  reproducao_custos: ['custo'], entradas_estoque: ['valor_total'], manutencoes: ['custo'],
+  entradas_insumo_cana: ['preco_pago'], entradas_insumo_graos: ['preco_pago'],
+};
 const ERRO_REDE = { name: 'TypeError', message: 'Failed to fetch' };
 const SEM_RESPOSTA = () => Promise.resolve({ data: null, error: ERRO_REDE });
 window.supabase = {
@@ -30,26 +36,50 @@ window.supabase = {
       // view sempre cai no ramo "nao rateado": os mesmos lancamentos, so
       // com lancamento_id no lugar de id (a view nao tem coluna "id") e
       // rateio_id/rateado marcando que nao foi rateado.
+      // <tabela>_leitura (seguranca_07): visao com as mesmas linhas da tabela; o preco vem vazio se o
+      // teste disser que a pessoa nao pode ve-lo (window.__SEM_PRECO__[tabela] = [colunas]).
+      // window.__PRECOS_TRANCADOS__[tabela] = [colunas]: ler essas colunas direto da tabela (ou '*')
+      // da erro de permissao, como no banco depois do 07b.
+      const visao = /_leitura$/.test(nome);
+      const base = visao ? nome.replace(/_leitura$/, '') : nome;
       let linhas = nome === 'lancamentos_rateados'
         ? () => (window.__DB__.lancamentos_financeiros || []).map(r => ({ ...r, lancamento_id: r.id, rateio_id: null, rateado: false }))
-        : () => (window.__DB__[nome] || []).slice();
+        : visao
+          ? () => (window.__DB__[base] || []).map(r => {
+              const cols = (window.__SEM_PRECO__ || {})[base];
+              if (!cols) return { ...r };
+              const c = { ...r }; cols.forEach(k => { if (k in c) c[k] = null; }); return c;
+            })
+          : () => (window.__DB__[nome] || []).slice();
       const q = {
         _rows: null,
         _filtros: [],
         _pendingUpdate: undefined,
         _pendingDelete: false,
-        select() { this._rows = linhas(); return this; },
+        select(cols) {
+          const trancadas = (window.__PRECOS_TRANCADOS__ || {})[nome];
+          if (trancadas && this._pendingUpdate === undefined) {
+            const pedidas = (cols == null || String(cols).trim() === '*') ? ['*'] : String(cols).split(',').map(x => x.trim());
+            if (pedidas.includes('*') || pedidas.some(c => trancadas.includes(c))) {
+              this._erro = { code: '42501', message: 'permission denied for table ' + nome };
+              (window.__LEITURAS_BARRADAS__ = window.__LEITURAS_BARRADAS__ || []).push(nome + ':' + (cols || '*'));
+            }
+          }
+          this._rows = linhas(); return this;
+        },
         eq(col, val) { this._filtros.push(r => String(r[col]) === String(val)); return this; },
         in(col, vals) { const s = new Set((vals || []).map(String)); this._filtros.push(r => s.has(String(r[col]))); return this; },
         order() { return this; },
         limit(n) { this._limit = n; return this; },
         range(de, ate) {
           if (semRede()) return SEM_RESPOSTA();
+          if (this._erro) return Promise.resolve({ data: null, error: this._erro });
           const r = this._aplicar();
           return Promise.resolve({ data: r.slice(de, ate + 1), error: null });
         },
         single() {
           if (semRede()) return SEM_RESPOSTA();
+          if (this._erro) return Promise.resolve({ data: null, error: this._erro });
           const r = this._aplicar();
           return Promise.resolve({ data: r[0] || null, error: null });
         },
@@ -65,7 +95,9 @@ window.supabase = {
           if (semRede()) return SEM_RESPOSTA().then(res, rej);
           if (this._pendingUpdate !== undefined) {
             const alvo = this._aplicar();
-            alvo.forEach(r => Object.assign(r, this._pendingUpdate));
+            // como o JSON do supabase-js: chave com undefined nao vai ao banco
+            const v = Object.fromEntries(Object.entries(this._pendingUpdate).filter(([, x]) => x !== undefined));
+            alvo.forEach(r => Object.assign(r, v));
             return Promise.resolve({ data: alvo, error: null }).then(res, rej);
           }
           if (this._pendingDelete) {
@@ -73,6 +105,7 @@ window.supabase = {
             window.__DB__[nome] = (window.__DB__[nome] || []).filter(r => !alvo.has(r));
             return Promise.resolve({ data: null, error: null }).then(res, rej);
           }
+          if (this._erro) return Promise.resolve({ data: null, error: this._erro }).then(res, rej);
           return Promise.resolve({ data: this._aplicar(), error: null }).then(res, rej);
         },
         insert(v) {

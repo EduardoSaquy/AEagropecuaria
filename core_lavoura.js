@@ -163,7 +163,7 @@ async function loadAll(){
   const results = await Promise.all([
     ...CADASTRO_KEYS.map(k => {
       const cfg = CADASTROS[k];
-      return fetchAllRows(()=>db.from(cfg.table).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc}).order('id'));
+      return fetchAllRows(()=>db.from(tabelaDeLeitura(cfg.table)).select('*').order(cfg.orderBy || 'nome', {ascending: !cfg.orderDesc}).order('id'));
     }),
     db.from('profiles').select('*').order('nome'),
     db.from('fazenda_atividades').select('*'),
