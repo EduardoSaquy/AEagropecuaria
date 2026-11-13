@@ -1376,7 +1376,8 @@ fotografado **todo dia 1º, automático**; valor pela mesma conta do "Rebanho es
 dia, fêmea para lote de fêmeas); **lote sem pesagem usa o peso de referência do lote** (vacas e novilhas, ~43% das cabeças em
 13/11/2026, não são pesadas de rotina).
 - **Banco** (`rebanho_inventario_01.sql`, ensaiado num Postgres descartável com pg_cron falso: 18 checagens, rodar de novo, desfazer
-  e aplicar de novo; **ainda não rodado**): coluna `lotes.peso_referencia_kg` (opcional, 20 a 1000 kg); tabela `rebanho_inventario`
+  e aplicar de novo; **RODADO em 13/11/2026 pelo conector, com o OK dele**: 5 itens OK; com uma foto de teste, só os 3 proprietários a
+  enxergaram, o administrador só com o código do celular e ninguém chama a função): coluna `lotes.peso_referencia_kg` (opcional, 20 a 1000 kg); tabela `rebanho_inventario`
   (data, lote, cabeças, peso médio, data da pesagem, `origem_peso` 'pesagem'/'referencia', @, preço da @, valor), leitura só
   `acesso_total()` + segundo fator, ninguém grava pela API; `fotografar_rebanho(data)` (definer, fechada a quem está logado; refazer
   o mesmo dia troca a foto) com a última pesagem **até o dia** (0 kg não conta) ou a referência, e o último preço da @ **até o dia**;
