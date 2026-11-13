@@ -1317,8 +1317,12 @@ recusa, desfazer devolve o banco idêntico; cópias fechadas `zz_backup_racao01_
 - 14 saídas da dieta Sequestro (24 a 29/07, 6.440 kg) "são dos bezerros": divididas em 3 partes iguais entre Bez. Conf. Fêmeas,
   Bezerros venda e Bezerros machos (2.146,7 kg cada). Cada parte é uma saída com a sua fração da baixa de estoque: o total baixado
   por ingrediente não mudou.
-- Ficam sem lote as 3 de pasto (703, 1317, 1318, Proteinado, 500 kg) até ele dizer o lote. Seguem também 14 saídas de 23/07 COM lote
-  e SEM dieta (sem baixa de estoque), do primeiro dia de uso.
+- Ficam sem lote as 3 de pasto (703, 1317, 1318, Proteinado, 500 kg) até ele dizer o lote (ele disse "lotes de recria", mas as 3 são
+  de antes de o Novilhas Fundo existir: perguntado se vão inteiras para o Bezerros Invernada ou meio a meio).
+- As 14 saídas de 23/07 COM lote e SEM dieta (7.271 kg, sem baixa de estoque, primeiro dia de uso) ganharam a dieta que o próprio lote
+  usou naquela semana (decisão dele, 13/11/2026, pelo conector): Curral 1 e 2 → ADAP 01, Bez. Conf. Fêmeas e Bezerros venda →
+  Sequestro, Vacas 07/08 → Vacas Maternidade. Só a dieta mudou; continuam sem baixa de estoque (editar uma delas no app refaz a baixa).
+  Cópia `zz_backup_racao02_saidas`. Depois disso: 0 saídas sem dieta no banco.
 - **Trava no banco** `trg_saida_racao_exige_lote_e_dieta`: saída nova (ou edição que mexe em lote/dieta) sem lote ou sem dieta é
   recusada. Edição que não mexe nos dois passa (as antigas continuam editáveis) e apagar um lote ou uma dieta (`on delete set null`)
   não é barrado (`pg_trigger_depth() > 1`). O app já exigia os dois no formulário desde 27/10.
