@@ -668,7 +668,7 @@ function mesLabel(mesStr){
   const [ano, m] = mesStr.split('-');
   return `${NOMES_MES[Number(m)-1]}/${ano}`;
 }
-const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
+const AREA_LABEL = {confinamento:'Confinamento', pasto:'Recria', cria:'Cria'};
 function rowToLancamento(r){
   return {id:r.id, tipo:r.tipo, atividade:r.atividade, fazendaId:r.fazenda_id, centroCustoId:r.centro_custo_id,
           descricao:r.descricao||'', valor:r.valor, data:r.data||null, mes:r.mes||null,
@@ -1804,7 +1804,7 @@ async function carregarResultadoCereais(){
   }
   renderCarga();
 }
-const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Pasto', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', despesaGeral:'Despesas gerais (Cana/Cereais)'};
+const CATEGORIA_DESPESA_LABEL = {racao:'Ração (Confinamento)', pasto:'Recria', reproducao:'Reprodução (Cria)', fixa:'Despesas fixas', combustivel:'Combustível', despesaGeral:'Despesas gerais (Cana/Cereais)'};
 // Soma os meses de "mensal" que caem no período (array de "YYYY-MM"). Meses
 // fora da janela carregada (ex: período futuro) simplesmente não têm
 // correspondência e contam como zero — sem precisar recortar antes.
@@ -2370,7 +2370,7 @@ const MODULOS_PERMISSAO = [
     ['manejo','Manejo'], ['cadastro','Cadastro'],
     ['insumos','Insumos'], ['dietas','Dietas'],
     ['lotesGeral','Lotes (visão geral)'],
-    ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
+    ['confinamento','Confinamento'], ['pasto','Recria'], ['cria','Cria'],
     ['vendas','Vendas (com o valor da venda)'],
     ['pec_financeiro','Financeiro', true], ['pec_resultados','Resultados', true],
   ]],
@@ -2675,7 +2675,7 @@ function resultadoOperacaoNoPeriodo(slug, periodo=state.periodo){
 // as três operações — é o que abre ao clicar no donut "Despesa por
 // operação". Só a parte "com centro de custo" (fixa da Pecuária / geral
 // de Cana e Cereais, que vem de lancamentos_financeiros) dá pra quebrar
-// assim; Ração, Pasto, Reprodução (Pecuária) e Combustível vêm de outra
+// assim; Ração, Recria, Reprodução (Pecuária) e Combustível vêm de outra
 // tabela, por animal/kg/litro, sem centro de custo — entram como uma
 // barra própria cada, com o mesmo valor que despesaDetalhe já mostra em
 // Resultados, então a soma das barras bate com o stat card Despesa.
@@ -7903,7 +7903,7 @@ function lerVendaDoFormulario(base){
   const v = (id)=> document.getElementById(id)?.value ?? '';
   if(!document.getElementById('f-lotevenda')) return base;
   const loteId = v('f-lotevenda');
-  // Sexo acompanha o lote quando ele é fixo (Confinamento/Pasto com sexo
+  // Sexo acompanha o lote quando ele é fixo (Confinamento/Recria com sexo
   // definido) -- mesma regra do AEpecuaria.html. Lote misto não mexe no
   // que já estava selecionado.
   const loteVal = state.lotesPec.find(l=>String(l.id)===String(loteId));
@@ -8481,7 +8481,7 @@ function ModalDetalheOperacao(){
   </div>`;
 }
 
-// Uma coluna por categoria (centro de custo, ou Ração/Pasto/Reprodução/
+// Uma coluna por categoria (centro de custo, ou Ração/Recria/Reprodução/
 // Combustível quando não tem centro de custo) — usado no drill-down de
 // despesa por centro de custo. Todo valor é >=0 aqui (é sempre despesa),
 // então não precisa de linha de zero nem cor por sinal. Rola pro lado
@@ -8693,7 +8693,7 @@ function ModalDespesaPorCentro(){
       <div class="modal-head"><h3>Despesa por centro de custo — ${esc(labelPeriodo(state.periodo))}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         ${itens.length===0 ? Empty('Sem despesa neste período', 'Não há lançamento de despesa em nenhuma das três operações neste período.') : `
-        <p class="hint" style="margin-bottom:8px;">Pecuária, Cana e Cereais somados. Ração, Pasto, Reprodução e Combustível não têm centro de custo próprio (vêm de outra tabela) e aparecem como uma barra cada.</p>
+        <p class="hint" style="margin-bottom:8px;">Pecuária, Cana e Cereais somados. Ração, Recria, Reprodução e Combustível não têm centro de custo próprio (vêm de outra tabela) e aparecem como uma barra cada.</p>
         ${GraficoColunasCategorias(itens)}
         <div class="card" style="overflow-x:auto; margin-top:14px;">
           <table>

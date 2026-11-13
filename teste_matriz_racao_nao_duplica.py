@@ -95,8 +95,8 @@ with sync_playwright() as pw:
     conf(abs(ag["despesa"] - 8000.0) < 0.01 and abs(ag["resultado"] - 32000.0) < 0.01,
          "periodo agregado (Resultados): despesa R$ 8.000 e resultado R$ 32.000", json.dumps(ag)[:200])
     rotulos = [d["label"] for d in ag["despesaDetalhe"]]
-    conf(not any("Ração" in r or "Pasto" in r or "Reprodução" in r for r in rotulos),
-         "a quebra da despesa nao mostra Racao, Pasto nem Reproducao consumidos", str(rotulos))
+    conf(not any("Ração" in r or "Recria" in r or "Reprodução" in r for r in rotulos),
+         "a quebra da despesa nao mostra Racao, Recria nem Reproducao consumidos", str(rotulos))
 
     browser.close()
 

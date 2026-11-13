@@ -2102,6 +2102,19 @@ do `auth` no Supabase de verdade (a 1ª execução é o teste). Passos e como re
 dados** no `public` (2,56 MB) e o `auth` também saiu (112 KB); artefato `backup-banco` de 2,03 MB. Nesse tamanho, 14 dias ocupam ~40 MB dos 500 MB grátis.
 Na tela nova do Supabase o Session pooler fica em Connect → **Direct** (Connection string) → Connection Method: Session pooler → Type: URI.
 
+### "Pasto" na tela virou "Recria"; no banco e no código a chave continua `pasto` (13/11/2026)
+
+O Eduardo: "a categoria recria é o pasto que deveria chamar recria e me equivoquei na hora de criar". Em `AEpecuaria.html` e
+`AEMatriz.html` todo texto de tela que dizia "Pasto" como fase/área/módulo passou a dizer **"Recria"** (menu, destino do lote, tipo de
+dieta, pesagem, área das despesas, saída de ração, permissões, categoria de despesa no Matriz). **Só o texto mudou.** A chave
+interna segue `pasto` e NÃO deve ser renomeada sem um plano próprio, porque é a mesma palavra em: `lotes.destino` (com a trava
+`lotes_destino_check`), `dietas.tipo`, `lancamentos_financeiros.areas`, o módulo de permissão `pasto` (perfis e ~25 regras de acesso
+do banco, inclusive o `CASE lotes.destino` da regra "atualizar lotes"), a tabela `pasto` (saída de ração desses lotes) com
+`movimentos.pasto_id`, o tipo `pasto` da fila sem internet e as cópias guardadas nos aparelhos. Trocar o valor no banco quebraria quem
+está com o app antigo aberto ou com lançamento na fila, sem ganho para quem usa. Ele tinha escolhido "renomear de verdade"; o
+levantamento mostrou esse alcance e ficou só o texto. Textos de ajuda em minúscula ("ração/pasto/cria" nas dicas de custo) não foram
+trocados. 2 lotes com destino `pasto` em 13/11/2026.
+
 ## Armadilhas que já custaram caro
 
 - **O repositório é PÚBLICO: nada de dado sensível em arquivo versionado.**

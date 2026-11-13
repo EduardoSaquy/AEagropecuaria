@@ -1370,9 +1370,9 @@ function render(){
 // o prefixo, dar acesso ao financeiro de um liberaria o do outro.
 const MODULOS_GROUP = {insumos:'insumos', dietas:'dietas', confinamento:'confinamento', pasto:'pasto', reproducao:'cria', financeiro:'pec_financeiro', resultados:'pec_resultados'};
 // tipo (mesma chave usada por loteTipo()) -> rótulo de tela e módulo de permissão
-const TIPO_PESAGEM_LABEL = {confinamento:'Confinamento', pasto:'Pasto', reproducao:'Cria'};
+const TIPO_PESAGEM_LABEL = {confinamento:'Confinamento', pasto:'Recria', reproducao:'Cria'};
 const TIPO_MODULO = {confinamento:'confinamento', pasto:'pasto', reproducao:'cria'};
-const DIETA_TIPO_LABEL = {confinamento:'Confinamento', cria:'Cria', pasto:'Pasto'};
+const DIETA_TIPO_LABEL = {confinamento:'Confinamento', cria:'Cria', pasto:'Recria'};
 const ACAO_MODULOS = {
   ingrediente:['insumos'], movimento:['insumos'],
   dieta:['dietas'], producaoRacao:['dietas'],
@@ -1387,7 +1387,7 @@ const ACAO_MODULOS = {
   receita:['pec_financeiro','pec_resultados'], metaMargem:['pec_resultados'], investimento:['pec_resultados'],
 };
 // Ações que "Manejo: Editar" libera sozinho, sem precisar da permissão do
-// módulo do lote (Confinamento/Pasto/Cria) -- não é todo ACAO_MODULOS, só
+// módulo do lote (Confinamento/Recria/Cria) -- não é todo ACAO_MODULOS, só
 // as de manejo de verdade (Insumos/Dietas/Financeiro continuam exigindo a
 // permissão própria deles).
 const MANEJO_ACAO_TYPES = new Set(['reproducaoCusto','diagnosticoGestacional','parto','desmama','pesagem']);
@@ -1425,7 +1425,7 @@ function souColaborador(){ return state.perfil?.papel === 'colaborador'; }
 // geral)"/"Cadastro" -- essas 2 chaves antes só controlavam se a aba
 // aparecia (grupoVisivel), sem liberar nada de verdade: um colaborador
 // com "Cadastro: Editar" via a aba mas não conseguia criar lote/animal
-// (só Confinamento/Pasto/Cria editar resolvia isso). Confirmado com o
+// (só Confinamento/Recria/Cria editar resolvia isso). Confirmado com o
 // Eduardo em 01/09/2026 -- agora as duas realmente criam/editam lote e
 // animal sozinhas, sem precisar da permissão do módulo do lote também.
 function podeCriarLote(){ return acessoTotal() || state.perfil?.papel === 'consultor' || temPermissao('lotesGeral','editar') || temPermissao('cadastro','editar'); }
@@ -1448,7 +1448,7 @@ function podeEditarAcao(type){
 // Venda (abate, venda por animal ou por kg) lança uma Receita
 // automaticamente (módulo Resultados, mantido separado do resto de
 // propósito pra controlar quem vê receita/resultado da operação) — por
-// isso exige editar tanto no módulo do lote (Confinamento/Pasto/Cria)
+// isso exige editar tanto no módulo do lote (Confinamento/Recria/Cria)
 // quanto em Resultados, não só um dos dois. "Vendas: Editar" é um atalho
 // à parte pra essa mesma ação -- combinado com nenhuma outra permissão,
 // já basta (confirmado com o Eduardo em 01/09/2026: antes só controlava
@@ -1548,7 +1548,7 @@ function getIng(id){ return state.ingredientes.find(i=>i.id===Number(id)); }
 const FILA_OFFLINE_KEY = 'aepecuaria_fila_offline_v1';
 const LANCAMENTO_LABEL = {
   saidaRacao:'Saída de ração', saidaRacaoCria:'Saída de ração (Cria)', cocho:'Leitura de cocho',
-  pasto:'Saída de ração (Pasto)', reproducaoCusto:'Inseminação', diagnosticoGestacional:'Diagnóstico gestacional', parto:'Parto', desmama:'Desmama',
+  pasto:'Saída de ração (Recria)', reproducaoCusto:'Inseminação', diagnosticoGestacional:'Diagnóstico gestacional', parto:'Parto', desmama:'Desmama',
   pesagem:'Pesagem',
 };
 function lerFilaOffline(){
@@ -1580,7 +1580,7 @@ function enfileirarLancamento(type, campos){
 // lançamento de campo pra saber quem fez, sem afetar edições posteriores
 // (só o insert grava; editar não troca o autor original).
 function autorAtual(){ return state.perfil?.nome || state.perfil?.usuario || null; }
-// Insere um lançamento de "saída de ração" -- Confinamento, Cria ou Pasto,
+// Insere um lançamento de "saída de ração" -- Confinamento, Cria ou Recria,
 // não importa mais, quem decide como descontar o estoque é a própria dieta
 // escolhida: "consumo direto" desconta os insumos crus na hora (via
 // movimentos, igual sempre foi o Confinamento); senão, só grava a saída,
@@ -2068,14 +2068,14 @@ function recomputarPrecoIngrediente(movs, unidade){
 // Dietas que fazem sentido controlar por estoque de ração pronta (produzida
 // em lote e guardada). Quem é "consumo direto" é formulada e servida na
 // hora, sem virar um lote guardado, então não entra aqui. Não depende mais
-// da área (Confinamento/Cria/Pasto) -- qualquer dieta pode ser "produzida
+// da área (Confinamento/Cria/Recria) -- qualquer dieta pode ser "produzida
 // e guardada", a própria dieta decide.
 function dietasComEstoquePronto(){
   return state.dietas.filter(d=>!d.consumoDireto);
 }
 
 // Estoque (kg) de ração já pronta/misturada de uma dieta: soma das produções
-// registradas menos o que já foi consumido (Saída de Ração ou Pasto que
+// registradas menos o que já foi consumido (Saída de Ração ou Recria que
 // usaram essa dieta). A produção é quem desconta o ingrediente cru do
 // estoque (ver executarInsertLancamento) — o consumo diário só desconta
 // daqui, sem tocar o estoque de ingrediente de novo.
@@ -2111,7 +2111,7 @@ const GROUPS = {
     {key:'cocho', label:'Leitura de Cocho'},
     {key:'pesagemConfinamento', label:'Pesagem'},
   ]},
-  pasto: {label:'Pasto', icon:iconPasto(), pages:[
+  pasto: {label:'Recria', icon:iconPasto(), pages:[
     {key:'lotesPasto', label:'Lotes'},
     {key:'pasto', label:'Saída de Ração'},
     {key:'pesagemPasto', label:'Pesagem'},
@@ -2248,25 +2248,25 @@ function Header(){
     estoque:{eyebrow:'Movimentação', title:'Estoque', desc:'Saldo atual por ingrediente, calculado a partir das entradas e saídas registradas.'},
     dietas:{eyebrow:'Motor nutricional', title:'Formulação de Dietas', desc:'Combine ingredientes por percentual e veja MS, PB, NDT e custo calculados automaticamente.'},
     estoqueRacao:{eyebrow:'Produto acabado', title:'Estoque de Ração', desc:'Registre a produção (mistura) de ração de cada dieta e acompanhe o saldo já pronto, com alerta de estoque baixo.'},
-    lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Pasto ou Cria — para aparecerem automaticamente na aba certa.'},
+    lotesGeral:{eyebrow:'Estoque de animais', title:'Lotes', desc:'Cadastre todos os lotes aqui e escolha o destino de cada um — Confinamento, Recria ou Cria — para aparecerem automaticamente na aba certa.'},
     cadastroInicio:{eyebrow:'Início', title:'Cadastro', desc:'Registre novos lotes ou numere novos animais — de qualquer módulo, num lugar só.'},
     manejoInicio:{eyebrow:'Manejo', title:'Manejo', desc:'Passe pelo lote animal por animal e lance pesagem e reprodução de uma vez, direto do curral.'},
-    vendasGeral:{eyebrow:'Movimentação', title:'Vendas', desc:'Todas as vendas de animais de Confinamento, Pasto e Cria juntas numa lista só (abate por @, venda por animal ou por kg) — cada uma desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
+    vendasGeral:{eyebrow:'Movimentação', title:'Vendas', desc:'Todas as vendas de animais de Confinamento, Recria e Cria juntas numa lista só (abate por @, venda por animal ou por kg) — cada uma desconta o número de animais do lote e lança a receita automaticamente em Resultados.'},
     lotes:{eyebrow:'Confinamento', title:'Lotes', desc:'Cadastro dos lotes/currais de animais em confinamento, com número de cabeças e período de início e encerramento.'},
     racao:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     cocho:{eyebrow:'Manejo diário', title:'Leitura de Cocho', desc:'Registre a avaliação diária de sobra no cocho de cada curral, de 1 (limpo) a 4 (muito excesso).'},
-    lotesPasto:{eyebrow:'Pasto', title:'Lotes', desc:'Cadastro dos lotes soltos no pasto, com número de cabeças e período de início e encerramento.'},
-    pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes que estão no pasto — o estoque de cada ingrediente é descontado automaticamente.'},
+    lotesPasto:{eyebrow:'Recria', title:'Lotes', desc:'Cadastro dos lotes de recria, com número de cabeças e período de início e encerramento.'},
+    pasto:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a reposição de ração ou suplemento nos cochos dos lotes de recria — o estoque de cada ingrediente é descontado automaticamente.'},
     lotesReproducao:{eyebrow:'Cria', title:'Lotes', desc:'Cadastro dos lotes de fêmeas de cria (reprodução), com número de cabeças e período de início e encerramento.'},
     racaoCria:{eyebrow:'Movimentação', title:'Saída de Ração', desc:'Registre a ração feita e distribuída a um lote de Cria a partir de uma dieta — o estoque de cada ingrediente é descontado automaticamente.'},
     reproducaoGeral:{eyebrow:'Cria', title:'Reprodução', desc:'Inseminação, diagnóstico gestacional, partos e desmama dos lotes de Cria.'},
     pesagemConfinamento:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Confinamento, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
-    pesagemPasto:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Pasto, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
+    pesagemPasto:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Recria, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     pesagemReproducao:{eyebrow:'Movimentação', title:'Pesagem', desc:'Registre o peso médio dos lotes de Cria, com data e observação — acompanhe o ganho de peso e a arroba produzida.'},
     financeiroResumo:{eyebrow:'Resultado', title:'Custos Detalhados', desc:'Indicadores de custo do dia e do mês da operação — visível só para proprietário/administrador.'},
     financeiroCurral:{eyebrow:'Resultado', title:'Por Lote', desc:'Custo diário e mensal detalhado de cada lote ativo — visível só para proprietário/administrador.'},
     resultadosReproducao:{eyebrow:'Resultado', title:'Reprodução', desc:'Taxa de prenhez e taxa de desmame por lote, e o custo estimado de cada bezerro desmamado — visível só para proprietário/administrador.'},
-    financeiroCustosFixos:{eyebrow:'Financeiro', title:'Despesas', desc:'Lance as despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Pasto ou Cria.'},
+    financeiroCustosFixos:{eyebrow:'Financeiro', title:'Despesas', desc:'Lance as despesas da operação (recorrentes ou de um mês específico), cada uma com centro de custo e, quando souber, a área — Confinamento, Recria ou Cria.'},
     resultadosInvestimentos:{eyebrow:'Resultado', title:'Investimentos', desc:'Compra de animais, máquinas e outros bens — não entra no custo operacional.'},
     resultadosResumo:{eyebrow:'Resultado', title:'Resumo', desc:'Demonstrativo de Despesa vs Receita do mês e do ano, e a composição do custo mensal por categoria.'},
     resultadosReceitas:{eyebrow:'Financeiro', title:'Receitas', desc:'Lance a venda de animais e outras receitas da operação, por data e lote.'},
@@ -2299,7 +2299,7 @@ function openNewModal(type){
   } else if(type==='producaoRacao'){
     const dietasEstocaveis = dietasComEstoquePronto();
     if(dietasEstocaveis.length===0){
-      alert('Cadastre ao menos uma dieta de Cria ou Pasto (aba Formulação de Dietas) antes de registrar uma produção de ração. Confinamento não usa estoque de ração pronta — a ração é formulada e servida na hora.');
+      alert('Cadastre ao menos uma dieta de Cria ou Recria (aba Formulação de Dietas) antes de registrar uma produção de ração. Confinamento não usa estoque de ração pronta — a ração é formulada e servida na hora.');
       return false;
     }
     editDraft = {dietaId: dietasEstocaveis[0]?.id||'', data:hojeStr(), quantidadeKg:''};
@@ -2356,7 +2356,7 @@ function openNewModal(type){
     const lotesPasto = lotesQueRecebem('pasto');
     if(state.dietas.length===0){ alert(SEM_DIETA_PARA_RACAO); return false; }
     if(lotesPasto.length===0){
-      alert('Cadastre ao menos um lote com destino Pasto (aba Lotes) e uma dieta antes de registrar uma saída de ração (pasto).');
+      alert('Cadastre ao menos um lote com destino Recria (aba Lotes) e uma dieta antes de registrar uma saída de ração (recria).');
       return false;
     }
     editDraft = {loteId:'', dietaId:'', data:hojeStr(), quantidade:''};
@@ -2410,7 +2410,7 @@ function openNewModal(type){
   } else if(type==='venda'){
     const lotesElegiveis = state.lotes.filter(l=>!l.dataFim && Number(l.numeroAnimais||0)>0);
     if(lotesElegiveis.length===0){
-      alert('Cadastre ao menos um lote ativo com animais (Confinamento, Pasto ou Cria) antes de registrar uma venda.');
+      alert('Cadastre ao menos um lote ativo com animais (Confinamento, Recria ou Cria) antes de registrar uma venda.');
       return false;
     }
     editDraft = {tipo:'', loteId:'', data:hojeStr(), quantidade:'', tipoVenda:'arroba', pesoMedioKg:'', arrobasTotais:'', valorArroba:'', valorPorAnimal:'', valorKg:'', categoria:'abate', sexo:'', observacao:''};
@@ -2450,7 +2450,7 @@ function FabMenu(){
     {type:'producaoRacao', label:'Nova produção de ração'},
     {type:'saidaRacao', label:'Nova saída de ração'},
     {type:'cocho', label:'Nova leitura de cocho'},
-    {type:'pasto', label:'Nova saída de ração (Pasto)'},
+    {type:'pasto', label:'Nova saída de ração (Recria)'},
     {type:'saidaRacaoCria', label:'Nova saída de ração (Cria)'},
     {type:'reproducaoCusto', label:'Nova inseminação'},
     {type:'diagnosticoGestacional', label:'Novo diagnóstico gestacional'},
@@ -2678,7 +2678,7 @@ function calcDieta(d){
 }
 
 // Se a composição de uma dieta não soma 100%, todo lançamento que a usa
-// (Saída de Ração, Produção de Ração, Pasto) desconta só a fração
+// (Saída de Ração, Produção de Ração, Recria) desconta só a fração
 // correspondente do estoque de ingrediente cru — ex: composição somando
 // 60% desconta só 60% da quantidade de ração realmente lançada, deixando
 // "sobrar" ingrediente no estoque que na verdade já foi consumido. Por
@@ -2751,7 +2751,7 @@ function PageDietas(){
 function PageEstoqueRacao(){
   const dietasEstocaveis = dietasComEstoquePronto();
   if(dietasEstocaveis.length===0){
-    return `<div class="card">${Empty('Nenhuma dieta de Cria ou Pasto formulada','O estoque de ração pronta vale pra dieta produzida em lote e guardada (Cria, Pasto) — Confinamento é formulado e servido na hora, sem entrar aqui.')}</div>`;
+    return `<div class="card">${Empty('Nenhuma dieta de Cria ou Recria formulada','O estoque de ração pronta vale pra dieta produzida em lote e guardada (Cria, Recria) — Confinamento é formulado e servido na hora, sem entrar aqui.')}</div>`;
   }
   const rows = dietasEstocaveis.map(d=>{
     const saldo = estoqueRacaoPronta(d.id);
@@ -2764,7 +2764,7 @@ function PageEstoqueRacao(){
   const producoesRows = [...state.producoesRacao].sort((a,b)=> b.data.localeCompare(a.data) || b.id-a.id).slice(0,8);
 
   return `
-  <p class="hint" style="margin:0 0 14px;">Vale pra dieta produzida em lote e guardada (Cria, Pasto) — Confinamento é formulado e servido na hora, sem passar por aqui.</p>
+  <p class="hint" style="margin:0 0 14px;">Vale pra dieta produzida em lote e guardada (Cria, Recria) — Confinamento é formulado e servido na hora, sem passar por aqui.</p>
   <div class="stat-row">
     <div class="stat-card"><div class="stat-label">Dietas com estoque de ração pronta</div><div class="stat-value">${dietasEstocaveis.length}</div></div>
     <div class="stat-card"><div class="stat-label">Alertas de estoque baixo</div><div class="stat-value ${alertas>0?'alerta':''}">${alertas}</div></div>
@@ -2821,7 +2821,7 @@ function PageLotes(tipo){
     ? Empty('Nenhum lote de confinamento cadastrado','Cadastre o lote na aba Lotes, escolhendo Confinamento como destino, para ele aparecer aqui.')
     : tipo==='reproducao'
     ? Empty('Nenhum lote de cria cadastrado','Cadastre o lote na aba Lotes, escolhendo Cria como destino, para ele aparecer aqui.')
-    : Empty('Nenhum lote de pasto cadastrado','Cadastre o lote na aba Lotes, escolhendo Pasto como destino, para ele aparecer aqui.');
+    : Empty('Nenhum lote de recria cadastrado','Cadastre o lote na aba Lotes, escolhendo Recria como destino, para ele aparecer aqui.');
   const mostraSexo = tipo==='confinamento';
   return `
   <div class="toolbar">
@@ -2865,7 +2865,7 @@ function PageLotes(tipo){
 }
 
 /* ===================== PÁGINA: LOTES (ESTOQUE DE ANIMAIS) ===================== */
-const DESTINO_LOTE_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
+const DESTINO_LOTE_LABEL = {confinamento:'Confinamento', pasto:'Recria', cria:'Cria'};
 const ACAO_MANEJO_LABEL = {
   pesagem:'Pesagem', protocoloIA:'Protocolo de inseminação', inseminacao:'Inseminação',
   diagnostico:'Diagnóstico gestacional', desmama:'Desmama',
@@ -3631,7 +3631,7 @@ function PageCadastroInicio(){
     <button type="button" class="cadastro-opcao" data-fab-action="lote">
       <span class="cadastro-opcao-icone">${iconLoteGrande()}</span>
       <span class="cadastro-opcao-titulo">Lotes</span>
-      <span class="cadastro-opcao-desc">Criar um lote novo ou somar animais chegando num lote que já existe (Confinamento, Pasto ou Cria).</span>
+      <span class="cadastro-opcao-desc">Criar um lote novo ou somar animais chegando num lote que já existe (Confinamento, Recria ou Cria).</span>
     </button>
     <button type="button" class="cadastro-opcao" data-fab-action="animal">
       <span class="cadastro-opcao-icone">${iconAnimalGrande()}</span>
@@ -3665,7 +3665,7 @@ function PageLotesGeral(){
     ${podeCriarLote() ? `<button class="btn btn-primary btn-sm" data-fab-action="lote">+ Nova entrada de animais</button>` : ''}
   </div>
   <div class="card">
-    ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre um lote e escolha o destino — Confinamento, Pasto ou Cria — para ele aparecer na aba certa.') : `
+    ${list.length===0 ? Empty('Nenhum lote cadastrado','Cadastre um lote e escolha o destino — Confinamento, Recria ou Cria — para ele aparecer na aba certa.') : `
     <table>
       <thead><tr>
         <th>Lote</th><th>Destino</th><th>Sexo</th><th>Nº de animais</th><th>Início</th><th>Fim</th><th>Status</th><th></th>
@@ -4002,7 +4002,7 @@ function PageVendasGeral(){
   const totalAnimais = vendas.reduce((acc,v)=>acc+Number(v.quantidade||0),0);
   const totalValor = vendas.reduce((acc,v)=>acc+valorVenda(v),0);
   const rv = listaVisivelHoje('vendas', vendas);
-  // Quem vê a tela pelo Confinamento/Pasto/Cria, sem a permissão Vendas, vê cabeças e lotes, sem valor (12/11/2026).
+  // Quem vê a tela pelo Confinamento/Recria/Cria, sem a permissão Vendas, vê cabeças e lotes, sem valor (12/11/2026).
   const comValor = veValorDeVenda();
   return `
   <div class="toolbar">
@@ -4015,7 +4015,7 @@ function PageVendasGeral(){
     ${comValor ? `<div class="stat-card"><div class="stat-label">Receita total</div><div class="stat-value">R$ ${fmt(totalValor)}</div></div>` : ''}
   </div>
   <div class="card">
-    ${rv.itens.length===0 ? (vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Pasto ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : Empty('Nenhuma venda hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
+    ${rv.itens.length===0 ? (vendas.length===0 ? Empty('Nenhuma venda registrada','Registre a venda (abate, por animal ou por kg) de um lote — Confinamento, Recria ou Cria — pra dar baixa nos animais e lançar a receita automaticamente em Resultados.') : Empty('Nenhuma venda hoje','Clique em "Ver todos" acima pra ver o histórico completo.')) : `
     <table>
       <thead><tr><th>Data</th><th>Lote</th><th>Atividade</th><th>Categoria</th><th>Sexo</th><th>Tipo</th><th>Qtd. animais</th>${comValor ? '<th>Preço</th><th>Valor total</th>' : ''}<th>Lançado por</th><th></th></tr></thead>
       <tbody>
@@ -4227,7 +4227,7 @@ function PagePasto(){
   const listaTipo = state.pasto
     .filter(p=>{ const lote = state.lotes.find(l=>l.id===p.loteId); return lote && loteTipo(lote)==='pasto'; });
   const lotesTipo = state.lotes.filter(l=>loteTipo(l)==='pasto');
-  // Dietas que já foram usadas em algum lançamento de Pasto -- não dá mais
+  // Dietas que já foram usadas em algum lançamento de Recria -- não dá mais
   // pra filtrar por dieta.tipo, já que qualquer dieta pode ser usada em
   // qualquer área agora.
   const dietasTipo = [...new Set(listaTipo.map(p=>p.dietaId))].map(id=>state.dietas.find(d=>d.id===id)).filter(Boolean);
@@ -4243,10 +4243,10 @@ function PagePasto(){
   // faz sentido esconder atrás de "Ver todos".
   const rv = listaVisivelHoje('pasto', list, undefined, temFiltro);
   const vazio = listaTipo.length===0
-    ? Empty('Nenhuma saída de ração (Pasto) registrada','Registre a mistura/dieta de pasto colocada no cocho de cada lote.')
+    ? Empty('Nenhuma saída de ração (Recria) registrada','Registre a mistura/dieta de recria colocada no cocho de cada lote.')
     : (temFiltro
-      ? Empty('Nenhuma saída de ração (Pasto) com esse filtro','Tente outro mês, lote ou dieta.')
-      : Empty('Nenhuma saída de ração (Pasto) hoje','Clique em "Ver todos" acima pra ver o histórico completo.'));
+      ? Empty('Nenhuma saída de ração (Recria) com esse filtro','Tente outro mês, lote ou dieta.')
+      : Empty('Nenhuma saída de ração (Recria) hoje','Clique em "Ver todos" acima pra ver o histórico completo.'));
   return `
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:200px;">
@@ -4269,14 +4269,14 @@ function PagePasto(){
     </div>
   </div>
   <div class="toolbar">
-    <span class="hint">${list.length} saída(s) de ração (Pasto) registrada(s)${temFiltro ? ' (filtrado)' : (rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`)}</span>
+    <span class="hint">${list.length} saída(s) de ração (Recria) registrada(s)${temFiltro ? ' (filtrado)' : (rv.expandido?'':` · mostrando hoje (${rv.totalHoje})`)}</span>
     ${temFiltro ? '' : botaoToggleLista('pasto', rv)}
   </div>
   <div class="card">
     ${rv.itens.length===0 ? vazio : `
     <table>
       <thead><tr>
-        <th>Data</th><th>Lote</th><th>Nº animais</th><th>Dieta de pasto</th><th>Quantidade</th><th>Ração/animal</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
+        <th>Data</th><th>Lote</th><th>Nº animais</th><th>Dieta de recria</th><th>Quantidade</th><th>Ração/animal</th>${verValor?'<th>Custo estimado</th>':''}<th>Lançado por</th><th></th>
       </tr></thead>
       <tbody>
         ${agruparPorDiaLote(rv.itens.map(p=>({...p, quantidadeKg:p.quantidade}))).map(g=>{
@@ -4687,7 +4687,7 @@ function numeroAnimaisParaArroba(lote, ultimaPesagem){
   if(pesadosNaUltima>0) return pesadosNaUltima;
   return state.vendas.filter(v=>v.loteId===lote.id).reduce((a,v)=>a+Number(v.quantidade||0),0);
 }
-// Custo fixo/animal/dia de cada área (Confinamento/Pasto/Cria), pra
+// Custo fixo/animal/dia de cada área (Confinamento/Recria/Cria), pra
 // espalhar pela janela de cada lote no Painel de Resultado dos Lotes --
 // mesma conta (custo fixo do mês corrente ÷ 30 ÷ nº de animais ativos da
 // área hoje) já usada no Custo/@ do Confinamento da tela Financeiro
@@ -4840,7 +4840,7 @@ function custoSaidaRacao(s){
 // maioria usa "data"; alguns registros de investimento usam o mesmo nome).
 // bypass pula o colapso e devolve a lista inteira já "expandida" -- usado
 // nas telas que já têm filtro de mês/lote/dieta próprio (Saída de Ração,
-// Pasto): se a pessoa já filtrou por algo específico, não faz sentido
+// Recria): se a pessoa já filtrou por algo específico, não faz sentido
 // esconder atrás de "Ver todos" de novo.
 function listaVisivelHoje(listId, listaCompleta, dataAcessor, bypass){
   if(bypass) return {itens:listaCompleta, expandido:true, totalHoje:0, total:listaCompleta.length};
@@ -4868,19 +4868,19 @@ const SERIES_COLORS = ['#2a78d6','#008300','#e87ba4','#eda100','#1baf7a','#eb683
 // A cor segue sempre a mesma categoria (nunca a posição no ranking do mês),
 // para não trocar de cor quando um custo cresce/encolhe em relação aos outros.
 // São dois gráficos com jobs diferentes — não fazem sentido misturados no
-// mesmo painel: um compara as áreas de produção (Confinamento/Pasto/Cria),
+// mesmo painel: um compara as áreas de produção (Confinamento/Recria/Cria),
 // o outro compara os centros de custo fixo (Pessoal, Manutenção etc.).
-const AREAS_PRODUCAO = ['Confinamento','Pasto','Cria'];
+const AREAS_PRODUCAO = ['Confinamento','Recria','Cria'];
 function coresPorArea(){
   const mapa = {};
   AREAS_PRODUCAO.forEach((nome,idx)=>{ mapa[nome] = SERIES_COLORS[idx]; });
   return mapa;
 }
-// No painel global, Confinamento/Pasto/Cria têm cor fixa reservada (mesma dos
+// No painel global, Confinamento/Recria/Cria têm cor fixa reservada (mesma dos
 // outros gráficos); as categorias de custo fixo (texto livre) recebem uma cor
 // por ordem alfabética nos slots restantes, sem repetir cor entre elas.
 // Centros de custo fixo têm cor própria (ordem alfabética) — não precisam
-// reservar slots para Confinamento/Pasto/Cria porque esse gráfico não mistura
+// reservar slots para Confinamento/Recria/Cria porque esse gráfico não mistura
 // os dois eixos (área x centro de custo): cada real do custo fixo pertence a
 // exatamente uma categoria aqui, sem sobrepor com o gráfico de área.
 function coresPorCentroCusto(nomes){
@@ -4890,7 +4890,7 @@ function coresPorCentroCusto(nomes){
   return mapa;
 }
 
-// Cada área (Confinamento/Pasto/Cria) já vem com o custo fixo diluído por
+// Cada área (Confinamento/Recria/Cria) já vem com o custo fixo diluído por
 // cabeça somado (mesmo critério do Por Curral), então as 3 fatias juntas
 // somam 100% do custo total do mês — sem precisar repetir os centros de
 // custo fixo como fatias à parte.
@@ -4898,7 +4898,7 @@ function composicaoPorArea(confMes, pastoMes, criaMes, detalhesPorArea){
   detalhesPorArea = detalhesPorArea || {confinamento:[], pasto:[], cria:[]};
   const grupos = {};
   if(confMes>0) grupos['Confinamento'] = {valor:confMes, itens:detalhesPorArea.confinamento};
-  if(pastoMes>0) grupos['Pasto'] = {valor:pastoMes, itens:detalhesPorArea.pasto};
+  if(pastoMes>0) grupos['Recria'] = {valor:pastoMes, itens:detalhesPorArea.pasto};
   if(criaMes>0) grupos['Cria'] = {valor:criaMes, itens:detalhesPorArea.cria};
   let entries = Object.entries(grupos).map(([nome,g])=>({nome, valor:g.valor, itens:g.itens}));
   entries.sort((a,b)=>b.valor-a.valor);
@@ -5178,7 +5178,7 @@ function gmdEntre(pesoAnterior, pesoAtual, dataAnterior, dataAtual){
  * Sempre que a pesagem tem peso individual, o ganho sai do MESMO animal nas
  * duas pesagens, procurado em qualquer lote do mesmo tipo (o boi pode ter
  * vindo de outro curral; vaca com o mesmo número fica de fora porque está
- * em lote de Cria/Pasto). Número que aparece duas vezes na mesma pesagem é
+ * em lote de Cria/Recria). Número que aparece duas vezes na mesma pesagem é
  * ambíguo e não entra. Sem nenhum animal com peso anterior (pesagem só com
  * média, como a "Entrada de animais"), cai na média do lote.
  *
@@ -5349,8 +5349,8 @@ function precoArrobaAtual(sexo){
 const NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 // Mesmo filtro de racaoLoteTipo que dadosFinanceiro() usa pro mês --
-// saidasRacao só conta pra Confinamento/Cria (Pasto tem seu próprio custo
-// via state.pasto). Sem esse filtro, um lote que mudou de destino pra Pasto
+// saidasRacao só conta pra Confinamento/Cria (Recria tem seu próprio custo
+// via state.pasto). Sem esse filtro, um lote que mudou de destino pra Recria
 // depois de já ter saídas de ração lançadas fazia o total do ano (que soma
 // custoVariavelDoMes de cada mês) não bater com o total do mês corrente.
 function custoVariavelDoMes(mesStr){
@@ -5424,7 +5424,7 @@ function receitaDoMes(mesStr){
 // Quanto de UMA despesa (já filtrada pro mês) cai em cada atividade —
 // nenhuma atividade marcada (Geral) rateia por cabeça entre as três; uma
 // marcada vai 100% pra ela; duas ou três marcadas rateiam por cabeça só
-// entre as marcadas (ex: Pasto+Cria sem pesar no Confinamento). Usado tanto
+// entre as marcadas (ex: Recria+Cria sem pesar no Confinamento). Usado tanto
 // pra somar o total de cada área quanto pra listar, despesa por despesa, o
 // que compõe cada fatia do gráfico "por área" (clique numa fatia pra ver
 // o detalhe).
@@ -5696,7 +5696,7 @@ function PageFinanceiroResumo(){
     <div class="stat-card"><div class="stat-label">Total/animal/mês (com fixo)</div><div class="stat-value">R$ ${fmt(d.custoTotalPorAnimalMes,2)}</div></div>
     <div class="stat-card"><div class="stat-label">Custo por @ produzida</div><div class="stat-value">${d.custoPorArrobaMes!==null ? 'R$ '+fmt(d.custoPorArrobaMes,2) : '—'}</div><div class="hint" style="margin-top:3px;">${fmt(d.arrobasMes,1)} @ produzidas na fazenda</div></div>
   </div>
-  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário). "@ produzidas" vem das pesagens lançadas em Confinamento, Pasto e Cria — sem pesagem no mês, aparece "—".${d.compraRacaoMes>0 ? ` Dos custos fixos do mês, R$ ${fmt(d.compraRacaoMes)} são compra de ração (Nutrição animal): essa compra não entra no "com fixo", no total nem no custo por @, porque a ração já entra pelo consumo (saída de ração) — somar as duas contaria a ração duas vezes. No resultado financeiro (receita − despesa) a compra continua contando.` : ''}</p>
+  <p class="hint" style="margin:10px 0 20px;">"Com fixo" soma ao custo variável uma fatia do custo fixo mensal, diluída entre os animais em lotes ativos (mensal ÷ 30 dias para o valor diário). "@ produzidas" vem das pesagens lançadas em Confinamento, Recria e Cria — sem pesagem no mês, aparece "—".${d.compraRacaoMes>0 ? ` Dos custos fixos do mês, R$ ${fmt(d.compraRacaoMes)} são compra de ração (Nutrição animal): essa compra não entra no "com fixo", no total nem no custo por @, porque a ração já entra pelo consumo (saída de ração) — somar as duas contaria a ração duas vezes. No resultado financeiro (receita − despesa) a compra continua contando.` : ''}</p>
 
   <div class="card" style="margin-bottom:22px;">
     <div class="card-pad" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -5722,7 +5722,7 @@ function PageFinanceiroResumo(){
           <td class="mono">${d.animaisConfinamento>0 ? 'R$ '+fmt(d.custoTotalConfinamentoMes/d.animaisConfinamento,2) : '—'}</td>
         </tr>
         <tr>
-          <td><strong>Pasto</strong></td>
+          <td><strong>Recria</strong></td>
           <td class="mono">${fmtInt(d.animaisPasto)}</td>
           <td class="mono">R$ ${fmt(d.custoTotalPastoMes/diasDecorridosMes)}</td>
           <td class="mono">${d.animaisPasto>0 ? 'R$ '+fmt(d.custoTotalPastoMes/diasDecorridosMes/d.animaisPasto,2) : '—'}</td>
@@ -5809,8 +5809,8 @@ function PageResultadosResumo(){
   ${DemonstrativoReceitaDespesa(d.fixosMes, d.receitaMes, d.margemAtualPct, state.metaMargemPct, 'mes', true)}
   ${ComparativoMensal(meses)}
   ${DemonstrativoReceitaDespesa(anual.despesa, anual.receita, anual.receita>0 ? (anual.resultado/anual.receita*100) : null, state.metaMargemPct, 'ano', false)}
-  ${PainelResultados(composicaoArea, 'area', 'Painel de resultados', 'Despesa do mês por área (Confinamento, Pasto e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.')}
-  ${PainelResultados(composicaoAreaAno, 'area-ano', 'Painel de resultados', 'Despesa do ano por área (Confinamento, Pasto e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.', 'no ano')}
+  ${PainelResultados(composicaoArea, 'area', 'Painel de resultados', 'Despesa do mês por área (Confinamento, Recria e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.')}
+  ${PainelResultados(composicaoAreaAno, 'area-ano', 'Painel de resultados', 'Despesa do ano por área (Confinamento, Recria e Cria)', 'Cadastre despesas com área direta ou geral, e lotes ativos, para ver a composição por área aqui.', 'no ano')}
   ${PainelResultados(composicaoFixos, 'fixos', 'Painel de resultados', 'Despesa do mês por centro de custo', 'Cadastre despesas em Financeiro para ver a composição por centro de custo aqui.')}
   ${PainelResultados(composicaoFixosAno, 'fixos-ano', 'Painel de resultados', 'Despesa do ano por centro de custo', 'Cadastre despesas em Financeiro para ver a composição por centro de custo aqui.', 'no ano')}
   <p class="hint" style="margin:-8px 0 20px;">Esses quatro gráficos mostram só a despesa cadastrada em Financeiro (custos fixos) — o consumo diário de ração, pasto e reprodução não entra aqui; ele já aparece em Financeiro &gt; Resumo e Por Lote.</p>
@@ -5841,7 +5841,7 @@ function custosDiariosPorLote(){
   }
 
   // O custo fixo de cada área (dadosFinanceiro já rateia despesa por
-  // despesa entre Confinamento/Pasto/Cria) ainda precisa ser dividido entre
+  // despesa entre Confinamento/Recria/Cria) ainda precisa ser dividido entre
   // os lotes daquela área — não só pelo número de animais de cada um, mas
   // ponderado também pelos dias que cada lote já existe no mês (animal ×
   // dia). Sem isso, um lote que chegou há poucos dias entraria na conta com
@@ -5862,7 +5862,7 @@ function custosDiariosPorLote(){
   // tem um ciclo bem diferente, então cada uma tem sua própria janela (o
   // custo fixo acima continua só do mês corrente, isso não muda):
   // Confinamento é um ciclo curto (60-120 dias) -- soma desde a entrada do
-  // lote, sem limite de mês. Pasto e Cria ficam meses a anos -- soma desde
+  // lote, sem limite de mês. Recria e Cria ficam meses a anos -- soma desde
   // 1º de janeiro do ano corrente (ou desde a entrada, se entrou depois),
   // resetando a cada ano novo pra não arrastar custo de anos passados.
   const inicioAnoStr = d.mes.slice(0,4)+'-01-01';
@@ -5881,7 +5881,7 @@ function custosDiariosPorLote(){
   // (ex: 21/07 e 03/09, sem pesagem no início do mês) tinha o ganho de
   // peso de MESES inteiros creditado só ao mês corrente (que só carrega o
   // custo desse mês) -- @ produzida inflada, custo/@ artificialmente
-  // baixo. Achado pelo Eduardo em 07/09/2026. Pasto/Cria continuam usando
+  // baixo. Achado pelo Eduardo em 07/09/2026. Recria/Cria continuam usando
   // a janela do mês (ciclo mais longo, sem o mesmo problema).
   const totalAnimaisConfinamento = lotesAtivos.filter(l=>loteTipo(l)==='confinamento').reduce((a,l)=>a+Number(l.numeroAnimais||0),0);
   function custoPorArrobaJanelaPesagem(lote){
@@ -5935,7 +5935,7 @@ function custosDiariosPorLote(){
   // não são lançados todo santo dia -- mostrar só o valor de hoje ou só o
   // total do mês corrente deixava a conta furada ou reiniciando toda hora.
   // Cada lote soma o que já gastou na SUA janela (definida acima -- desde
-  // a entrada pro Confinamento, desde o ano corrente pro Pasto/Cria) e
+  // a entrada pro Confinamento, desde o ano corrente pro Recria/Cria) e
   // divide pelos dias dessa mesma janela.
   const custosPorLote = lotesAtivos.map(l=>{
     const inicioJanela = inicioJanelaVariavel(l);
@@ -5961,7 +5961,7 @@ function custosDiariosPorLote(){
   }).sort((a,b)=> b.total-a.total);
 
   // Mesmos dados de custosMesPorLote, só que somados por área (Confinamento/
-  // Pasto/Cria) em vez de por lote individual — pra comparar categorias.
+  // Recria/Cria) em vez de por lote individual — pra comparar categorias.
   const custoPorAreaMes = ['confinamento','pasto','reproducao'].map(tipo=>{
     const lotesArea = custosMesPorLote.filter(r=>loteTipo(r.lote)===tipo);
     const totalAnimais = lotesArea.reduce((a,r)=>a+Number(r.lote.numeroAnimais||0),0);
@@ -6113,7 +6113,7 @@ function PageResultadosReproducao(){
   <div class="card">
     ${bezerros.length===0 ? Empty('Nenhuma desmama registrada','Registre a desmama de cada bezerro pelo Manejo para ver o custo aqui.') : `
     <table>
-      <thead><tr><th>Lote</th><th>Nº da mãe</th><th>Nasceu em</th><th>Desmamou em</th><th>Dias</th><th>Protocolo</th><th>Ração+Pasto</th><th>Fixo (estimado)</th><th>Total</th></tr></thead>
+      <thead><tr><th>Lote</th><th>Nº da mãe</th><th>Nasceu em</th><th>Desmamou em</th><th>Dias</th><th>Protocolo</th><th>Ração+Recria</th><th>Fixo (estimado)</th><th>Total</th></tr></thead>
       <tbody>
         ${bezerros.map(c=>`
           <tr>
@@ -6131,12 +6131,12 @@ function PageResultadosReproducao(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin-top:12px;">Estimativa: "Protocolo" é o custo da inseminação daquela vaca específica, quando encontrada pelo lote e número da vaca (aparece "—" quando não há inseminação registrada pra essa vaca); "Ração+Pasto" é o gasto real do lote entre o nascimento e a desmama, dividido pelo nº de animais do lote; "Fixo" usa a taxa diária atual do lote × os dias até a desmama — o app não guarda o histórico de quantos animais o lote tinha em cada mês passado.</p>
+  <p class="hint" style="margin-top:12px;">Estimativa: "Protocolo" é o custo da inseminação daquela vaca específica, quando encontrada pelo lote e número da vaca (aparece "—" quando não há inseminação registrada pra essa vaca); "Ração+Recria" é o gasto real do lote entre o nascimento e a desmama, dividido pelo nº de animais do lote; "Fixo" usa a taxa diária atual do lote × os dias até a desmama — o app não guarda o histórico de quantos animais o lote tinha em cada mês passado.</p>
   `;
 }
 
 // Lançamentos de alimentação de um lote (Saída de Ração pra Confinamento/
-// Cria, Pasto pra lote de Pasto), normalizados em {data, quantidade}, dentro
+// Cria, Recria pra lote de Recria), normalizados em {data, quantidade}, dentro
 // de uma janela de datas -- usado pelo diagnóstico abaixo.
 function lancamentosAlimentacaoDoLote(lote, inicioJanela, hoje){
   if(loteTipo(lote)==='pasto'){
@@ -6160,7 +6160,7 @@ function agruparDatasEmIntervalos(datas){
   return intervalos;
 }
 // Varre, pra cada lote ativo, a mesma janela usada no custo médio diário
-// (desde a entrada pro Confinamento, desde 1º de janeiro pro Pasto/Cria) --
+// (desde a entrada pro Confinamento, desde 1º de janeiro pro Recria/Cria) --
 // procurando (1) dias corridos sem nenhum lançamento de alimentação (puxam a
 // média pra baixo, sem aparecer como erro em lugar nenhum) e (2) lançamentos
 // cuja quantidade foge muito da mediana do próprio lote (menos da metade ou
@@ -6200,7 +6200,7 @@ function PageFinanceiroCurral(){
   return `
   <p class="eyebrow" style="margin-bottom:10px;">Custo médio diário por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
-    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo médio diário de cada um aqui.') : `
+    ${custosPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Recria ou Cria para ver o custo médio diário de cada um aqui.') : `
     <table>
       <thead><tr><th>Curral</th><th>Nº animais</th><th>Custo variável (méd./dia)</th><th>Custo teórico da dieta (dia)</th><th>% do teórico</th><th>Custo fixo (dia)</th><th>Custo médio diário (fixo + variável)</th><th>Custo/animal (méd./dia)</th></tr></thead>
       <tbody>
@@ -6219,13 +6219,13 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Pasto), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia), e cada atividade tem sua própria janela de tempo, pelo ciclo bem diferente de cada uma: no <strong>Confinamento</strong> (ciclo curto) soma tudo que já foi gasto desde a <strong>entrada do lote</strong>, sem resetar por mês; no <strong>Pasto</strong> e na <strong>Cria</strong> (ciclo de meses a anos) soma desde <strong>1º de janeiro do ano corrente</strong> (ou desde a entrada, se entrou depois), resetando a cada ano novo. O custo fixo continua sendo só do mês corrente (mensal ÷ 30), rateado entre os currais na proporção de animais × dias que cada um já existe no mês — isso não mudou. <strong>"Custo teórico da dieta"</strong> é quanto deveria custar se o lote inteiro comesse a dieta padrão cadastrada (kg/animal/dia × preço × nº de animais) — compare com o "Custo variável" real ao lado: se o "% do teórico" estiver bem abaixo de 100%, é sinal de que faltou lançar Saída de Ração em algum dia (o que puxa a média real pra baixo) ou que a dieta padrão cadastrada está desatualizada em relação ao que é realmente dado.</p>
+  <p class="hint" style="margin:-14px 0 22px;">"Custo variável" junta ração, pasto e cria numa coisa só — um curral só tem custo na categoria da sua própria atividade (ex: Confinamento nunca tem custo de Recria), então mostrar as três colunas separadas só deixava a tabela cheia de R$ 0,00. Não é o gasto de hoje especificamente (ração/pasto/cria não são lançados todo dia), e cada atividade tem sua própria janela de tempo, pelo ciclo bem diferente de cada uma: no <strong>Confinamento</strong> (ciclo curto) soma tudo que já foi gasto desde a <strong>entrada do lote</strong>, sem resetar por mês; no <strong>Recria</strong> e na <strong>Cria</strong> (ciclo de meses a anos) soma desde <strong>1º de janeiro do ano corrente</strong> (ou desde a entrada, se entrou depois), resetando a cada ano novo. O custo fixo continua sendo só do mês corrente (mensal ÷ 30), rateado entre os currais na proporção de animais × dias que cada um já existe no mês — isso não mudou. <strong>"Custo teórico da dieta"</strong> é quanto deveria custar se o lote inteiro comesse a dieta padrão cadastrada (kg/animal/dia × preço × nº de animais) — compare com o "Custo variável" real ao lado: se o "% do teórico" estiver bem abaixo de 100%, é sinal de que faltou lançar Saída de Ração em algum dia (o que puxa a média real pra baixo) ou que a dieta padrão cadastrada está desatualizada em relação ao que é realmente dado.</p>
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo total do mês por curral (ração + pasto + cria + fatia do custo fixo)</p>
   <div class="card" style="margin-bottom:22px;">
-    ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para ver o custo total do mês de cada um aqui.') : `
+    ${custosMesPorLote.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Recria ou Cria para ver o custo total do mês de cada um aqui.') : `
     <table>
-      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Pasto+Cria no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th><th>@ produzidas</th><th>Custo/@</th></tr></thead>
+      <thead><tr><th>Curral</th><th>Nº animais</th><th>Ração+Recria+Cria no mês</th><th>Custo fixo alocado</th><th>Total no mês</th><th>Custo/animal no mês</th><th>@ produzidas</th><th>Custo/@</th></tr></thead>
       <tbody>
         ${custosMesPorLote.map(r=>`
           <tr>
@@ -6246,7 +6246,7 @@ function PageFinanceiroCurral(){
 
   <p class="eyebrow" style="margin-bottom:10px;">Custo por @ produzida — por área</p>
   <div class="card">
-    ${custoPorAreaMes.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para comparar o custo por @ produzida entre as áreas.') : `
+    ${custoPorAreaMes.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Recria ou Cria para comparar o custo por @ produzida entre as áreas.') : `
     <table>
       <thead><tr><th>Área</th><th>Lotes</th><th>Nº animais</th><th>Total no mês</th><th>Custo/animal</th><th>@ produzidas</th><th>Custo/@</th></tr></thead>
       <tbody>
@@ -6264,11 +6264,11 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin-top:12px;">Soma dos lotes de cada área (mesmos dados da tabela "Por Lote" acima) — útil pra comparar, por exemplo, se o Confinamento está produzindo @ mais barata que o Pasto.</p>
+  <p class="hint" style="margin-top:12px;">Soma dos lotes de cada área (mesmos dados da tabela "Por Lote" acima) — útil pra comparar, por exemplo, se o Confinamento está produzindo @ mais barata que o Recria.</p>
 
-  <p class="eyebrow" style="margin-bottom:10px;">Diagnóstico de lançamentos (Saída de Ração / Pasto)</p>
+  <p class="eyebrow" style="margin-bottom:10px;">Diagnóstico de lançamentos (Saída de Ração / Recria)</p>
   <div class="card">
-    ${diagnostico.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Pasto ou Cria para conferir os lançamentos aqui.') : `
+    ${diagnostico.length===0 ? Empty('Nenhum lote ativo','Cadastre lotes em Confinamento, Recria ou Cria para conferir os lançamentos aqui.') : `
     <table>
       <thead><tr><th>Curral</th><th>Janela analisada</th><th>Dias sem lançamento</th><th>Lançamentos fora do padrão</th></tr></thead>
       <tbody>
@@ -6285,7 +6285,7 @@ function PageFinanceiroCurral(){
       </tbody>
     </table>`}
   </div>
-  <p class="hint" style="margin-top:12px;">"Dias sem lançamento" conta dias corridos, dentro da mesma janela usada no custo médio diário acima, sem nenhuma Saída de Ração/Pasto lançada pro lote — cada dia faltando puxa a média (e o "% do teórico" da tabela acima) pra baixo. "Fora do padrão" lista lançamentos com menos da metade ou mais do dobro da quantidade mediana lançada pro mesmo lote — pode ser erro de digitação (esqueceu um zero, ou lançou no lote errado) ou uma mudança real que vale a pena conferir.</p>`;
+  <p class="hint" style="margin-top:12px;">"Dias sem lançamento" conta dias corridos, dentro da mesma janela usada no custo médio diário acima, sem nenhuma Saída de Ração/Recria lançada pro lote — cada dia faltando puxa a média (e o "% do teórico" da tabela acima) pra baixo. "Fora do padrão" lista lançamentos com menos da metade ou mais do dobro da quantidade mediana lançada pro mesmo lote — pode ser erro de digitação (esqueceu um zero, ou lançou no lote errado) ou uma mudança real que vale a pena conferir.</p>`;
 }
 
 /* ---- Financeiro: Receitas ---- */
@@ -6331,7 +6331,7 @@ function PageResultadosReceitas(){
 }
 
 /* ---- Financeiro: Despesas ---- */
-const AREA_LABEL = {confinamento:'Confinamento', pasto:'Pasto', cria:'Cria'};
+const AREA_LABEL = {confinamento:'Confinamento', pasto:'Recria', cria:'Cria'};
 function PageFinanceiroCustosFixos(){
   const busca = state.searchDespesas.toLowerCase();
   const mesAtual = mesAtualStr();
@@ -6434,7 +6434,7 @@ const MODULOS_PERMISSAO = [
   ['manejo','Manejo'], ['cadastro','Cadastro'],
   ['insumos','Insumos'], ['dietas','Dietas'],
   ['lotesGeral','Lotes (visão geral)'],
-  ['confinamento','Confinamento'], ['pasto','Pasto'], ['cria','Cria'],
+  ['confinamento','Confinamento'], ['pasto','Recria'], ['cria','Cria'],
   ['vendas','Vendas (com o valor da venda)'],
   // pec_ nos dois últimos: no banco unificado o Lavoura também tem
   // 'financeiro' e 'resultados', com outro significado. Ver MODULOS_GROUP.
@@ -6637,7 +6637,7 @@ function ModalDieta(){
             <select id="f-tipodieta">
               <option value="confinamento" ${d.tipo==='confinamento'?'selected':''}>Confinamento</option>
               <option value="cria" ${d.tipo==='cria'?'selected':''}>Cria</option>
-              <option value="pasto" ${d.tipo==='pasto'?'selected':''}>Pasto</option>
+              <option value="pasto" ${d.tipo==='pasto'?'selected':''}>Recria</option>
             </select>
           </div>
           <div class="field"><label>Categoria animal</label><input id="f-categoria" value="${esc(d.categoriaAnimal)}" placeholder="Ex: Boi terminação"/></div>
@@ -6652,7 +6652,7 @@ function ModalDieta(){
             <option value="direto" ${d.consumoDireto?'selected':''}>Direto do estoque de insumos (mistura e serve na hora)</option>
           </select>
         </div>
-        <p class="hint">"Direto do estoque" desconta os insumos crus na hora que a Saída de Ração é lançada. "Produzida e guardada" exige produzir um lote antes (Produção de Ração) — a Saída de Ração só consome desse estoque pronto. Qualquer dieta pode ser usada por qualquer lote (Confinamento, Cria ou Pasto) — a Categoria acima é só pra organizar a lista. O estoque mínimo (produzida e guardada) é usado no alerta da aba "Estoque de Ração".</p>
+        <p class="hint">"Direto do estoque" desconta os insumos crus na hora que a Saída de Ração é lançada. "Produzida e guardada" exige produzir um lote antes (Produção de Ração) — a Saída de Ração só consome desse estoque pronto. Qualquer dieta pode ser usada por qualquer lote (Confinamento, Cria ou Recria) — a Categoria acima é só pra organizar a lista. O estoque mínimo (produzida e guardada) é usado no alerta da aba "Estoque de Ração".</p>
         <label>Composição (% da dieta)</label>
         <div style="display:flex; flex-direction:column; gap:8px;">
           ${d.itens.map((it,idx)=>`
@@ -6996,10 +6996,10 @@ function ModalPasto(){
   return `
   <div class="overlay" data-close-overlay="1">
     <div class="modal" data-stop="1">
-      <div class="modal-head"><h3>${d._editId?'Editar saída de ração (Pasto)':'Nova saída de ração (Pasto)'}</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-head"><h3>${d._editId?'Editar saída de ração (Recria)':'Nova saída de ração (Recria)'}</h3><button class="modal-close" data-close="1">&times;</button></div>
       <div class="modal-body">
         <div class="field-row">
-          <div class="field"><label>Lote (Pasto)</label>
+          <div class="field"><label>Lote (Recria)</label>
             <select id="f-lote">
               ${opcaoSelecioneLote(d.loteId)}
               ${lotesQueRecebem('pasto', d.loteId).map(l=>`<option value="${l.id}" ${d.loteId==l.id?'selected':''}>${esc(l.nome)}</option>`).join('')}
@@ -7407,7 +7407,7 @@ function ModalPesagem(){
 
 function ModalVenda(){
   const d = editDraft;
-  // Mostra lote de qualquer atividade (Confinamento/Pasto/Cria) — inclui o
+  // Mostra lote de qualquer atividade (Confinamento/Recria/Cria) — inclui o
   // lote já selecionado mesmo se ele não estiver mais ativo/com animais
   // (caso de editar uma venda cujo lote já fechou por causa dela mesma).
   const lotesDisponiveis = state.lotes.filter(l=>(!l.dataFim && Number(l.numeroAnimais||0)>0) || l.id==d.loteId);
@@ -8033,7 +8033,7 @@ function attachEvents(){
   });
   document.querySelectorAll('[data-del-pasto]').forEach(el=>{
     el.onclick = async ()=>{
-      if(!confirm('Excluir esta saída de ração (pasto)? Essa ação não pode ser desfeita.')) return;
+      if(!confirm('Excluir esta saída de ração (recria)? Essa ação não pode ser desfeita.')) return;
       const id = Number(el.dataset.delPasto);
       const {error} = await db.from('pasto').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir esta saída de ração: ' + error.message); return; }
@@ -8315,7 +8315,7 @@ function attachEvents(){
   if(loteVendaEl) loteVendaEl.onchange = (e)=>{
     sincronizarDataObsVenda();
     editDraft.loteId = Number(e.target.value);
-    // Sexo acompanha o lote quando ele é fixo (Confinamento/Pasto com sexo
+    // Sexo acompanha o lote quando ele é fixo (Confinamento/Recria com sexo
     // definido) -- troca de lote muda o que está sendo vendido de verdade.
     // Lote misto (sem sexo fixo) não mexe no que já estava selecionado.
     const sexoFixoNovoLote = sexoFixoDoLote(editDraft.loteId);
