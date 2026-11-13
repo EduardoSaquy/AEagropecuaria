@@ -2079,10 +2079,13 @@ tela. Agora o banco também tranca:
 - **Conferido no banco real (13/11/2026, entrando como cada pessoa)**: os 3 proprietários veem todos os preços; o consultor, os 9
   preços de ingrediente e os 15 movimentos com preço (nada de venda nem inseminação); quem tem Vendas, os 11 valores de venda; os
   outros, nenhum preço (mas as mesmas linhas de antes). O administrador, que tem o código no celular, só vê com a sessão confirmada.
-- **Achado no caminho, não mexido**: as regras de leitura de `movimentos` (e de outras tabelas da Pecuária) chamam
-  `tem_permissao(...)` linha a linha (sem `(select ...)` em volta): ler os 9.838 movimentos leva ~2 s por página de 1000 no banco,
-  antes e depois desta mudança. Embrulhar as chamadas em `(select ...)` (como o `exige_segundo_fator`) deve encurtar muito a carga da
-  Pecuária no campo.
+- **Achado no caminho e resolvido no mesmo dia**: as regras de acesso chamavam `tem_permissao(...)`, `acesso_total()`, `auth.uid()`
+  etc. linha a linha: ler os 9.838 movimentos levava ~2 s por página de 1000. `desempenho_01_regras_uma_vez_por_consulta.sql`
+  (**RODADO pelo Eduardo em 13/11/2026**: 0 regras soltas, 235 regras reescritas; texto antigo em `zz_backup_regras_2026_11_13`, desfazer
+  no fim do arquivo) embrulha cada chamada em `(select ...)`: o banco calcula uma vez por consulta. Conferido logo depois, entrando como
+  cada uma das 14 pessoas ativas em 33 tabelas: as regras ANTIGAS avaliadas direto contra os dados dão exatamente as mesmas linhas que
+  as novas (462 comparações, 0 diferentes). Medido: a mesma página de movimentos caiu de 2.179 ms para 21 ms no banco. **Regra nova
+  de acesso: escreva as chamadas já embrulhadas, `(select tem_permissao('x','visualizar'))`, ou rode o `desempenho_01` de novo**.
 
 ### Backup automático do banco (09/11/2026; LIGADO em 12/11/2026)
 
