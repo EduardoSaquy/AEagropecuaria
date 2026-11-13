@@ -430,7 +430,15 @@ const dbLavoura = db;
 
 function rowToIngrediente(r){ return {id:r.id, nome:r.nome, categoria:r.categoria, fornecedor:r.fornecedor, unidade:r.unidade, ms:r.ms, pb:r.pb, ndt:r.ndt, precoKg:r.preco_kg, estoqueMin:r.estoque_min, obs:r.obs||''}; }
 function ingredienteToRow(i){ return {nome:i.nome, categoria:i.categoria, fornecedor:i.fornecedor, unidade:i.unidade, ms:i.ms, pb:i.pb, ndt:i.ndt, preco_kg:i.precoKg, estoque_min:i.estoqueMin, obs:manter(i.obs)}; }
-function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg, ajuste:!!r.ajuste}; }
+function rowToMovimento(r){ return {id:r.id, data:r.data, ingredienteId:r.ingrediente_id, tipo:r.tipo, quantidade:r.quantidade, precoKg:r.preco_kg, ajuste:!!r.ajuste,
+  // entrada que veio de uma compra do AE Matriz (lancamento ou conta a pagar): so muda pela compra (estoque_compra_01.sql)
+  lancamentoId:r.lancamento_id ?? null, tituloId:r.titulo_id ?? null}; }
+function movimentoDeCompra(m){ return !!(m && (m.lancamentoId || m.tituloId)); }
+function OrigemDaCompra(m){
+  if(!movimentoDeCompra(m)) return '';
+  const onde = m.lancamentoId ? `lançamento Nº ${m.lancamentoId}` : `conta a pagar Nº ${m.tituloId}`;
+  return `<span class="pill pill-cat" data-origem-compra="${m.id}" title="Para mudar, edite a compra no AE Matriz">Compra: ${onde}</span>`;
+}
 function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId, tipo:m.tipo, quantidade:m.quantidade, preco_kg:m.precoKg||null, ajuste:!!m.ajuste}; }
 function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0, consumoDireto:!!r.consumo_direto}; }
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento', estoque_min_pronta:d.estoqueMinPronta||0, consumo_direto:!!d.consumoDireto}; }
@@ -2447,11 +2455,11 @@ function TabelaMovimentosAgrupados(grupos, tipo, verValor){
         <tr class="mov-item-row">
           <td></td>
           <td class="mono">${m.data.split('-').reverse().join('/')}</td>
-          <td>${m.ajuste ? '<span class="pill pill-cat">Ajuste</span>' : ''}</td>
+          <td>${m.ajuste ? '<span class="pill pill-cat">Ajuste</span>' : ''}${OrigemDaCompra(m)}</td>
           <td class="mono">${fmtInt(m.quantidade)} ${ing?ing.unidade:''}</td>
           ${verValor?`<td class="mono">R$ ${fmt(m.precoUnit,2)}</td><td class="mono">R$ ${fmt(m.valor)}</td>`:''}
           <td style="display:flex; gap:6px;">
-            ${temPermissao('insumos','editar') ? `
+            ${movimentoDeCompra(m) ? `<span class="hint">Edite pela compra no AE Matriz</span>` : temPermissao('insumos','editar') ? `
             <button class="btn-ghost btn-sm" data-edit-mov="${m.id}">Editar</button>
             ${!souColaborador() ? `<button class="btn-danger-ghost" data-del-mov="${m.id}">Excluir</button>` : ''}
             ` : ''}

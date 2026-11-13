@@ -1050,6 +1050,7 @@ async function loadAll(grupos){
     state.funcionarioAtividades = (funcAtiv.data||[]).map(rowToFuncionarioAtividade);
     state.centrosCusto = (cCusto.data||[]).map(rowToCentroCusto);
     state.equipamentos = equip.data||[];
+    carregarIngredientesCompra();
   }
   if(quer('lancamentos')){
     state.lancamentos  = (lanc.data||[]).map(rowToLancamento);
@@ -1937,6 +1938,7 @@ const state = {
   perfis: [],
   lancamentos: [],    // modelo único: despesa, receita e investimento de todas as atividades
   centrosCusto: [],
+  ingredientesCompra: [],   // ingredientes da Pecuária para a compra dar entrada no estoque (vazio = bloco escondido)
   equipamentos: [],   // máquinas do AE Combustível (id, nome, ativo): para ligar uma despesa a uma máquina
   filtroAtividade: '',
   subAbaResultados: 'geral', // 'geral' | 'operacional' | 'relatorios' | 'empresa'
@@ -6656,6 +6658,7 @@ function lerTituloDoFormulario(base){
     previsao:        document.getElementById('f-tit-previsao')?.checked === true,
     observacao:      v('f-tit-obs').trim(),
     rateios,
+    estoque:         lerEstoqueDoFormulario(base.estoque),
   };
 }
 
@@ -6842,7 +6845,7 @@ function ModalTitulo(){
               ${state.fazendasLavoura.map(fz=>`<option value="${fz.id}" ${String(r.fazendaId)===String(fz.id)?'selected':''}>${esc(fz.nome)}</option>`).join('')}
             </select></div>
           <div class="field"><label>${ehPagar ? 'Centro de custo' : 'Origem da receita'}</label>
-            <select id="f-rat-centro-${i}">
+            <select id="f-rat-centro-${i}" data-recalcula-titulo="1">
               <option value="">— Selecione —</option>
               ${centrosPara(r.atividade).map(c=>`<option value="${c.id}" ${String(r.centroCustoId)===String(c.id)?'selected':''}>${esc(c.nome)}</option>`).join('')}
             </select></div>
@@ -6878,6 +6881,8 @@ function ModalTitulo(){
             ? `<div class="hint" style="color:var(--ambar-texto);">A soma fecha, mas ainda falta preencher centro de custo, competência ou valor em algum rateio.</div>`
             : `<div class="hint" style="color:var(--verde-vivo-escuro); font-weight:600;">O rateio fecha com o valor do título.</div>`
         ) : ''}
+
+        ${mostraEntradaEstoqueTitulo(d) ? BlocoEntradaEstoque(d, totalDaCompraTitulo(d), hojeStr()) : ''}
 
         <div class="field" style="margin-top:12px;"><label>Observação (opcional)</label>
           <textarea id="f-tit-obs" rows="2">${esc(d.observacao||'')}</textarea></div>
@@ -7109,6 +7114,9 @@ async function salvarTitulo(){
     state.erroTitulo = 'Preencha: ' + faltando.join('; ') + '.';
     editDraft = d; render(); return;
   }
+  // Entrada no estoque da Pecuária junto com a compra (conferida antes de gravar a conta)
+  const estoque = mostraEntradaEstoqueTitulo(d) ? itensDoEstoque(d.estoque, totalDaCompraTitulo(d)) : {itens: []};
+  if(estoque.erro){ state.erroTitulo = estoque.erro; editDraft = d; render(); return; }
   // Fornecedor novo (ainda sem cadastro) nao tem como repetir conta.
   const nomeEnt = (d.entidadeNome||'').trim().toLowerCase();
   const entExistente = nomeEnt ? state.entidades.find(e=>e.nome.trim().toLowerCase()===nomeEnt) : null;
@@ -7213,6 +7221,8 @@ async function salvarTitulo(){
   if(viaBanco.error && !funcaoDoBancoNaoExiste(viaBanco.error)){
     alert('Não foi possível salvar: ' + viaBanco.error.message); return;
   }
+  // A entrada no estoque fica na conta (na 1ª parcela, se for parcelada).
+  let idDaCompra = d._editId || (Array.isArray(viaBanco.data) ? Number(viaBanco.data[0]) : null);
   if(viaBanco.error){
     for(const it of itens){
       let id = it.id;
@@ -7228,8 +7238,11 @@ async function salvarTitulo(){
       }
       const {error: e3} = await db.from('titulo_rateios').insert(it.rateios.map(r=>({...r, titulo_id: id})));
       if(e3){ alert('Não foi possível salvar o rateio: ' + e3.message); return; }
+      if(!idDaCompra) idDaCompra = id;
     }
   }
+  const erroEstoque = await gravarEstoqueDaCompra('titulo', idDaCompra, d.estoque, estoque.itens, !!d._estoqueTinha);
+  if(erroEstoque) alert(`A conta Nº ${idDaCompra} foi salva, mas a entrada no estoque não: ${erroEstoque}. Abra a conta de novo para tentar.`);
 
   state.modal = null; editDraft = null;
   await loadAll(['contas']);
@@ -7342,9 +7355,11 @@ function ligarEventosContas(){
         parcelas: t.parcelas, intervaloDias:'', formaPagamento: t.formaPagamento,
         contaBancariaId: t.contaBancariaId ?? '', previsao: t.previsao, observacao: t.observacao,
         rateios: rat.length ? rat : [rateioVazio()],
+        _parcela: t.parcela, _grupo: t.grupo,
       };
       state.modal = {type:'titulo'};
       render();
+      if(t.tipo==='pagar' && Number(t.parcela||1)===1) carregarEntradasDaCompra('titulo', t.id);
     };
   });
   document.querySelectorAll('[data-baixar-titulo]').forEach(el=>{
@@ -7995,6 +8010,7 @@ function lerLancamentoDoFormulario(base){
     culturaId:     document.getElementById('f-culturalanc') ? v('f-culturalanc') : base.culturaId,
     anoSafra:      document.getElementById('f-safralanc') ? v('f-safralanc') : base.anoSafra,
     equipamentoId: document.getElementById('f-equipamentolanc') ? v('f-equipamentolanc') : base.equipamentoId,
+    estoque:       lerEstoqueDoFormulario(base.estoque),
   };
 }
 // Le lancamento E venda. O valor da venda e sempre recalculado dos campos
@@ -8073,6 +8089,165 @@ function montarDivisaoDoLancamento(campos){
   });
   return {linhas};
 }
+
+/* ---- Compra de insumo da Pecuária com entrada no estoque (13/11/2026) ----
+ * Decisão do Eduardo: a compra de ração lançada aqui (lançamento ou conta a pagar)
+ * já dá a entrada no estoque da Pecuária. Antes eram dois lançamentos e, quando o
+ * segundo era esquecido, o estoque ficava negativo. Quem grava é o banco
+ * (estoque_compra_01.sql: gravar_entradas_da_compra), que troca as entradas da
+ * compra de uma vez e refaz o preço médio; a secretária não precisa da permissão
+ * de Insumos. Insumo produzido pela própria empresa (milho da lavoura, silagem)
+ * continua entrando pela tela de Entrada do AE Pecuária.
+ * O bloco só aparece em despesa/conta a pagar nos centros abaixo e quando o banco
+ * devolve a lista de ingredientes (antes do SQL a função não existe: nada muda). */
+const CENTROS_COMPRA_ESTOQUE = ['nutricao animal', 'insumos pecuarios'];
+function centroDaCompraDeEstoque(centroId){
+  const c = state.centrosCusto.find(x=>String(x.id)===String(centroId));
+  return !!c && CENTROS_COMPRA_ESTOQUE.includes(semAcentoMinusc(c.nome));
+}
+async function carregarIngredientesCompra(){
+  const r = await db.rpc('ingredientes_para_compra');
+  state.ingredientesCompra = r.error ? [] : (r.data||[]);
+  if(state.modal && (state.modal.type==='lancamento' || state.modal.type==='titulo')) render();
+}
+function mostraEntradaEstoqueLanc(d){
+  return d.tipo==='despesa' && d.atividade!=='dividir' && !d.tituloBaixaId && !d.ehVenda
+    && centroDaCompraDeEstoque(d.centroCustoId) && state.ingredientesCompra.length > 0;
+}
+function mostraEntradaEstoqueTitulo(d){
+  return d.tipo==='pagar' && !(d._editId && Number(d._parcela||1) > 1)
+    && (d.rateios||[]).some(r=>centroDaCompraDeEstoque(r.centroCustoId)) && state.ingredientesCompra.length > 0;
+}
+// Valor da compra para conferir os itens: na conta parcelada é o total das parcelas.
+function totalDaCompraTitulo(d){
+  if(!d._editId || !d._grupo) return Number(d.valor||0);
+  return state.titulos.filter(t=>t.grupo===d._grupo && !t.cancelado)
+    .reduce((a,t)=>a + (t.id===d._editId ? Number(d.valor||0) : Number(t.valor||0)), 0);
+}
+function estoqueVazio(){ return {ligado:false, data:'', itens:[]}; }
+function BlocoEntradaEstoque(d, total, dataPadrao){
+  const e = d.estoque || estoqueVazio();
+  const ings = state.ingredientesCompra;
+  const itens = e.itens.length ? e.itens : [{ingredienteId:'', quantidade:'', valor:''}];
+  const unidadeDe = (id)=> (ings.find(g=>String(g.id)===String(id))?.unidade) || 'kg';
+  const soma = itens.reduce((a,i)=>a+Number(i.valor||0), 0);
+  return `
+  <div class="card" id="bloco-estoque" style="padding:12px; margin:6px 0 12px; background:var(--cinza-bg);">
+    <label style="display:flex; align-items:center; gap:8px; font-weight:600;">
+      <input id="f-est-ligado" type="checkbox" style="width:auto;" data-est-toggle="1" ${e.ligado?'checked':''}/>
+      Este insumo entrou no estoque da Pecuária
+    </label>
+    <span class="hint">Marque para a compra já dar a entrada no estoque (ingrediente, quantidade e valor de cada um). Insumo produzido pela própria empresa, como o milho da lavoura e a silagem, entra pela tela de Entrada do AE Pecuária.</span>
+    ${e.ligado ? `
+    <div class="field" style="margin-top:10px;"><label>Data da entrada no estoque</label>
+      <input id="f-est-data" type="date" value="${esc(e.data || dataPadrao || '')}"/></div>
+    ${itens.map((it,i)=>`
+    <div class="field-row" data-est-linha="${i}" style="align-items:flex-end;">
+      <div class="field" style="flex:2;"><label>Ingrediente</label>
+        <select id="f-est-ing-${i}">
+          <option value="">— Escolha —</option>
+          ${ings.map(g=>`<option value="${g.id}" ${String(it.ingredienteId)===String(g.id)?'selected':''}>${esc(g.nome)}</option>`).join('')}
+        </select></div>
+      <div class="field" style="flex:1;"><label>Quantidade (${esc(unidadeDe(it.ingredienteId))})</label>
+        <input id="f-est-qtd-${i}" type="number" step="0.001" min="0" inputmode="decimal" value="${esc(it.quantidade ?? '')}" autocomplete="off"/></div>
+      <div class="field" style="flex:1;"><label>Valor (R$)</label>
+        <input id="f-est-val-${i}" type="text" inputmode="decimal" data-moeda value="${esc(it.valor ?? '')}" autocomplete="off"/></div>
+      ${itens.length>1 ? `<button class="btn-danger-ghost btn-sm" data-est-rem="${i}" style="margin-bottom:12px;">Remover</button>` : ''}
+    </div>`).join('')}
+    <button class="btn-ghost btn-sm" data-est-add="1">+ Outro ingrediente</button>
+    <span class="hint" style="display:block; margin-top:6px;">Com um ingrediente só, o valor em branco vale o total da compra (R$ ${fmt(total)}). O preço por kg é o valor ÷ a quantidade, e o preço médio do ingrediente se refaz. Frete e outros custos da nota podem ficar de fora dos itens.</span>
+    ${itens.length>1 && soma > total + 0.005 ? `<div class="login-error" style="margin-top:6px;">Os itens somam R$ ${fmt(soma)}, mais que a compra (R$ ${fmt(total)}).</div>` : ''}
+    ` : ''}
+  </div>`;
+}
+function lerEstoqueDoFormulario(base){
+  const marcador = document.getElementById('f-est-ligado');
+  if(!marcador) return base || estoqueVazio();
+  const ligado = marcador.checked;
+  if(!ligado) return {...(base||estoqueVazio()), ligado:false};
+  const itens = [];
+  for(let i=0; document.getElementById(`f-est-ing-${i}`); i++){
+    itens.push({ingredienteId: document.getElementById(`f-est-ing-${i}`).value,
+                quantidade: document.getElementById(`f-est-qtd-${i}`).value,
+                valor: document.getElementById(`f-est-val-${i}`).value});
+  }
+  return {ligado:true, data: document.getElementById('f-est-data')?.value || '', itens};
+}
+// Confere o bloco e monta os itens para o banco. Devolve {erro} ou {itens}.
+function itensDoEstoque(e, total){
+  if(!e || !e.ligado) return {itens: []};
+  if(!e.data) return {erro: 'Informe a data da entrada no estoque.'};
+  const linhas = (e.itens||[]).filter(i=> i.ingredienteId || String(i.quantidade??'').trim() || String(i.valor??'').trim());
+  if(!linhas.length) return {erro: 'Escolha o ingrediente que entrou no estoque (ou desmarque a entrada).'};
+  const itens = [];
+  for(const [k,i] of linhas.entries()){
+    const onde = linhas.length>1 ? ` (item ${k+1})` : '';
+    if(!i.ingredienteId) return {erro: `Escolha o ingrediente${onde}.`};
+    const q = Number(i.quantidade);
+    if(!(q > 0)) return {erro: `A quantidade tem que ser maior que zero${onde}.`};
+    const vazio = String(i.valor??'').trim()==='';
+    if(vazio && linhas.length>1) return {erro: `Informe o valor${onde}: com mais de um ingrediente o app não adivinha a divisão.`};
+    const v = vazio ? Number(total) : Number(i.valor);
+    if(!(v >= 0)) return {erro: `O valor${onde} não pode ser negativo.`};
+    itens.push({ingrediente_id: Number(i.ingredienteId), quantidade: q, valor: Math.round(v*100)/100});
+  }
+  const soma = itens.reduce((a,i)=>a+i.valor, 0);
+  if(soma > Number(total) + 0.005) return {erro: `Os itens do estoque somam R$ ${fmt(soma)}, mais que a compra (R$ ${fmt(total)}).`};
+  return {itens};
+}
+// Grava as entradas da compra no banco (troca as que havia). Devolve a mensagem de erro, ou ''.
+async function gravarEstoqueDaCompra(origem, id, e, itens, tinha){
+  if(!id || (!itens.length && !tinha)) return '';
+  const r = await db.rpc('gravar_entradas_da_compra', {
+    p_lancamento: origem==='lancamento' ? id : null,
+    p_titulo: origem==='titulo' ? id : null,
+    p_data: itens.length ? e.data : null,
+    p_itens: itens,
+  });
+  return r.error ? r.error.message : '';
+}
+// Ao abrir uma compra para editar: traz o que já entrou no estoque por ela.
+async function carregarEntradasDaCompra(origem, id){
+  if(!state.ingredientesCompra.length) return;
+  const r = await db.rpc('entradas_da_compra', {p_lancamento: origem==='lancamento' ? id : null, p_titulo: origem==='titulo' ? id : null});
+  if(r.error || !(r.data||[]).length) return;
+  if(!editDraft || editDraft._editId !== id) return;   // a janela já é outra
+  editDraft = (origem==='lancamento' ? lerLancamentoCompleto(editDraft) : lerTituloDoFormulario(editDraft));
+  editDraft.estoque = {ligado:true, data: r.data[0].data,
+    itens: r.data.map(x=>({ingredienteId: x.ingrediente_id, quantidade: x.quantidade, valor: x.valor}))};
+  editDraft._estoqueTinha = true;
+  render();
+}
+function lerDraftDaCompra(){
+  return state.modal?.type==='titulo' ? lerTituloDoFormulario(editDraft) : lerLancamentoCompleto(editDraft);
+}
+function ligarEventosEstoque(){
+  const marcador = document.querySelector('[data-est-toggle]');
+  if(marcador) marcador.onchange = ()=>{
+    const d = lerDraftDaCompra();
+    if(d.estoque.ligado && !d.estoque.itens.length) d.estoque = {...d.estoque, itens:[{ingredienteId:'', quantidade:'', valor:''}]};
+    editDraft = d; render();
+  };
+  const add = document.querySelector('[data-est-add]');
+  if(add) add.onclick = ()=>{
+    const d = lerDraftDaCompra();
+    d.estoque = {...d.estoque, itens:[...d.estoque.itens, {ingredienteId:'', quantidade:'', valor:''}]};
+    editDraft = d; render();
+  };
+  document.querySelectorAll('[data-est-rem]').forEach(el=>{
+    el.onclick = ()=>{
+      const d = lerDraftDaCompra();
+      const i = Number(el.dataset.estRem);
+      d.estoque = {...d.estoque, itens: d.estoque.itens.filter((_,k)=>k!==i)};
+      editDraft = d; render();
+    };
+  });
+  // trocar o ingrediente troca a unidade mostrada na quantidade
+  document.querySelectorAll('[id^="f-est-ing-"]').forEach(el=>{
+    el.onchange = ()=>{ editDraft = lerDraftDaCompra(); render(); };
+  });
+}
+
 function ModalLancamento(){
   const d = editDraft;
   const ehDespesa      = d.tipo==='despesa';
@@ -8189,6 +8364,8 @@ function ModalLancamento(){
           </div>
         </div>
         <span class="hint" style="display:block; margin:-6px 0 12px;">Compra de animais: informe o lote que ela formou e quantas cabeças vieram (juntos). É o que permite casar o custo dos animais com a venda do lote, em Resultados &gt; Operacional &gt; Pecuária.</span>` : ''}
+        ${mostraEntradaEstoqueLanc(d) ? BlocoEntradaEstoque(d, Number(d.valor||0), d.data || hojeStr()) : ''}
+        ${d.tituloBaixaId && centroDaCompraDeEstoque(d.centroCustoId) ? `<span class="hint" style="display:block; margin:-4px 0 12px;">Este lançamento veio da baixa da conta Nº ${d.tituloBaixaId}: a entrada no estoque, se houver, fica na conta a pagar.</span>` : ''}
         ${ehDespesa && ehPecuaria ? `
         <div class="field"><label>Rateio entre as áreas da pecuária</label>
           <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;">
@@ -8938,8 +9115,10 @@ function attachEvents(){
   const selCentroLanc = document.getElementById('f-centrocustolanc');
   if(selCentroLanc) selCentroLanc.onchange = ()=>{
     const novo = lerLancamentoCompleto(editDraft);
-    if(mostraCamposCompra(novo) !== mostraCamposCompra(editDraft)){ editDraft = novo; render(); }
+    if(mostraCamposCompra(novo) !== mostraCamposCompra(editDraft)
+       || mostraEntradaEstoqueLanc(novo) !== mostraEntradaEstoqueLanc(editDraft)){ editDraft = novo; render(); }
   };
+  ligarEventosEstoque();
   // Divisão entre atividades: reais e aviso de soma acompanham a digitação.
   document.querySelectorAll('[data-divisao]').forEach(el=>{ el.addEventListener('input', atualizarDivisaoNaTela); });
   const campoValorLanc = document.getElementById('f-valorlanc');
@@ -8952,6 +9131,7 @@ function attachEvents(){
       editDraft = {...l, _editId:l.id, _atividadeOriginal:l.atividade, _equipamentoOriginal:l.equipamentoId ?? null};
       state.erroLancamento = '';
       state.modal = {type:'lancamento'}; render();
+      if(l.tipo==='despesa' && !l.tituloBaixaId) carregarEntradasDaCompra('lancamento', l.id);
     };
   });
   ligarEventosContas();
@@ -9143,6 +9323,7 @@ function attachEvents(){
       const type = saveBtn.dataset.save;
       let error;
       let lancamentosGravados = null;   // ids que este salvar mexeu: só eles são buscados de novo
+      let estoqueDaCompra = null;       // entrada no estoque da compra de ração (lançamento): gravada depois do lançamento
       if(type==='fazenda'){
         const campos = {
           nome: document.getElementById('f-nomefazenda').value.trim() || 'Sem nome',
@@ -9293,6 +9474,11 @@ function attachEvents(){
           }
           if(temQtd) campos.unidade = 'cab';
         }
+        // Entrada no estoque da Pecuária junto com a compra (conferida antes de gravar o lançamento)
+        const comEstoque = mostraEntradaEstoqueLanc(campos);
+        const estoque = comEstoque ? itensDoEstoque(campos.estoque, Number(campos.valor||0)) : {itens: []};
+        if(estoque.erro){ state.erroLancamento = estoque.erro; editDraft = campos; render(); return; }
+        estoqueDaCompra = {e: campos.estoque, itens: estoque.itens, tinha: !!editDraft._estoqueTinha};
         state.erroLancamento = '';
         const row = lancamentoToRow(campos);
         // Venda nova passa pelo caminho proprio: alem do lancamento, ela
@@ -9447,6 +9633,10 @@ function attachEvents(){
         return;
       }
       if(error){ alert('Não foi possível salvar: ' + error.message); return; }
+      if(type==='lancamento' && estoqueDaCompra && lancamentosGravados?.length===1){
+        const erroEstoque = await gravarEstoqueDaCompra('lancamento', lancamentosGravados[0], estoqueDaCompra.e, estoqueDaCompra.itens, estoqueDaCompra.tinha);
+        if(erroEstoque) alert(`O lançamento Nº ${lancamentosGravados[0]} foi salvo, mas a entrada no estoque não: ${erroEstoque}. Abra o lançamento de novo para tentar.`);
+      }
       state.modal = null; editDraft = null;
       if(type==='lancamento' && lancamentosGravados?.length) await atualizarLancamentos(lancamentosGravados);
       else await loadAll(GRUPOS_AO_SALVAR[type]);
