@@ -1666,7 +1666,12 @@ compra de animais e as travas do banco.
   `[data-nav-seta]`) + `.nav-sub` com um `[data-menu-sub]` por sub-aba; com uma página só devolve o botão sozinho, como era. **Sanfona: um item
   aberto por vez**; ao abrir o app abre só o item da tela atual (no Painel, nenhum); o que ficou aberto (ou `''` = tudo fechado) vale **só enquanto o
   app está aberto** (`menuAbertoMemoria`). Até 13/11/2026 ficava no `localStorage` e o Matriz abria no Painel com Resultados aberto (o
-  Eduardo pediu para corrigir); a chave antiga `ae_menu_aberto_v1_*` é apagada ao abrir. Clicar no **nome** do item guarda aquele item como aberto (ouvinte de captura, antes do clique do app, que
+  Eduardo pediu para corrigir); a chave antiga `ae_menu_aberto_v1_*` é apagada ao abrir.
+  **A coluna do menu guarda a rolagem ao trocar de tela (13/11/2026, pedido dele: "na Pecuária toda vez que clica numa aba
+  na lateral a barra de rolagem vai pra cima sozinha")**: cada app redesenha tudo e o menu novo nascia no topo. `core.js`
+  (`SELETOR_MENU_ROLAVEL` = `.tabsrow, .sidebar nav`, `rolagemDoMenu`, `devolverRolagemDoMenu`) guarda a rolagem enquanto a pessoa
+  rola e a devolve UMA vez a cada menu novo (um `MutationObserver`); se o menu ficou mais curto (lista de sub-abas que fechou),
+  para no fim dele. `teste_menu_rolagem.py` (60, os 5 apps, falha no código anterior). Clicar no **nome** do item guarda aquele item como aberto (ouvinte de captura, antes do clique do app, que
   já redesenha); a setinha só abre/fecha a lista e **não troca de tela**; clicar numa sub-aba vai direto (ouvinte delegado em `core.js`:
   `state.page = valor`, ou `irParaSubAbaDoApp(valor)` se o app definir). **Atributo próprio `data-menu-sub`, não `data-subnav`**: os testes e
   os botões de dentro da tela usam `[data-subnav="x"]` e uma segunda cópia quebraria o modo estrito do Playwright.

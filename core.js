@@ -823,6 +823,27 @@ function ItemDoMenu(it){
     <div class="nav-sub">${subs.map(s=>`<button class="nav-sub-item ${s.ativo ? 'active' : ''}" data-menu-sub="${esc(s.valor)}">${s.rotulo}</button>`).join('')}</div>
   </div>`;
 }
+// O menu lateral não volta para o topo ao trocar de tela (13/11/2026). Pedido do Eduardo: na Pecuária, com o menu rolado, tocar num
+// item fazia a coluna do menu voltar para o topo. Cada app redesenha a tela inteira (innerHTML) e o menu novo nasce com a rolagem 0.
+// Aqui se guarda a rolagem do menu enquanto a pessoa rola e se devolve UMA vez a cada menu novo que aparece na tela (o mesmo elemento
+// não é mexido de novo, para não brigar com quem está rolando). Vale para a coluna dos 5 apps: .tabsrow (Matriz, Pecuária, Cana,
+// Cereais) e o nav da barra azul do Combustível.
+const SELETOR_MENU_ROLAVEL = '.tabsrow, .sidebar nav';
+let rolagemDoMenu = 0;
+const menusJaAjustados = new WeakSet();
+document.addEventListener('scroll', e=>{
+  const el = e.target;
+  if(el && el.nodeType === 1 && el.matches(SELETOR_MENU_ROLAVEL) && menusJaAjustados.has(el)) rolagemDoMenu = el.scrollTop;
+}, true);
+function devolverRolagemDoMenu(){
+  document.querySelectorAll(SELETOR_MENU_ROLAVEL).forEach(el=>{
+    if(menusJaAjustados.has(el)) return;
+    menusJaAjustados.add(el);
+    if(rolagemDoMenu > 0 && el.scrollHeight > el.clientHeight) el.scrollTop = rolagemDoMenu;
+    if(el.getClientRects().length) rolagemDoMenu = el.scrollTop;   // menu mais curto agora: vale onde ele parou de verdade
+  });
+}
+new MutationObserver(devolverRolagemDoMenu).observe(document.documentElement, {childList:true, subtree:true});
 // Clicar no nome de um item guarda qual item fica aberto (fase de captura: roda antes do clique do app, que já redesenha com isso).
 document.addEventListener('click', e=>{
   const alvo = e.target && e.target.closest ? e.target.closest('[data-menu-chave]') : null;
