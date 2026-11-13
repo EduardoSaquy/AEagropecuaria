@@ -748,7 +748,7 @@ a soma dos talhões voltou a 152,41); o **Talhão 2 do Palhadão** (22,80 ha) fo
 (Matriz > Fazendas), soma dos talhões (amarelo quando não fecha), área colhida na safra (mesma regra do Matriz: cada talhão uma vez,
 pela maior área; safra do campo "Safra" ou maio a abril), toneladas, TCH e talhões sem colheita na safra, com seletor das 3 últimas
 safras; talhão "Histórico..." e inativo ficam fora. A lista ganhou a coluna "Área colhida (ha)" ("(inteiro)" = campo em branco).
-`teste_conferencia_colheita_cana.py` (21). **Ficou com ele**: data e toneladas do Talhão 2 do Palhadão, e a área colhida de cada
+`teste_conferencia_colheita_cana.py` (21). **Resolvido no mesmo dia (pelo conector, com ele)**: o Palhadão colheu 15.908,29 t no total e o relatório da usina não tinha o Talhão 2: as toneladas foram rateadas pela área dos 7 talhões (166,31 ha, TCH 95,65 em todos; colheita do Talhão 2 criada em 02/06/2026, corte em branco; cópia `zz_backup_palhadao_colheitas_2026_11_13`). Palmito pelo mapa: T1 3 ha, T2 inteiro, T3 12 ha, T4 inteiro, T5 18,8 ha = 115,48 ha; as toneladas do T3 e do T4 estavam trocadas na nota (T3 dava 316 t/ha) e foram destrocadas (cópia `zz_backup_palmito_area_colhida_2026_11_13`). Safra 26/27 conferida por ele: Mata Verde 67,59 ha / 7.763,76 t, Palhadão 166,31 ha / 15.908,29 t, Palmito 115,48 ha / 11.483,74 t; total 349,38 ha, 35.155,79 t, TCH 100,6.
 talhão do Palmito (com o Talhão 3 em 31,41 o Palmito soma 107,65 ha, e ele diz que foram 113).
 
 ### Resultados > Empresa: a empresa como uma atividade só
