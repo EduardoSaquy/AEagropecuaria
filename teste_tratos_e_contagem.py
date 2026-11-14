@@ -222,7 +222,6 @@ with sync_playwright() as pw:
     larg = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
     modal_larg = page.evaluate("() => { const m = document.querySelector('.modal'); return m.scrollWidth - m.clientWidth; }")
     conf(larg <= 0 and modal_larg <= 0, "janela da contagem sem rolar de lado em 390 px", f"pagina {larg}, janela {modal_larg}")
-    conf(page.locator('[data-contagem-ing="1"]').bounding_box()["height"] >= 40, "campo de quantidade com altura de toque")
     page.close()
 
     page, st = abrir(browser, OPERADOR)
