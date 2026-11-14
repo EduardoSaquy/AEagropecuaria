@@ -526,6 +526,35 @@
   .nav-sub-item:hover{background:var(--cinza-bg);}
   .nav-sub-item.active{background:var(--cinza-bg); color:var(--verde-escuro); font-weight:700;}
 }
+
+  .nota-resumo{background:var(--cinza-bg, #F5F3EE); border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.45;}
+  .nota-bloco label.btn-ghost{display:inline-flex; align-items:center;}
+  /* ---------- RELATÓRIOS EM PDF (14/11/2026): só #area-impressao vai para o papel ---------- */
+  #area-impressao{display:none;}
+  @media print{
+    @page{size:A4; margin:12mm 10mm;}
+    html, body{background:#fff !important; height:auto !important; overflow:visible !important;}
+    body > *:not(#area-impressao){display:none !important;}
+    #area-impressao{display:block !important; color:#000; font:9.5pt/1.35 Arial, Helvetica, sans-serif;}
+    #area-impressao .imp-cab{border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:10px;}
+    #area-impressao .imp-marca{font-size:9pt; letter-spacing:1px; text-transform:uppercase; color:#444;}
+    #area-impressao h1{font-size:16pt; margin:2px 0;}
+    #area-impressao h2{font-size:11.5pt; margin:14px 0 6px;}
+    #area-impressao .imp-sub{font-size:10.5pt;}
+    #area-impressao .imp-gerado, #area-impressao .imp-nota{font-size:8pt; color:#444;}
+    #area-impressao .imp-nota{margin-top:10px;}
+    #area-impressao table{width:100%; border-collapse:collapse; margin-bottom:8px;}
+    #area-impressao th, #area-impressao td{border:0.5pt solid #999; padding:3px 5px; text-align:left; vertical-align:top;}
+    #area-impressao th{background:#eee; font-weight:700;}
+    #area-impressao thead{display:table-header-group;}
+    #area-impressao tr{break-inside:avoid; page-break-inside:avoid;}
+    #area-impressao .num{text-align:right; white-space:nowrap;}
+    #area-impressao .imp-grupo td{background:#f2f2f2; font-weight:700; text-transform:uppercase; font-size:8.5pt;}
+    #area-impressao .imp-subtotal td{font-weight:600; background:#fafafa;}
+    #area-impressao .imp-total td{font-weight:700; border-top:1.5pt solid #000;}
+    #area-impressao .imp-resumo{width:auto; min-width:55%;}
+    #area-impressao .imp-livro{font-size:8.5pt;}
+  }
 </style>
 <link rel="stylesheet" href="core.css?v=634c4105b2">
 </head>
@@ -1021,14 +1050,16 @@ async function loadAll(grupos){
   ]);
   // Contas a pagar/receber: so carrega para quem tem a chave, senao a RLS
   // devolve vazio e a consulta e desperdicio de rede.
-  const [ents, ctas, tits, rats, bxs] = !quer('contas') ? [nada, nada, nada, nada, nada]
+  const [ents, ctas, tits, rats, bxs, nfs] = !quer('contas') ? [nada, nada, nada, nada, nada, nada]
     : podeVerContas() ? await Promise.all([
       fetchAllRows(()=>db.from('entidades').select('*').order('nome').order('id')),
       db.from('contas_bancarias').select('*').order('nome'),
       fetchAllRows(()=>db.from('titulos').select('*').order('vencimento').order('id')),
       fetchAllRows(()=>db.from('titulo_rateios').select('*').order('id')),
       fetchAllRows(()=>db.from('titulo_baixas').select('*').order('id')),
-    ]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]}];
+      // notas fiscais (notas_fiscais_01.sql): sem a tabela, o campo da nota só não aparece (fora do aviso de erro de carga)
+      fetchAllRows(()=>db.from('notas_fiscais').select('*').order('id')),
+    ]) : [{data:[]},{data:[]},{data:[]},{data:[]},{data:[]},{error:{message:'sem permissao'}}];
   // lanc e cCusto entram aqui: antes ficavam de fora, e uma falha ao
   // carregar o financeiro virava "R$ 0,00" em fonte de 26px — um zero
   // apresentado com a mesma confiança de um número real.
@@ -1062,6 +1093,8 @@ async function loadAll(grupos){
     state.titulos         = (tits.data||[]).map(rowToTitulo);
     state.rateios         = (rats.data||[]).map(rowToRateio);
     state.baixas          = (bxs.data||[]).map(rowToBaixa);
+    state.notasDisponivel = !(nfs && nfs.error);
+    state.notasFiscais    = (nfs && !nfs.error ? (nfs.data||[]) : []).map(rowToNota);
   }
   if(quer('financiamentos')){
     state.financiamentos = (fin.data||[]).map(rowToFinanciamento);
@@ -2025,6 +2058,8 @@ const state = {
   entidades: [],        // {id, nome, documento, papel, ativo}
   contasBancarias: [],  // {id, nome, banco, agencia, conta, ativo}
   titulos: [],          // o boleto
+  notasFiscais: [],     // NF-e ligadas às contas (notas_fiscais)
+  notasDisponivel: false,
   rateios: [],          // onde cada titulo pesa
   baixas: [],           // cada pagamento
   abaContas: 'pagar',
@@ -3805,12 +3840,260 @@ function BlocoCurvaAbc(){
   <p class="hint" style="margin-top:12px;">A curva ABC mostra onde está o dinheiro: a classe A é o pequeno grupo de contas que sozinho responde por 80% do gasto, e é onde uma negociação ou um corte muda o resultado. Só despesa; investimento (compra de animais, máquinas) e receita ficam de fora. Segue o período e os filtros de atividade e fazenda desta aba.</p>`;
 }
 
+/* ===================== RELATÓRIOS EM PDF (14/11/2026) =====================
+ * Pedido do Eduardo: tirar em PDF as contas que faltam pagar no mês, o balancete, a produção e um livro caixa. Não usa
+ * biblioteca: o relatório é montado em #area-impressao (filho direto do <body>) e o navegador imprime só ele (@media print);
+ * "Salvar como PDF" no computador, Compartilhar > Imprimir > (pinça) no iPad. O título da página vira o nome do arquivo.
+ * - Contas do mês: só o que está EM ABERTO (saldo > 0), com vencimento no mês, e as atrasadas de antes (opcional).
+ * - Balancete: o mesmo da tela, com o período e os filtros dela.
+ * - Livro caixa: o que foi pago e recebido (o Financeiro é regime de caixa; conta a pagar só entra quando é baixada), empresa
+ *   inteira (state.lancamentos, sem ratear), por data, com subtotal do mês e o acumulado do período. SEM saldo de conta
+ *   bancária (decisão dele: conta bancária e saldo não entram no app); o acumulado começa em zero no início do período.
+ *   Lançamento antigo do ERP que só tem o mês (sem o dia) entra no mês, marcado. Recorrente (sem mês) não entra.
+ * - Produção: cana (t, área colhida, TCH) e grãos (sacas, área, sc/ha) por fazenda, e vendas de animais (cab., @). */
+function nomeArquivoRelatorio(s){ return String(s).replace(/[\/\\:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim(); }
+function imprimirRelatorio(titulo, subtitulo, corpo){
+  let area = document.getElementById('area-impressao');
+  if(!area){ area = document.createElement('div'); area.id = 'area-impressao'; document.body.appendChild(area); }
+  const agora = new Date();
+  const quem = state.perfil?.nome ? ` por ${esc(state.perfil.nome)}` : '';
+  area.innerHTML = `
+    <div class="imp-cab">
+      <div class="imp-marca">AE Agropecuária</div>
+      <h1>${esc(titulo)}</h1>
+      ${subtitulo ? `<div class="imp-sub">${esc(subtitulo)}</div>` : ''}
+      <div class="imp-gerado">Gerado em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR',{hour:'2-digit', minute:'2-digit'})}${quem}</div>
+    </div>
+    ${corpo}`;
+  const tituloAntes = document.title;
+  document.title = nomeArquivoRelatorio(`AE ${titulo}${subtitulo ? ' ' + subtitulo : ''}`);
+  let voltou = false;
+  const volta = ()=>{ if(voltou) return; voltou = true; document.title = tituloAntes; window.removeEventListener('afterprint', volta); };
+  window.addEventListener('afterprint', volta);
+  setTimeout(volta, 60000);
+  window.print();
+}
+function brl(v){ return `R$ ${fmt(Number(v||0))}`; }
+function textoFiltrosRelatorio(){
+  const ativs = state.filtroAtividadesRelatorio;
+  const a = ativs.length===0 ? 'todas as atividades' : ativs.map(rotuloAtividade).join(', ');
+  const f = state.filtroFazendaRelatorio ? nomeFazendaLanc(Number(state.filtroFazendaRelatorio)) : 'todas as fazendas';
+  return `${a} · ${f}`;
+}
+
+// ---- Contas do mês ----
+function dadosRelatorioContas(tipo, mes, comAtrasadas){
+  const abertos = state.titulos.filter(t=>t.tipo===tipo && !t.cancelado && t.vencimento && saldoDoTitulo(t) > 0);
+  const doMes = abertos.filter(t=>t.vencimento.slice(0,7)===mes).sort((a,b)=>a.vencimento.localeCompare(b.vencimento) || a.id-b.id);
+  const atrasadas = comAtrasadas ? abertos.filter(t=>t.vencimento.slice(0,7) < mes).sort((a,b)=>a.vencimento.localeCompare(b.vencimento) || a.id-b.id) : [];
+  const pagoNoMes = state.titulos.filter(t=>t.tipo===tipo && !t.cancelado && t.vencimento && t.vencimento.slice(0,7)===mes)
+    .reduce((a,t)=>a+Number(t.valorBaixado||0), 0);
+  const soma = l => l.reduce((a,t)=>a+saldoDoTitulo(t), 0);
+  return {doMes, atrasadas, totalMes: soma(doMes), totalAtrasadas: soma(atrasadas), pagoNoMes};
+}
+function corpoRelatorioContas(tipo, mes, comAtrasadas){
+  const d = dadosRelatorioContas(tipo, mes, comAtrasadas);
+  const quem = tipo==='pagar' ? 'Fornecedor' : 'Cliente';
+  const tabela = (lista, titulo)=> lista.length===0 ? '' : `
+    <h2>${esc(titulo)}</h2>
+    <table class="imp-tabela">
+      <thead><tr><th>Vencimento</th><th>Nº</th><th>${quem}</th><th>Descrição</th><th>Atividade / Fazenda</th><th class="num">Em aberto</th></tr></thead>
+      <tbody>
+        ${lista.map(t=>{
+          const af = atividadesFazendasDoTitulo(rateiosDoTitulo(t.id)).map(x=>`${x.atividade} · ${x.fazenda}`).join('; ');
+          return `<tr>
+            <td>${dataBr(t.vencimento)}</td><td>${t.id}</td><td>${esc(nomeEntidade(t.entidadeId))}</td>
+            <td>${esc(t.descricao)}${t.parcelas>1?` (${t.parcela}/${t.parcelas})`:''}${t.documento?` · doc ${esc(t.documento)}`:''}${t.previsao?' · previsão':''}${t.situacao==='parcial'?' · pago em parte':''}</td>
+            <td>${esc(af||'—')}</td><td class="num">${brl(saldoDoTitulo(t))}</td></tr>`;
+        }).join('')}
+        <tr class="imp-total"><td colspan="5">Total (${lista.length} ${lista.length===1?'conta':'contas'})</td><td class="num">${brl(lista.reduce((a,t)=>a+saldoDoTitulo(t),0))}</td></tr>
+      </tbody>
+    </table>`;
+  const nome = tipo==='pagar' ? 'pagar' : 'receber';
+  return `
+    <table class="imp-resumo">
+      <tr><td>Falta ${nome} com vencimento em ${mesLabel(mes)}</td><td class="num">${brl(d.totalMes)}</td></tr>
+      ${comAtrasadas ? `<tr><td>Atrasadas (vencidas antes de ${mesLabel(mes)})</td><td class="num">${brl(d.totalAtrasadas)}</td></tr>
+      <tr class="imp-total"><td>Total em aberto</td><td class="num">${brl(d.totalMes + d.totalAtrasadas)}</td></tr>` : ''}
+      <tr><td>Já ${tipo==='pagar'?'pago':'recebido'} das contas que vencem em ${mesLabel(mes)}</td><td class="num">${brl(d.pagoNoMes)}</td></tr>
+    </table>
+    ${d.doMes.length===0 && d.atrasadas.length===0 ? `<p>Nenhuma conta em aberto ${comAtrasadas?'no mês nem atrasada':'no mês'}.</p>` : ''}
+    ${tabela(d.atrasadas, `Atrasadas (antes de ${mesLabel(mes)})`)}
+    ${tabela(d.doMes, `Vencem em ${mesLabel(mes)}`)}
+    <p class="imp-nota">Valores em aberto (o valor da conta menos o que já foi baixado). Contas canceladas não entram.</p>`;
+}
+function imprimirRelatorioContas(tipo, mes, comAtrasadas){
+  imprimirRelatorio(tipo==='pagar' ? 'Contas a pagar' : 'Contas a receber', mesLabel(mes), corpoRelatorioContas(tipo, mes, comAtrasadas));
+}
+
+// ---- Balancete ----
+function corpoRelatorioBalancete(periodo){
+  const bal = balanceteRelatorio(periodo);
+  if(bal.linhas.length===0) return `<p>Sem lançamento neste período e filtro.</p>`;
+  let grupoAtual = null;
+  return `
+    <table class="imp-tabela">
+      <thead><tr><th>Centro de custo</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+      <tbody>
+        ${bal.linhas.map(l=>{
+          const cab = l.grupo!==grupoAtual ? (grupoAtual = l.grupo, `<tr class="imp-grupo"><td colspan="4">${esc(l.grupo)}</td></tr>`) : '';
+          return `${cab}<tr><td>${esc(l.centro)}</td><td class="num">${l.entrada>0?brl(l.entrada):'—'}</td><td class="num">${l.saida>0?brl(l.saida):'—'}</td><td class="num">${brl(l.saldo)}</td></tr>`;
+        }).join('')}
+        <tr class="imp-total"><td>Total</td><td class="num">${brl(bal.totalEntrada)}</td><td class="num">${brl(bal.totalSaida)}</td><td class="num">${brl(bal.saldo)}</td></tr>
+      </tbody>
+    </table>
+    <p class="imp-nota">Saída inclui despesas e investimentos. Lançamento geral aparece na parte de cada atividade (visão rateada).</p>`;
+}
+
+// ---- Livro caixa ----
+function dadosLivroCaixa(periodo){
+  const meses = periodoMeses(periodo), noPeriodo = new Set(meses);
+  const linhas = state.lancamentos
+    .filter(l=>l.mes && noPeriodo.has(l.mes) && ['receita','despesa','investimento'].includes(l.tipo))
+    .map(l=>({l, ord: l.data || (l.mes + '-00'), entrada: l.tipo==='receita' ? Number(l.valor||0) : 0, saida: l.tipo==='receita' ? 0 : Number(l.valor||0)}))
+    .sort((a,b)=> a.ord<b.ord ? -1 : a.ord>b.ord ? 1 : a.l.id-b.l.id);
+  const porMes = meses.map(m=>{
+    const ls = linhas.filter(x=>x.l.mes===m);
+    return {mes:m, linhas:ls, entradas: ls.reduce((a,x)=>a+x.entrada,0), saidas: ls.reduce((a,x)=>a+x.saida,0)};
+  }).filter(g=>g.linhas.length>0);
+  const entradas = porMes.reduce((a,g)=>a+g.entradas,0), saidas = porMes.reduce((a,g)=>a+g.saidas,0);
+  return {porMes, entradas, saidas, resultado: entradas - saidas, semDia: linhas.filter(x=>!x.l.data).length};
+}
+function corpoRelatorioLivroCaixa(periodo){
+  const d = dadosLivroCaixa(periodo);
+  if(d.porMes.length===0) return `<p>Nenhum pagamento ou recebimento no período.</p>`;
+  let acumulado = 0;
+  return `
+    <table class="imp-resumo">
+      <tr><td>Entradas (recebimentos)</td><td class="num">${brl(d.entradas)}</td></tr>
+      <tr><td>Saídas (pagamentos: despesas e investimentos)</td><td class="num">${brl(d.saidas)}</td></tr>
+      <tr class="imp-total"><td>Resultado de caixa do período</td><td class="num">${brl(d.resultado)}</td></tr>
+    </table>
+    <table class="imp-tabela imp-livro">
+      <thead><tr><th>Data</th><th>Nº</th><th>Histórico</th><th>Centro de custo</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Acumulado</th></tr></thead>
+      <tbody>
+        ${d.porMes.map(g=>`
+          <tr class="imp-grupo"><td colspan="7">${esc(mesLabel(g.mes))}</td></tr>
+          ${g.linhas.map(x=>{
+            acumulado += x.entrada - x.saida;
+            const l = x.l;
+            const hist = [l.descricao, l.fornecedor && l.fornecedor!==l.descricao ? l.fornecedor : ''].filter(Boolean).join(' · ');
+            return `<tr><td>${l.data ? dataBr(l.data) : esc(mesLabel(l.mes)) + '*'}</td><td>${l.id}</td><td>${esc(hist||'—')}</td><td>${esc(nomeCentroCusto(l.centroCustoId))}</td>
+              <td class="num">${x.entrada ? brl(x.entrada) : ''}</td><td class="num">${x.saida ? brl(x.saida) : ''}</td><td class="num">${brl(acumulado)}</td></tr>`;
+          }).join('')}
+          <tr class="imp-subtotal"><td colspan="4">Total de ${esc(mesLabel(g.mes))}</td><td class="num">${brl(g.entradas)}</td><td class="num">${brl(g.saidas)}</td><td class="num">${brl(g.entradas - g.saidas)}</td></tr>`).join('')}
+        <tr class="imp-total"><td colspan="4">Total do período</td><td class="num">${brl(d.entradas)}</td><td class="num">${brl(d.saidas)}</td><td class="num">${brl(d.resultado)}</td></tr>
+      </tbody>
+    </table>
+    <p class="imp-nota">Empresa inteira, pelo que foi pago e recebido (conta a pagar e a receber só entra quando é baixada). O acumulado começa em zero no início do período: não é saldo de conta bancária.${d.semDia ? ` * ${d.semDia} lançamento(s) antigo(s) do ERP têm só o mês, sem o dia.` : ''}</p>`;
+}
+
+// ---- Produção ----
+function colheitasDoPeriodo(lista, periodo, ehCana){
+  if(ehCana && periodo.tipo==='safra') return colheitasCanaNaSafra(periodo.safra);
+  const meses = new Set(periodoMeses(periodo));
+  return lista.filter(c=>c.data && meses.has(c.data.slice(0,7)));
+}
+function producaoPorGrupo(colheitas, chaveDe, campo){
+  const grupos = new Map();
+  colheitas.forEach(c=>{
+    const t = state.talhoes.find(x=>x.id===c.talhaoId);
+    const k = chaveDe(c, t);
+    if(!grupos.has(k)) grupos.set(k, {chave:k, qtd:0, areaPorTalhao:new Map()});
+    const g = grupos.get(k);
+    g.qtd += Number(c[campo]||0);
+    if(c.talhaoId!=null){
+      const area = Number(c.areaColhida) > 0 ? Number(c.areaColhida) : Number(t?.areaHa||0);
+      g.areaPorTalhao.set(c.talhaoId, Math.max(g.areaPorTalhao.get(c.talhaoId)||0, area));
+    }
+  });
+  return [...grupos.values()].map(g=>{ const area = [...g.areaPorTalhao.values()].reduce((a,v)=>a+v,0); return {chave:g.chave, qtd:g.qtd, area, porHa: area>0 ? g.qtd/area : null}; })
+    .sort((a,b)=>String(a.chave).localeCompare(String(b.chave),'pt-BR'));
+}
+function dadosProducao(periodo){
+  const fazDoTalhao = t => t ? nomeFazendaLanc(t.fazendaId) : 'Sem talhão';
+  const cana = producaoPorGrupo(colheitasDoPeriodo(state.colheitasCana, periodo, true), (c,t)=>fazDoTalhao(t), 'toneladas');
+  const nomeCultura = id => (state.culturas.find(c=>c.id===id)||{}).nome || 'Sem cultura';
+  const graos = producaoPorGrupo(colheitasDoPeriodo(state.colheitasGraos, periodo, false), (c,t)=>`${nomeCultura(c.culturaId)} — ${fazDoTalhao(t)}`, 'sacas');
+  const meses = new Set(periodoMeses(periodo));
+  const vendas = (state.vendasPec||[]).filter(a=>a.data && meses.has(a.data.slice(0,7)));
+  const porCat = new Map();
+  vendas.forEach(a=>{
+    const k = a.categoria || (a.tipoVenda==='arroba' ? 'Abate' : 'Venda');
+    if(!porCat.has(k)) porCat.set(k, {categoria:k, vendas:0, cabecas:0, arrobas:0, cabComPeso:0, kg:0});
+    const g = porCat.get(k), arr = arrobasDoAbate(a);
+    g.vendas += 1; g.cabecas += Number(a.quantidade||0);
+    if(arr!=null){ g.arrobas += arr; g.cabComPeso += Number(a.quantidade||0); g.kg += Number(a.pesoMedioKg||0)*Number(a.quantidade||0); }
+  });
+  return {cana, graos, pecuaria: [...porCat.values()].sort((a,b)=>b.cabecas-a.cabecas)};
+}
+function corpoRelatorioProducao(periodo){
+  const d = dadosProducao(periodo);
+  const tabLavoura = (linhas, unidade, porHa, titulo)=>`
+    <h2>${esc(titulo)}</h2>
+    ${linhas.length===0 ? `<p>Sem colheita lançada no período.</p>` : `
+    <table class="imp-tabela">
+      <thead><tr><th>${titulo==='Grãos'?'Cultura — fazenda':'Fazenda'}</th><th class="num">${unidade}</th><th class="num">Área colhida (ha)</th><th class="num">${porHa}</th></tr></thead>
+      <tbody>
+        ${linhas.map(l=>`<tr><td>${esc(l.chave)}</td><td class="num">${fmt(l.qtd,2)}</td><td class="num">${fmt(l.area,2)}</td><td class="num">${l.porHa!=null?fmt(l.porHa,2):'—'}</td></tr>`).join('')}
+        ${linhas.length>1 ? (()=>{ const q = linhas.reduce((a,l)=>a+l.qtd,0), ar = linhas.reduce((a,l)=>a+l.area,0); return `<tr class="imp-total"><td>Total</td><td class="num">${fmt(q,2)}</td><td class="num">${fmt(ar,2)}</td><td class="num">${ar>0?fmt(q/ar,2):'—'}</td></tr>`; })() : ''}
+      </tbody>
+    </table>`}`;
+  return `
+    ${tabLavoura(d.cana, 'Toneladas', 'TCH (t/ha)', 'Cana')}
+    ${tabLavoura(d.graos, 'Sacas', 'Sacas/ha', 'Grãos')}
+    <h2>Pecuária: vendas de animais</h2>
+    ${d.pecuaria.length===0 ? `<p>Sem venda de animais no período.</p>` : `
+    <table class="imp-tabela">
+      <thead><tr><th>Categoria</th><th class="num">Vendas</th><th class="num">Cabeças</th><th class="num">Arrobas</th><th class="num">Peso médio (kg)</th></tr></thead>
+      <tbody>
+        ${d.pecuaria.map(g=>`<tr><td>${esc(g.categoria)}</td><td class="num">${g.vendas}</td><td class="num">${fmtInt(g.cabecas)}</td><td class="num">${g.cabComPeso?fmt(g.arrobas,1):'—'}</td><td class="num">${g.cabComPeso?fmt(g.kg/g.cabComPeso,1):'—'}</td></tr>`).join('')}
+        <tr class="imp-total"><td>Total</td><td class="num">${d.pecuaria.reduce((a,g)=>a+g.vendas,0)}</td><td class="num">${fmtInt(d.pecuaria.reduce((a,g)=>a+g.cabecas,0))}</td><td class="num">${fmt(d.pecuaria.reduce((a,g)=>a+g.arrobas,0),1)}</td><td></td></tr>
+      </tbody>
+    </table>`}
+    <p class="imp-nota">Área colhida: cada talhão uma vez, pela área colhida informada ou a do talhão. Arroba: abate pelo peso de carcaça (÷15); venda por kg pelo peso vivo (÷30); venda por cabeça não tem peso e fica sem @.</p>`;
+}
+function BlocoRelatoriosPdf(){
+  return `
+  <div class="card card-pad" style="margin-bottom:18px;" data-bloco-pdf="1">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <strong style="margin-right:6px;">Tirar em PDF (${esc(labelPeriodo(state.periodo))}):</strong>
+      <button class="btn-ghost btn-sm" data-pdf="balancete">Balancete</button>
+      <button class="btn-ghost btn-sm" data-pdf="livroCaixa">Livro caixa</button>
+      <button class="btn-ghost btn-sm" data-pdf="producao">Produção</button>
+    </div>
+    <p class="hint" style="margin:6px 0 0;">Abre a impressão do navegador: escolha "Salvar como PDF" (no iPad, Compartilhar → Imprimir e abra a prévia com dois dedos). O balancete segue o período e os filtros desta tela; o livro caixa e a produção são da empresa inteira no período.</p>
+  </div>`;
+}
+function ModalRelatorioContas(){
+  const d = editDraft;
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Relatório de contas em PDF</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field"><label>Contas</label>
+            <select id="f-rel-tipo"><option value="pagar" ${d.tipo==='pagar'?'selected':''}>A pagar</option><option value="receber" ${d.tipo==='receber'?'selected':''}>A receber</option></select></div>
+          <div class="field"><label>Mês</label><input id="f-rel-mes" type="month" value="${d.mes}"/></div>
+        </div>
+        <label style="display:flex; gap:8px; align-items:center; font-weight:400;"><input type="checkbox" id="f-rel-atrasadas" ${d.atrasadas?'checked':''} style="width:auto;"/> Incluir as atrasadas (vencidas antes do mês)</label>
+        <p class="hint" style="margin-top:10px;">Lista o que está em aberto, pelo vencimento, com a atividade e a fazenda de cada conta. Abre a impressão: escolha "Salvar como PDF".</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-gerar-relatorio-contas="1">Gerar PDF</button>
+      </div>
+    </div>
+  </div>`;
+}
 function PageResultadosRelatorios(){
   const bal = balanceteRelatorio(state.periodo);
   const fc = fluxoCaixaRelatorio(state.periodo);
   let grupoAtual = null;
   return `
   ${FiltrosRelatorio()}
+  ${BlocoRelatoriosPdf()}
   <p class="eyebrow" style="margin-bottom:10px;">${labelPeriodo(state.periodo)} — Balancete</p>
   <div class="card" style="overflow-x:auto; margin-bottom:18px;">
     ${bal.linhas.length===0 ? Empty('Sem lançamento neste filtro', 'Nenhuma despesa, receita ou investimento no período/atividade/fazenda selecionados.') : `
@@ -6426,7 +6709,7 @@ function rowToTitulo(r){
           parcela:r.parcela||1, parcelas:r.parcelas||1, grupo:r.grupo||null,
           previsao:r.previsao===true, cancelado:r.cancelado===true,
           valorBaixado:Number(r.valor_baixado||0), situacao:r.situacao||'aberto',
-          observacao:r.observacao||''};
+          observacao:r.observacao||'', notaFiscalId:r.nota_fiscal_id||null};
 }
 function rowToRateio(r){
   return {id:r.id, tituloId:r.titulo_id, fazendaId:r.fazenda_id||null, atividade:r.atividade,
@@ -6585,7 +6868,10 @@ function PageContas(){
         <button class="${tipo===k?'btn btn-primary btn-sm':'btn-ghost btn-sm'}" data-aba-contas="${k}">${l}</button>
       `).join('')}
     </div>
-    ${podeEditarContas() ? `<button class="btn btn-primary btn-sm" data-novo-titulo="${tipo}">+ Nova ${rotulo}</button>` : ''}
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <button class="btn-ghost btn-sm" data-relatorio-contas="${tipo}">Relatório do mês (PDF)</button>
+      ${podeEditarContas() ? `<button class="btn btn-primary btn-sm" data-novo-titulo="${tipo}">+ Nova ${rotulo}</button>` : ''}
+    </div>
   </div>
 
   <div class="stat-row" style="margin-bottom:14px;">
@@ -6810,6 +7096,7 @@ function ModalTitulo(){
 
         <h4 style="font-family:'Fraunces',serif; color:var(--verde-escuro); margin:0 0 8px;">Financeiro</h4>
         <p class="hint" style="margin-top:0;">O papel: quem, quanto, quando vence.</p>
+        ${BlocoNotaFiscal(d, editando)}
 
         <div class="field"><label>${ehPagar?'Fornecedor':'Cliente'}</label>
           <input id="f-tit-entidade" list="lista-entidades" value="${esc(d.entidadeNome||'')}" placeholder="Comece a digitar..." autocomplete="off"/>
@@ -7131,13 +7418,14 @@ function repartir(total, n){
 /* Acha a entidade pelo nome ou cria. O indice unico do banco e por
  * lower(btrim(nome)), entao a comparacao aqui usa a mesma regra — senao a
  * tela tentaria criar "Agrosaquy" tendo "AGROSAQUY" e tomaria erro. */
-async function acharOuCriarEntidade(nome){
+async function acharOuCriarEntidade(nome, documento){
   const limpo = (nome||'').trim();
   if(!limpo) return {id:null};
   const achou = state.entidades.find(e=>e.nome.trim().toLowerCase() === limpo.toLowerCase());
   if(achou) return {id:achou.id};
+  // documento: CNPJ/CPF lido da nota fiscal (só quando o nome é o da nota); fica no banco, nunca no repositório
   const {data, error} = await db.from('entidades')
-    .insert({nome: limpo, papel: 'fornecedor', criado_por: state.perfil?.nome || null})
+    .insert({nome: limpo, papel: 'fornecedor', criado_por: state.perfil?.nome || null, ...(documento ? {documento} : {})})
     .select('id').single();
   if(error) return {error};
   return {id: data.id};
@@ -7202,7 +7490,8 @@ async function salvarTitulo(){
   }
   state.erroTitulo = '';
 
-  const ent = await acharOuCriarEntidade(d.entidadeNome);
+  const docDaNota = d.nota && d._nomeDaNota && (d.entidadeNome||'').trim().toLowerCase()===d._nomeDaNota.trim().toLowerCase() ? d.entidadeDocumento : null;
+  const ent = await acharOuCriarEntidade(d.entidadeNome, docDaNota);
   if(ent.error){ alert('Não foi possível cadastrar o fornecedor: ' + ent.error.message); return; }
 
   const comum = {
@@ -7215,6 +7504,16 @@ async function salvarTitulo(){
     previsao: d.previsao === true,
     observacao: d.observacao || null,
   };
+  // Nota fiscal lida do XML (só em conta nova): guarda o arquivo e a nota antes; se a conta não for gravada, desfaz.
+  let notaGravada = null;
+  if(!d._editId && d.nota){
+    if(state.notasFiscais.some(n=>n.chave===d.nota.chave)){ state.erroTitulo = 'Esta nota já foi lançada em outra conta.'; editDraft = d; render(); return; }
+    const g = await gravarNotaFiscal(d.nota, d.notaXmlTexto || '', d.notaPdf || null);
+    if(g.erro){ alert(g.erro); return; }
+    notaGravada = g;
+    comum.nota_fiscal_id = g.id;
+  }
+  const falhou = async (msg)=>{ await desfazerNotaFiscal(notaGravada); alert(msg); };
 
   // O que vai ser gravado: uma entrada por conta (por parcela), cada uma com os dados e as partes do rateio.
   const itens = [];
@@ -7286,7 +7585,7 @@ async function salvarTitulo(){
   // caminho antigo abaixo, conta por conta.
   const viaBanco = await db.rpc('salvar_titulos', {p_itens: itens});
   if(viaBanco.error && !funcaoDoBancoNaoExiste(viaBanco.error)){
-    alert('Não foi possível salvar: ' + viaBanco.error.message); return;
+    await falhou('Não foi possível salvar: ' + viaBanco.error.message); return;
   }
   // A entrada no estoque fica na conta (na 1ª parcela, se for parcelada).
   let idDaCompra = d._editId || (Array.isArray(viaBanco.data) ? Number(viaBanco.data[0]) : null);
@@ -7300,7 +7599,7 @@ async function salvarTitulo(){
         if(e2){ alert('Não foi possível atualizar o rateio: ' + e2.message); return; }
       } else {
         const {data: novo, error: e1} = await db.from('titulos').insert(it.titulo).select('id').single();
-        if(e1){ alert('Não foi possível salvar: ' + e1.message); return; }
+        if(e1){ await falhou('Não foi possível salvar: ' + e1.message); return; }
         id = novo.id;
       }
       const {error: e3} = await db.from('titulo_rateios').insert(it.rateios.map(r=>({...r, titulo_id: id})));
@@ -7378,6 +7677,203 @@ async function salvarBaixa(){
   await loadAll(['contas','lancamentos']);
 }
 
+/* ===================== NOTA FISCAL NO PAGAR/RECEBER (14/11/2026) =====================
+ * Pedido do Eduardo: lançar a nota fiscal nas contas a pagar e a receber, lendo o XML da NF-e. O app lê o XML no próprio
+ * navegador (DOMParser, nada sai do aparelho antes de salvar), preenche fornecedor/cliente, documento, descrição, valor e as
+ * parcelas (duplicatas da nota, com data e valor de cada uma), e ao salvar guarda o XML (e o PDF da DANFE, se enviado) no
+ * bucket privado "notas-fiscais" e uma linha em notas_fiscais ligada às contas (titulos.nota_fiscal_id). A chave de acesso é
+ * única: a mesma nota não entra duas vezes (o app avisa antes; o banco recusa). notas_fiscais_01.sql cria tudo; sem ele o
+ * campo da nota não aparece (state.notasDisponivel). Quem lança e vê é o mesmo das contas (permissão contas).
+ * Lado da conta: nota de saída do fornecedor (tpNF 1) numa conta a pagar = o emitente é o fornecedor; nota de entrada que nós
+ * mesmos emitimos (tpNF 0, compra de produtor) = o fornecedor está no destinatário. Conta a receber, o contrário. */
+const BUCKET_NOTAS = 'notas-fiscais';
+const LIMITE_ARQUIVO_NOTA = 5 * 1024 * 1024;
+function rowToNota(r){
+  return {id:r.id, chave:r.chave, modelo:r.modelo||'', numero:r.numero||'', serie:r.serie||'', emissao:r.emissao||null,
+          tipoOperacao:r.tipo_operacao||null, emitenteNome:r.emitente_nome||'', emitenteDoc:r.emitente_doc||'',
+          destinatarioNome:r.destinatario_nome||'', destinatarioDoc:r.destinatario_doc||'',
+          valorTotal:Number(r.valor_total||0), xmlPath:r.xml_path||null, pdfPath:r.pdf_path||null};
+}
+function soDigitos(s){ return String(s||'').replace(/\D/g,''); }
+function chaveFormatada(c){ return String(c||'').replace(/(\d{4})(?=\d)/g,'$1 '); }
+function lerXmlNfe(texto){
+  let doc = null;
+  try{ doc = new DOMParser().parseFromString(String(texto||''), 'application/xml'); }catch(e){ doc = null; }
+  if(!doc || doc.getElementsByTagName('parsererror').length) return {erro:'O arquivo não é um XML válido.'};
+  const inf = doc.getElementsByTagName('infNFe')[0];
+  if(!inf) return {erro:'Este XML não é de NF-e (nota de produto). Nota de serviço (NFS-e) e conhecimento de transporte (CT-e) ainda não são lidos: lance a conta à mão.'};
+  const um = (raiz, tag)=>{ const e = raiz && raiz.getElementsByTagName(tag)[0]; return e ? e.textContent.trim() : ''; };
+  const ide = inf.getElementsByTagName('ide')[0], emit = inf.getElementsByTagName('emit')[0], dest = inf.getElementsByTagName('dest')[0];
+  let chave = soDigitos(inf.getAttribute('Id'));
+  if(chave.length!==44) chave = soDigitos(um(doc, 'chNFe'));
+  if(chave.length!==44) return {erro:'Não achei a chave de acesso (44 números) neste XML.'};
+  const dataSo = s => /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0,10) : '';
+  const tot = inf.getElementsByTagName('ICMSTot')[0];
+  const parcelas = [...inf.getElementsByTagName('dup')]
+    .map(dp=>({numero: um(dp,'nDup'), vencimento: dataSo(um(dp,'dVenc')), valor: Math.round((Number(um(dp,'vDup'))||0)*100)/100}))
+    .filter(p=>p.valor > 0);
+  const cStat = um(doc.getElementsByTagName('protNFe')[0], 'cStat');
+  return {
+    chave, modelo: um(ide,'mod'), numero: um(ide,'nNF'), serie: um(ide,'serie'),
+    emissao: dataSo(um(ide,'dhEmi') || um(ide,'dEmi')),
+    tipoOperacao: um(ide,'tpNF')==='0' ? 'entrada' : 'saida',
+    emitente: {nome: um(emit,'xNome'), doc: soDigitos(um(emit,'CNPJ') || um(emit,'CPF'))},
+    destinatario: {nome: um(dest,'xNome'), doc: soDigitos(um(dest,'CNPJ') || um(dest,'CPF'))},
+    valorTotal: Math.round((Number(um(tot,'vNF'))||0)*100)/100,
+    parcelas,
+    produtos: [...inf.getElementsByTagName('det')].map(d=>um(d,'xProd')).filter(Boolean),
+    autorizada: cStat==='100' || cStat==='150',
+  };
+}
+// Quem é o fornecedor (conta a pagar) ou o cliente (conta a receber) na nota.
+function contraparteDaNota(nf, tipoConta){
+  const pagar = tipoConta==='pagar';
+  return nf.tipoOperacao==='entrada' ? (pagar ? nf.destinatario : nf.emitente) : (pagar ? nf.emitente : nf.destinatario);
+}
+function contaDaNota(notaId){ return state.titulos.find(t=>t.notaFiscalId===notaId) || null; }
+function aplicarNotaNoTitulo(d, nf){
+  const parte = contraparteDaNota(nf, d.tipo);
+  const ent = parte.doc ? state.entidades.find(e=>soDigitos(e.documento)===parte.doc) : null;
+  const nomeEnt = ent ? ent.nome : (parte.nome || d.entidadeNome || '');
+  const n = nf.parcelas.length;
+  const total = n ? Math.round(nf.parcelas.reduce((a,p)=>a+p.valor,0)*100)/100 : nf.valorTotal;
+  const primeiro = (n && nf.parcelas[0].vencimento) || nf.emissao || hojeStr();
+  const nParc = Math.max(1, n);
+  const vencimentos = n ? nf.parcelas.map(p=>p.vencimento || primeiro) : [primeiro];
+  const valores = n ? nf.parcelas.map(p=>p.valor) : [total];
+  const desc = nf.produtos.length
+    ? nf.produtos[0].slice(0,90) + (nf.produtos.length>1 ? ` e mais ${nf.produtos.length-1} ${nf.produtos.length===2?'item':'itens'}` : '')
+    : `NF ${nf.numero}`;
+  const comp = (nf.emissao || hojeStr()).slice(0,7);
+  const avisos = [];
+  if(!nf.autorizada) avisos.push('O XML não traz a autorização da SEFAZ (protocolo): confira se a nota foi autorizada antes de pagar.');
+  if(n && Math.abs(total - nf.valorTotal) > 0.009) avisos.push(`As duplicatas somam R$ ${fmt(total)} e a nota é de R$ ${fmt(nf.valorTotal)}: a conta ficou com o valor das duplicatas.`);
+  if(!n) avisos.push('A nota não tem duplicatas (pagamento à vista ou combinado à parte): a conta ficou com uma parcela, vencendo na data de emissão. Ajuste o vencimento se for outro.');
+  if(!parte.nome) avisos.push(`A nota não traz o ${d.tipo==='pagar'?'fornecedor':'cliente'}: preencha o nome.`);
+  return {...d,
+    entidadeNome: nomeEnt, _nomeDaNota: nomeEnt, entidadeDocumento: parte.doc || '',
+    descricao: d.descricao || desc,
+    documento: `NF ${nf.numero}${nf.serie ? ' série ' + nf.serie : ''}`,
+    valor: total, vencimento: primeiro, parcelas: nParc, intervaloTipo: 'mensal', intervaloDias: '',
+    vencimentos, valoresParcela: valores, _regraChave: `${primeiro}|${nParc}|mensal||${total}`,
+    rateios: (d.rateios||[]).map(r=>({...r, competencia: comp})),
+    nota: nf, notaAvisos: avisos, notaErro: ''};
+}
+function ResumoNota(nf, conta){
+  const linha = (rot, val)=> val ? `<div><span class="hint">${rot}:</span> ${val}</div>` : '';
+  return `
+    <div class="nota-resumo" data-nota-resumo="1">
+      <strong>NF ${esc(nf.numero)}${nf.serie?` · série ${esc(nf.serie)}`:''}</strong>${nf.modelo==='65'?' <span class="pill">NFC-e</span>':''}
+      ${linha('Emissão', esc(dataBr(nf.emissao)))}
+      ${linha('Emitente', esc(nf.emitenteNome ?? nf.emitente?.nome ?? ''))}
+      ${linha('Destinatário', esc(nf.destinatarioNome ?? nf.destinatario?.nome ?? ''))}
+      ${linha('Valor da nota', 'R$ ' + fmt(nf.valorTotal))}
+      ${nf.parcelas ? linha('Duplicatas', nf.parcelas.length ? nf.parcelas.map(p=>`${esc(dataBr(p.vencimento))} R$ ${fmt(p.valor)}`).join(' · ') : 'nenhuma') : ''}
+      <div class="hint mono" style="word-break:break-all;">Chave ${esc(chaveFormatada(nf.chave))}</div>
+      ${conta ? `<div class="hint">Conta ${NumeroId(conta.id)}</div>` : ''}
+    </div>`;
+}
+function BlocoNotaFiscal(d, editando){
+  if(!state.notasDisponivel) return '';
+  if(editando){
+    const t = state.titulos.find(x=>x.id===d._editId);
+    const nf = t && t.notaFiscalId ? state.notasFiscais.find(n=>n.id===t.notaFiscalId) : null;
+    if(!nf) return '';
+    return `
+    <div class="field nota-bloco" data-nota-bloco="1"><label>Nota fiscal</label>
+      ${ResumoNota(nf, null)}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+        ${nf.xmlPath ? `<button class="btn-ghost btn-sm" data-baixar-nota="${nf.id}" data-arquivo="xml">Baixar XML</button>` : ''}
+        ${nf.pdfPath ? `<button class="btn-ghost btn-sm" data-baixar-nota="${nf.id}" data-arquivo="pdf">Baixar PDF (DANFE)</button>`
+          : (podeEditarContas() ? `<label class="btn-ghost btn-sm" style="cursor:pointer;">Anexar PDF (DANFE)<input type="file" accept="application/pdf,.pdf" data-anexar-pdf-nota="${nf.id}" style="display:none;"/></label>` : '')}
+      </div>
+    </div>`;
+  }
+  return `
+    <div class="field nota-bloco" data-nota-bloco="1"><label>Nota fiscal (opcional)</label>
+      ${d.nota ? `
+        ${ResumoNota({...d.nota, emitenteNome:d.nota.emitente.nome, destinatarioNome:d.nota.destinatario.nome}, null)}
+        ${(d.notaAvisos||[]).map(a=>`<div class="hint" style="color:var(--ambar-texto, #7A4F08);">${esc(a)}</div>`).join('')}
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px;">
+          <label class="btn-ghost btn-sm" style="cursor:pointer;">${d.notaPdf ? 'Trocar o PDF' : 'Anexar PDF (DANFE, opcional)'}<input type="file" accept="application/pdf,.pdf" data-nota-pdf="1" style="display:none;"/></label>
+          ${d.notaPdf ? `<span class="hint">${esc(d.notaPdf.name)}</span>` : ''}
+          <button class="btn-ghost btn-sm" data-tirar-nota="1">Tirar a nota</button>
+        </div>
+        <span class="hint">Os campos abaixo foram preenchidos pela nota: confira e complete o rateio. O XML${d.notaPdf?' e o PDF':''} ficam guardados com a conta.</span>`
+      : `
+        <label class="btn-ghost btn-sm" style="cursor:pointer; display:inline-flex;">Ler o XML da NF-e<input type="file" accept=".xml,text/xml,application/xml" data-nota-xml="1" style="display:none;"/></label>
+        <span class="hint">Preenche ${d.tipo==='pagar'?'o fornecedor':'o cliente'}, o número, o valor e as parcelas a partir do XML da nota.</span>`}
+      ${d.notaErro ? `<div class="login-error" style="margin-top:6px;">${esc(d.notaErro)}</div>` : ''}
+    </div>`;
+}
+function lerArquivoComoTexto(file){
+  return new Promise((ok, falha)=>{ const r = new FileReader(); r.onload = ()=>ok(String(r.result||'')); r.onerror = ()=>falha(r.error); r.readAsText(file); });
+}
+async function receberXmlDaNota(file){
+  let d = lerTituloDoFormulario(editDraft);
+  if(file.size > LIMITE_ARQUIVO_NOTA){ editDraft = {...d, notaErro:'O arquivo passa de 5 MB: não parece um XML de nota.'}; render(); return; }
+  let texto = '';
+  try{ texto = await lerArquivoComoTexto(file); }catch(e){ editDraft = {...d, notaErro:'Não foi possível ler o arquivo.'}; render(); return; }
+  const nf = lerXmlNfe(texto);
+  if(nf.erro){ editDraft = {...d, notaErro: nf.erro}; render(); return; }
+  const ja = state.notasFiscais.find(n=>n.chave===nf.chave);
+  if(ja){
+    const c = contaDaNota(ja.id);
+    editDraft = {...d, notaErro: `Esta nota (NF ${nf.numero}) já foi lançada${c ? ` na conta Nº ${c.id} (${c.descricao})` : ''}. A mesma nota não entra duas vezes.`};
+    render(); return;
+  }
+  editDraft = {...aplicarNotaNoTitulo(d, nf), notaXmlTexto: texto};
+  render();
+}
+async function gravarNotaFiscal(nf, xmlTexto, pdf){
+  const xmlPath = `${nf.chave}/nfe-${nf.chave}.xml`;
+  const pdfPath = pdf ? `${nf.chave}/danfe-${nf.chave}.pdf` : null;
+  const jaExiste = e => e && /exist|duplicate/i.test(String(e.message||e.error||''));
+  const store = db.storage.from(BUCKET_NOTAS);
+  const up1 = await store.upload(xmlPath, new Blob([xmlTexto], {type:'application/xml'}), {contentType:'application/xml', upsert:false});
+  if(up1.error && !jaExiste(up1.error)) return {erro: 'Não foi possível guardar o XML da nota: ' + up1.error.message};
+  if(pdf){
+    const up2 = await store.upload(pdfPath, pdf, {contentType:'application/pdf', upsert:false});
+    if(up2.error && !jaExiste(up2.error)){ if(!up1.error) await store.remove([xmlPath]); return {erro: 'Não foi possível guardar o PDF da nota: ' + up2.error.message}; }
+  }
+  const row = {chave: nf.chave, modelo: nf.modelo || null, numero: nf.numero || null, serie: nf.serie || null, emissao: nf.emissao || null,
+    tipo_operacao: nf.tipoOperacao, emitente_nome: nf.emitente.nome || null, emitente_doc: nf.emitente.doc || null,
+    destinatario_nome: nf.destinatario.nome || null, destinatario_doc: nf.destinatario.doc || null,
+    valor_total: nf.valorTotal, xml_path: xmlPath, pdf_path: pdfPath};
+  const ins = await db.from('notas_fiscais').insert(row).select('id').single();
+  if(ins.error){
+    await store.remove([xmlPath, pdfPath].filter(Boolean));
+    return {erro: ins.error.code==='23505' ? 'Esta nota já foi lançada em outra conta: a mesma nota não entra duas vezes.' : 'Não foi possível guardar a nota: ' + ins.error.message};
+  }
+  return {id: ins.data.id, xmlPath, pdfPath};
+}
+async function desfazerNotaFiscal(g){
+  if(!g) return;
+  await db.from('notas_fiscais').delete().eq('id', g.id);
+  await db.storage.from(BUCKET_NOTAS).remove([g.xmlPath, g.pdfPath].filter(Boolean));
+}
+async function baixarArquivoNota(nf, tipo){
+  const path = tipo==='pdf' ? nf.pdfPath : nf.xmlPath;
+  if(!path) return;
+  const {data, error} = await db.storage.from(BUCKET_NOTAS).download(path);
+  if(error || !data){ alert('Não foi possível baixar o arquivo da nota: ' + (error?.message || 'sem resposta')); return; }
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url; a.download = `NF ${nf.numero}${nf.serie?'-'+nf.serie:''}.${tipo==='pdf'?'pdf':'xml'}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+async function anexarPdfNaNota(nf, file){
+  if(file.type && file.type!=='application/pdf'){ alert('Escolha um arquivo PDF.'); return; }
+  if(file.size > LIMITE_ARQUIVO_NOTA){ alert('O PDF passa de 5 MB.'); return; }
+  const path = `${nf.chave}/danfe-${nf.chave}.pdf`;
+  const up = await db.storage.from(BUCKET_NOTAS).upload(path, file, {contentType:'application/pdf', upsert:true});
+  if(up.error){ alert('Não foi possível guardar o PDF: ' + up.error.message); return; }
+  const {error} = await db.from('notas_fiscais').update({pdf_path: path}).eq('id', nf.id);
+  if(error){ alert('O PDF foi enviado, mas não ficou ligado à nota: ' + error.message); return; }
+  state.notasFiscais = state.notasFiscais.map(n=>n.id===nf.id ? {...n, pdfPath: path} : n);
+  render();
+}
 function rateioVazio(){
   // Sem atividade de partida: "geral" aqui nascia calado e a baixa do
   // título gerava lançamento fora das três atividades. A pessoa escolhe.
@@ -7481,6 +7977,27 @@ function ligarEventosContas(){
       render();
     };
   });
+  document.querySelectorAll('[data-relatorio-contas]').forEach(el=>{
+    el.onclick = ()=>{ editDraft = {tipo: el.dataset.relatorioContas, mes: mesAtualStr(), atrasadas: true}; state.modal = {type:'relatorioContas'}; render(); };
+  });
+  document.querySelectorAll('[data-gerar-relatorio-contas]').forEach(el=>{
+    el.onclick = ()=>{
+      const tipo = document.getElementById('f-rel-tipo').value;
+      const mes = document.getElementById('f-rel-mes').value;
+      if(!mes){ alert('Escolha o mês do relatório.'); return; }
+      const atrasadas = document.getElementById('f-rel-atrasadas').checked;
+      state.modal = null; editDraft = null; render();
+      imprimirRelatorioContas(tipo, mes, atrasadas);
+    };
+  });
+  document.querySelectorAll('[data-pdf]').forEach(el=>{
+    el.onclick = ()=>{
+      const p = state.periodo, sub = labelPeriodo(p);
+      if(el.dataset.pdf==='balancete') imprimirRelatorio('Balancete', `${sub} · ${textoFiltrosRelatorio()}`, corpoRelatorioBalancete(p));
+      else if(el.dataset.pdf==='livroCaixa') imprimirRelatorio('Livro caixa', sub, corpoRelatorioLivroCaixa(p));
+      else if(el.dataset.pdf==='producao') imprimirRelatorio('Produção', sub, corpoRelatorioProducao(p));
+    };
+  });
   document.querySelectorAll('[data-ver-baixas]').forEach(el=>{
     el.onclick = ()=>{ state.modal = {type:'verBaixas', tituloId: Number(el.dataset.verBaixas)}; render(); };
   });
@@ -7511,6 +8028,31 @@ function ligarEventosContas(){
   // ---- dentro do formulário de título ----
   document.querySelectorAll('[data-recalcula-titulo]').forEach(el=>{
     el.onchange = ()=>{ editDraft = lerTituloDoFormulario(editDraft); render(); };
+  });
+  document.querySelectorAll('[data-nota-xml]').forEach(el=>{
+    el.onchange = ()=>{ const f = el.files && el.files[0]; if(f) receberXmlDaNota(f); };
+  });
+  document.querySelectorAll('[data-nota-pdf]').forEach(el=>{
+    el.onchange = ()=>{
+      const f = el.files && el.files[0]; if(!f) return;
+      const d = lerTituloDoFormulario(editDraft);
+      if(f.type && f.type!=='application/pdf'){ editDraft = {...d, notaErro:'Escolha um arquivo PDF para a DANFE.'}; render(); return; }
+      if(f.size > LIMITE_ARQUIVO_NOTA){ editDraft = {...d, notaErro:'O PDF passa de 5 MB.'}; render(); return; }
+      editDraft = {...d, notaPdf: f, notaErro: ''}; render();
+    };
+  });
+  document.querySelectorAll('[data-tirar-nota]').forEach(el=>{
+    el.onclick = ()=>{
+      const d = lerTituloDoFormulario(editDraft);
+      editDraft = {...d, nota: null, notaAvisos: [], notaXmlTexto: '', notaPdf: null, notaErro: '', _nomeDaNota: '', entidadeDocumento: ''};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-baixar-nota]').forEach(el=>{
+    el.onclick = ()=>{ const nf = state.notasFiscais.find(n=>n.id===Number(el.dataset.baixarNota)); if(nf) baixarArquivoNota(nf, el.dataset.arquivo); };
+  });
+  document.querySelectorAll('[data-anexar-pdf-nota]').forEach(el=>{
+    el.onchange = ()=>{ const f = el.files && el.files[0]; const nf = state.notasFiscais.find(n=>n.id===Number(el.dataset.anexarPdfNota)); if(f && nf){ editDraft = lerTituloDoFormulario(editDraft); anexarPdfNaNota(nf, f); } };
   });
   const addRateio = document.querySelector('[data-add-rateio]');
   if(addRateio){
@@ -8562,6 +9104,7 @@ function Modal(){
   if(state.modal.type==='baixa') return ModalBaixa();
   if(state.modal.type==='baixaLote') return ModalBaixaLote();
   if(state.modal.type==='verBaixas') return ModalVerBaixas();
+  if(state.modal.type==='relatorioContas') return ModalRelatorioContas();
   if(state.modal.type==='centroCusto') return ModalCentroCusto();
   if(state.modal.type==='funcionario') return ModalFuncionario();
   if(state.modal.type==='financiamento') return ModalFinanciamento();

@@ -153,6 +153,30 @@ window.supabase = {
         return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + nome + ' in the schema cache' } });
       },
       functions: { invoke: () => Promise.resolve({ data: {}, error: null }) },
+      // Storage (notas fiscais, 14/11/2026): guarda o arquivo em window.__STORAGE__[bucket/caminho]. window.__STORAGE_ERRO__ = true faz o
+      // upload falhar (o teste confere que nada ficou pela metade).
+      storage: {
+        from: (bucket) => ({
+          upload: (caminho, arquivo, opcoes) => {
+            if (semRede()) return SEM_RESPOSTA();
+            window.__STORAGE__ = window.__STORAGE__ || {};
+            const k = bucket + '/' + caminho;
+            if (window.__STORAGE_ERRO__) return Promise.resolve({ data: null, error: { message: 'falha simulada no upload' } });
+            if (window.__STORAGE__[k] && !(opcoes && opcoes.upsert)) return Promise.resolve({ data: null, error: { message: 'The resource already exists' } });
+            window.__STORAGE__[k] = { arquivo, tipo: (opcoes && opcoes.contentType) || (arquivo && arquivo.type) || '' };
+            return Promise.resolve({ data: { path: caminho }, error: null });
+          },
+          remove: (caminhos) => {
+            window.__STORAGE__ = window.__STORAGE__ || {};
+            (caminhos || []).forEach(c => { delete window.__STORAGE__[bucket + '/' + c]; });
+            return Promise.resolve({ data: [], error: null });
+          },
+          download: (caminho) => {
+            const f = (window.__STORAGE__ || {})[bucket + '/' + caminho];
+            return Promise.resolve(f ? { data: f.arquivo instanceof Blob ? f.arquivo : new Blob([f.arquivo]), error: null } : { data: null, error: { message: 'Object not found' } });
+          },
+        }),
+      },
       auth: {
         getSession: () => Promise.resolve({ data: { session: window.__SESSAO__ } }),
         // guarda os ouvintes para o teste poder disparar eventos de sessao (window.__authCallbacks[i]('TOKEN_REFRESHED', sessao))
