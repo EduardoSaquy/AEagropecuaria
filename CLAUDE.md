@@ -1396,6 +1396,38 @@ estoque. Antes eram dois lançamentos e, quando o segundo era esquecido, o estoq
   secretária de contas recebe a lista e continua sem ler o estoque; quem lia os movimentos continua lendo os mesmos 10.012; o
   administrador (que tem o código no celular) só com a sessão confirmada.
 
+### Relatórios em PDF e nota fiscal no Pagar/Receber (14/11/2026)
+
+Pedidos do Eduardo (respostas dele: nota = "ler o XML e preencher"; livro caixa = "relatório do que foi pago", sem LCDPR; PDF dos
+quatro relatórios). Só no `AEMatriz.html`.
+- **PDF sem biblioteca** (`imprimirRelatorio(titulo, subtitulo, corpo)`): monta o relatório em `#area-impressao` (filho direto do
+  `<body>`), troca o `document.title` (vira o nome do arquivo, sem barra) e chama `window.print()`; o `@media print` esconde tudo que
+  não é o relatório (A4, tabela com cabeçalho repetido por página). "Salvar como PDF" no computador; no iPad, Compartilhar → Imprimir.
+  Na tela `#area-impressao` fica escondida. Os testes trocam `window.print` por um registro (`window.__PRINTS`).
+- **Resultados > Relatórios** ganhou "Tirar em PDF" (`BlocoRelatoriosPdf`): **Balancete** (o da tela, período e filtros dela, com o
+  recorrente pela regra do app), **Livro caixa** (`dadosLivroCaixa`: empresa inteira, `state.lancamentos`, receita = entrada,
+  despesa e investimento = saída, por data, subtotal do mês e acumulado do período começando em zero; **não é saldo bancário**;
+  lançamento do ERP só com o mês entra no começo do mês com `*`; recorrente sem mês não entra) e **Produção** (`dadosProducao`: cana
+  t/área colhida/TCH e grãos sacas/área/sc-ha por fazenda (grãos por cultura), mesma regra de área colhida do Matriz; vendas de
+  animais por categoria com cabeças e @ pela `arrobasDoAbate`).
+- **Pagar/Receber > "Relatório do mês (PDF)"** (`ModalRelatorioContas`, `dadosRelatorioContas`): a pagar ou a receber, mês, e as
+  atrasadas (opcional): só o **em aberto** (saldo > 0, sem cancelada), por vencimento, com atividade/fazenda; resumo com o que falta no
+  mês, as atrasadas, o total e o que já foi pago das contas do mês. Quem tem só a permissão Contas também tira.
+- **Nota fiscal** (`notas_fiscais_01.sql`: tabela `notas_fiscais` com `chave` única de 44 dígitos, `titulos.nota_fiscal_id`, regras
+  iguais às das contas, apagar só quem pode excluir ou quem lançou, segundo fator, registro de alterações; bucket privado
+  **`notas-fiscais`** no Storage, 5 MB, só XML e PDF, regras em `storage.objects`; ensaiado num Postgres descartável com 6 perfis).
+  Conta **nova** a pagar/receber tem "Ler o XML da NF-e" (`lerXmlNfe`, no navegador): preenche fornecedor/cliente (pelo CNPJ do
+  cadastro, senão o nome da nota; fornecedor novo é cadastrado com o CNPJ), "NF nº série s", a descrição pelo 1º produto, o valor e
+  **as parcelas pelas duplicatas** (data e valor de cada; sem duplicata: uma parcela na emissão), e a competência do rateio = mês da
+  emissão. Avisa nota sem protocolo da SEFAZ, duplicatas que não somam a nota e nota sem duplicata. Lado: nota de saída do
+  fornecedor → emitente; nota de entrada que nós emitimos (`tpNF` 0) → destinatário; a receber, o contrário (`contraparteDaNota`).
+  Não lê NFS-e nem CT-e (diz). **A mesma nota não entra duas vezes** (o app avisa com o Nº da conta; o banco recusa pela chave).
+  Ao salvar: guarda o XML (e o PDF da DANFE, se anexado), grava a nota e liga as parcelas; se a conta não for gravada, a nota e os
+  arquivos são desfeitos (`desfazerNotaFiscal`). Editar a conta mostra a nota com "Baixar XML"/"Baixar PDF" e "Anexar PDF" depois.
+  Antes do SQL o campo não aparece (`state.notasDisponivel`, fora do aviso de erro de carga). O stub dos testes ganhou `storage`
+  (`window.__STORAGE__`, `__STORAGE_ERRO__`). CNPJ das notas fica no banco, nunca no repositório (o teste usa CNPJ inválido).
+- `teste_relatorios_e_notas.py` (53).
+
 ### Tratos do dia e contagem de estoque (14/11/2026)
 
 Achado ao conferir o Núcleo BI com ele (acabou no galpão, o app mostrava ~2,1 t): na safra 2026 do confinamento, só ~69% dos
@@ -1950,7 +1982,7 @@ divergem: conferir no painel). Por isso:
   80%), **B até 95%, C o resto**. Só despesa (investimento e receita ficam de fora); segue o período e os filtros da aba;
   fornecedores com nome igual (maiúscula, acento, espaço) somam juntos. `teste_curva_abc.py` (18).
 - Ainda sem os concorrentes: depreciação e peças/serviços por máquina (custo por hora hoje = combustível + manutenção com custo), Manejo ao vivo sem internet (hoje: planilha de manejo), livro
-  caixa/LCDPR (depende do escritório dele) e backup automático (GitHub Actions para repositório PRIVADO: artefato de repositório
+  caixa/LCDPR (o livro caixa simples saiu em 14/11/2026, ver "Relatórios em PDF"; o LCDPR da Receita depende do escritório dele) e backup automático (GitHub Actions para repositório PRIVADO: artefato de repositório
   público é baixável por qualquer um).
 
 ### Núcleo comum dos apps (`core.js`, 07/11/2026)
@@ -2395,7 +2427,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-91 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
+92 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2486,6 +2518,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_pecuaria_editar_estoque.py` | 17 | AEpecuaria.html (editar saída de ração, recria e produção: uma chamada da função do banco com a baixa pela dieta, nada gravado direto, dieta pronta manda baixa vazia, recusa do banco na tela; sem a função, baixa trocada sem dobrar e, se a nova falhar, a antiga continua) |
 | `teste_paginas_em_ondas.py` | 15 | core.js (fetchAllRows em ondas: todas as linhas na ordem sem repetir de 0 a 27.823, tabela pequena com uma ida só, até 4 páginas em paralelo, tempo menor que em fila, erro no meio devolve o que veio antes e o erro) |
 | `teste_tratos_e_contagem.py` | 43 | AEpecuaria.html (tratos do dia: N de M hoje por lote com tratos por dia, fila sem internet conta, dias dos últimos 7 com trato faltando desde o início do lote, lote sem o campo ou encerrado fora, Recria pela tabela pasto, sem número com o histórico carregando; campo no lote grava, limpa, não manda a coluna sem valor e barra 13 e 2,5; contagem de estoque: saldo no dia da contagem, diferença ao digitar, uma inserção só com ajuste sem preço só do que mudou, data passada, recusas, histórico com valor, desligado sem histórico, só para quem edita Insumos, sem rolar de lado em 390 px) |
+| `teste_relatorios_e_notas.py` | 53 | AEMatriz.html (PDF por impressão: balancete, livro caixa com entradas/saídas/acumulado e lançamento só com o mês marcado, produção de cana/grãos/vendas, contas do mês em aberto com atrasadas e já pago; só o relatório aparece na impressão; nota fiscal: lê o XML da NF-e e preenche fornecedor pelo CNPJ, documento, descrição, valor e parcelas das duplicatas, PDF anexado, grava nota e arquivos ligados às parcelas, mesma nota barrada, XML que não é NF-e, sem duplicata e sem protocolo avisa, fornecedor novo com CNPJ, falha no upload ou na conta desfaz tudo, baixar XML, anexar PDF depois, a receber pelo destinatário, sem a tabela o campo não aparece) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
