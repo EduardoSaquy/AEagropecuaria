@@ -117,8 +117,12 @@ with sync_playwright() as pw:
     conf(r.locator("[data-trato-dias-faltando]").get_attribute("data-trato-dias-faltando") == "1",
          "lote que comecou ha 2 dias: so confere desde o inicio (1 dia faltando)", r.inner_text())
     ir(page, "racaoCria")
+    conf(page.locator(".tratos-dica").count() == 0 and page.locator(".tratos-dia").count() == 0,
+         "Cria sem lote com tratos por dia: nada aparece (la nao ha trato diario)")
+    page.evaluate("() => { state.lotes.forEach(l => { if (l.destino==='confinamento') l.tratosPorDia = null; }); state.page='racao'; render(); }"); page.wait_for_timeout(150)
     conf(page.locator(".tratos-dica").count() == 1 and page.locator(".tratos-dia").count() == 0,
-         "area sem lote com tratos por dia: so a dica de onde informar")
+         "Confinamento sem lote com tratos por dia: so a dica de onde informar")
+    page.goto(page.url); page.wait_for_function("() => typeof state !== 'undefined' && state.carregouDados && !state.carregandoHistorico", timeout=15000)
     page.evaluate("() => { state.carregandoHistorico = true; state.page='racao'; render(); }"); page.wait_for_timeout(150)
     conf("Carregando os lançamentos" in page.locator(".tratos-dia").inner_text() and page.locator("[data-trato-lote]").count() == 0,
          "historico ainda carregando: nao mostra numero (seria falso)")

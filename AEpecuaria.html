@@ -4108,7 +4108,9 @@ function CardTratosDoDia(tipo){
   const ativos = lotesQueRecebem(tipo);
   if(!ativos.length) return '';
   const comTratos = ativos.filter(l=>Number(l.tratosPorDia)>0);
-  if(!comTratos.length) return `<p class="hint tratos-dica" style="margin:0 0 12px;">Para conferir os tratos do dia, informe "Tratos por dia" no cadastro de cada lote (Lotes → Editar).</p>`;
+  // Cria e Recria não costumam ter trato diário (suplemento posto para alguns dias): ali a dica não aparece, e a conferência
+  // só entra no lote que tiver o número preenchido (Eduardo, 14/11/2026).
+  if(!comTratos.length) return tipo!=='confinamento' ? '' : `<p class="hint tratos-dica" style="margin:0 0 12px;">Para conferir os tratos do dia, informe "Tratos por dia" no cadastro de cada lote (Lotes → Editar).</p>`;
   if(!historicoDeTratosPronto()) return `<div class="card tratos-dia" style="margin-bottom:14px;"><div class="tratos-titulo">Tratos de hoje</div><p class="hint" style="margin:6px 0 0;">${state.dadosDoAparelho ? 'Sem internet: a conferência dos tratos aparece quando o app carregar os lançamentos.' : 'Carregando os lançamentos para conferir os tratos…'}</p></div>`;
   const linhas = conferenciaTratos(tipo);
   const dm = d=>d.split('-').reverse().slice(0,2).join('/');
@@ -6862,7 +6864,7 @@ function ModalLote(){
         <div class="field"><label>Peso de referência (kg, opcional)</label><input id="f-pesoreferencia" type="number" step="1" min="0" value="${d.pesoReferencia!=null?d.pesoReferencia:''}" placeholder="Ex: 420" data-peso-referencia="1"/></div>
         <p class="hint">Para lote que não é pesado de rotina (vacas, novilhas): peso médio estimado, usado só para dar valor ao rebanho no AE Matriz. Quando o lote tiver pesagem, vale a pesagem.</p>
         <div class="field"><label>Tratos por dia (opcional)</label><input id="f-tratospordia" type="number" step="1" min="1" max="12" value="${d.tratosPorDia!=null?d.tratosPorDia:''}" placeholder="Ex: 4"/></div>
-        <p class="hint">Quantos tratos o lote recebe por dia. A tela de Saída de Ração mostra, para cada lote, quantos já foram lançados hoje e avisa os dias em que ficou faltando trato.</p>
+        <p class="hint">Quantos tratos o lote recebe por dia. A tela de Saída de Ração mostra, para cada lote, quantos já foram lançados hoje e avisa os dias em que ficou faltando trato. Deixe em branco no lote que não recebe trato todo dia (sal ou proteinado posto para vários dias).</p>
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
         <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130" data-numeros-animais="1">${esc(d.numerosAnimais||'')}</textarea></div>
