@@ -140,6 +140,26 @@
   .pill-alerta{background:var(--alerta-bg); color:var(--alerta);}
   .pill-cat{background:var(--chip-bg); color:var(--chip-color); border-radius:8px; font-weight:600;}
   .pill-warn{background:#F3E7D4; color:var(--trigo);}
+  .tratos-dia{padding:14px 16px;}
+  .tratos-titulo{font-weight:600; margin-bottom:6px;}
+  .trato-linha{padding:8px 0; border-top:1px solid var(--linha, #E5E1D8);}
+  .trato-linha:first-of-type{border-top:0;}
+  .trato-cab{display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
+  .trato-semana{margin-top:3px;}
+  .trato-falta{color:var(--alerta);}
+  .modal-largo{max-width:720px;}
+  .contagem-tabela{width:100%;}
+  .contagem-tabela input{max-width:140px;}
+  @media (max-width:560px){
+    .contagem-tabela thead{display:none;}
+    .contagem-tabela tr{display:grid; grid-template-columns:1fr 1fr; gap:2px 10px; padding:8px 0; border-top:1px solid #E5E1D8;}
+    .contagem-tabela td{padding:2px 0; border:0;}
+    .contagem-tabela td:first-child{grid-column:1/-1;}
+    .contagem-tabela td[data-rotulo]:not(:first-child)::before{content:attr(data-rotulo); display:block; font-size:12px; color:#6B6B6B;}
+    .contagem-tabela input{max-width:none; width:100%;}
+  }
+  .contagem-dif-mais{color:var(--verde-vivo-escuro);}
+  .contagem-dif-menos{color:var(--alerta);}
 
   /* silo gauge */
   .silo-wrap{display:flex; align-items:center; gap:8px;}
@@ -332,6 +352,8 @@
     .app{height:auto; overflow:visible;}
     .topbar{padding:10px 14px; height:auto; flex-wrap:wrap; row-gap:8px; position:-webkit-sticky; position:sticky; top:0; z-index:40;}
     .topbar-user-nome{display:none;}
+    /* com "N pendente(s)" da fila sem internet a barra passava da tela (14/11/2026): quebra em duas linhas */
+    .topbar-user{flex-wrap:wrap; justify-content:flex-end; row-gap:6px; min-width:0; max-width:100%;}
     .tabsrow{padding:8px 10px; position:-webkit-sticky; position:sticky; top:0; z-index:39;}
     .nav-item{padding:8px 11px; font-size:12.5px;}
     .main{padding:20px 16px 48px 16px; max-width:100%; overflow-y:visible;}
@@ -443,13 +465,16 @@ function movimentoToRow(m){ return {data:m.data, ingrediente_id:m.ingredienteId,
 function rowToDieta(r){ return {id:r.id, nome:r.nome, categoriaAnimal:r.categoria_animal, kgAnimalDia:r.kg_animal_dia, itens:r.itens||[], tipo:r.tipo||'confinamento', estoqueMinPronta:r.estoque_min_pronta||0, consumoDireto:!!r.consumo_direto}; }
 function dietaToRow(d){ return {nome:d.nome, categoria_animal:d.categoriaAnimal, kg_animal_dia:d.kgAnimalDia, itens:d.itens, tipo:d.tipo||'confinamento', estoque_min_pronta:d.estoqueMinPronta||0, consumo_direto:!!d.consumoDireto}; }
 function rowToLote(r){ return {id:r.id, nome:r.nome, numeroAnimais:r.numero_animais, dataInicio:r.data_inicio, dataFim:r.data_fim, destino:r.destino, dietaId:r.dieta_id, sexo:r.sexo||'',
-  pesoReferencia: r.peso_referencia_kg!=null ? Number(r.peso_referencia_kg) : null}; }
+  pesoReferencia: r.peso_referencia_kg!=null ? Number(r.peso_referencia_kg) : null,
+  tratosPorDia: r.tratos_por_dia!=null ? Number(r.tratos_por_dia) : null}; }
 // Peso de referência (13/11/2026): peso médio ESTIMADO para lote que não é pesado de rotina (vacas, novilhas). Só serve para dar valor
 // ao rebanho (foto mensal e Rebanho estocado do AE Matriz); a pesagem real, quando existe, manda. A coluna só vai ao banco com valor ou
 // para limpar um que existia (o app funciona antes de rodar rebanho_inventario_01.sql).
 function loteToRow(l){
   const row = {nome:l.nome, numero_animais:l.numeroAnimais, data_inicio:l.dataInicio, data_fim:l.dataFim||null, destino:l.destino, dieta_id:l.dietaId||null, sexo:l.sexo||null};
   if(l.pesoReferencia!=null || l._tinhaPesoReferencia) row.peso_referencia_kg = l.pesoReferencia!=null ? l.pesoReferencia : null;
+  // Tratos por dia (14/11/2026): mesma regra, só vai ao banco com valor ou para limpar (funciona antes de lotes_tratos_por_dia_01.sql).
+  if(l.tratosPorDia!=null || l._tinhaTratosPorDia) row.tratos_por_dia = l.tratosPorDia!=null ? l.tratosPorDia : null;
   return row;
 }
 function rowToSaidaRacao(r){ return {id:r.id, data:r.data, dietaId:r.dieta_id, loteId:r.lote_id, quantidadeKg:r.quantidade_kg, criadoPor:r.criado_por||'', criadoEm:r.criado_em||null}; }
@@ -1945,6 +1970,37 @@ function saldoIngrediente(id){
   });
   return saldo;
 }
+// Saldo no fim de um dia (movimentos até aquela data). A contagem de estoque usa: a contagem feita num dia acerta o
+// saldo daquele dia, e o que entrou ou saiu depois continua valendo por cima.
+function saldoIngredienteAte(id, dataStr){
+  let saldo = 0;
+  state.movimentos.filter(m=>m.ingredienteId===id && m.data<=dataStr).forEach(m=>{
+    saldo += m.tipo==='entrada' ? Number(m.quantidade) : -Number(m.quantidade);
+  });
+  return saldo;
+}
+/* CONTAGEM DE ESTOQUE (14/11/2026, pedido do Eduardo). O pessoal conta o galpão e digita o que tem de cada ingrediente; o
+ * app mostra a diferença para o saldo do sistema naquela data e grava, numa gravação só, um ajuste (entrada ou saída com
+ * ajuste=true, sem preço) por ingrediente que mudou -- o mesmo movimento do "Ajustar" de um ingrediente. Ingrediente em
+ * branco não é mexido. Precisa do histórico inteiro carregado (o saldo sai dos movimentos). O histórico de ajustes, com
+ * a diferença de cada contagem, fica embaixo da tabela de estoque (serve para medir perda). */
+function arred3(v){ return Math.round(Number(v)*1000)/1000; }
+function diferencasDaContagem(d){
+  const out = [];
+  state.ingredientes.forEach(i=>{
+    const bruto = d.contado[i.id];
+    if(bruto===undefined || bruto===null || String(bruto).trim()==='') return;
+    const contado = Number(String(bruto).replace(',','.'));
+    const saldo = saldoIngredienteAte(i.id, d.data);
+    out.push({ing:i, contado, saldo, diferenca: arred3(contado - saldo)});
+  });
+  return out;
+}
+function textoDiferenca(dif, unidade){
+  if(!isFinite(dif)) return '—';
+  if(Math.abs(dif) < 0.0005) return 'igual';
+  return `${dif>0?'+':'−'}${fmt(Math.abs(dif),1)} ${unidade||'kg'}`;
+}
 // Consumo médio diário de saída de UM ingrediente -- soma tudo que já saiu
 // (na mesma unidade do ingrediente) e divide pelos dias entre a primeira e
 // a última saída registrada. null quando nunca teve saída (nada pra tirar
@@ -2520,6 +2576,10 @@ function PageEstoque(){
   const verValor = veValores();   // valor e custo: só acesso total (12/11/2026)
   const podeAjustar = temPermissao('insumos','editar');
 
+  const historicoPronto = !!state.carregouDados && !state.carregandoHistorico && !state.dadosDoAparelho;
+  const ajustes = state.movimentos.filter(m=>m.ajuste).sort((a,b)=>b.data.localeCompare(a.data) || b.id-a.id);
+  const datasAjuste = [...new Set(ajustes.map(m=>m.data))].slice(0,6);
+
   const buscaMov = state.searchMovimentos.toLowerCase();
   const mesesMovDisponiveis = [...new Set(state.movimentos.map(m=>m.data.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
   const movFiltradas = state.movimentos
@@ -2536,6 +2596,10 @@ function PageEstoque(){
     <div class="stat-card"><div class="stat-label">Movimentações registradas</div><div class="stat-value">${state.movimentos.length}</div></div>
   </div>
 
+  ${podeAjustar ? `<div class="toolbar" style="margin-bottom:10px;">
+    <button class="btn btn-primary" data-contagem-estoque="1" ${historicoPronto?'':'disabled'}>Contagem de estoque</button>
+    <span class="hint">${historicoPronto ? 'Digite o que foi contado no galpão: o app acerta o saldo de cada ingrediente de uma vez.' : 'Disponível quando o histórico do estoque terminar de carregar (precisa de internet).'}</span>
+  </div>` : ''}
   <div class="card" style="margin-bottom:22px;">
     <table>
       <thead><tr>
@@ -2557,6 +2621,28 @@ function PageEstoque(){
       </tbody>
     </table>
   </div>
+
+  ${datasAjuste.length ? `
+  <p class="eyebrow" style="margin-bottom:10px;">Contagens e ajustes de estoque</p>
+  <div class="card" style="margin-bottom:22px;" data-historico-ajustes="1">
+    <table>
+      <thead><tr><th>Data</th><th>Ingrediente</th><th>Ajuste</th>${verValor?'<th>Valor (preço médio atual)</th>':''}</tr></thead>
+      <tbody>
+        ${datasAjuste.map(dt=>ajustes.filter(m=>m.data===dt).map((m,idx)=>{
+          const ing = getIng(m.ingredienteId);
+          const sinal = m.tipo==='entrada' ? 1 : -1;
+          const valor = sinal * qtdEmKg(m.quantidade, ing?.unidade) * (ing?.precoKg||0);
+          return `<tr>
+            <td class="mono" data-rotulo="Data">${idx===0 ? dt.split('-').reverse().join('/') : ''}</td>
+            <td data-rotulo="Ingrediente">${ing?esc(ing.nome):'—'}</td>
+            <td class="mono ${sinal>0?'contagem-dif-mais':'contagem-dif-menos'}" data-rotulo="Ajuste">${textoDiferenca(sinal*Number(m.quantidade), ing?.unidade)}</td>
+            ${verValor?`<td class="mono" data-rotulo="Valor">${valor<0?'−':''}R$ ${fmt(Math.abs(valor))}</td>`:''}
+          </tr>`;
+        }).join('')).join('')}
+      </tbody>
+    </table>
+    <p class="hint" style="margin:8px 0 0;">Entrada (+) = havia mais no galpão que no sistema; saída (−) = havia menos (consumo não lançado, perda ou erro de lançamento). Mostra as ${datasAjuste.length} datas mais recentes.</p>
+  </div>` : ''}
 
   <p class="eyebrow" style="margin-bottom:10px;" id="movimentacoes-secao">Movimentações</p>
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
@@ -3981,6 +4067,69 @@ function agruparPorDiaLote(lista){
   });
   return ordem.map(key=>grupos[key]);
 }
+/* TRATOS DO DIA (14/11/2026, pedido do Eduardo). Na safra 2026 do confinamento ficaram ~30% dos tratos da Sequestro sem
+ * lançar (dias com 2 de 4 tratos, dias inteiros sem nada) e o estoque de ingredientes ficou maior que o do galpão. O lote
+ * informa quantos tratos recebe por dia (lotes.tratos_por_dia, opcional); a tela de Saída de Ração mostra quantos já foram
+ * lançados hoje e os dias dos últimos 7 com menos tratos. Conta tratos, não quilos: a variação de kg do vagão não importa.
+ * Conta também o que está na fila sem internet deste aparelho. Precisa do histórico (saídas): sem ele não confere. */
+const DIAS_CONFERE_TRATOS = 7;
+function somaDiasData(dataStr, n){
+  const d = new Date(dataStr+'T12:00:00'); d.setDate(d.getDate()+n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function historicoDeTratosPronto(){ return !!state.carregouDados && !state.carregandoHistorico && !state.dadosDoAparelho; }
+function tratosLancadosPorDia(loteId, tipo){
+  const lista = tipo==='pasto' ? state.pasto : state.saidasRacao;
+  const tiposFila = tipo==='pasto' ? ['pasto'] : ['saidaRacao','saidaRacaoCria'];
+  const cont = {};
+  lista.forEach(s=>{ if(s.loteId===loteId && s.data) cont[s.data] = (cont[s.data]||0)+1; });
+  lerFilaOffline().forEach(f=>{
+    const c = f.campos||{};
+    if(tiposFila.includes(f.type) && Number(c.loteId)===loteId && c.data) cont[c.data] = (cont[c.data]||0)+1;
+  });
+  return cont;
+}
+function conferenciaTratos(tipo, hoje){
+  hoje = hoje || hojeStr();
+  return lotesQueRecebem(tipo).filter(l=>Number(l.tratosPorDia)>0).map(l=>{
+    const esperado = Number(l.tratosPorDia);
+    const cont = tratosLancadosPorDia(l.id, tipo);
+    const diasFaltando = [];
+    for(let i=1; i<=DIAS_CONFERE_TRATOS; i++){
+      const dia = somaDiasData(hoje, -i);
+      if(l.dataInicio && dia < l.dataInicio) break;
+      const n = cont[dia]||0;
+      if(n < esperado) diasFaltando.push({dia, n});
+    }
+    return {lote:l, esperado, lancadosHoje: cont[hoje]||0, diasFaltando};
+  }).sort((a,b)=>a.lote.nome.localeCompare(b.lote.nome));
+}
+function CardTratosDoDia(tipo){
+  const ativos = lotesQueRecebem(tipo);
+  if(!ativos.length) return '';
+  const comTratos = ativos.filter(l=>Number(l.tratosPorDia)>0);
+  if(!comTratos.length) return `<p class="hint tratos-dica" style="margin:0 0 12px;">Para conferir os tratos do dia, informe "Tratos por dia" no cadastro de cada lote (Lotes → Editar).</p>`;
+  if(!historicoDeTratosPronto()) return `<div class="card tratos-dia" style="margin-bottom:14px;"><div class="tratos-titulo">Tratos de hoje</div><p class="hint" style="margin:6px 0 0;">${state.dadosDoAparelho ? 'Sem internet: a conferência dos tratos aparece quando o app carregar os lançamentos.' : 'Carregando os lançamentos para conferir os tratos…'}</p></div>`;
+  const linhas = conferenciaTratos(tipo);
+  const dm = d=>d.split('-').reverse().slice(0,2).join('/');
+  return `
+  <div class="card tratos-dia" style="margin-bottom:14px;">
+    <div class="tratos-titulo">Tratos de hoje</div>
+    ${linhas.map(x=>{
+      const completo = x.lancadosHoje >= x.esperado;
+      const faltam = Math.max(0, x.esperado - x.lancadosHoje);
+      return `<div class="trato-linha" data-trato-lote="${x.lote.id}">
+        <div class="trato-cab"><strong>${esc(x.lote.nome)}</strong>
+          <span class="pill ${completo?'pill-ok':'pill-warn'}" data-trato-hoje="${x.lancadosHoje}">${x.lancadosHoje} de ${x.esperado}</span>
+          ${completo ? '' : `<span class="hint">falta${faltam>1?'m':''} ${faltam}</span>`}
+        </div>
+        <div class="hint trato-semana ${x.diasFaltando.length?'trato-falta':''}" data-trato-dias-faltando="${x.diasFaltando.length}">${x.diasFaltando.length
+          ? `Últimos ${DIAS_CONFERE_TRATOS} dias: ${x.diasFaltando.length} dia${x.diasFaltando.length>1?'s':''} com trato faltando: ${x.diasFaltando.map(f=>`${dm(f.dia)} (${f.n} de ${x.esperado})`).join(', ')}`
+          : `Últimos ${DIAS_CONFERE_TRATOS} dias: todos os tratos lançados.`}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 function PageSaidaRacao(tipo){
   const verValor = veValores();   // valor e custo: só acesso total (12/11/2026)
   const filtro = state.filtrosSaidaRacao[tipo] || {mes:'', loteId:'', dietaId:''};
@@ -4007,6 +4156,7 @@ function PageSaidaRacao(tipo){
       ? Empty('Nenhuma saída de ração com esse filtro','Tente outro mês, lote ou dieta.')
       : Empty('Nenhuma saída de ração hoje','Clique em "Ver todos" acima pra ver o histórico completo.'));
   return `
+  ${CardTratosDoDia(tipo)}
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:200px;">
       <select data-filtro-mes-racao="${tipo}">
@@ -4168,6 +4318,7 @@ function PagePasto(){
       ? Empty('Nenhuma saída de ração (Recria) com esse filtro','Tente outro mês, lote ou dieta.')
       : Empty('Nenhuma saída de ração (Recria) hoje','Clique em "Ver todos" acima pra ver o histórico completo.'));
   return `
+  ${CardTratosDoDia('pasto')}
   <div class="field-row" style="flex-wrap:wrap; margin-bottom:14px;">
     <div class="field" style="max-width:200px;">
       <select data-filtro-mes-racao="pasto">
@@ -6385,6 +6536,7 @@ function Modal(){
   if(state.modal.type==='ingrediente') return ModalIngrediente();
   if(state.modal.type==='movimento') return ModalMovimento();
   if(state.modal.type==='ajusteEstoque') return ModalAjusteEstoque();
+  if(state.modal.type==='contagemEstoque') return ModalContagemEstoque();
   if(state.modal.type==='dieta') return ModalDieta();
   if(state.modal.type==='producaoRacao') return ModalProducaoRacao();
   if(state.modal.type==='lote') return ModalLote();
@@ -6487,6 +6639,42 @@ function ModalMovimento(){
       <div class="modal-foot">
         <button class="btn btn-ghost" data-close="1">Cancelar</button>
         <button class="btn btn-primary" data-save="movimento">${d._editId?'Salvar alterações':'Registrar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ModalContagemEstoque(){
+  const d = editDraft;
+  const ings = [...state.ingredientes].sort((a,b)=>a.nome.localeCompare(b.nome));
+  return `
+  <div class="overlay" data-close-overlay="1">
+    <div class="modal modal-largo" data-stop="1">
+      <div class="modal-head"><h3>Contagem de estoque</h3><button class="modal-close" data-close="1">&times;</button></div>
+      <div class="modal-body">
+        <div class="field" style="max-width:220px;"><label>Data da contagem</label><input id="f-datacontagem" type="date" value="${d.data}" data-data-contagem="1"/></div>
+        <p class="hint">Digite o que foi contado de cada ingrediente, na unidade dele. Em branco = não contado (fica como está). O saldo do sistema é o do fim do dia da contagem.</p>
+        <table class="contagem-tabela">
+          <thead><tr><th>Ingrediente</th><th>No sistema</th><th>Contado</th><th>Diferença</th></tr></thead>
+          <tbody>
+            ${ings.map(i=>{
+              const saldo = saldoIngredienteAte(i.id, d.data);
+              const bruto = d.contado[i.id];
+              const temValor = bruto!==undefined && String(bruto).trim()!=='';
+              const dif = temValor ? arred3(Number(String(bruto).replace(',','.')) - saldo) : null;
+              return `<tr>
+                <td data-rotulo="Ingrediente"><strong>${esc(i.nome)}</strong></td>
+                <td class="mono" data-rotulo="No sistema">${fmt(saldo,1)} ${esc(i.unidade||'kg')}</td>
+                <td data-rotulo="Contado"><input type="number" step="0.1" min="0" inputmode="decimal" aria-label="Contado de ${esc(i.nome)}" data-contagem-ing="${i.id}" value="${temValor?esc(String(bruto)):''}"/></td>
+                <td class="mono" data-rotulo="Diferença" data-contagem-dif="${i.id}">${dif===null ? '—' : textoDiferenca(dif, i.unidade)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" data-save="contagemEstoque">Salvar contagem</button>
       </div>
     </div>
   </div>`;
@@ -6673,6 +6861,8 @@ function ModalLote(){
         </div>
         <div class="field"><label>Peso de referência (kg, opcional)</label><input id="f-pesoreferencia" type="number" step="1" min="0" value="${d.pesoReferencia!=null?d.pesoReferencia:''}" placeholder="Ex: 420" data-peso-referencia="1"/></div>
         <p class="hint">Para lote que não é pesado de rotina (vacas, novilhas): peso médio estimado, usado só para dar valor ao rebanho no AE Matriz. Quando o lote tiver pesagem, vale a pesagem.</p>
+        <div class="field"><label>Tratos por dia (opcional)</label><input id="f-tratospordia" type="number" step="1" min="1" max="12" value="${d.tratosPorDia!=null?d.tratosPorDia:''}" placeholder="Ex: 4"/></div>
+        <p class="hint">Quantos tratos o lote recebe por dia. A tela de Saída de Ração mostra, para cada lote, quantos já foram lançados hoje e avisa os dias em que ficou faltando trato.</p>
         ${!d._editId ? `<div class="field"><label>Peso médio dos animais (opcional)</label><input id="f-pesoentrada" type="number" step="0.1" value="${d.pesoMedioEntrada||''}" placeholder="Ex: 220"/></div>
         <p class="hint">Se informado, já registra a primeira pesagem do lote com esse peso.</p>
         <div class="field"><label>Números dos animais (opcional)</label><textarea id="f-numerosanimais" rows="2" placeholder="Ex: 128, 129, 130" data-numeros-animais="1">${esc(d.numerosAnimais||'')}</textarea></div>
@@ -7718,6 +7908,32 @@ function attachEvents(){
       const {error} = await db.from('movimentos').delete().eq('id', id);
       if(error){ alert('Não foi possível excluir esta movimentação: ' + error.message); return; }
       await loadAll();
+    };
+  });
+  document.querySelectorAll('[data-contagem-estoque]').forEach(el=>{
+    el.onclick = ()=>{
+      editDraft = {data: hojeStr(), contado: {}};
+      state.modal = {type:'contagemEstoque'};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-contagem-ing]').forEach(el=>{
+    el.oninput = ()=>{
+      if(!editDraft || !editDraft.contado) return;
+      const id = Number(el.dataset.contagemIng);
+      editDraft.contado[id] = el.value;
+      const ing = getIng(id);
+      const cel = document.querySelector(`[data-contagem-dif="${id}"]`);
+      if(!cel || !ing) return;
+      if(String(el.value).trim()===''){ cel.textContent = '—'; return; }
+      cel.textContent = textoDiferenca(arred3(Number(el.value) - saldoIngredienteAte(id, editDraft.data)), ing.unidade);
+    };
+  });
+  document.querySelectorAll('[data-data-contagem]').forEach(el=>{
+    el.onchange = ()=>{
+      if(!editDraft || !editDraft.contado || !el.value) return;
+      editDraft.data = el.value;
+      render();
     };
   });
   document.querySelectorAll('[data-ajustar-estoque]').forEach(el=>{
@@ -8857,6 +9073,26 @@ function attachEvents(){
             }
           }
         }
+      } else if(type==='contagemEstoque'){
+        const dataCont = document.getElementById('f-datacontagem').value;
+        if(!dataCont){ alert('Informe a data da contagem.'); return; }
+        if(dataCont > hojeStr()){ alert('A data da contagem não pode ser no futuro.'); return; }
+        editDraft.data = dataCont;
+        document.querySelectorAll('[data-contagem-ing]').forEach(el=>{ editDraft.contado[Number(el.dataset.contagemIng)] = el.value; });
+        const difs = diferencasDaContagem(editDraft);
+        const invalido = difs.find(x=>!isFinite(x.contado) || x.contado<0);
+        if(invalido){ alert(`Quantidade contada inválida em "${invalido.ing.nome}": informe um número de 0 para cima, ou deixe em branco.`); return; }
+        if(difs.length===0){ alert('Nenhum ingrediente foi contado: digite o que foi contado de pelo menos um.'); return; }
+        const mudam = difs.filter(x=>Math.abs(x.diferenca) >= 0.0005);
+        if(mudam.length===0){ alert('A contagem bate com o sistema em todos os ingredientes contados: nada a ajustar.'); state.modal=null; editDraft=null; render(); return; }
+        const resumo = mudam.map(x=>`• ${x.ing.nome}: ${textoDiferenca(x.diferenca, x.ing.unidade)}`).join('\n');
+        if(!confirm(`Lançar o ajuste da contagem de ${dataCont.split('-').reverse().join('/')}?\n\n${resumo}`)) return;
+        const rows = mudam.map(x=>({...movimentoToRow({
+          data: dataCont, ingredienteId: x.ing.id,
+          tipo: x.diferenca>0 ? 'entrada' : 'saida',
+          quantidade: Math.abs(x.diferenca), precoKg: null, ajuste: true,
+        })}));
+        ({error} = await db.from('movimentos').insert(rows));
       } else if(type==='ajusteEstoque'){
         const ingredienteId = Number(editDraft.ingredienteId);
         const ing = getIng(ingredienteId);
@@ -8993,7 +9229,11 @@ function attachEvents(){
             sexo: document.getElementById('f-sexolote').value || null,
             pesoReferencia: (()=>{ const v = Number(document.getElementById('f-pesoreferencia')?.value); return v>0 ? v : null; })(),
             _tinhaPesoReferencia: editDraft._editId ? editDraft.pesoReferencia!=null : false,
+            tratosPorDia: (()=>{ const v = Number(document.getElementById('f-tratospordia')?.value); return v>0 ? Math.round(v) : null; })(),
+            _tinhaTratosPorDia: editDraft._editId ? editDraft.tratosPorDia!=null : false,
           };
+          const tratosDigitado = document.getElementById('f-tratospordia')?.value;
+          if(tratosDigitado && !(Number.isInteger(Number(tratosDigitado)) && Number(tratosDigitado)>=1 && Number(tratosDigitado)<=12)){ alert('Tratos por dia: informe um número inteiro de 1 a 12, ou deixe em branco.'); return; }
           const pesoRefDigitado = document.getElementById('f-pesoreferencia')?.value;
           if(pesoRefDigitado && !(Number(pesoRefDigitado)>=20 && Number(pesoRefDigitado)<=1000)){ alert('Peso de referência fora do normal: informe entre 20 e 1000 kg, ou deixe em branco.'); return; }
           const row = loteToRow(campos);

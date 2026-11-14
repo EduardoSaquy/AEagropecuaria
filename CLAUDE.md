@@ -1396,6 +1396,27 @@ estoque. Antes eram dois lançamentos e, quando o segundo era esquecido, o estoq
   secretária de contas recebe a lista e continua sem ler o estoque; quem lia os movimentos continua lendo os mesmos 10.012; o
   administrador (que tem o código no celular) só com a sessão confirmada.
 
+### Tratos do dia e contagem de estoque (14/11/2026)
+
+Achado ao conferir o Núcleo BI com ele (acabou no galpão, o app mostrava ~2,1 t): na safra 2026 do confinamento, só ~69% dos
+tratos da Sequestro foram lançados (3 tratos/dia em jul–ago e 4 em set–out, lançados 2,5 a 3 em média, mais dias inteiros sem
+nada; ~190 t sem lançar). Todo ingrediente da Sequestro ficou com estoque a mais no app. Mesmo com os tratos estimados, ~1,1 t
+de núcleo continua sem explicação (trato com kg menor que o real ou mistura fora do app). **O acerto do estoque espera a
+contagem física que ele vai pedir ao pessoal** (silagem, milho, farelo, núcleos BI e TIP, ureia). Dietas Batida Creep e
+Proteinado bois Invernada passaram a "Produzida e guardada" no mesmo dia (pelo conector, a pedido dele; nenhuma tinha uso).
+- **Tratos por dia** (`lotes.tratos_por_dia`, opcional 1 a 12, `lotes_tratos_por_dia_01.sql`; o app só manda a coluna com
+  valor ou para limpar): campo no cadastro do lote; `CardTratosDoDia(tipo)` no topo de Saída de Ração (Confinamento, Cria) e da
+  Recria (tabela `pasto`): por lote ativo com o campo, "N de M" hoje e os dias dos últimos 7 (`DIAS_CONFERE_TRATOS`, desde o
+  início do lote) com menos tratos. Conta **tratos, não quilos** (a variação do vagão não importa) e conta também a fila sem
+  internet do aparelho. Sem o histórico carregado (ou só com a cópia do aparelho) não mostra número.
+- **Contagem de estoque** (Insumos > Estoque, quem edita Insumos, só com o histórico carregado): janela com todos os
+  ingredientes, saldo do sistema no fim do dia da contagem (`saldoIngredienteAte`), campo "Contado" (em branco = não mexe) e a
+  diferença ao digitar; salvar pergunta com o resumo e grava **uma inserção só** com um movimento de ajuste por ingrediente que
+  mudou (entrada/saída, `ajuste=true`, sem preço: o mesmo do "Ajustar" de um ingrediente). Embaixo da tabela, "Contagens e
+  ajustes de estoque" lista as 6 datas mais recentes, com o valor pelo preço médio atual para quem vê valores (serve para medir perda).
+- No celular, a barra de cima com "N pendente(s)" passava da tela (já era assim): agora quebra em duas linhas.
+- `teste_tratos_e_contagem.py` (42).
+
 ### Foto mensal do rebanho e resultado econômico da Pecuária (13/11/2026)
 
 Decisões do Eduardo: **resultado econômico = resultado de caixa + (rebanho no fim do período − rebanho no começo)**; o rebanho é
@@ -2372,7 +2393,7 @@ trocados. 2 lotes com destino `pasto` em 13/11/2026.
 
 ## Testes
 
-90 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
+91 arquivos `teste_*.py`, mais de 3.300 checagens (13/11/2026; a tabela abaixo lista os
 principais, `ls teste_*.py` é a lista completa). Rodam com Playwright + Python
 contra um stub do Supabase (`teste_stub_supabase.js` — `insert`/`update`/`delete`
 gravam de verdade em `window.__DB__`). Neste notebook, 5 checagens de tempo de
@@ -2462,6 +2483,7 @@ falhavam igual no código publicado antes: é a máquina, não regressão.
 | `teste_rebanho_economico.py` | 27 | AEMatriz.html, AEpecuaria.html (foto mensal do rebanho: resultado econômico = caixa + variação do rebanho entre as fotos do dia 1º, mês/ano/safra, aviso quando falta foto ou lote sem valor; Rebanho estocado pelo peso de referência; campo Peso de referência do lote grava, limpa, não manda a coluna sem valor e barra fora de 20 a 1000 kg) |
 | `teste_pecuaria_editar_estoque.py` | 17 | AEpecuaria.html (editar saída de ração, recria e produção: uma chamada da função do banco com a baixa pela dieta, nada gravado direto, dieta pronta manda baixa vazia, recusa do banco na tela; sem a função, baixa trocada sem dobrar e, se a nova falhar, a antiga continua) |
 | `teste_paginas_em_ondas.py` | 15 | core.js (fetchAllRows em ondas: todas as linhas na ordem sem repetir de 0 a 27.823, tabela pequena com uma ida só, até 4 páginas em paralelo, tempo menor que em fila, erro no meio devolve o que veio antes e o erro) |
+| `teste_tratos_e_contagem.py` | 42 | AEpecuaria.html (tratos do dia: N de M hoje por lote com tratos por dia, fila sem internet conta, dias dos últimos 7 com trato faltando desde o início do lote, lote sem o campo ou encerrado fora, Recria pela tabela pasto, sem número com o histórico carregando; campo no lote grava, limpa, não manda a coluna sem valor e barra 13 e 2,5; contagem de estoque: saldo no dia da contagem, diferença ao digitar, uma inserção só com ajuste sem preço só do que mudou, data passada, recusas, histórico com valor, desligado sem histórico, só para quem edita Insumos, sem rolar de lado em 390 px) |
 
 Não são `teste_*.py` (não entram na rodada normal): `conferir_chave_publica.py`
 (pergunta ao banco de verdade, com a chave pública, quantas linhas de cada tabela
